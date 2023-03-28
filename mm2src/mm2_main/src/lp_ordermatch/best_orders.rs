@@ -1,5 +1,5 @@
-use super::{addr_format_from_protocol_info, BaseRelProtocolInfo, OrderConfirmationsSettings,
-            OrderbookP2PItemWithProof, OrdermatchContext, OrdermatchRequest};
+use super::{addr_format_from_protocol_info, BaseRelProtocolInfo, OrderbookP2PItemWithProof, OrdermatchContext,
+            OrdermatchRequest};
 use crate::mm2::lp_network::{request_any_relay, P2PRequest};
 use crate::mm2::lp_ordermatch::{orderbook_address, RpcOrderbookEntryV2};
 use coins::{address_by_coin_conf_and_pubkey_str, coin_conf, is_wallet_only_conf, is_wallet_only_ticker};
@@ -9,6 +9,7 @@ use http::{Response, StatusCode};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber};
+use mm2_rpc_data::legacy::OrderConfirmationsSettings;
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
 use std::collections::{HashMap, HashSet};

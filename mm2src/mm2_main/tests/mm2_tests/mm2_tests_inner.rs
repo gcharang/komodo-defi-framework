@@ -8,6 +8,7 @@ use http::{HeaderMap, StatusCode};
 use mm2_main::mm2::lp_ordermatch::MIN_ORDER_KEEP_ALIVE_INTERVAL;
 use mm2_metrics::{MetricType, MetricsJson};
 use mm2_number::{BigDecimal, BigRational, Fraction, MmNumber};
+use mm2_rpc_data::legacy::{MmVersionResponse, OrderbookResponse};
 use mm2_test_helpers::electrums::*;
 use mm2_test_helpers::for_tests::{btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
                                   check_recent_swaps, enable_eth_coin, enable_qrc20, eth_jst_testnet_conf,
@@ -81,7 +82,7 @@ fn test_rpc() {
     .unwrap();
     assert_eq!(version.0, StatusCode::OK);
     assert_eq!((version.2)[ACCESS_CONTROL_ALLOW_ORIGIN], "http://localhost:4000");
-    let _version: MmVersion = json::from_str(&version.1).unwrap();
+    let _version: MmVersionResponse = json::from_str(&version.1).unwrap();
 
     let help = block_on(mm.rpc(&json! ({
         "userpass": mm.userpass,
@@ -6469,20 +6470,20 @@ fn test_conf_settings_in_orderbook() {
         1,
         "Alice RICK/MORTY orderbook must have exactly 1 ask"
     );
-    assert_eq!(alice_orderbook.asks[0].base_confs, 10);
-    assert!(alice_orderbook.asks[0].base_nota);
-    assert_eq!(alice_orderbook.asks[0].rel_confs, 5);
-    assert!(!alice_orderbook.asks[0].rel_nota);
+    assert_eq!(alice_orderbook.asks[0].entry.conf_settings.unwrap().base_confs, 10);
+    assert!(alice_orderbook.asks[0].entry.conf_settings.unwrap().base_nota);
+    assert_eq!(alice_orderbook.asks[0].entry.conf_settings.unwrap().rel_confs, 5);
+    assert!(!alice_orderbook.asks[0].entry.conf_settings.unwrap().rel_nota);
 
     assert_eq!(
         alice_orderbook.bids.len(),
         1,
         "Alice RICK/MORTY orderbook must have exactly 1 bid"
     );
-    assert_eq!(alice_orderbook.bids[0].base_confs, 10);
-    assert!(alice_orderbook.bids[0].base_nota);
-    assert_eq!(alice_orderbook.bids[0].rel_confs, 5);
-    assert!(!alice_orderbook.bids[0].rel_nota);
+    assert_eq!(alice_orderbook.bids[0].entry.conf_settings.unwrap().base_confs, 10);
+    assert!(alice_orderbook.bids[0].entry.conf_settings.unwrap().base_nota);
+    assert_eq!(alice_orderbook.bids[0].entry.conf_settings.unwrap().rel_confs, 5);
+    assert!(!alice_orderbook.bids[0].entry.conf_settings.unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();
@@ -6608,12 +6609,12 @@ fn alice_can_see_confs_in_orderbook_after_sync() {
     let bob_order_in_orderbook = alice_orderbook
         .asks
         .iter()
-        .find(|entry| entry.pubkey == bob_pubkey)
+        .find(|entry| entry.entry.pubkey == bob_pubkey)
         .unwrap();
-    assert_eq!(bob_order_in_orderbook.base_confs, 10);
-    assert!(bob_order_in_orderbook.base_nota);
-    assert_eq!(bob_order_in_orderbook.rel_confs, 5);
-    assert!(!bob_order_in_orderbook.rel_nota);
+    assert_eq!(bob_order_in_orderbook.entry.conf_settings.unwrap().base_confs, 10);
+    assert!(bob_order_in_orderbook.entry.conf_settings.unwrap().base_nota);
+    assert_eq!(bob_order_in_orderbook.entry.conf_settings.unwrap().rel_confs, 5);
+    assert!(!bob_order_in_orderbook.entry.conf_settings.unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();

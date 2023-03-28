@@ -111,6 +111,8 @@ pub mod jsonrpc_client;
 #[macro_use]
 pub mod fmt;
 #[macro_use]
+pub mod io;
+#[macro_use]
 pub mod log;
 
 pub mod crash_reports;

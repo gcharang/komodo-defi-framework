@@ -1076,6 +1076,8 @@ dependencies = [
  "mm2_metrics",
  "mm2_net",
  "mm2_number",
+ "mm2_rpc",
+ "mm2_rpc_data",
  "mm2_test_helpers",
  "mocktopus",
  "num-traits",
@@ -4333,6 +4335,7 @@ dependencies = [
  "mm2_net",
  "mm2_number",
  "mm2_rpc",
+ "mm2_rpc_data",
  "mm2_test_helpers",
  "mocktopus",
  "num-traits",
@@ -4465,10 +4468,26 @@ dependencies = [
  "gstuff",
  "http 0.2.7",
  "mm2_err_handle",
+ "mm2_number",
+ "rpc",
  "ser_error",
  "ser_error_derive",
  "serde",
  "serde_json",
+ "uuid 1.2.2",
+]
+
+[[package]]
+name = "mm2_rpc_data"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "derive_more",
+ "mm2_number",
+ "rpc",
+ "serde",
+ "serde_json",
+ "uuid 1.2.2",
 ]
 
 [[package]]
