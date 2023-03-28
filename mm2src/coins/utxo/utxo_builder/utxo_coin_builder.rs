@@ -512,7 +512,7 @@ pub trait UtxoCoinBuilderCommonOps {
 
         let mut attempts = 0i32;
         while !client.is_connected().await {
-            if attempts >= 10 {
+            if attempts >= 300 {
                 return MmError::err(UtxoCoinBuildError::FailedToConnectToElectrums {
                     electrum_servers: servers.clone(),
                     seconds: 5,
