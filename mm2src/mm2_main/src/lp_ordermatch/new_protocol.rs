@@ -1,10 +1,12 @@
-use super::{MatchBy as SuperMatchBy, TakerAction};
-use crate::mm2::lp_ordermatch::{AlbOrderedOrderbookPair, OrderConfirmationsSettings, H64};
 use common::now_sec;
 use compact_uuid::CompactUuid;
 use mm2_number::{BigRational, MmNumber};
+use mm2_rpc_data::legacy::{MatchBy as SuperMatchBy, OrderConfirmationsSettings, TakerAction};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+use super::{MatchBy as SuperMatchBy, TakerAction};
+use crate::mm2::lp_ordermatch::{AlbOrderedOrderbookPair, OrderConfirmationsSettings, H64};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
@@ -108,7 +110,7 @@ mod compact_uuid {
     }
 }
 
-#[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MakerOrderCreated {
     pub uuid: CompactUuid,
     pub base: String,

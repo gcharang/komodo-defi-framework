@@ -29,6 +29,7 @@ use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, MmNumber};
+use mm2_rpc_data::legacy::{MatchBy, OrderConfirmationsSettings, TakerAction};
 use parking_lot::Mutex as PaMutex;
 use primitives::hash::H264;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json, H264 as H264Json};
@@ -2416,7 +2417,7 @@ pub async fn taker_swap_trade_preimage(
     let order_builder = TakerOrderBuilder::new(&base_coin, &rel_coin)
         .with_base_amount(base_amount)
         .with_rel_amount(rel_amount)
-        .with_action(action.clone())
+        .with_action(action)
         .with_match_by(MatchBy::Any)
         .with_conf_settings(conf_settings)
         .with_sender_pubkey(H256Json::from(our_public_id.bytes));

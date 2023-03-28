@@ -45,8 +45,13 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, TopicHash, TopicPrefix,
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
-use mm2_number::{construct_detailed, BigDecimal, BigRational, Fraction, MmNumber, MmNumberMultiRepr};
+use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
+use mm2_rpc_data::legacy::{KmdWalletRpcResult, MatchBy, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry,
+                           SellBuyRequest, SellBuyResponse, TakerAction, TakerRequestForRpc};
 #[cfg(test)] use mocktopus::macros::*;
+use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
+                        save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,
+                        MyOrdersHistory, MyOrdersStorage};
 use num_traits::identities::Zero;
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::H256 as H256Json;
@@ -72,9 +77,6 @@ use crate::mm2::lp_swap::{calc_max_maker_vol, check_balance_for_maker_swap, chec
                           RunTakerSwapInput, SwapConfirmationsSettings, TakerSwap};
 
 pub use best_orders::{best_orders_rpc, best_orders_rpc_v2};
-use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
-                        save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,
-                        MyOrdersHistory, MyOrdersStorage};
 pub use orderbook_depth::orderbook_depth_rpc;
 pub use orderbook_rpc::{orderbook_rpc, orderbook_rpc_v2};
 
@@ -1155,32 +1157,6 @@ impl BalanceTradeFeeUpdatedHandler for BalanceUpdateOrdermatchHandler {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum TakerAction {
-    Buy,
-    Sell,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(test, derive(Default))]
-pub struct OrderConfirmationsSettings {
-    pub base_confs: u64,
-    pub base_nota: bool,
-    pub rel_confs: u64,
-    pub rel_nota: bool,
-}
-
-impl OrderConfirmationsSettings {
-    pub fn reversed(&self) -> OrderConfirmationsSettings {
-        OrderConfirmationsSettings {
-            base_confs: self.rel_confs,
-            base_nota: self.rel_nota,
-            rel_confs: self.base_confs,
-            rel_nota: self.base_nota,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TakerRequest {
     pub base: String,
     pub rel: String,
@@ -1570,29 +1546,6 @@ impl<'a> TakerOrderBuilder<'a> {
             p2p_privkey: None,
         }
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", content = "data")]
-pub enum MatchBy {
-    Any,
-    Orders(HashSet<Uuid>),
-    Pubkeys(HashSet<H256Json>),
-}
-
-impl Default for MatchBy {
-    fn default() -> Self { MatchBy::Any }
-}
-
-#[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", content = "data")]
-enum OrderType {
-    FillOrKill,
-    GoodTillCancelled,
-}
-
-impl Default for OrderType {
-    fn default() -> Self { OrderType::GoodTillCancelled }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -3704,39 +3657,8 @@ async fn process_taker_connect(ctx: MmArc, sender_pubkey: H256Json, connect_msg:
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct AutoBuyInput {
-    base: String,
-    rel: String,
-    price: MmNumber,
-    volume: MmNumber,
-    timeout: Option<u64>,
-    /// Not used. Deprecated.
-    #[allow(dead_code)]
-    duration: Option<u32>,
-    // TODO: remove this field on API refactoring, method should be separated from params
-    method: String,
-    #[allow(dead_code)]
-    gui: Option<String>,
-    #[serde(rename = "destpubkey")]
-    #[serde(default)]
-    #[allow(dead_code)]
-    dest_pub_key: H256Json,
-    #[serde(default)]
-    match_by: MatchBy,
-    #[serde(default)]
-    order_type: OrderType,
-    base_confs: Option<u64>,
-    base_nota: Option<bool>,
-    rel_confs: Option<u64>,
-    rel_nota: Option<bool>,
-    min_volume: Option<MmNumber>,
-    #[serde(default = "get_true")]
-    save_in_history: bool,
-}
-
 pub async fn buy(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let input: AutoBuyInput = try_s!(json::from_value(req));
+    let input: SellBuyRequest = try_s!(json::from_value(req));
     if input.base == input.rel {
         return ERR!("Base and rel must be different coins");
     }
@@ -3763,12 +3685,12 @@ pub async fn buy(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
         )
         .await
     );
-    let res = try_s!(lp_auto_buy(&ctx, &base_coin, &rel_coin, input).await).into_bytes();
+    let res = try_s!(lp_auto_buy(&ctx, &base_coin, &rel_coin, input).await);
     Ok(try_s!(Response::builder().body(res)))
 }
 
 pub async fn sell(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let input: AutoBuyInput = try_s!(json::from_value(req));
+    let input: SellBuyRequest = try_s!(json::from_value(req));
     if input.base == input.rel {
         return ERR!("Base and rel must be different coins");
     }
@@ -3794,7 +3716,7 @@ pub async fn sell(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
         )
         .await
     );
-    let res = try_s!(lp_auto_buy(&ctx, &base_coin, &rel_coin, input).await).into_bytes();
+    let res = try_s!(lp_auto_buy(&ctx, &base_coin, &rel_coin, input).await);
     Ok(try_s!(Response::builder().body(res)))
 }
 
@@ -3817,54 +3739,24 @@ struct TakerMatch {
     last_updated: u64,
 }
 
-impl<'a> From<&'a TakerRequest> for TakerRequestForRpc<'a> {
-    fn from(request: &'a TakerRequest) -> TakerRequestForRpc<'a> {
+impl<'a> From<&'a TakerRequest> for TakerRequestForRpc {
+    fn from(request: &'a TakerRequest) -> TakerRequestForRpc {
         TakerRequestForRpc {
-            base: &request.base,
-            rel: &request.rel,
+            base: request.base.clone(),
+            rel: request.rel.clone(),
             base_amount: request.base_amount.to_decimal(),
             base_amount_rat: request.base_amount.to_ratio(),
             rel_amount: request.rel_amount.to_decimal(),
             rel_amount_rat: request.rel_amount.to_ratio(),
-            action: &request.action,
-            uuid: &request.uuid,
+            action: request.action,
+            uuid: request.uuid,
             method: "request".to_string(),
-            sender_pubkey: &request.sender_pubkey,
-            dest_pub_key: &request.dest_pub_key,
-            match_by: &request.match_by,
-            conf_settings: &request.conf_settings,
+            sender_pubkey: request.sender_pubkey,
+            dest_pub_key: request.dest_pub_key,
+            match_by: request.match_by.clone(),
+            conf_settings: request.conf_settings,
         }
     }
-}
-
-construct_detailed!(DetailedMinVolume, min_volume);
-
-#[derive(Serialize)]
-struct LpautobuyResult<'a> {
-    #[serde(flatten)]
-    request: TakerRequestForRpc<'a>,
-    order_type: &'a OrderType,
-    #[serde(flatten)]
-    min_volume: DetailedMinVolume,
-    base_orderbook_ticker: &'a Option<String>,
-    rel_orderbook_ticker: &'a Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct TakerRequestForRpc<'a> {
-    base: &'a str,
-    rel: &'a str,
-    base_amount: BigDecimal,
-    base_amount_rat: BigRational,
-    rel_amount: BigDecimal,
-    rel_amount_rat: BigRational,
-    action: &'a TakerAction,
-    uuid: &'a Uuid,
-    method: String,
-    sender_pubkey: &'a H256Json,
-    dest_pub_key: &'a H256Json,
-    match_by: &'a MatchBy,
-    conf_settings: &'a Option<OrderConfirmationsSettings>,
 }
 
 #[allow(clippy::needless_borrow)]
@@ -3872,8 +3764,8 @@ pub async fn lp_auto_buy(
     ctx: &MmArc,
     base_coin: &MmCoinEnum,
     rel_coin: &MmCoinEnum,
-    input: AutoBuyInput,
-) -> Result<String, String> {
+    input: SellBuyRequest,
+) -> Result<Vec<u8>, String> {
     if input.price < MmNumber::from(BigRational::new(1.into(), 100_000_000.into())) {
         return ERR!("Price is too low, minimum is 0.00000001");
     }
@@ -3927,19 +3819,20 @@ pub async fn lp_auto_buy(
         order.p2p_keypair(),
     );
 
-    let result = json!({ "result": LpautobuyResult {
+    let res = try_s!(serde_json::to_vec(&KmdWalletRpcResult::new(SellBuyResponse {
         request: (&order.request).into(),
-        order_type: &order.order_type,
+        order_type: order.order_type,
         min_volume: order.min_volume.clone().into(),
-        base_orderbook_ticker: &order.base_orderbook_ticker,
-        rel_orderbook_ticker: &order.rel_orderbook_ticker,
-    } });
+        base_orderbook_ticker: order.base_orderbook_ticker.clone(),
+        rel_orderbook_ticker: order.rel_orderbook_ticker.clone(),
+    })));
 
     save_my_new_taker_order(ctx.clone(), &order)
         .await
         .map_err(|e| ERRL!("{}", e))?;
     my_taker_orders.insert(order.request.uuid, order);
-    Ok(result.to_string())
+
+    Ok(res)
 }
 
 /// Orderbook Item P2P message
@@ -3986,7 +3879,6 @@ impl OrderbookP2PItem {
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
             age: now_sec_i64(),
-            zcredits: 0,
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4052,7 +3944,6 @@ impl OrderbookP2PItem {
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
             age: now_sec_i64(),
-            zcredits: 0,
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4214,7 +4105,6 @@ impl OrderbookItem {
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
             age: now_sec_i64(),
-            zcredits: 0,
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4250,7 +4140,6 @@ impl OrderbookItem {
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
             age: now_sec_i64(),
-            zcredits: 0,
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4474,7 +4363,7 @@ impl<'a> From<&'a MakerReserved> for MakerReservedForRpc<'a> {
 
 #[derive(Debug, Serialize)]
 struct MakerMatchForRpc<'a> {
-    request: TakerRequestForRpc<'a>,
+    request: TakerRequestForRpc,
     reserved: MakerReservedForRpc<'a>,
     connect: Option<TakerConnectForRpc<'a>>,
     connected: Option<MakerConnectedForRpc<'a>>,
@@ -4682,7 +4571,7 @@ pub async fn set_price(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, Strin
     let req: SetPriceReq = try_s!(json::from_value(req));
     let maker_order = create_maker_order(&ctx, req).await?;
     let rpc_result = MakerOrderForRpc::from(&maker_order);
-    let res = try_s!(json::to_vec(&json!({ "result": rpc_result })));
+    let res = try_s!(json::to_vec(&KmdWalletRpcResult::new(rpc_result)));
     Ok(try_s!(Response::builder().body(res)))
 }
 
@@ -4853,7 +4742,7 @@ pub async fn update_maker_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Ve
     let req: MakerOrderUpdateReq = try_s!(json::from_value(req));
     let order = try_s!(update_maker_order(&ctx, req).await);
     let rpc_result = MakerOrderForRpc::from(&order);
-    let res = try_s!(json::to_vec(&json!({ "result": rpc_result })));
+    let res = try_s!(json::to_vec(&KmdWalletRpcResult::new(rpc_result)));
 
     Ok(try_s!(Response::builder().body(res)))
 }
@@ -5242,7 +5131,7 @@ impl<'a> From<&'a TakerMatch> for TakerMatchForRpc<'a> {
 #[derive(Serialize)]
 struct TakerOrderForRpc<'a> {
     created_at: u64,
-    request: TakerRequestForRpc<'a>,
+    request: TakerRequestForRpc,
     matches: HashMap<Uuid, TakerMatchForRpc<'a>>,
     order_type: &'a OrderType,
     cancellable: bool,
@@ -5269,6 +5158,7 @@ impl<'a> From<&'a TakerOrder> for TakerOrderForRpc<'a> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize)]
 #[serde(tag = "type", content = "order")]
 enum OrderForRpc<'a> {
@@ -5600,42 +5490,6 @@ pub(self) async fn subscribe_to_orderbook_topic(
     }
 
     Ok(())
-}
-
-construct_detailed!(DetailedBaseMaxVolume, base_max_volume);
-construct_detailed!(DetailedBaseMinVolume, base_min_volume);
-construct_detailed!(DetailedRelMaxVolume, rel_max_volume);
-construct_detailed!(DetailedRelMinVolume, rel_min_volume);
-
-#[derive(Clone, Debug, Serialize)]
-pub struct RpcOrderbookEntry {
-    coin: String,
-    address: String,
-    price: BigDecimal,
-    price_rat: BigRational,
-    price_fraction: Fraction,
-    #[serde(rename = "maxvolume")]
-    max_volume: BigDecimal,
-    max_volume_rat: BigRational,
-    max_volume_fraction: Fraction,
-    min_volume: BigDecimal,
-    min_volume_rat: BigRational,
-    min_volume_fraction: Fraction,
-    pubkey: String,
-    age: i64,
-    zcredits: u64,
-    uuid: Uuid,
-    is_mine: bool,
-    #[serde(flatten)]
-    base_max_volume: DetailedBaseMaxVolume,
-    #[serde(flatten)]
-    base_min_volume: DetailedBaseMinVolume,
-    #[serde(flatten)]
-    rel_max_volume: DetailedRelMaxVolume,
-    #[serde(flatten)]
-    rel_min_volume: DetailedRelMinVolume,
-    #[serde(flatten)]
-    conf_settings: Option<OrderConfirmationsSettings>,
 }
 
 #[derive(Clone, Debug, Serialize)]

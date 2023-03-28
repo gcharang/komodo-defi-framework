@@ -70,18 +70,6 @@ pub const PASSWORD_MAXIMUM_CONSECUTIVE_CHARACTERS: usize = 3;
 #[cfg(feature = "custom-swap-locktime")]
 const CUSTOM_PAYMENT_LOCKTIME_DEFAULT: u64 = 900;
 
-#[derive(Serialize)]
-pub struct MmVersionResult {
-    result: String,
-    datetime: String,
-}
-
-impl MmVersionResult {
-    pub const fn new(result: String, datetime: String) -> MmVersionResult { MmVersionResult { result, datetime } }
-
-    pub fn to_json(&self) -> Json { json::to_value(self).expect("expected valid JSON object") }
-}
-
 pub struct LpMainParams {
     conf: Json,
     filter: Option<LogLevel>,

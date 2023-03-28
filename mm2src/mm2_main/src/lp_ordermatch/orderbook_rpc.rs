@@ -1,5 +1,5 @@
 use super::{addr_format_from_protocol_info, is_my_order, orderbook_address, subscribe_to_orderbook_topic,
-            OrdermatchContext, RpcOrderbookEntry, RpcOrderbookEntryV2};
+            OrdermatchContext, RpcOrderbookEntryV2};
 use coins::{address_by_coin_conf_and_pubkey_str, coin_conf, is_wallet_only_conf};
 use common::log::warn;
 use common::{now_sec, HttpStatusCode};
@@ -8,32 +8,10 @@ use derive_more::Display;
 use http::{Response, StatusCode};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use mm2_number::{construct_detailed, BigRational, MmNumber, MmNumberMultiRepr};
+use mm2_number::{BigRational, MmNumber, MmNumberMultiRepr};
+use mm2_rpc_data::legacy::{AggregatedOrderbookEntry, OrderbookRequest, OrderbookResponse, RpcOrderbookEntry};
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
-
-#[derive(Deserialize)]
-pub struct OrderbookReq {
-    base: String,
-    rel: String,
-}
-
-construct_detailed!(TotalAsksBaseVol, total_asks_base_vol);
-construct_detailed!(TotalAsksRelVol, total_asks_rel_vol);
-construct_detailed!(TotalBidsBaseVol, total_bids_base_vol);
-construct_detailed!(TotalBidsRelVol, total_bids_rel_vol);
-construct_detailed!(AggregatedBaseVol, base_max_volume_aggr);
-construct_detailed!(AggregatedRelVol, rel_max_volume_aggr);
-
-#[derive(Debug, Serialize)]
-pub struct AggregatedOrderbookEntry {
-    #[serde(flatten)]
-    entry: RpcOrderbookEntry,
-    #[serde(flatten)]
-    base_max_volume_aggr: AggregatedBaseVol,
-    #[serde(flatten)]
-    rel_max_volume_aggr: AggregatedRelVol,
-}
 
 #[derive(Debug, Serialize)]
 pub struct AggregatedOrderbookEntryV2 {
@@ -41,32 +19,6 @@ pub struct AggregatedOrderbookEntryV2 {
     entry: RpcOrderbookEntryV2,
     base_max_volume_aggr: MmNumberMultiRepr,
     rel_max_volume_aggr: MmNumberMultiRepr,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OrderbookResponse {
-    #[serde(rename = "askdepth")]
-    ask_depth: u32,
-    asks: Vec<AggregatedOrderbookEntry>,
-    base: String,
-    #[serde(rename = "biddepth")]
-    bid_depth: u32,
-    bids: Vec<AggregatedOrderbookEntry>,
-    netid: u16,
-    #[serde(rename = "numasks")]
-    num_asks: usize,
-    #[serde(rename = "numbids")]
-    num_bids: usize,
-    rel: String,
-    timestamp: u64,
-    #[serde(flatten)]
-    total_asks_base: TotalAsksBaseVol,
-    #[serde(flatten)]
-    total_asks_rel: TotalAsksRelVol,
-    #[serde(flatten)]
-    total_bids_base: TotalBidsBaseVol,
-    #[serde(flatten)]
-    total_bids_rel: TotalBidsRelVol,
 }
 
 fn build_aggregated_entries(entries: Vec<RpcOrderbookEntry>) -> (Vec<AggregatedOrderbookEntry>, MmNumber, MmNumber) {
@@ -108,7 +60,7 @@ fn build_aggregated_entries_v2(
 }
 
 pub async fn orderbook_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let req: OrderbookReq = try_s!(json::from_value(req));
+    let req: OrderbookRequest = try_s!(json::from_value(req));
     if req.base == req.rel {
         return ERR!("Base and rel must be different coins");
     }
@@ -284,7 +236,7 @@ impl From<GetTradeableCoinConfErr> for OrderbookRpcError {
 
 pub async fn orderbook_rpc_v2(
     ctx: MmArc,
-    req: OrderbookReq,
+    req: OrderbookRequest,
 ) -> Result<OrderbookV2Response, MmError<OrderbookRpcError>> {
     if req.base == req.rel {
         return MmError::err(OrderbookRpcError::BaseRelSame);

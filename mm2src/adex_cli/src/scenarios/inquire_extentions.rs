@@ -2,7 +2,7 @@ use inquire::parser::DEFAULT_BOOL_PARSER;
 use std::str::FromStr;
 
 #[derive(Clone)]
-pub enum InquireOption<T> {
+pub(crate) enum InquireOption<T> {
     Some(T),
     None,
 }
@@ -40,8 +40,8 @@ impl<T: ToString> ToString for InquireOption<T> {
     }
 }
 
-pub type OptionBoolFormatter<'a> = &'a dyn Fn(OptionalConfirm) -> String;
-pub const DEFAULT_OPTION_BOOL_FORMATTER: OptionBoolFormatter = &|ans| -> String {
+pub(crate) type OptionBoolFormatter<'a> = &'a dyn Fn(OptionalConfirm) -> String;
+pub(crate) const DEFAULT_OPTION_BOOL_FORMATTER: OptionBoolFormatter = &|ans| -> String {
     match ans {
         InquireOption::None => String::new(),
         InquireOption::Some(true) => String::from("yes"),
@@ -49,15 +49,15 @@ pub const DEFAULT_OPTION_BOOL_FORMATTER: OptionBoolFormatter = &|ans| -> String 
     }
 };
 
-pub type OptionBoolParser<'a> = &'a dyn Fn(&str) -> Result<InquireOption<bool>, ()>;
-pub const OPTION_BOOL_PARSER: OptionBoolParser = &|ans: &str| -> Result<InquireOption<bool>, ()> {
+pub(crate) type OptionBoolParser<'a> = &'a dyn Fn(&str) -> Result<InquireOption<bool>, ()>;
+pub(crate) const OPTION_BOOL_PARSER: OptionBoolParser = &|ans: &str| -> Result<InquireOption<bool>, ()> {
     if ans.is_empty() {
         return Ok(InquireOption::None);
     }
     DEFAULT_BOOL_PARSER(ans).map(InquireOption::Some)
 };
 
-pub const DEFAULT_DEFAULT_OPTION_BOOL_FORMATTER: OptionBoolFormatter = &|ans: InquireOption<bool>| match ans {
+pub(crate) const DEFAULT_DEFAULT_OPTION_BOOL_FORMATTER: OptionBoolFormatter = &|ans: InquireOption<bool>| match ans {
     InquireOption::None => String::from("Tap enter to skip/yes/no"),
     InquireOption::Some(true) => String::from("none/Yes/no"),
     InquireOption::Some(false) => String::from("none/yes/No"),

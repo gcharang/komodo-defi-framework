@@ -1,4 +1,6 @@
 use bip39::{Language, Mnemonic, MnemonicType};
+use common::log::{error, info};
+use common::password_policy;
 use inquire::{validator::Validation, Confirm, CustomType, CustomUserError, Text};
 use passwords::PasswordGenerator;
 use serde::Serialize;
@@ -6,11 +8,9 @@ use std::net::Ipv4Addr;
 use std::ops::Not;
 use std::path::Path;
 
-use super::helpers;
 use super::inquire_extentions::{InquireOption, DEFAULT_DEFAULT_OPTION_BOOL_FORMATTER, DEFAULT_OPTION_BOOL_FORMATTER,
                                 OPTION_BOOL_PARSER};
-use common::log::{error, info};
-use common::password_policy;
+use crate::helpers;
 
 const DEFAULT_NET_ID: u16 = 7777;
 const DEFAULT_GID: &str = "adex-cli";
@@ -29,7 +29,7 @@ pub fn init_mm2_cfg(cfg_file: &str) -> Result<(), ()> {
 }
 
 #[derive(Serialize)]
-pub struct Mm2Cfg {
+pub(crate) struct Mm2Cfg {
     pub gui: Option<String>,
     pub netid: Option<u16>,
     pub rpc_password: Option<String>,
