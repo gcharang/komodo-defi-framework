@@ -1,5 +1,10 @@
 use crate::eth::GetEthAddressError;
+#[cfg(target_arch = "wasm32")]
+use crate::nft_storage::wasm_storage::WasmNftCacheError;
+use crate::nft_storage::CreateNftStorageError;
 use common::HttpStatusCode;
+#[cfg(not(target_arch = "wasm32"))]
+use db_common::sqlite::rusqlite::Error as SqlError;
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use http::StatusCode;
@@ -33,6 +38,8 @@ pub enum GetNftInfoError {
         token_address: String,
         token_id: String,
     },
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
 }
 
 impl From<SlurpError> for GetNftInfoError {
@@ -63,6 +70,24 @@ impl From<GetEthAddressError> for GetNftInfoError {
     fn from(e: GetEthAddressError) -> Self { GetNftInfoError::GetEthAddressError(e) }
 }
 
+impl From<CreateNftStorageError> for GetNftInfoError {
+    fn from(e: CreateNftStorageError) -> Self {
+        match e {
+            CreateNftStorageError::Internal(err) => GetNftInfoError::Internal(err),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<SqlError> for GetNftInfoError {
+    fn from(e: SqlError) -> Self { GetNftInfoError::DbError(e.to_string()) }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<WasmNftCacheError> for GetNftInfoError {
+    fn from(e: WasmNftCacheError) -> Self { GetNftInfoError::DbError(e.to_string()) }
+}
+
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -72,7 +97,8 @@ impl HttpStatusCode for GetNftInfoError {
             GetNftInfoError::Transport(_)
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
-            | GetNftInfoError::TokenNotFoundInWallet { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::TokenNotFoundInWallet { .. }
+            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

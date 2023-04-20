@@ -22,7 +22,7 @@ fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS {} (
     chain TEXT NOT NULL,
-    token_address TEXT NOT NULL,
+    token_address VARCHAR(256) NOT NULL,
     token_id VARCHAR(256) NOT NULL,
     amount VARCHAR(256) NOT NULL,
     owner_of TEXT NOT NULL,
@@ -60,7 +60,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     value VARCHAR(256) NOT NULL,
     contract_type TEXT NOT NULL,
     transaction_type TEXT NOT NULL,
-    token_address TEXT NOT NULL,
+    token_address VARCHAR(256) NOT NULL,
     token_id VARCHAR(256) NOT NULL,
     from_address TEXT NOT NULL,
     to_address TEXT NOT NULL,

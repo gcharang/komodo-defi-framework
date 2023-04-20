@@ -1,8 +1,10 @@
 use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
 use async_trait::async_trait;
+use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::NotMmError;
 use mm2_err_handle::prelude::MmResult;
+use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub mod wasm_storage;
@@ -48,6 +50,7 @@ pub trait NftTxHistoryStorageOps {
         I::IntoIter: Send;
 }
 
+#[derive(Debug, Deserialize, Display, Serialize)]
 pub enum CreateNftStorageError {
     Internal(String),
 }

@@ -276,3 +276,14 @@ pub(crate) struct NftTransferHistoryWrapper {
 pub struct NftsTransferHistoryList {
     pub(crate) transfer_history: Vec<NftTransferHistory>,
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct GetNftTxHistoryFilters {
+    from_block: Option<i64>,
+    to_block: Option<i64>,
+    from_address: Option<String>,
+    to_address: Option<String>,
+    from_date: Option<String>,
+    to_date: Option<String>,
+}
