@@ -118,6 +118,7 @@ pub struct Nft {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 /// This structure is for deserializing NFT json to struct.
@@ -139,6 +140,7 @@ pub(crate) struct NftWrapper {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -249,6 +251,7 @@ pub struct NftTransferHistory {
     pub(crate) amount: BigDecimal,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,6 +273,7 @@ pub(crate) struct NftTransferHistoryWrapper {
     pub(crate) amount: SerdeStringWrap<BigDecimal>,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
