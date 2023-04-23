@@ -141,13 +141,13 @@ impl NftStorageOps for SqliteNftStorage {
 
     async fn get_nft_list(&self, _ctx: &MmArc, _chain: &Chain) -> MmResult<Vec<Nft>, Self::Error> { todo!() }
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send,
     {
         let selfi = self.clone();
-        let _chain = chain.clone();
+        let _chain = *chain;
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let _sql_transaction = conn.transaction()?;

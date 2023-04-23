@@ -5,15 +5,15 @@ use crate::nft::{send_moralis_request, FORMAT_DECIMAL_MORALIS, URL_MORALIS};
 use async_trait::async_trait;
 use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
-use mm2_err_handle::mm_error::NotMmError;
 use mm2_err_handle::mm_error::{MmError, MmResult};
+use mm2_err_handle::mm_error::{NotEqual, NotMmError};
 use serde::{Deserialize, Serialize};
 use std::format;
 
 #[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub mod wasm_storage;
 
-pub trait NftStorageError: std::fmt::Debug + NotMmError + Send {}
+pub trait NftStorageError: std::fmt::Debug + NotMmError + NotEqual + Send {}
 
 #[async_trait]
 pub trait NftStorageOps {
@@ -72,6 +72,7 @@ impl<'a> NftStorageBuilder<'a> {
     }
 }
 
+#[allow(dead_code)]
 async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, GetNftInfoError> {
     let api_key = ctx.conf["api_key"]
         .as_str()
@@ -80,7 +81,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, 
     let mut res_list = Vec::new();
 
     let (coin_str, chain_str) = chain.to_ticker_chain();
-    let my_address = get_eth_address(&ctx, &coin_str).await?;
+    let my_address = get_eth_address(ctx, &coin_str).await?;
     let uri_without_cursor = format!(
         "{}{}/nft?chain={}&{}",
         URL_MORALIS, my_address.wallet_address, chain_str, FORMAT_DECIMAL_MORALIS
@@ -95,7 +96,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, 
             for nft_json in nfts_list {
                 let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string())?;
                 let nft = Nft {
-                    chain: chain.clone(),
+                    chain: *chain,
                     token_address: nft_wrapper.token_address,
                     token_id: nft_wrapper.token_id.0,
                     amount: nft_wrapper.amount.0,

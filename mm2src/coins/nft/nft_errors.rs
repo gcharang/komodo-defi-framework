@@ -1,10 +1,6 @@
 use crate::eth::GetEthAddressError;
-#[cfg(target_arch = "wasm32")]
-use crate::nft_storage::wasm_storage::WasmNftCacheError;
 use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 use common::HttpStatusCode;
-#[cfg(not(target_arch = "wasm32"))]
-use db_common::sqlite::rusqlite::Error as SqlError;
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use http::StatusCode;
@@ -84,16 +80,6 @@ impl<T: NftStorageError> From<T> for GetNftInfoError {
         GetNftInfoError::DbError(msg)
     }
 }
-
-// #[cfg(not(target_arch = "wasm32"))]
-// impl From<SqlError> for GetNftInfoError {
-//     fn from(e: SqlError) -> Self { GetNftInfoError::DbError(e.to_string()) }
-// }
-//
-// #[cfg(target_arch = "wasm32")]
-// impl From<WasmNftCacheError> for GetNftInfoError {
-//     fn from(e: WasmNftCacheError) -> Self { GetNftInfoError::DbError(e.to_string()) }
-// }
 
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
