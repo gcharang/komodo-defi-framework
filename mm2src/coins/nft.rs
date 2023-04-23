@@ -6,81 +6,35 @@ pub(crate) mod nft_structs;
 
 use crate::WithdrawError;
 use nft_errors::GetNftInfoError;
-use nft_structs::{Chain, ConvertChain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory,
-                  NftTransferHistoryWrapper, NftTransfersReq, NftWrapper, NftsTransferHistoryList,
-                  TransactionNftDetails, WithdrawNftReq};
+use nft_structs::{Chain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory, NftTransferHistoryWrapper,
+                  NftTransfersReq, NftWrapper, NftsTransferHistoryList, TransactionNftDetails, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
+use crate::nft_storage::{NftStorageOps, NftStorageBuilder};
 use common::{APPLICATION_JSON, X_API_KEY};
 use http::header::ACCEPT;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
 
 /// url for moralis requests
-const URL_MORALIS: &str = "https://deep-index.moralis.io/api/v2/";
+pub const URL_MORALIS: &str = "https://deep-index.moralis.io/api/v2/";
 /// query parameter for moralis request: The format of the token ID
-const FORMAT_DECIMAL_MORALIS: &str = "format=decimal";
+pub const FORMAT_DECIMAL_MORALIS: &str = "format=decimal";
 /// query parameter for moralis request: The transfer direction
-const DIRECTION_BOTH_MORALIS: &str = "direction=both";
+pub const DIRECTION_BOTH_MORALIS: &str = "direction=both";
 
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
 /// `get_nft_list` function returns list of NFTs on requested chains owned by user.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
-    let api_key = ctx.conf["api_key"]
-        .as_str()
-        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
-
     let mut res_list = Vec::new();
-
+    let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains {
-        let (coin_str, chain_str) = chain.to_ticker_chain();
-        let my_address = get_eth_address(&ctx, &coin_str).await?;
-        let uri_without_cursor = format!(
-            "{}{}/nft?chain={}&{}",
-            URL_MORALIS, my_address.wallet_address, chain_str, FORMAT_DECIMAL_MORALIS
-        );
-
-        // The cursor returned in the previous response (used for getting the next page).
-        let mut cursor = String::new();
-        loop {
-            let uri = format!("{}{}", uri_without_cursor, cursor);
-            let response = send_moralis_request(uri.as_str(), api_key).await?;
-            if let Some(nfts_list) = response["result"].as_array() {
-                for nft_json in nfts_list {
-                    let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string())?;
-                    let nft = Nft {
-                        chain,
-                        token_address: nft_wrapper.token_address,
-                        token_id: nft_wrapper.token_id.0,
-                        amount: nft_wrapper.amount.0,
-                        owner_of: nft_wrapper.owner_of,
-                        token_hash: nft_wrapper.token_hash,
-                        block_number_minted: *nft_wrapper.block_number_minted,
-                        block_number: *nft_wrapper.block_number,
-                        contract_type: nft_wrapper.contract_type.map(|v| v.0),
-                        name: nft_wrapper.name,
-                        symbol: nft_wrapper.symbol,
-                        token_uri: nft_wrapper.token_uri,
-                        metadata: nft_wrapper.metadata,
-                        last_token_uri_sync: nft_wrapper.last_token_uri_sync,
-                        last_metadata_sync: nft_wrapper.last_metadata_sync,
-                        minter_address: nft_wrapper.minter_address,
-                        possible_spam: nft_wrapper.possible_spam,
-                    };
-                    // collect NFTs from the page
-                    res_list.push(nft);
-                }
-                // if cursor is not null, there are other NFTs on next page,
-                // and we need to send new request with cursor to get info from the next page.
-                if let Some(cursor_res) = response["cursor"].as_str() {
-                    cursor = format!("{}{}", "&cursor=", cursor_res);
-                    continue;
-                } else {
-                    break;
-                }
-            }
+        if storage.is_initialized_for_list(&chain).await? {
+            storage.init_list(&chain).await?;
         }
+        let nfts = storage.get_nft_list(&ctx, &chain).await?;
+        res_list.extend(nfts);
     }
     drop_mutability!(res_list);
     let nft_list = NftList { nfts: res_list };
@@ -217,7 +171,7 @@ pub async fn withdraw_nft(ctx: MmArc, req_type: WithdrawNftReq) -> WithdrawNftRe
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNftInfoError> {
+pub async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNftInfoError> {
     use http::header::HeaderValue;
     use mm2_net::transport::slurp_req_body;
 

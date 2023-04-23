@@ -1,6 +1,5 @@
-use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageError, NftListStorageOps, NftTxHistoryStorageError,
-                         NftTxHistoryStorageOps};
+use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftTransferHistory};
+use crate::nft_storage::{CreateNftStorageError, NftStorageError, NftStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, NO_PARAMS};
@@ -73,8 +72,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     Ok(sql)
 }
 
-impl NftListStorageError for SqlError {}
-impl NftTxHistoryStorageError for SqlError {}
+impl NftStorageError for SqlError {}
 
 #[derive(Clone)]
 pub struct SqliteNftStorage(Arc<Mutex<Connection>>);
@@ -91,10 +89,10 @@ impl SqliteNftStorage {
 }
 
 #[async_trait]
-impl NftListStorageOps for SqliteNftStorage {
+impl NftStorageOps for SqliteNftStorage {
     type Error = SqlError;
 
-    async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+    async fn init_list(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
         let sql_nft_list = create_nft_list_table_sql(chain)?;
         async_blocking(move || {
@@ -105,7 +103,7 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn is_initialized_for(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
+    async fn is_initialized_for_list(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
         let table_name = nft_list_table_name(chain);
         validate_table_name(&table_name)?;
         let selfi = self.clone();
@@ -117,24 +115,7 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_nft_list(&self, _chain: &Chain) -> MmResult<NftList, Self::Error> { todo!() }
-
-    async fn add_nfts_to_list<I>(&self, _chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
-    where
-        I: IntoIterator<Item = Nft> + Send + 'static,
-        I::IntoIter: Send,
-    {
-        todo!()
-    }
-
-    async fn remove_nft_from_list(&self, _nft: Nft) -> MmResult<(), Self::Error> { todo!() }
-}
-
-#[async_trait]
-impl NftTxHistoryStorageOps for SqliteNftStorage {
-    type Error = SqlError;
-
-    async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+    async fn init_history(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
         let sql_tx_history = create_tx_history_table_sql(chain)?;
         async_blocking(move || {
@@ -145,7 +126,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn is_initialized_for(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
+    async fn is_initialized_for_history(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
         let table_name = nft_list_table_name(chain);
         validate_table_name(&table_name)?;
         let selfi = self.clone();
@@ -158,7 +139,29 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_tx_history(&self, _chain: &Chain) -> MmResult<NftsTransferHistoryList, Self::Error> { todo!() }
+    async fn get_nft_list(&self, _ctx: &MmArc, _chain: &Chain) -> MmResult<Vec<Nft>, Self::Error> { todo!() }
+
+    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
+    where
+        I: IntoIterator<Item = Nft> + Send + 'static,
+        I::IntoIter: Send,
+    {
+        let selfi = self.clone();
+        let _chain = chain.clone();
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let _sql_transaction = conn.transaction()?;
+
+            Ok(())
+        })
+        .await
+    }
+
+    async fn remove_nft_from_list(&self, _nft: Nft) -> MmResult<(), Self::Error> { todo!() }
+
+    async fn get_tx_history(&self, _ctx: &MmArc, _chain: &Chain) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
 
     async fn add_txs_to_history<I>(&self, _chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
     where
