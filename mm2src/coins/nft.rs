@@ -10,7 +10,7 @@ use nft_structs::{Chain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHi
                   NftTransfersReq, NftWrapper, NftsTransferHistoryList, TransactionNftDetails, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft_storage::{NftStorageOps, NftStorageBuilder};
+use crate::nft_storage::{NftStorageBuilder, NftStorageOps};
 use common::{APPLICATION_JSON, X_API_KEY};
 use http::header::ACCEPT;
 use mm2_number::BigDecimal;
