@@ -11,41 +11,33 @@ use nft_structs::{Chain, ConvertChain, Nft, NftList, NftListReq, NftMetadataReq,
                   TransactionNftDetails, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use common::{APPLICATION_JSON, X_API_KEY};
+use common::APPLICATION_JSON;
 use http::header::ACCEPT;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
 
-/// url for moralis requests
-const URL_MORALIS: &str = "https://deep-index.moralis.io/api/v2/";
-/// query parameter for moralis request: The format of the token ID
-const FORMAT_DECIMAL_MORALIS: &str = "format=decimal";
-/// query parameter for moralis request: The transfer direction
-const DIRECTION_BOTH_MORALIS: &str = "direction=both";
+/// url for proxy service requests
+const URL_PROXY: &str = "https://moralis-proxy.komodo.earth/api/v1/";
 
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
 /// `get_nft_list` function returns list of NFTs on requested chains owned by user.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
-    let api_key = ctx.conf["api_key"]
-        .as_str()
-        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
-
     let mut res_list = Vec::new();
 
     for chain in req.chains {
         let (coin_str, chain_str) = chain.to_ticker_chain();
         let my_address = get_eth_address(&ctx, &coin_str).await?;
         let uri_without_cursor = format!(
-            "{}{}/nft?chain={}&{}",
-            URL_MORALIS, my_address.wallet_address, chain_str, FORMAT_DECIMAL_MORALIS
+            "{}get_wallet_nfts?chain={}&address={}",
+            URL_PROXY, chain_str, my_address.wallet_address
         );
 
         // The cursor returned in the previous response (used for getting the next page).
         let mut cursor = String::new();
         loop {
             let uri = format!("{}{}", uri_without_cursor, cursor);
-            let response = send_moralis_request(uri.as_str(), api_key).await?;
+            let response = send_nft_req_to_proxy(uri.as_str()).await?;
             if let Some(nfts_list) = response["result"].as_array() {
                 for nft_json in nfts_list {
                     let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string())?;
@@ -66,6 +58,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
                         last_token_uri_sync: nft_wrapper.last_token_uri_sync,
                         last_metadata_sync: nft_wrapper.last_metadata_sync,
                         minter_address: nft_wrapper.minter_address,
+                        possible_spam: nft_wrapper.possible_spam,
                     };
                     // collect NFTs from the page
                     res_list.push(nft);
@@ -94,10 +87,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 /// **Caution:** ERC-1155 token can have a total supply more than 1, which means there could be several owners
 /// of the same token. `get_nft_metadata` returns NFTs info with the most recent owner.
 /// **Dont** use this function to get specific info about owner address, amount etc, you will get info not related to my_address.
-pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
-    let api_key = ctx.conf["api_key"]
-        .as_str()
-        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
+pub async fn get_nft_metadata(_ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
     let chain_str = match req.chain {
         Chain::Avalanche => "avalanche",
         Chain::Bsc => "bsc",
@@ -106,10 +96,10 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
         Chain::Polygon => "polygon",
     };
     let uri = format!(
-        "{}nft/{}/{}?chain={}&{}",
-        URL_MORALIS, req.token_address, req.token_id, chain_str, FORMAT_DECIMAL_MORALIS
+        "{}get_nft_metadata?chain={}&address={}&token_id={}",
+        URL_PROXY, chain_str, req.token_address, req.token_id
     );
-    let response = send_moralis_request(uri.as_str(), api_key).await?;
+    let response = send_nft_req_to_proxy(uri.as_str()).await?;
     let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
     let nft_metadata = Nft {
         chain: req.chain,
@@ -128,6 +118,7 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
         last_token_uri_sync: nft_wrapper.last_token_uri_sync,
         last_metadata_sync: nft_wrapper.last_metadata_sync,
         minter_address: nft_wrapper.minter_address,
+        possible_spam: nft_wrapper.possible_spam,
     };
     Ok(nft_metadata)
 }
@@ -135,10 +126,6 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
 /// `get_nft_transfers` function returns a transfer history of NFTs on requested chains owned by user.
 /// Currently doesnt support filters.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
-    let api_key = ctx.conf["api_key"]
-        .as_str()
-        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
-
     let mut res_list = Vec::new();
 
     for chain in req.chains {
@@ -151,15 +138,15 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
         };
         let my_address = get_eth_address(&ctx, coin_str).await?;
         let uri_without_cursor = format!(
-            "{}{}/nft/transfers?chain={}&{}&{}",
-            URL_MORALIS, my_address.wallet_address, chain_str, FORMAT_DECIMAL_MORALIS, DIRECTION_BOTH_MORALIS
+            "{}get_wallet_nft_transfers?chain={}&address={}",
+            URL_PROXY, chain_str, my_address.wallet_address
         );
 
         // The cursor returned in the previous response (used for getting the next page).
         let mut cursor = String::new();
         loop {
             let uri = format!("{}{}", uri_without_cursor, cursor);
-            let response = send_moralis_request(uri.as_str(), api_key).await?;
+            let response = send_nft_req_to_proxy(uri.as_str()).await?;
             if let Some(transfer_list) = response["result"].as_array() {
                 for transfer in transfer_list {
                     let transfer_wrapper: NftTransferHistoryWrapper = serde_json::from_str(&transfer.to_string())?;
@@ -181,6 +168,7 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
                         amount: transfer_wrapper.amount.0,
                         verified: transfer_wrapper.verified,
                         operator: transfer_wrapper.operator,
+                        possible_spam: transfer_wrapper.possible_spam,
                     };
                     // collect NFTs transfers from the page
                     res_list.push(transfer_history);
@@ -214,14 +202,13 @@ pub async fn withdraw_nft(ctx: MmArc, req_type: WithdrawNftReq) -> WithdrawNftRe
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNftInfoError> {
+async fn send_nft_req_to_proxy(uri: &str) -> MmResult<Json, GetNftInfoError> {
     use http::header::HeaderValue;
     use mm2_net::transport::slurp_req_body;
 
     let request = http::Request::builder()
         .method("GET")
         .uri(uri)
-        .header(X_API_KEY, api_key)
         .header(ACCEPT, HeaderValue::from_static(APPLICATION_JSON))
         .body(hyper::Body::from(""))?;
 
@@ -236,7 +223,7 @@ async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNft
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNftInfoError> {
+async fn send_nft_req_to_proxy(uri: &str) -> MmResult<Json, GetNftInfoError> {
     use mm2_net::wasm_http::FetchRequest;
 
     macro_rules! try_or {
@@ -251,7 +238,6 @@ async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNft
     let result = FetchRequest::get(uri)
         .cors()
         .body_utf8("".to_owned())
-        .header(X_API_KEY, api_key)
         .header(ACCEPT.as_str(), APPLICATION_JSON)
         .request_str()
         .await;
