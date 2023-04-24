@@ -1,5 +1,5 @@
 use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftTransferHistory};
-use crate::nft_storage::{CreateNftStorageError, NftStorageError, NftStorageOps};
+use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, NO_PARAMS};
@@ -89,10 +89,10 @@ impl SqliteNftStorage {
 }
 
 #[async_trait]
-impl NftStorageOps for SqliteNftStorage {
+impl NftListStorageOps for SqliteNftStorage {
     type Error = SqlError;
 
-    async fn init_list(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+    async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
         let sql_nft_list = create_nft_list_table_sql(chain)?;
         async_blocking(move || {
@@ -103,7 +103,7 @@ impl NftStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn is_initialized_for_list(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
+    async fn is_initialized(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
         let table_name = nft_list_table_name(chain);
         validate_table_name(&table_name)?;
         let selfi = self.clone();
@@ -111,30 +111,6 @@ impl NftStorageOps for SqliteNftStorage {
             let conn = selfi.0.lock().unwrap();
             let nft_list_initialized = query_single_row(&conn, CHECK_TABLE_EXISTS_SQL, [table_name], string_from_row)?;
             Ok(nft_list_initialized.is_some())
-        })
-        .await
-    }
-
-    async fn init_history(&self, chain: &Chain) -> MmResult<(), Self::Error> {
-        let selfi = self.clone();
-        let sql_tx_history = create_tx_history_table_sql(chain)?;
-        async_blocking(move || {
-            let conn = selfi.0.lock().unwrap();
-            conn.execute(&sql_tx_history, NO_PARAMS).map(|_| ())?;
-            Ok(())
-        })
-        .await
-    }
-
-    async fn is_initialized_for_history(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
-        let table_name = nft_list_table_name(chain);
-        validate_table_name(&table_name)?;
-        let selfi = self.clone();
-        async_blocking(move || {
-            let conn = selfi.0.lock().unwrap();
-            let tx_history_initialized =
-                query_single_row(&conn, CHECK_TABLE_EXISTS_SQL, [table_name], string_from_row)?;
-            Ok(tx_history_initialized.is_some())
         })
         .await
     }
@@ -158,6 +134,34 @@ impl NftStorageOps for SqliteNftStorage {
     }
 
     async fn remove_nft_from_list(&self, _nft: Nft) -> MmResult<(), Self::Error> { todo!() }
+}
+
+#[async_trait]
+impl NftTxHistoryStorageOps for SqliteNftStorage {
+    type Error = SqlError;
+
+    async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let selfi = self.clone();
+        let sql_nft_list = create_nft_list_table_sql(chain)?;
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            conn.execute(&sql_nft_list, NO_PARAMS).map(|_| ())?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn is_initialized(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
+        let table_name = nft_list_table_name(chain);
+        validate_table_name(&table_name)?;
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            let nft_list_initialized = query_single_row(&conn, CHECK_TABLE_EXISTS_SQL, [table_name], string_from_row)?;
+            Ok(nft_list_initialized.is_some())
+        })
+        .await
+    }
 
     async fn get_tx_history(&self, _ctx: &MmArc, _chain: &Chain) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
         todo!()

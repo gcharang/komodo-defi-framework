@@ -16,20 +16,14 @@ use std::format;
 pub trait NftStorageError: std::fmt::Debug + NotMmError + NotEqual + Send {}
 
 #[async_trait]
-pub trait NftStorageOps {
+pub trait NftListStorageOps {
     type Error: NftStorageError;
 
     /// Initializes tables in storage for the specified chain type.
-    async fn init_list(&self, chain: &Chain) -> MmResult<(), Self::Error>;
+    async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error>;
 
     /// Whether tables are initialized for the specified chain.
-    async fn is_initialized_for_list(&self, chain: &Chain) -> MmResult<bool, Self::Error>;
-
-    /// Initializes tables in storage for the specified chain type.
-    async fn init_history(&self, chain: &Chain) -> MmResult<(), Self::Error>;
-
-    /// Whether tables are initialized for the specified chain.
-    async fn is_initialized_for_history(&self, chain: &Chain) -> MmResult<bool, Self::Error>;
+    async fn is_initialized(&self, chain: &Chain) -> MmResult<bool, Self::Error>;
 
     async fn get_nft_list(&self, ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, Self::Error>;
 
@@ -39,6 +33,17 @@ pub trait NftStorageOps {
         I::IntoIter: Send;
 
     async fn remove_nft_from_list(&self, nft: Nft) -> MmResult<(), Self::Error>;
+}
+
+#[async_trait]
+pub trait NftTxHistoryStorageOps {
+    type Error: NftStorageError;
+
+    /// Initializes tables in storage for the specified chain type.
+    async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error>;
+
+    /// Whether tables are initialized for the specified chain.
+    async fn is_initialized(&self, chain: &Chain) -> MmResult<bool, Self::Error>;
 
     async fn get_tx_history(&self, ctx: &MmArc, chain: &Chain) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
 
@@ -64,7 +69,7 @@ impl<'a> NftStorageBuilder<'a> {
     pub fn new(ctx: &MmArc) -> NftStorageBuilder<'_> { NftStorageBuilder { ctx } }
 
     #[inline]
-    pub fn build(self) -> MmResult<impl NftStorageOps, CreateNftStorageError> {
+    pub fn build(self) -> MmResult<impl NftListStorageOps + NftTxHistoryStorageOps, CreateNftStorageError> {
         #[cfg(target_arch = "wasm32")]
         return wasm_storage::IndexedDbNftStorage::new(self.ctx);
         #[cfg(not(target_arch = "wasm32"))]
