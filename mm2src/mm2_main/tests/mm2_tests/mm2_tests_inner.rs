@@ -894,7 +894,14 @@ fn trade_test_electrum_and_eth_coins() {
     let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
     let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount(0);
     let pairs = &[("ETH", "JST")];
-    block_on(trade_base_rel_electrum(bob_policy, alice_policy, pairs, 1., 2., 0.1));
+    block_on(trade_base_rel_electrum(
+        bob_policy,
+        alice_policy,
+        pairs,
+        1.,
+        2.,
+        0.000001,
+    ));
 }
 
 #[test]

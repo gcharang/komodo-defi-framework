@@ -92,7 +92,7 @@ const ABCI_REQUEST_PROVE: bool = false;
 /// 0.25 is good average gas price on atom and iris
 const DEFAULT_GAS_PRICE: f64 = 0.25;
 pub(super) const TIMEOUT_HEIGHT_DELTA: u64 = 100;
-pub const GAS_LIMIT_DEFAULT: u64 = 100_000;
+pub const GAS_LIMIT_DEFAULT: u64 = 125_000;
 pub(crate) const TX_DEFAULT_MEMO: &str = "";
 
 // https://github.com/irisnet/irismod/blob/5016c1be6fdbcffc319943f33713f4a057622f0a/modules/htlc/types/validation.go#L19-L22
