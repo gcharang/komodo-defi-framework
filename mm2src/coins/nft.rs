@@ -18,10 +18,6 @@ use serde_json::Value as Json;
 
 /// url for proxy service requests
 const URL_PROXY: &str = "https://moralis-proxy.komodo.earth/api/v1/";
-/// query parameter for proxy service request: The format of the token ID
-const FORMAT_DECIMAL_PROXY: &str = "format=decimal";
-/// query parameter for proxy service request: The transfer direction
-const DIRECTION_BOTH_PROXY: &str = "direction=both";
 
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
@@ -33,8 +29,8 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         let (coin_str, chain_str) = chain.to_ticker_chain();
         let my_address = get_eth_address(&ctx, &coin_str).await?;
         let uri_without_cursor = format!(
-            "{}get_wallet_nfts?chain={}&address={}&{}",
-            URL_PROXY, chain_str, my_address.wallet_address, FORMAT_DECIMAL_PROXY
+            "{}get_wallet_nfts?chain={}&address={}",
+            URL_PROXY, chain_str, my_address.wallet_address
         );
 
         // The cursor returned in the previous response (used for getting the next page).
@@ -99,8 +95,8 @@ pub async fn get_nft_metadata(_ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft,
         Chain::Polygon => "polygon",
     };
     let uri = format!(
-        "{}get_nft_metadata/?chain={}&address={}&token_id={}&{}",
-        URL_PROXY, chain_str, req.token_address, req.token_id, FORMAT_DECIMAL_PROXY
+        "{}get_nft_metadata?chain={}&address={}&token_id={}",
+        URL_PROXY, chain_str, req.token_address, req.token_id
     );
     let response = send_nft_req_to_proxy(uri.as_str()).await?;
     let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
@@ -140,8 +136,8 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
         };
         let my_address = get_eth_address(&ctx, coin_str).await?;
         let uri_without_cursor = format!(
-            "{}get_wallet_nft_transfers?chain={}&address={}&{}&{}",
-            URL_PROXY, chain_str, my_address.wallet_address, FORMAT_DECIMAL_PROXY, DIRECTION_BOTH_PROXY
+            "{}get_wallet_nft_transfers?chain={}&address={}",
+            URL_PROXY, chain_str, my_address.wallet_address
         );
 
         // The cursor returned in the previous response (used for getting the next page).
