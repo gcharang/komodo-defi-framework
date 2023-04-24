@@ -33,8 +33,8 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         let (coin_str, chain_str) = chain.to_ticker_chain();
         let my_address = get_eth_address(&ctx, &coin_str).await?;
         let uri_without_cursor = format!(
-            "{}/get_wallet_nfts?chain={}&address={}",
-            URL_PROXY, chain_str, my_address.wallet_address
+            "{}get_wallet_nfts?chain={}&address={}&{}",
+            URL_PROXY, chain_str, my_address.wallet_address, FORMAT_DECIMAL_PROXY
         );
 
         // The cursor returned in the previous response (used for getting the next page).
