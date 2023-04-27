@@ -1,6 +1,7 @@
 use super::taker_swap::MaxTakerVolumeLessThanDust;
 use super::{get_locked_amount, get_locked_amount_by_other_swaps};
-use coins::{lp_coinfind_or_err, BalanceError, CoinBalance, CoinFindError, MmCoinEnum, TradeFee, TradePreimageError};
+use coins::{lp_coinfind_or_err, BalanceError, CoinFindError, MmCoinEnum, ProtocolSpecificBalance, TradeFee,
+            TradePreimageError};
 use common::log::debug;
 use derive_more::Display;
 use futures::compat::Future01CompatExt;
@@ -10,6 +11,7 @@ use mm2_number::{BigDecimal, MmNumber};
 use uuid::Uuid;
 
 pub type CheckBalanceResult<T> = Result<T, MmError<CheckBalanceError>>;
+type CheckProtocolSpecificBalanceResult<T> = Result<T, MmError<CheckProtocolSpecificBalanceError>>;
 
 /// Check the coin balance before the swap has started.
 ///
@@ -21,11 +23,10 @@ pub async fn check_my_coin_balance_for_swap(
     volume: MmNumber,
     mut trade_fee: TradeFee,
     taker_fee: Option<TakerFeeAdditionalInfo>,
-) -> CheckBalanceResult<CoinBalance> {
+) -> CheckBalanceResult<BigDecimal> {
     let ticker = coin.ticker();
     debug!("Check my_coin '{}' balance for swap", ticker);
-    let balance = coin.my_balance().compat().await?;
-    let spendable_balance: MmNumber = balance.spendable.clone().into();
+    let balance: MmNumber = coin.my_spendable_balance().compat().await?.into();
 
     let locked = match swap_uuid {
         Some(u) => get_locked_amount_by_other_swaps(ctx, u, coin),
@@ -62,7 +63,7 @@ pub async fn check_my_coin_balance_for_swap(
     debug!(
         "{} balance {:?}, locked {:?}, volume {:?}, fee {:?}, dex_fee {:?}",
         ticker,
-        spendable_balance.to_fraction(),
+        balance.to_fraction(),
         locked.locked_spendable.to_fraction(),
         volume.to_fraction(),
         total_trade_fee.to_fraction(),
@@ -70,7 +71,7 @@ pub async fn check_my_coin_balance_for_swap(
     );
 
     let required = volume + total_trade_fee + dex_fee;
-    let available = &spendable_balance - &locked.locked_spendable;
+    let available = &balance - &locked.locked_spendable;
 
     if available < required {
         return MmError::err(CheckBalanceError::NotSufficientBalance {
@@ -81,7 +82,7 @@ pub async fn check_my_coin_balance_for_swap(
         });
     }
 
-    Ok(balance)
+    Ok(balance.into())
 }
 
 pub async fn check_other_coin_balance_for_swap(
@@ -89,6 +90,7 @@ pub async fn check_other_coin_balance_for_swap(
     coin: &MmCoinEnum,
     swap_uuid: Option<&Uuid>,
     trade_fee: TradeFee,
+    // Todo: change this name to be inline with protocol specific balance
     required_receivable_volume: MmNumber,
 ) -> CheckBalanceResult<()> {
     if trade_fee.paid_from_trading_vol {
@@ -127,18 +129,53 @@ pub async fn check_other_coin_balance_for_swap(
         check_base_coin_balance_for_swap(ctx, &base_coin_balance, trade_fee, swap_uuid).await?;
     }
 
-    // Todo: LSP on-demand liquidity case
-    if let Some(protocol_specific_balance) = &balance.protocol_specific_balance {
-        let receivable_volume = MmNumber::from(protocol_specific_balance.receivable_balance())
-            - locked.locked_receivable.clone().unwrap_or_default();
-        if receivable_volume < required_receivable_volume {
-            return MmError::err(CheckBalanceError::NotSufficientReceivableBalance {
-                coin: ticker.to_owned(),
-                available: receivable_volume.to_decimal(),
-                required: required_receivable_volume.to_decimal(),
-                locked_by_swaps: locked.locked_receivable.map(|l| l.to_decimal()),
-            });
-        }
+    if let Some(protocol_specific_balance) = balance.protocol_specific_balance {
+        check_other_coin_protocol_specific_balance_for_swap(
+            ticker.to_string(),
+            protocol_specific_balance,
+            required_receivable_volume,
+            // Todo: can this unwrap_or_default be removed?
+            locked.locked_receivable.unwrap_or_default(),
+        )?;
+    }
+
+    Ok(())
+}
+
+// Todo: add test cases in the test document for how to test inbound in ordermatching, maybe add unit tests
+// Todo: check if this allow clippy can be removed at the end
+#[allow(clippy::result_large_err)]
+fn check_other_coin_protocol_specific_balance_for_swap(
+    ticker: String,
+    balance: ProtocolSpecificBalance,
+    required_volume: MmNumber,
+    locked: MmNumber,
+) -> CheckProtocolSpecificBalanceResult<()> {
+    match balance {
+        // Todo: LSP on-demand liquidity case
+        ProtocolSpecificBalance::Lightning(lightning_balance) => {
+            let receivable_volume = MmNumber::from(lightning_balance.inbound) - locked.clone();
+            let max_receivable_volume = MmNumber::from(lightning_balance.max_receivable_amount_per_payment);
+            let receivable_volume = receivable_volume.min(max_receivable_volume);
+            if receivable_volume < required_volume {
+                return MmError::err(
+                    CheckProtocolSpecificBalanceError::NotSufficientLightningInboundBalance {
+                        coin: ticker,
+                        available: receivable_volume.to_decimal(),
+                        required: required_volume.to_decimal(),
+                        locked_by_swaps: locked.to_decimal(),
+                    },
+                );
+            }
+            let min_receivable_volume = MmNumber::from(lightning_balance.min_receivable_amount_per_payment);
+            if required_volume < min_receivable_volume {
+                return MmError::err(CheckProtocolSpecificBalanceError::LightningInboundVolumeTooLow {
+                    coin: ticker,
+                    volume: required_volume.to_decimal(),
+                    threshold: min_receivable_volume.to_decimal(),
+                });
+            }
+        },
     }
 
     Ok(())
@@ -207,19 +244,8 @@ pub enum CheckBalanceError {
         required: BigDecimal,
         locked_by_swaps: Option<BigDecimal>,
     },
-    #[display(
-        fmt = "Not enough receivable {} for swap: available {}, required at least {}, locked by swaps {:?}",
-        coin,
-        available,
-        required,
-        locked_by_swaps
-    )]
-    NotSufficientReceivableBalance {
-        coin: String,
-        available: BigDecimal,
-        required: BigDecimal,
-        locked_by_swaps: Option<BigDecimal>,
-    },
+    #[display(fmt = "Not enough protocol specific balance for swap: {}", _0)]
+    NotSufficientProtocolSpecificBalance(CheckProtocolSpecificBalanceError),
     #[display(
         fmt = "Not enough base coin {} balance for swap: available {}, required at least {}, locked by swaps {:?}",
         coin,
@@ -326,5 +352,39 @@ impl CheckBalanceError {
             required: max_vol_err.min_tx_amount.to_decimal(),
             locked_by_swaps: Some(locked_by_swaps),
         }
+    }
+}
+
+#[derive(Debug, Display, Serialize)]
+pub enum CheckProtocolSpecificBalanceError {
+    #[display(
+        fmt = "Not enough {} inbound balance for swap: available {}, required at least {}, locked by swaps {}",
+        coin,
+        available,
+        required,
+        locked_by_swaps
+    )]
+    NotSufficientLightningInboundBalance {
+        coin: String,
+        available: BigDecimal,
+        required: BigDecimal,
+        locked_by_swaps: BigDecimal,
+    },
+    #[display(
+        fmt = "The inbound volume {} of {} is less than minimum allowed inbound volume {}",
+        volume,
+        coin,
+        threshold
+    )]
+    LightningInboundVolumeTooLow {
+        coin: String,
+        volume: BigDecimal,
+        threshold: BigDecimal,
+    },
+}
+
+impl From<CheckProtocolSpecificBalanceError> for CheckBalanceError {
+    fn from(error: CheckProtocolSpecificBalanceError) -> Self {
+        CheckBalanceError::NotSufficientProtocolSpecificBalance(error)
     }
 }

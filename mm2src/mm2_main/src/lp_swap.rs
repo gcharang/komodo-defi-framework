@@ -507,6 +507,7 @@ pub async fn get_locked_amount_rpc(
 
 pub(crate) struct TotalLockedAmount {
     locked_spendable: MmNumber,
+    // Todo: make this protocol specific locked value
     locked_receivable: Option<MmNumber>,
 }
 

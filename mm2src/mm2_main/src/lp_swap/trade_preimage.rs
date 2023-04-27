@@ -1,6 +1,7 @@
 use super::check_balance::CheckBalanceError;
 use super::{maker_swap_trade_preimage, taker_swap_trade_preimage, MakerTradePreimage, TakerTradePreimage};
 use crate::mm2::lp_ordermatch::{MakerOrderBuildError, TakerAction, TakerOrderBuildError};
+use crate::mm2::lp_swap::check_balance::CheckProtocolSpecificBalanceError;
 use coins::{is_wallet_only_ticker, lp_coinfind_or_err, BalanceError, CoinFindError, TradeFee, TradePreimageError};
 use common::HttpStatusCode;
 use crypto::CryptoCtxError;
@@ -195,20 +196,9 @@ pub enum TradePreimageRpcError {
         #[serde(skip_serializing_if = "Option::is_none")]
         locked_by_swaps: Option<BigDecimal>,
     },
-    #[display(
-        fmt = "Not enough receivable {} for swap: available {}, required at least {}, locked by swaps {:?}",
-        coin,
-        available,
-        required,
-        locked_by_swaps
-    )]
-    NotSufficientReceivableBalance {
-        coin: String,
-        available: BigDecimal,
-        required: BigDecimal,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        locked_by_swaps: Option<BigDecimal>,
-    },
+    // Todo: check for this in trade preimage
+    #[display(fmt = "Not enough protocol specific balance for swap: {}", _0)]
+    NotSufficientProtocolSpecificBalance(CheckProtocolSpecificBalanceError),
     #[display(
         fmt = "Not enough base coin {} balance for swap: available {}, required at least {}, locked by swaps {:?}",
         coin,
@@ -254,7 +244,7 @@ impl HttpStatusCode for TradePreimageRpcError {
     fn status_code(&self) -> StatusCode {
         match self {
             TradePreimageRpcError::NotSufficientBalance { .. }
-            | TradePreimageRpcError::NotSufficientReceivableBalance { .. }
+            | TradePreimageRpcError::NotSufficientProtocolSpecificBalance(_)
             | TradePreimageRpcError::NotSufficientBaseCoinBalance { .. }
             | TradePreimageRpcError::VolumeTooLow { .. }
             | TradePreimageRpcError::NoSuchCoin { .. }
@@ -297,16 +287,8 @@ impl From<CheckBalanceError> for TradePreimageRpcError {
                 required,
                 locked_by_swaps,
             },
-            CheckBalanceError::NotSufficientReceivableBalance {
-                coin,
-                available,
-                required,
-                locked_by_swaps,
-            } => TradePreimageRpcError::NotSufficientReceivableBalance {
-                coin,
-                available,
-                required,
-                locked_by_swaps,
+            CheckBalanceError::NotSufficientProtocolSpecificBalance(e) => {
+                TradePreimageRpcError::NotSufficientProtocolSpecificBalance(e)
             },
             CheckBalanceError::NotSufficientBaseCoinBalance {
                 coin,

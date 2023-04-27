@@ -1531,6 +1531,7 @@ impl MmCoin for LightningCoin {
         let payer = self.channel_manager.node_id();
         let first_hops = self.channel_manager.first_hops();
         let inflight_htlcs = self.channel_manager.compute_inflight_htlcs();
+        // Todo: do find_route take into consideration max-min htlc per payment?
         self.router
             .find_route(
                 &payer,

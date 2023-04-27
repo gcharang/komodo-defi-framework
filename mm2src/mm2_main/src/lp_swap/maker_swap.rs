@@ -16,10 +16,10 @@ use crate::mm2::lp_ordermatch::{MakerOrderBuilder, OrderConfirmationsSettings};
 use crate::mm2::lp_price::fetch_swap_coins_price;
 use crate::mm2::lp_swap::{broadcast_swap_message, min_watcher_reward, taker_payment_spend_duration,
                           watcher_reward_amount};
-use coins::{CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, ConfirmPaymentInput, FeeApproxStage,
-            FoundSwapTxSpend, MmCoinEnum, PaymentInstructions, PaymentInstructionsErr, RefundPaymentArgs,
-            SearchForSwapTxSpendInput, SendPaymentArgs, SpendPaymentArgs, TradeFee, TradePreimageValue,
-            TransactionEnum, ValidateFeeArgs, ValidatePaymentInput};
+use coins::{CanRefundHtlc, CheckIfMyPaymentSentArgs, ConfirmPaymentInput, FeeApproxStage, FoundSwapTxSpend,
+            MmCoinEnum, PaymentInstructions, PaymentInstructionsErr, RefundPaymentArgs, SearchForSwapTxSpendInput,
+            SendPaymentArgs, SpendPaymentArgs, TradeFee, TradePreimageValue, TransactionEnum, ValidateFeeArgs,
+            ValidatePaymentInput};
 use common::log::{debug, error, info, warn};
 use common::{bits256, executor::Timer, now_ms, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::privkey::SerializableSecp256k1Keypair;
@@ -2141,7 +2141,7 @@ pub async fn check_balance_for_maker_swap(
     swap_uuid: Option<&Uuid>,
     prepared_params: Option<MakerSwapPreparedParams>,
     stage: FeeApproxStage,
-) -> CheckBalanceResult<CoinBalance> {
+) -> CheckBalanceResult<BigDecimal> {
     let (maker_payment_trade_fee, taker_payment_spend_trade_fee) = match prepared_params {
         Some(MakerSwapPreparedParams {
             maker_payment_trade_fee,
@@ -2193,7 +2193,7 @@ pub async fn maker_swap_trade_preimage(
     let base_coin_ticker = base_coin.ticker();
     let rel_coin_ticker = rel_coin.ticker();
     let volume = if req.max {
-        let balance = base_coin.my_balance().compat().await?;
+        let balance = base_coin.my_spendable_balance().compat().await?;
         calc_max_maker_vol(ctx, &base_coin, &balance, FeeApproxStage::TradePreimage)
             .await?
             .volume
@@ -2265,39 +2265,36 @@ pub async fn maker_swap_trade_preimage(
     })
 }
 
-// Todo: check where this is used
 pub struct CoinVolumeInfo {
     pub volume: MmNumber,
-    pub balance: CoinBalance,
+    pub balance: MmNumber,
     pub locked_by_swaps: MmNumber,
-    pub receivable_locked_by_swaps: Option<MmNumber>,
 }
 
 /// Requests the `coin` balance and calculates max Maker volume.
 /// Returns [`CheckBalanceError::NotSufficientBalance`] if the balance is insufficient.
 // todo: edit documentations for all changed functions, also add notes to all added code
 pub async fn get_max_maker_vol(ctx: &MmArc, my_coin: &MmCoinEnum) -> CheckBalanceResult<CoinVolumeInfo> {
-    let my_balance = my_coin.my_balance().compat().await?;
+    let my_balance = my_coin.my_spendable_balance().compat().await?;
     calc_max_maker_vol(ctx, my_coin, &my_balance, FeeApproxStage::OrderIssue).await
 }
 
 /// Calculates max Maker volume.
 /// Returns [`CheckBalanceError::NotSufficientBalance`] if the balance is not sufficient.
 /// Note the function checks base coin balance if the trade fee should be paid in base coin.
-// Todo: refactor my changes here since I need to add other coin option and check if it needs receivable balance or not
+// Todo: check changes here and elsewhere that should probably be rolled back
 pub async fn calc_max_maker_vol(
     ctx: &MmArc,
     coin: &MmCoinEnum,
-    balance: &CoinBalance,
+    balance: &BigDecimal,
     stage: FeeApproxStage,
 ) -> CheckBalanceResult<CoinVolumeInfo> {
     let ticker = coin.ticker();
     let locked_by_swaps = get_locked_amount(ctx, coin);
-    // Todo: add test cases in the test document for how to test inbound in ordermatching, maybe add unit tests
-    let available_to_send = &MmNumber::from(balance.spendable.clone()) - &locked_by_swaps.locked_spendable;
-    let mut sendable_volume = available_to_send.clone();
+    let available = &MmNumber::from(balance.clone()) - &locked_by_swaps.locked_spendable;
+    let mut volume = available.clone();
 
-    let preimage_value = TradePreimageValue::UpperBound(sendable_volume.to_decimal());
+    let preimage_value = TradePreimageValue::UpperBound(volume.to_decimal());
     let trade_fee = coin
         .get_sender_trade_fee(preimage_value, stage)
         .await
@@ -2306,44 +2303,26 @@ pub async fn calc_max_maker_vol(
     debug!("{} trade fee {}", trade_fee.coin, trade_fee.amount.to_decimal());
     let mut required_to_pay_fee = MmNumber::from(0);
     if trade_fee.coin == ticker {
-        sendable_volume = &sendable_volume - &trade_fee.amount;
+        volume = &volume - &trade_fee.amount;
         required_to_pay_fee = trade_fee.amount;
     } else {
         let base_coin_balance = coin.base_coin_balance().compat().await?;
         check_base_coin_balance_for_swap(ctx, &MmNumber::from(base_coin_balance), trade_fee.clone(), None).await?;
     }
     let min_tx_amount = MmNumber::from(coin.min_tx_amount());
-    if sendable_volume < min_tx_amount {
+    if volume < min_tx_amount {
         let required = min_tx_amount + required_to_pay_fee;
         return MmError::err(CheckBalanceError::NotSufficientBalance {
             coin: ticker.to_owned(),
-            available: available_to_send.to_decimal(),
+            available: available.to_decimal(),
             required: required.to_decimal(),
             locked_by_swaps: Some(locked_by_swaps.locked_spendable.to_decimal()),
         });
     }
-    // Todo: need to add LSP case where fee is subtracted from receivable amount, also LSP on-demand liquidity should not be used if there is inbound liquidity and a route
-    // Todo: this will probably be removed, see how inbound balance affect balance updates / max volume / etc..
-    if let Some(protocol_specific_balance) = &balance.protocol_specific_balance {
-        let receivable_volume = MmNumber::from(protocol_specific_balance.receivable_balance())
-            - locked_by_swaps.locked_receivable.clone().unwrap_or_default();
-        let required = protocol_specific_balance.min_receivable_balance();
-        if receivable_volume < required {
-            return MmError::err(CheckBalanceError::NotSufficientReceivableBalance {
-                coin: ticker.to_owned(),
-                available: receivable_volume.to_decimal(),
-                required,
-                locked_by_swaps: locked_by_swaps.locked_receivable.map(|l| l.to_decimal()),
-            });
-        }
-    }
-    // Todo: check where this is used
     Ok(CoinVolumeInfo {
-        volume: sendable_volume,
-        // Todo: add receivable volume
-        balance: balance.clone(),
+        volume,
+        balance: MmNumber::from(balance.clone()),
         locked_by_swaps: locked_by_swaps.locked_spendable,
-        receivable_locked_by_swaps: locked_by_swaps.locked_receivable,
     })
 }
 
