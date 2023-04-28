@@ -93,13 +93,16 @@ impl SqliteNftStorage {
 }
 
 fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmResult<SqlQuery, SqlError> {
-    let union_sql_strings: MmResult<Vec<_>, SqlError> = chains.iter().map(|chain| {
-        let table_name = nft_list_table_name(chain);
-        validate_table_name(&table_name)?;
-        let sql_builder = nft_table_builder_preimage(conn, table_name.as_str())?;
-        let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
-        Ok(sql_string)
-    }).collect();
+    let union_sql_strings: MmResult<Vec<_>, SqlError> = chains
+        .iter()
+        .map(|chain| {
+            let table_name = nft_list_table_name(chain);
+            validate_table_name(&table_name)?;
+            let sql_builder = nft_table_builder_preimage(conn, table_name.as_str())?;
+            let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
+            Ok(sql_string)
+        })
+        .collect();
 
     let union_sql_strings = union_sql_strings?;
     let union_sql = union_sql_strings.join(" UNION ALL ");
@@ -113,11 +116,7 @@ fn nft_table_builder_preimage<'a>(conn: &'a Connection, table_name: &'a str) -> 
     Ok(sql_builder)
 }
 
-fn finalize_nft_sql_builder(
-    sql_builder: &mut SqlQuery,
-    offset: usize,
-    limit: usize,
-) -> MmResult<(), SqlError> {
+fn finalize_nft_sql_builder(sql_builder: &mut SqlQuery, offset: usize, limit: usize) -> MmResult<(), SqlError> {
     sql_builder.offset(offset).limit(limit);
     Ok(())
 }
