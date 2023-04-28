@@ -9,6 +9,7 @@ use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, 
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::{MmError, MmResult};
 use mm2_err_handle::or_mm_error::OrMmError;
+use mm2_number::BigDecimal;
 use serde_json::{self as json};
 use std::convert::TryInto;
 use std::num::NonZeroUsize;
@@ -154,7 +155,6 @@ impl NftListStorageOps for SqliteNftStorage {
 
     async fn get_nft_list(
         &self,
-        _ctx: &MmArc,
         chains: Vec<Chain>,
         max: bool,
         limit: usize,
@@ -166,8 +166,6 @@ impl NftListStorageOps for SqliteNftStorage {
             let mut sql_builder = get_nft_list_builder_preimage(&conn, chains)?;
             let mut total_count_builder = sql_builder.clone();
             total_count_builder.count_all()?;
-            // let str = total_count_builder.clone().sql()?;
-            // println!("total_count_builder: \n {} \n", str);
             let total: isize = total_count_builder
                 .query_single_row(|row| row.get(0))?
                 .or_mm_err(|| SqlError::QueryReturnedNoRows)?;
@@ -208,7 +206,23 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn remove_nft_from_list(&self, _nft: Nft) -> MmResult<(), Self::Error> { todo!() }
+    async fn get_nft(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+
+    async fn remove_nft_from_list(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
 }
 
 #[async_trait]

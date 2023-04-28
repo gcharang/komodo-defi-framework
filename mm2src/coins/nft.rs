@@ -35,7 +35,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         }
     }
     let nfts = storage
-        .get_nft_list(&ctx, req.chains, req.max, req.limit, req.page_number)
+        .get_nft_list(req.chains, req.max, req.limit, req.page_number)
         .await?;
     Ok(nfts)
 }

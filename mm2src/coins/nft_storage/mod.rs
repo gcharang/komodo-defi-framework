@@ -7,6 +7,7 @@ use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::{MmError, MmResult};
 use mm2_err_handle::mm_error::{NotEqual, NotMmError};
+use mm2_number::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::format;
 use std::num::NonZeroUsize;
@@ -28,7 +29,6 @@ pub trait NftListStorageOps {
 
     async fn get_nft_list(
         &self,
-        ctx: &MmArc,
         chains: Vec<Chain>,
         max: bool,
         limit: usize,
@@ -40,7 +40,14 @@ pub trait NftListStorageOps {
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send;
 
-    async fn remove_nft_from_list(&self, nft: Nft) -> MmResult<(), Self::Error>;
+    async fn get_nft(&self, chain: &Chain, token_address: String, token_id: BigDecimal) -> MmResult<(), Self::Error>;
+
+    async fn remove_nft_from_list(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]
