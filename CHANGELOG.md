@@ -10,6 +10,9 @@
 - - Break the loop right after processing any of `SWAP_PREFIX`, `WATCHER_PREFIX`, `TX_HELPER_PREFIX` topic.
 - An issue was fixed where we don't have to wait for all EVM nodes to sync the latest account nonce [#1757](https://github.com/KomodoPlatform/atomicDEX-API/pull/1757)
 - optimized dev and release compilation profiles and removed ci [#1759](https://github.com/KomodoPlatform/atomicDEX-API/pull/1759)
+- fix receiver trade fee for cosmos swaps [#1767](https://github.com/KomodoPlatform/atomicDEX-API/pull/1767)
+- All features were enabled to be checked under x86-64 code lint CI step with `--all-features` option [#1760](https://github.com/KomodoPlatform/atomicDEX-API/pull/1760)
+- use OS generated secrets for cryptographically secure randomness in `maker_swap` and `tendermint_coin::get_sender_trade_fee_for_denom` [#1753](https://github.com/KomodoPlatform/atomicDEX-API/pull/1753)
 
 
 ## v1.0.2-beta - 2023-04-11
