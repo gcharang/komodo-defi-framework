@@ -879,6 +879,9 @@ pub async fn withdraw_erc1155(ctx: MmArc, req: WithdrawErc1155) -> WithdrawNftRe
     // dont use `get_nft_metadata` for erc1155, it can return info related to other owner.
     let nft_req = NftListReq {
         chains: vec![req.chain],
+        max: true,
+        limit: 0,
+        page_number: None,
     };
     let wallet_amount = find_wallet_amount(ctx, nft_req, req.token_address.clone(), req.token_id.clone()).await?;
 

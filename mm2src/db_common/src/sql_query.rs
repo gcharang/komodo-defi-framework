@@ -316,6 +316,12 @@ impl<'a> SqlQuery<'a> {
             .field(format!("ROW_NUMBER() OVER (ORDER BY {}) AS {}", order_by, alias));
         Ok(self)
     }
+
+    /// Count all rows
+    pub fn count_all(&mut self) -> SqlResult<&mut Self> {
+        self.sql_builder.count("*");
+        Ok(self)
+    }
 }
 
 /// `SqlCondition` implements the following methods by default:

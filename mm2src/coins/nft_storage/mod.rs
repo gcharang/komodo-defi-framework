@@ -9,6 +9,7 @@ use mm2_err_handle::mm_error::{MmError, MmResult};
 use mm2_err_handle::mm_error::{NotEqual, NotMmError};
 use serde::{Deserialize, Serialize};
 use std::format;
+use std::num::NonZeroUsize;
 
 #[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub mod wasm_storage;
@@ -25,7 +26,14 @@ pub trait NftListStorageOps {
     /// Whether tables are initialized for the specified chain.
     async fn is_initialized(&self, chain: &Chain) -> MmResult<bool, Self::Error>;
 
-    async fn get_nft_list(&self, ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, Self::Error>;
+    async fn get_nft_list(
+        &self,
+        ctx: &MmArc,
+        chains: Vec<Chain>,
+        max: bool,
+        limit: usize,
+        page_number: Option<NonZeroUsize>,
+    ) -> MmResult<Vec<Nft>, Self::Error>;
 
     async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
     where

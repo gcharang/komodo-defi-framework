@@ -2,19 +2,20 @@ use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftTransferHistory};
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
+use db_common::sql_build::SqlQuery;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, NO_PARAMS};
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::{MmError, MmResult};
+use mm2_err_handle::or_mm_error::OrMmError;
+use std::convert::TryInto;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
-#[allow(dead_code)]
 fn nft_list_table_name(chain: &Chain) -> String { chain.to_ticker() + "_nft_list" }
 
-#[allow(dead_code)]
 fn nft_tx_history_table_name(chain: &Chain) -> String { chain.to_ticker() + "_nft_tx_history" }
 
-#[allow(dead_code)]
 fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_list_table_name(chain);
     validate_table_name(&table_name)?;
@@ -88,6 +89,27 @@ impl SqliteNftStorage {
     }
 }
 
+fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmResult<SqlQuery, SqlError> {
+    let mut union_sql_strings = Vec::new();
+    for chain in chains.iter() {
+        let table_name = nft_list_table_name(chain);
+        validate_table_name(&table_name)?;
+        let sql_builder = nft_list_table_builder_preimage(conn, table_name.as_str())?;
+        let sql_string = sql_builder.sql()?;
+        union_sql_strings.push(sql_string);
+    }
+    let union_sql = union_sql_strings.join(" UNION ALL ");
+    let mut final_sql_builder = SqlQuery::select_from_alias(conn, &format!("({}) AS nft_list", union_sql), "nft_list")?;
+
+    final_sql_builder.order_desc("nft_list.block_number")?;
+    Ok(final_sql_builder)
+}
+
+fn nft_list_table_builder_preimage<'a>(conn: &'a Connection, table_name: &'a str) -> MmResult<SqlQuery<'a>, SqlError> {
+    let sql_builder = SqlQuery::select_from(conn, table_name)?;
+    Ok(sql_builder)
+}
+
 #[async_trait]
 impl NftListStorageOps for SqliteNftStorage {
     type Error = SqlError;
@@ -115,15 +137,46 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_nft_list(&self, _ctx: &MmArc, _chain: &Chain) -> MmResult<Vec<Nft>, Self::Error> { todo!() }
+    async fn get_nft_list(
+        &self,
+        _ctx: &MmArc,
+        chains: Vec<Chain>,
+        max: bool,
+        limit: usize,
+        page_number: Option<NonZeroUsize>,
+    ) -> MmResult<Vec<Nft>, Self::Error> {
+        let res = Vec::new();
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            let sql_builder = get_nft_list_builder_preimage(&conn, chains)?;
+            let mut total_count_builder = sql_builder.clone();
+            total_count_builder.count_all()?;
+            let total: isize = total_count_builder
+                .query_single_row(|row| row.get(0))?
+                .or_mm_err(|| SqlError::QueryReturnedNoRows)?;
+            let count_total = total.try_into().expect("count should be always above zero");
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
+            let (_offset, _limit) = if max {
+                (0, count_total)
+            } else {
+                match page_number {
+                    Some(page) => ((page.get() - 1) * limit, limit),
+                    None => (0, limit),
+                }
+            };
+
+            Ok(res)
+        })
+        .await
+    }
+
+    async fn add_nfts_to_list<I>(&self, _chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send,
     {
         let selfi = self.clone();
-        let _chain = *chain;
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let _sql_transaction = conn.transaction()?;

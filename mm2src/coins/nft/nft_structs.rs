@@ -1,12 +1,19 @@
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
+use common::ten;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
+    #[serde(default)]
+    pub(crate) max: bool,
+    #[serde(default = "ten")]
+    pub(crate) limit: usize,
+    pub(crate) page_number: Option<NonZeroUsize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -226,9 +233,16 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
+    pub(crate) filters: Option<NftTxHistoryFilters>,
+    #[serde(default)]
+    pub(crate) max: bool,
+    #[serde(default = "ten")]
+    pub(crate) limit: usize,
+    pub(crate) page_number: Option<NonZeroUsize>,
 }
 
 #[derive(Debug, Serialize)]
@@ -283,11 +297,17 @@ pub struct NftsTransferHistoryList {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-pub struct GetNftTxHistoryFilters {
+pub struct NftTxHistoryFilters {
     from_block: Option<i64>,
     to_block: Option<i64>,
     from_address: Option<String>,
     to_address: Option<String>,
     from_date: Option<String>,
     to_date: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct UpdateNftReq {
+    chains: Vec<Chain>,
 }

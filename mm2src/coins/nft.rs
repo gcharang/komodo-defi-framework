@@ -5,9 +5,10 @@ pub(crate) mod nft_errors;
 pub(crate) mod nft_structs;
 
 use crate::WithdrawError;
-use nft_errors::GetNftInfoError;
+use nft_errors::{GetNftInfoError, UpdateNftError};
 use nft_structs::{Chain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory, NftTransferHistoryWrapper,
-                  NftTransfersReq, NftWrapper, NftsTransferHistoryList, TransactionNftDetails, WithdrawNftReq};
+                  NftTransfersReq, NftWrapper, NftsTransferHistoryList, TransactionNftDetails, UpdateNftReq,
+                  WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft_storage::{NftListStorageOps, NftStorageBuilder};
@@ -29,13 +30,15 @@ pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
     let mut res_list = Vec::new();
     let storage = NftStorageBuilder::new(&ctx).build()?;
-    for chain in req.chains {
-        if NftListStorageOps::is_initialized(&storage, &chain).await? {
-            NftListStorageOps::init(&storage, &chain).await?;
+    for chain in req.chains.iter() {
+        if NftListStorageOps::is_initialized(&storage, chain).await? {
+            NftListStorageOps::init(&storage, chain).await?;
         }
-        let nfts = storage.get_nft_list(&ctx, &chain).await?;
-        res_list.extend(nfts);
     }
+    let nfts = storage
+        .get_nft_list(&ctx, req.chains, req.max, req.limit, req.page_number)
+        .await?;
+    res_list.extend(nfts);
     drop_mutability!(res_list);
     let nft_list = NftList { nfts: res_list };
     Ok(nft_list)
@@ -159,6 +162,10 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
     };
     Ok(transfer_history_list)
 }
+
+pub async fn update_nft(_ctx: MmArc, _req: UpdateNftReq) -> MmResult<(), UpdateNftError> { todo!() }
+
+pub async fn refresh_nft_metadata(_ctx: MmArc, _req: UpdateNftReq) -> MmResult<(), UpdateNftError> { todo!() }
 
 /// `withdraw_nft` function generates, signs and returns a transaction that transfers NFT
 /// from my address to recipient's address.

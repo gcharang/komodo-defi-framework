@@ -95,3 +95,27 @@ impl HttpStatusCode for GetNftInfoError {
         }
     }
 }
+
+#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
+#[serde(tag = "error_type", content = "error_data")]
+pub enum UpdateNftError {
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
+    #[display(fmt = "Internal: {}", _0)]
+    Internal(String),
+}
+
+impl<T: NftStorageError> From<T> for UpdateNftError {
+    fn from(err: T) -> Self {
+        let msg = format!("{:?}", err);
+        UpdateNftError::DbError(msg)
+    }
+}
+
+impl HttpStatusCode for UpdateNftError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            UpdateNftError::DbError(_) | UpdateNftError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
