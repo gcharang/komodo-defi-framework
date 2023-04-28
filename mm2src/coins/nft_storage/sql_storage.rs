@@ -93,26 +93,27 @@ impl SqliteNftStorage {
 }
 
 fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmResult<SqlQuery, SqlError> {
-    let mut union_sql_strings = Vec::new();
-    for chain in chains.iter() {
+    let union_sql_strings: MmResult<Vec<_>, SqlError> = chains.iter().map(|chain| {
         let table_name = nft_list_table_name(chain);
         validate_table_name(&table_name)?;
-        let sql_builder = nft_list_table_builder_preimage(conn, table_name.as_str())?;
+        let sql_builder = nft_table_builder_preimage(conn, table_name.as_str())?;
         let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
-        union_sql_strings.push(sql_string);
-    }
+        Ok(sql_string)
+    }).collect();
+
+    let union_sql_strings = union_sql_strings?;
     let union_sql = union_sql_strings.join(" UNION ALL ");
     let mut final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_list")?;
     final_sql_builder.order_desc("nft_list.block_number")?;
     Ok(final_sql_builder)
 }
 
-fn nft_list_table_builder_preimage<'a>(conn: &'a Connection, table_name: &'a str) -> MmResult<SqlQuery<'a>, SqlError> {
+fn nft_table_builder_preimage<'a>(conn: &'a Connection, table_name: &'a str) -> MmResult<SqlQuery<'a>, SqlError> {
     let sql_builder = SqlQuery::select_from(conn, table_name)?;
     Ok(sql_builder)
 }
 
-fn finalize_get_nft_list_sql_builder(
+fn finalize_nft_sql_builder(
     sql_builder: &mut SqlQuery,
     offset: usize,
     limit: usize,
@@ -179,7 +180,7 @@ impl NftListStorageOps for SqliteNftStorage {
                     None => (0, limit),
                 }
             };
-            finalize_get_nft_list_sql_builder(&mut sql_builder, offset, limit)?;
+            finalize_nft_sql_builder(&mut sql_builder, offset, limit)?;
             let nfts = sql_builder.query(nft_from_row)?;
             let result = NftList {
                 nfts,
