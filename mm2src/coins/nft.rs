@@ -28,20 +28,16 @@ pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError
 
 /// `get_nft_list` function returns list of NFTs on requested chains owned by user.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
-    let mut res_list = Vec::new();
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
-        if NftListStorageOps::is_initialized(&storage, chain).await? {
+        if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
         }
     }
     let nfts = storage
         .get_nft_list(&ctx, req.chains, req.max, req.limit, req.page_number)
         .await?;
-    res_list.extend(nfts);
-    drop_mutability!(res_list);
-    let nft_list = NftList { nfts: res_list };
-    Ok(nft_list)
+    Ok(nfts)
 }
 
 /// `get_nft_metadata` function returns info of one specific NFT.

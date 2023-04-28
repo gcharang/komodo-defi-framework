@@ -107,7 +107,7 @@ impl FromStr for ContractType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Nft {
     pub(crate) chain: Chain,
     pub(crate) token_address: String,
@@ -176,6 +176,8 @@ impl<T> std::ops::Deref for SerdeStringWrap<T> {
 #[derive(Debug, Serialize)]
 pub struct NftList {
     pub(crate) nfts: Vec<Nft>,
+    pub(crate) skipped: usize,
+    pub(crate) total: usize,
 }
 
 #[derive(Clone, Deserialize)]

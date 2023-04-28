@@ -1,6 +1,6 @@
 use crate::eth::get_eth_address;
 use crate::nft::nft_errors::GetNftInfoError;
-use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftTransferHistory, NftWrapper};
+use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory, NftWrapper};
 use crate::nft::{send_moralis_request, FORMAT_DECIMAL_MORALIS, URL_MORALIS};
 use async_trait::async_trait;
 use derive_more::Display;
@@ -33,7 +33,7 @@ pub trait NftListStorageOps {
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
-    ) -> MmResult<Vec<Nft>, Self::Error>;
+    ) -> MmResult<NftList, Self::Error>;
 
     async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
     where

@@ -1,13 +1,15 @@
-use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftTransferHistory};
+use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory};
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::SqlQuery;
-use db_common::sqlite::rusqlite::{Connection, Error as SqlError, NO_PARAMS};
+use db_common::sqlite::rusqlite::types::Type;
+use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row, NO_PARAMS};
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::{MmError, MmResult};
 use mm2_err_handle::or_mm_error::OrMmError;
+use serde_json::{self as json};
 use std::convert::TryInto;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
@@ -95,12 +97,11 @@ fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmRes
         let table_name = nft_list_table_name(chain);
         validate_table_name(&table_name)?;
         let sql_builder = nft_list_table_builder_preimage(conn, table_name.as_str())?;
-        let sql_string = sql_builder.sql()?;
+        let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
         union_sql_strings.push(sql_string);
     }
     let union_sql = union_sql_strings.join(" UNION ALL ");
-    let mut final_sql_builder = SqlQuery::select_from_alias(conn, &format!("({}) AS nft_list", union_sql), "nft_list")?;
-
+    let mut final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_list")?;
     final_sql_builder.order_desc("nft_list.block_number")?;
     Ok(final_sql_builder)
 }
@@ -108,6 +109,20 @@ fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmRes
 fn nft_list_table_builder_preimage<'a>(conn: &'a Connection, table_name: &'a str) -> MmResult<SqlQuery<'a>, SqlError> {
     let sql_builder = SqlQuery::select_from(conn, table_name)?;
     Ok(sql_builder)
+}
+
+fn finalize_get_nft_list_sql_builder(
+    sql_builder: &mut SqlQuery,
+    offset: usize,
+    limit: usize,
+) -> MmResult<(), SqlError> {
+    sql_builder.offset(offset).limit(limit);
+    Ok(())
+}
+
+fn nft_from_row(row: &Row<'_>) -> Result<Nft, SqlError> {
+    let json_string: String = row.get(0)?;
+    json::from_str(&json_string).map_err(|e| SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(e)))
 }
 
 #[async_trait]
@@ -144,20 +159,21 @@ impl NftListStorageOps for SqliteNftStorage {
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
-    ) -> MmResult<Vec<Nft>, Self::Error> {
-        let res = Vec::new();
+    ) -> MmResult<NftList, Self::Error> {
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            let sql_builder = get_nft_list_builder_preimage(&conn, chains)?;
+            let mut sql_builder = get_nft_list_builder_preimage(&conn, chains)?;
             let mut total_count_builder = sql_builder.clone();
             total_count_builder.count_all()?;
+            // let str = total_count_builder.clone().sql()?;
+            // println!("total_count_builder: \n {} \n", str);
             let total: isize = total_count_builder
                 .query_single_row(|row| row.get(0))?
                 .or_mm_err(|| SqlError::QueryReturnedNoRows)?;
-            let count_total = total.try_into().expect("count should be always above zero");
+            let count_total = total.try_into().expect("count should not be failed");
 
-            let (_offset, _limit) = if max {
+            let (offset, limit) = if max {
                 (0, count_total)
             } else {
                 match page_number {
@@ -165,8 +181,14 @@ impl NftListStorageOps for SqliteNftStorage {
                     None => (0, limit),
                 }
             };
-
-            Ok(res)
+            finalize_get_nft_list_sql_builder(&mut sql_builder, offset, limit)?;
+            let nfts = sql_builder.query(nft_from_row)?;
+            let result = NftList {
+                nfts,
+                skipped: offset,
+                total: count_total,
+            };
+            Ok(result)
         })
         .await
     }

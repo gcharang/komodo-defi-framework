@@ -322,6 +322,17 @@ impl<'a> SqlQuery<'a> {
         self.sql_builder.count("*");
         Ok(self)
     }
+
+    /// Select from union tables
+    pub fn select_from_union_alias(conn: &'a Connection, union_sql: &str, alias: &'static str) -> SqlResult<Self> {
+        validate_table_name(alias)?;
+        Ok(SqlQuery {
+            conn,
+            sql_builder: SqlBuilder::select_from(format!("({}) AS {}", union_sql, alias)),
+            params: SqlParamsBuilder::default(),
+            ordering: Vec::default(),
+        })
+    }
 }
 
 /// `SqlCondition` implements the following methods by default:
