@@ -81,6 +81,11 @@ impl<T: NftStorageError> From<T> for GetNftInfoError {
     }
 }
 
+impl From<GetNftInfoError> for UpdateNftError {
+    // expand UpdateNftError::GetNftInfoError
+    fn from(e: GetNftInfoError) -> Self { UpdateNftError::GetNftInfoError(e) }
+}
+
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -103,6 +108,15 @@ pub enum UpdateNftError {
     DbError(String),
     #[display(fmt = "Internal: {}", _0)]
     Internal(String),
+    GetNftInfoError(GetNftInfoError),
+}
+
+impl From<CreateNftStorageError> for UpdateNftError {
+    fn from(e: CreateNftStorageError) -> Self {
+        match e {
+            CreateNftStorageError::Internal(err) => UpdateNftError::Internal(err),
+        }
+    }
 }
 
 impl<T: NftStorageError> From<T> for UpdateNftError {
@@ -115,7 +129,10 @@ impl<T: NftStorageError> From<T> for UpdateNftError {
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
-            UpdateNftError::DbError(_) | UpdateNftError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            // expand UpdateNftError::GetNftInfoError
+            UpdateNftError::DbError(_) | UpdateNftError::Internal(_) | UpdateNftError::GetNftInfoError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            },
         }
     }
 }

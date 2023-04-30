@@ -1,4 +1,4 @@
-use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory};
+use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
@@ -252,7 +252,14 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_tx_history(&self, _ctx: &MmArc, _chain: &Chain) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+    async fn get_tx_history(
+        &self,
+        _ctx: &MmArc,
+        _chain: Vec<Chain>,
+        _max: bool,
+        _limit: usize,
+        _page_number: Option<NonZeroUsize>,
+    ) -> MmResult<NftsTransferHistoryList, Self::Error> {
         todo!()
     }
 
@@ -263,4 +270,6 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
     {
         todo!()
     }
+
+    async fn get_latest_block(&self, _chain: &Chain) -> MmResult<u64, Self::Error> { todo!() }
 }

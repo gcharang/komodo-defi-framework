@@ -295,6 +295,8 @@ pub(crate) struct NftTransferHistoryWrapper {
 #[derive(Debug, Serialize)]
 pub struct NftsTransferHistoryList {
     pub(crate) transfer_history: Vec<NftTransferHistory>,
+    pub(crate) skipped: usize,
+    pub(crate) total: usize,
 }
 
 #[allow(dead_code)]
@@ -311,5 +313,5 @@ pub struct NftTxHistoryFilters {
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateNftReq {
-    chains: Vec<Chain>,
+    pub(crate) chains: Vec<Chain>,
 }
