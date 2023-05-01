@@ -3,6 +3,7 @@ use common::ten;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
+use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 
@@ -52,11 +53,23 @@ impl ConvertChain for Chain {
 
     fn to_ticker_chain(&self) -> (String, String) {
         match self {
-            Chain::Avalanche => ("AVAX".to_owned(), "avalanche".to_owned()),
-            Chain::Bsc => ("BNB".to_owned(), "bsc".to_owned()),
-            Chain::Eth => ("ETH".to_owned(), "eth".to_owned()),
-            Chain::Fantom => ("FTM".to_owned(), "fantom".to_owned()),
-            Chain::Polygon => ("MATIC".to_owned(), "polygon".to_owned()),
+            Chain::Avalanche => ("AVAX".to_owned(), "AVALANCHE".to_owned()),
+            Chain::Bsc => ("BNB".to_owned(), "BSC".to_owned()),
+            Chain::Eth => ("ETH".to_owned(), "ETH".to_owned()),
+            Chain::Fantom => ("FTM".to_owned(), "FANTOM".to_owned()),
+            Chain::Polygon => ("MATIC".to_owned(), "POLYGON".to_owned()),
+        }
+    }
+}
+
+impl fmt::Display for Chain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Chain::Avalanche => write!(f, "AVALANCHE"),
+            Chain::Bsc => write!(f, "BSC"),
+            Chain::Eth => write!(f, "ETH"),
+            Chain::Fantom => write!(f, "FANTOM"),
+            Chain::Polygon => write!(f, "POLYGON"),
         }
     }
 }
@@ -72,11 +85,11 @@ impl FromStr for Chain {
     #[inline]
     fn from_str(s: &str) -> Result<Chain, ParseChainTypeError> {
         match s {
-            "avalanche" => Ok(Chain::Avalanche),
-            "bsc" => Ok(Chain::Bsc),
-            "eth" => Ok(Chain::Eth),
-            "fantom" => Ok(Chain::Fantom),
-            "polygon" => Ok(Chain::Polygon),
+            "AVALANCHE" => Ok(Chain::Avalanche),
+            "BSC" => Ok(Chain::Bsc),
+            "ETH" => Ok(Chain::Eth),
+            "FANTOM" => Ok(Chain::Fantom),
+            "POLYGON" => Ok(Chain::Polygon),
             _ => Err(ParseChainTypeError::UnsupportedCainType),
         }
     }
@@ -103,6 +116,15 @@ impl FromStr for ContractType {
             "ERC1155" => Ok(ContractType::Erc1155),
             "ERC721" => Ok(ContractType::Erc721),
             _ => Err(ParseContractTypeError::UnsupportedContractType),
+        }
+    }
+}
+
+impl fmt::Display for ContractType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ContractType::Erc1155 => write!(f, "ERC1155"),
+            ContractType::Erc721 => write!(f, "ERC721"),
         }
     }
 }

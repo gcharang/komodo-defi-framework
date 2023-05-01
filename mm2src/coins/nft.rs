@@ -54,11 +54,11 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
         .as_str()
         .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
     let chain_str = match req.chain {
-        Chain::Avalanche => "avalanche",
-        Chain::Bsc => "bsc",
-        Chain::Eth => "eth",
-        Chain::Fantom => "fantom",
-        Chain::Polygon => "polygon",
+        Chain::Avalanche => "AVALANCHE",
+        Chain::Bsc => "BSC",
+        Chain::Eth => "ETH",
+        Chain::Fantom => "FANTOM",
+        Chain::Polygon => "POLYGON",
     };
     let uri = format!(
         "{}nft/{}/{}?chain={}&{}",
@@ -99,11 +99,11 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
 
     for chain in req.chains {
         let (coin_str, chain_str) = match chain {
-            Chain::Avalanche => ("AVAX", "avalanche"),
-            Chain::Bsc => ("BNB", "bsc"),
-            Chain::Eth => ("ETH", "eth"),
-            Chain::Fantom => ("FTM", "fantom"),
-            Chain::Polygon => ("MATIC", "polygon"),
+            Chain::Avalanche => ("AVAX", "AVALANCHE"),
+            Chain::Bsc => ("BNB", "BSC"),
+            Chain::Eth => ("ETH", "ETH"),
+            Chain::Fantom => ("FTM", "FANTOM"),
+            Chain::Polygon => ("MATIC", "POLYGON"),
         };
         let my_address = get_eth_address(&ctx, coin_str).await?;
         let uri_without_cursor = format!(
@@ -177,20 +177,24 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         } else if !NftListStorageOps::is_initialized(&storage, chain).await?
             && NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
         {
+            NftListStorageOps::init(&storage, chain).await?;
+            let nft_list = get_moralis_nft_list(&ctx, chain).await?;
+            NftListStorageOps::add_nfts_to_list(&storage, chain, nft_list).await?;
             todo!()
         } else if NftListStorageOps::is_initialized(&storage, chain).await?
             && !NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
         {
+            NftTxHistoryStorageOps::init(&storage, chain).await?;
+            let nft_transfers = get_moralis_nft_transfers(&ctx, chain, None).await?;
+            NftTxHistoryStorageOps::add_txs_to_history(&storage, chain, nft_transfers).await?;
             todo!()
         } else if NftListStorageOps::is_initialized(&storage, chain).await?
             && NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
         {
             todo!()
-        } else {
-            continue;
         }
     }
-    todo!()
+    Ok(())
 }
 
 pub async fn refresh_nft_metadata(_ctx: MmArc, _req: UpdateNftReq) -> MmResult<(), UpdateNftError> { todo!() }
@@ -348,11 +352,11 @@ async fn get_moralis_nft_transfers(
 
     let mut res_list = Vec::new();
     let (coin_str, chain_str) = match chain {
-        Chain::Avalanche => ("AVAX", "avalanche"),
-        Chain::Bsc => ("BNB", "bsc"),
-        Chain::Eth => ("ETH", "eth"),
-        Chain::Fantom => ("FTM", "fantom"),
-        Chain::Polygon => ("MATIC", "polygon"),
+        Chain::Avalanche => ("AVAX", "AVALANCHE"),
+        Chain::Bsc => ("BNB", "BSC"),
+        Chain::Eth => ("ETH", "ETH"),
+        Chain::Fantom => ("FTM", "FANTOM"),
+        Chain::Polygon => ("MATIC", "POLYGON"),
     };
     let my_address = get_eth_address(ctx, coin_str).await?;
     let from_block = match from_block {
