@@ -24,9 +24,9 @@ fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     validate_table_name(&table_name)?;
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS {} (
-    chain TEXT NOT NULL,
     token_address VARCHAR(256) NOT NULL,
     token_id VARCHAR(256) NOT NULL,
+    chain TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
     owner_of TEXT NOT NULL,
     token_hash TEXT NOT NULL,
@@ -48,7 +48,6 @@ fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     Ok(sql)
 }
 
-#[allow(dead_code)]
 fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_tx_history_table_name(chain);
     validate_table_name(&table_name)?;
@@ -70,8 +69,8 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     to_address TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
     verified INTEGER NOT NULL,
-    possible_spam INTEGER,
-    operator TEXT
+    operator TEXT,
+    possible_spam INTEGER
         );",
         table_name
     );
@@ -145,8 +144,7 @@ fn insert_nft_in_list_sql(chain: &Chain) -> MmResult<String, SqlError> {
     Ok(sql)
 }
 
-#[allow(dead_code)]
-fn insert_nft_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
+fn insert_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_tx_history_table_name(chain);
     validate_table_name(&table_name)?;
 
@@ -154,7 +152,8 @@ fn insert_nft_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
         "INSERT OR IGNORE INTO {} (
             transaction_hash, chain, block_number, block_timestamp, block_hash,
             transaction_index, log_index, value, contract_type, transaction_type,
-            token_address, token_id, from_address, to_address, amount, verified, operator, possible_spam
+            token_address, token_id, from_address, to_address, amount, verified,
+            operator, possible_spam
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18
         );",
@@ -241,14 +240,26 @@ impl NftListStorageOps for SqliteNftStorage {
 
             for nft in nfts {
                 let params = [
+                    Some(nft.chain.to_string()),
+                    Some(nft.token_address),
+                    Some(nft.token_id.to_string()),
+                    Some(nft.amount.to_string()),
+                    Some(nft.owner_of),
+                    Some(nft.token_hash),
+                    Some(nft.block_number_minted.to_string()),
+                    Some(nft.block_number.to_string()),
+                    nft.contract_type.map(|ct| ct.to_string()),
+                    nft.name,
                     nft.symbol,
                     nft.token_uri,
                     nft.metadata,
+                    nft.last_token_uri_sync,
+                    nft.last_metadata_sync,
+                    nft.minter_address,
+                    nft.possible_spam.map(i32::from).map(|v| v.to_string()),
                 ];
-
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, &params)?;
             }
-
             sql_transaction.commit()?;
             Ok(())
         })
@@ -280,17 +291,17 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
 
     async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
-        let sql_nft_list = create_nft_list_table_sql(chain)?;
+        let sql_tx_history = create_tx_history_table_sql(chain)?;
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            conn.execute(&sql_nft_list, NO_PARAMS).map(|_| ())?;
+            conn.execute(&sql_tx_history, NO_PARAMS).map(|_| ())?;
             Ok(())
         })
         .await
     }
 
     async fn is_initialized(&self, chain: &Chain) -> MmResult<bool, Self::Error> {
-        let table_name = nft_list_table_name(chain);
+        let table_name = nft_tx_history_table_name(chain);
         validate_table_name(&table_name)?;
         let selfi = self.clone();
         async_blocking(move || {
@@ -312,12 +323,45 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         todo!()
     }
 
-    async fn add_txs_to_history<I>(&self, _chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
+    async fn add_txs_to_history<I>(&self, chain: &Chain, txs: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send,
     {
-        todo!()
+        let selfi = self.clone();
+        let chain = *chain;
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+
+            for tx in txs {
+                let params = [
+                    Some(tx.transaction_hash),
+                    Some(tx.chain.to_string()),
+                    Some(tx.block_number.to_string()),
+                    Some(tx.block_timestamp),
+                    Some(tx.block_hash),
+                    Some(tx.transaction_index.to_string()),
+                    Some(tx.log_index.to_string()),
+                    Some(tx.value.to_string()),
+                    Some(tx.contract_type.to_string()),
+                    Some(tx.transaction_type.to_string()),
+                    Some(tx.token_address),
+                    Some(tx.token_id.to_string()),
+                    Some(tx.from_address),
+                    Some(tx.to_address),
+                    Some(tx.amount.to_string()),
+                    Some(tx.verified.to_string()),
+                    tx.operator,
+                    tx.possible_spam.map(i32::from).map(|v| v.to_string()),
+                ];
+
+                sql_transaction.execute(&insert_tx_in_history_sql(&chain)?, &params)?;
+            }
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
     }
 
     async fn get_latest_block(&self, _chain: &Chain) -> MmResult<u64, Self::Error> { todo!() }

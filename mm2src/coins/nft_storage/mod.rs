@@ -65,12 +65,12 @@ pub trait NftTxHistoryStorageOps {
         page_number: Option<NonZeroUsize>,
     ) -> MmResult<NftsTransferHistoryList, Self::Error>;
 
-    async fn add_txs_to_history<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
+    async fn add_txs_to_history<I>(&self, chain: &Chain, txs: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send;
 
-    async fn get_latest_block(&self, _chain: &Chain) -> MmResult<u64, Self::Error>;
+    async fn get_latest_block(&self, chain: &Chain) -> MmResult<u64, Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]
