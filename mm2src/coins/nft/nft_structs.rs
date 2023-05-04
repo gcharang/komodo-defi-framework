@@ -268,7 +268,7 @@ pub struct NftTransfersReq {
     pub(crate) page_number: Option<NonZeroUsize>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct NftTransferHistory {
     pub(crate) chain: Chain,
     pub(crate) block_number: u64,
