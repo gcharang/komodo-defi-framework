@@ -81,6 +81,7 @@ pub struct RpcOrderbookEntry {
     pub min_volume_fraction: Fraction,
     pub pubkey: String,
     pub age: i64,
+    pub zcredits: u64,
     pub uuid: Uuid,
     pub is_mine: bool,
     #[serde(flatten)]
