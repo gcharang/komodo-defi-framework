@@ -85,11 +85,8 @@ pub use z_rpc::SyncStatus;
 use z_rpc::{init_light_client, init_native_client, SaplingSyncConnector, SaplingSyncGuard, WalletDbShared};
 
 mod z_coin_errors;
-use crate::z_coin::storage::BlockDbImpl;
-use crate::z_coin::z_rpc::create_wallet_db;
+use crate::z_coin::z_rpc::{create_wallet_db, BlockDb};
 pub use z_coin_errors::*;
-
-mod storage;
 
 #[cfg(all(test, feature = "zhtlc-native-tests"))]
 mod z_coin_native_tests;
@@ -852,13 +849,9 @@ impl<'a> UtxoCoinBuilder for ZCoinBuilder<'a> {
         let evk = ExtendedFullViewingKey::from(&z_spending_key);
         let cache_db_path = self.db_dir_path.join(format!("{}_cache.db", self.ticker));
         let wallet_db_path = self.db_dir_path.join(format!("{}_wallet.db", self.ticker));
-        let ctx_clone = self.ctx.clone();
-        let ticker = self.ticker.to_string();
-        let blocks_db = async_blocking(|| {
-            BlockDbImpl::new_from_path(ctx_clone, ticker, cache_db_path)
-                .map_to_mm(|err| ZCoinBuildError::StorageError(err.to_string()))
-        })
-        .await?;
+        let blocks_db =
+            async_blocking(|| BlockDb::for_path(cache_db_path).map_to_mm(ZcoinClientInitError::BlocksDbInitFailure))
+                .await?;
         let wallet_db = create_wallet_db(
             wallet_db_path,
             self.protocol_info.consensus_params.clone(),
