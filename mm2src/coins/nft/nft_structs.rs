@@ -147,7 +147,7 @@ pub struct Nft {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
-    pub(crate) possible_spam: Option<bool>,
+    pub(crate) possible_spam: Option<i8>,
 }
 
 /// This structure is for deserializing NFT json to struct.
@@ -257,7 +257,6 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
@@ -289,7 +288,7 @@ pub struct NftTransferHistory {
     pub(crate) amount: BigDecimal,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
-    pub(crate) possible_spam: Option<bool>,
+    pub(crate) possible_spam: Option<i8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -324,10 +323,10 @@ pub struct NftsTransferHistoryList {
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTxHistoryFilters {
-    from_block: Option<i64>,
-    to_block: Option<i64>,
-    from_address: Option<String>,
-    to_address: Option<String>,
+    #[serde(default)]
+    receive: bool,
+    #[serde(default)]
+    send: bool,
     from_date: Option<String>,
     to_date: Option<String>,
 }

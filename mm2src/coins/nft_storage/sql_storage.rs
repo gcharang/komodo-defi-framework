@@ -1,4 +1,5 @@
-use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
+use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory, NftTxHistoryFilters,
+                              NftsTransferHistoryList};
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
@@ -94,6 +95,30 @@ impl SqliteNftStorage {
 }
 
 fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmResult<SqlQuery, SqlError> {
+    let union_sql_strings: MmResult<Vec<_>, SqlError> = chains
+        .iter()
+        .map(|chain| {
+            let table_name = nft_list_table_name(chain);
+            validate_table_name(&table_name)?;
+            let sql_builder = nft_table_builder_preimage(conn, table_name.as_str())?;
+            let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
+            Ok(sql_string)
+        })
+        .collect();
+
+    let union_sql_strings = union_sql_strings?;
+    let union_sql = union_sql_strings.join(" UNION ALL ");
+    let mut final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_list")?;
+    final_sql_builder.order_desc("nft_list.block_number")?;
+    Ok(final_sql_builder)
+}
+
+// todo
+fn get_nft_tx_builder_preimage(
+    conn: &Connection,
+    chains: Vec<Chain>,
+    _filters: Option<NftTxHistoryFilters>,
+) -> MmResult<SqlQuery, SqlError> {
     let union_sql_strings: MmResult<Vec<_>, SqlError> = chains
         .iter()
         .map(|chain| {
@@ -256,7 +281,7 @@ impl NftListStorageOps for SqliteNftStorage {
                     nft.last_token_uri_sync,
                     nft.last_metadata_sync,
                     nft.minter_address,
-                    nft.possible_spam.map(i32::from).map(|v| v.to_string()),
+                    nft.possible_spam.map(|v| v.to_string()),
                 ];
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, &params)?;
             }
@@ -314,13 +339,22 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
 
     async fn get_tx_history(
         &self,
-        _ctx: &MmArc,
-        _chain: Vec<Chain>,
+        chains: Vec<Chain>,
         _max: bool,
         _limit: usize,
         _page_number: Option<NonZeroUsize>,
+        filters: Option<NftTxHistoryFilters>,
     ) -> MmResult<NftsTransferHistoryList, Self::Error> {
-        todo!()
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            // todo get_nft_tx_builder_preimage
+            let sql_builder = get_nft_tx_builder_preimage(&conn, chains, filters)?;
+            let mut total_count_builder = sql_builder.clone();
+            total_count_builder.count_all()?;
+            todo!()
+        })
+        .await
     }
 
     async fn add_txs_to_history<I>(&self, chain: &Chain, txs: I) -> MmResult<(), Self::Error>
@@ -353,7 +387,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.amount.to_string()),
                     Some(tx.verified.to_string()),
                     tx.operator,
-                    tx.possible_spam.map(i32::from).map(|v| v.to_string()),
+                    tx.possible_spam.map(|v| v.to_string()),
                 ];
 
                 sql_transaction.execute(&insert_tx_in_history_sql(&chain)?, &params)?;

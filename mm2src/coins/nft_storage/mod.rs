@@ -1,4 +1,4 @@
-use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
+use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftTxHistoryFilters, NftsTransferHistoryList};
 use async_trait::async_trait;
 use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
@@ -58,11 +58,11 @@ pub trait NftTxHistoryStorageOps {
 
     async fn get_tx_history(
         &self,
-        ctx: &MmArc,
         chains: Vec<Chain>,
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
+        filters: Option<NftTxHistoryFilters>,
     ) -> MmResult<NftsTransferHistoryList, Self::Error>;
 
     async fn add_txs_to_history<I>(&self, chain: &Chain, txs: I) -> MmResult<(), Self::Error>
