@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, DbLocked, IndexedDb, IndexedDbBuilder,
-                         InitDbResult, MultiIndex, SharedDb};
-use mm2_db::indexed_db::{BeBigUint, DbUpgrader, OnUpgradeResult, TableSignature};
+use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
+                         InitDbResult, OnUpgradeResult, TableSignature};
 
 const DB_NAME: &str = "z_compactblocks_cache";
 const DB_VERSION: u32 = 1;

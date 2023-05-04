@@ -1,17 +1,17 @@
 #[cfg(target_arch = "wasm32")] mod indexeddb;
 
-use db_common::sqlite::rusqlite::{params, Connection, NO_PARAMS};
-use db_common::sqlite::{query_single_row, run_optimization_pragmas};
 use mm2_core::mm_ctx::MmArc;
-#[cfg(target_arch = "wasm32")]
-use mm2_db::indexed_db::{ConstructibleDb, DbLocked, IndexedDb};
 use protobuf::Message;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use zcash_client_backend::data_api::BlockSource;
-use zcash_client_backend::proto::compact_formats::CompactBlock;
-use zcash_client_sqlite::error::SqliteClientError as ZcashClientError;
 use zcash_primitives::consensus::BlockHeight;
+cfg_native!(
+    use db_common::sqlite::rusqlite::{params, Connection, NO_PARAMS};
+    use db_common::sqlite::{query_single_row, run_optimization_pragmas};
+    use zcash_client_backend::data_api::BlockSource;
+    use zcash_client_backend::proto::compact_formats::CompactBlock;
+    use zcash_client_sqlite::error::SqliteClientError as ZcashClientError;
+);
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct CompactBlockRow {
@@ -133,45 +133,45 @@ impl BlockDbImpl {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-mod wasm {
-    use super::MmResult;
+cfg_wasm32!(
+    use super::*;
+    use crate::z_coin::storage::blockdb::indexeddb::BlockDbInner;
+    use mm2_db::indexed_db::{ConstructibleDb, DbLocked, IndexedDb, SharedDb};
+);
 
-    pub type BlockDbRes<T> = MmResult<T, BlockDbError>;
-    pub type BlockDbInnerLocked<'a> = DbLocked<'a, BlockDbInner>;
-    pub struct BlockDbInner {
-        pub inner: IndexedDb,
-    }
-}
+#[cfg(target_arch = "wasm32")]
+pub type BlockDbRes<T> = MmResult<T, BlockDbError>;
+#[cfg(target_arch = "wasm32")]
+pub type BlockDbInnerLocked<'a> = DbLocked<'a, BlockDbInner>;
 
 #[cfg(target_arch = "wasm32")]
 impl BlockDbImpl {
     #[cfg(target_arch = "wasm32")]
     pub fn new_from_path(ctx: MmArc, ticker: String, _path: impl AsRef<Path>) -> Result<Self, BlockDbError> {
         Ok(Self {
-            db: ConstructibleDb::new(ctx).into_shared(),
+            db: ConstructibleDb::new(&ctx).into_shared(),
             ticker,
         })
     }
 
     #[cfg(target_arch = "wasm32")]
-    async fn lock_db(&self) -> wasm::BlockDbRes<wasm::BlockDbInnerLocked<'_>> {
+    async fn lock_db(&self) -> BlockDbRes<BlockDbInnerLocked<'_>> {
         self.db
             .get_or_initialize()
             .await
-            .mm_err(|err| BlockHeaderStorageError::init_err(&self.ticker, err.to_string()))
+            .mm_err(|err| BlockDbError::IndexedDBError(err.to_string()))
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 impl BlockDbImpl {
-    fn get_latest_block(&self) -> Result<u32, ZcashClientError> { todo!() }
+    pub fn get_latest_block(&self) -> Result<u32, ZcashClientError> { todo!() }
 
-    fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, ZcashClientError> { todo!() }
+    pub fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, ZcashClientError> { todo!() }
 
-    fn rewind_to_height(&self, height: u32) -> Result<usize, ZcashClientError> { todo!() }
+    pub fn rewind_to_height(&self, height: u32) -> Result<usize, ZcashClientError> { todo!() }
 
-    fn with_blocks<F>(
+    pub fn with_blocks<F>(
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
