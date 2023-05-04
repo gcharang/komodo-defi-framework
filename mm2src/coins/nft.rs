@@ -83,7 +83,7 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
         last_token_uri_sync: nft_wrapper.last_token_uri_sync,
         last_metadata_sync: nft_wrapper.last_metadata_sync,
         minter_address: nft_wrapper.minter_address,
-        possible_spam: nft_wrapper.possible_spam.map(i8::from),
+        possible_spam: nft_wrapper.possible_spam,
     };
     Ok(nft_metadata)
 }
@@ -262,7 +262,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, 
                     last_token_uri_sync: nft_wrapper.last_token_uri_sync,
                     last_metadata_sync: nft_wrapper.last_metadata_sync,
                     minter_address: nft_wrapper.minter_address,
-                    possible_spam: nft_wrapper.possible_spam.map(i8::from),
+                    possible_spam: nft_wrapper.possible_spam,
                 };
                 // collect NFTs from the page
                 res_list.push(nft);
@@ -337,7 +337,7 @@ async fn get_moralis_nft_transfers(
                     amount: transfer_wrapper.amount.0,
                     verified: transfer_wrapper.verified,
                     operator: transfer_wrapper.operator,
-                    possible_spam: transfer_wrapper.possible_spam.map(i8::from),
+                    possible_spam: transfer_wrapper.possible_spam,
                 };
                 // collect NFTs transfers from the page
                 res_list.push(transfer_history);

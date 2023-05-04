@@ -281,7 +281,7 @@ impl NftListStorageOps for SqliteNftStorage {
                     nft.last_token_uri_sync,
                     nft.last_metadata_sync,
                     nft.minter_address,
-                    nft.possible_spam.map(|v| v.to_string()),
+                    nft.possible_spam.map(i32::from).map(|v| v.to_string()),
                 ];
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, &params)?;
             }
@@ -387,7 +387,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.amount.to_string()),
                     Some(tx.verified.to_string()),
                     tx.operator,
-                    tx.possible_spam.map(|v| v.to_string()),
+                    tx.possible_spam.map(i32::from).map(|v| v.to_string()),
                 ];
 
                 sql_transaction.execute(&insert_tx_in_history_sql(&chain)?, &params)?;
