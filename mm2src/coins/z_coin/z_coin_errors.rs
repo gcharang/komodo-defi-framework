@@ -207,6 +207,7 @@ pub enum ZCoinBuildError {
     ZCashParamsNotFound,
     ZDerivationPathNotSet,
     SaplingParamsInvalidChecksum,
+    StorageError(String),
 }
 
 impl From<SqliteError> for ZCoinBuildError {
