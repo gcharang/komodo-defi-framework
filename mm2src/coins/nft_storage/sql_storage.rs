@@ -124,10 +124,8 @@ fn get_nft_tx_builder_preimage(
         .map(|(chain, addr)| {
             let table_name = nft_tx_history_table_name(&chain);
             validate_table_name(&table_name)?;
-            // todo here add filters
             let sql_builder = nft_history_table_builder_preimage(conn, table_name.as_str(), addr, filters.clone())?;
             let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
-            println!("TABLE PREIMAGE = {} \n", sql_string);
             Ok(sql_string)
         })
         .collect();
@@ -156,6 +154,22 @@ fn nft_history_table_builder_preimage<'a>(
             sql_builder.sql_builder().and_where_eq("from_address", owner_add);
         } else if filters.receive {
             sql_builder.sql_builder().and_where_eq("to_address", owner_add);
+        }
+
+        if filters.from_date.is_some() && filters.to_date.is_some() {
+            sql_builder.sql_builder().and_where(format!(
+                "block_timestamp BETWEEN '{}' and '{}'",
+                filters.from_date.unwrap(),
+                filters.to_date.unwrap()
+            ));
+        } else if filters.from_date.is_some() {
+            sql_builder
+                .sql_builder()
+                .and_where(format!("block_timestamp >= '{}'", filters.from_date.unwrap()));
+        } else if filters.to_date.is_some() {
+            sql_builder
+                .sql_builder()
+                .and_where(format!("block_timestamp <= '{}'", filters.to_date.unwrap()));
         }
     }
     drop_mutability!(sql_builder);
@@ -389,12 +403,9 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            // todo get_nft_tx_builder_preimage complete filters
             let mut sql_builder = get_nft_tx_builder_preimage(&conn, chain_addr, filters)?;
             let mut total_count_builder = sql_builder.clone();
             total_count_builder.count_all()?;
-            let str = total_count_builder.clone().sql()?;
-            println!("TOTAL COUNT = {} \n", str);
             let total: isize = total_count_builder
                 .query_single_row(|row| row.get(0))?
                 .or_mm_err(|| SqlError::QueryReturnedNoRows)?;

@@ -320,7 +320,6 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct NftTxHistoryFilters {
     #[serde(default)]
@@ -331,7 +330,6 @@ pub struct NftTxHistoryFilters {
     pub(crate) to_date: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateNftReq {
     pub(crate) chains: Vec<Chain>,
