@@ -4,7 +4,7 @@ use mm2_err_handle::prelude::{MmError, MmResult};
 pub(crate) mod nft_errors;
 pub(crate) mod nft_structs;
 
-use crate::WithdrawError;
+use crate::{get_my_address, MyAddressReq, WithdrawError};
 use nft_errors::{GetNftInfoError, UpdateNftError};
 use nft_structs::{Chain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory, NftTransferHistoryWrapper,
                   NftTransfersReq, NftWrapper, NftsTransferHistoryList, TransactionNftDetails, UpdateNftReq,
@@ -97,8 +97,18 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
             NftTxHistoryStorageOps::init(&storage, chain).await?;
         }
     }
+    let mut adds = Vec::new();
+    for chain in req.chains.iter() {
+        let req = MyAddressReq {
+            coin: chain.to_ticker(),
+        };
+        let add = get_my_address(ctx.clone(), req).await?;
+        adds.push(add.wallet_address.to_lowercase());
+    }
+    drop_mutability!(adds);
+    let chain_addr: Vec<(Chain, String)> = req.chains.into_iter().zip(adds.into_iter()).collect();
     let transfer_history_list = storage
-        .get_tx_history(req.chains, req.max, req.limit, req.page_number, req.filters)
+        .get_tx_history(chain_addr, req.max, req.limit, req.page_number, req.filters)
         .await?;
     Ok(transfer_history_list)
 }

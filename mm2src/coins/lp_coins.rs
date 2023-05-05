@@ -363,7 +363,7 @@ impl From<CoinFindError> for RawTransactionError {
     }
 }
 
-#[derive(Debug, Deserialize, Display, EnumFromStringify, Serialize, SerializeErrorType)]
+#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum GetMyAddressError {
     CoinsConfCheckError(String),

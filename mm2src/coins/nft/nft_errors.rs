@@ -1,5 +1,6 @@
 use crate::eth::GetEthAddressError;
 use crate::nft_storage::{CreateNftStorageError, NftStorageError};
+use crate::GetMyAddressError;
 use common::HttpStatusCode;
 use derive_more::Display;
 use enum_from::EnumFromStringify;
@@ -36,6 +37,11 @@ pub enum GetNftInfoError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
+    GetMyAddressError(GetMyAddressError),
+}
+
+impl From<GetMyAddressError> for GetNftInfoError {
+    fn from(e: GetMyAddressError) -> Self { GetNftInfoError::GetMyAddressError(e) }
 }
 
 impl From<SlurpError> for GetNftInfoError {
@@ -96,7 +102,8 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
-            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::DbError(_)
+            | GetNftInfoError::GetMyAddressError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

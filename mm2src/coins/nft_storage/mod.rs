@@ -58,7 +58,7 @@ pub trait NftTxHistoryStorageOps {
 
     async fn get_tx_history(
         &self,
-        chains: Vec<Chain>,
+        chain_addr: Vec<(Chain, String)>,
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,

@@ -321,14 +321,14 @@ pub struct NftsTransferHistoryList {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct NftTxHistoryFilters {
     #[serde(default)]
-    receive: bool,
+    pub(crate) receive: bool,
     #[serde(default)]
-    send: bool,
-    from_date: Option<String>,
-    to_date: Option<String>,
+    pub(crate) send: bool,
+    pub(crate) from_date: Option<String>,
+    pub(crate) to_date: Option<String>,
 }
 
 #[allow(dead_code)]

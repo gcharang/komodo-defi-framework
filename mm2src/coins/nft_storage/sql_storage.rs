@@ -3,7 +3,7 @@ use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHist
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
 use async_trait::async_trait;
 use common::async_blocking;
-use db_common::sql_build::SqlQuery;
+use db_common::sql_build::{SqlCondition, SqlQuery};
 use db_common::sqlite::rusqlite::types::Type;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row, NO_PARAMS};
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
@@ -114,20 +114,20 @@ fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmRes
     Ok(final_sql_builder)
 }
 
-// todo impl filters
 fn get_nft_tx_builder_preimage(
     conn: &Connection,
-    chains: Vec<Chain>,
-    _filters: Option<NftTxHistoryFilters>,
+    chain_addr: Vec<(Chain, String)>,
+    filters: Option<NftTxHistoryFilters>,
 ) -> MmResult<SqlQuery, SqlError> {
-    let union_sql_strings: MmResult<Vec<_>, SqlError> = chains
-        .iter()
-        .map(|chain| {
-            let table_name = nft_tx_history_table_name(chain);
+    let union_sql_strings: MmResult<Vec<_>, SqlError> = chain_addr
+        .into_iter()
+        .map(|(chain, addr)| {
+            let table_name = nft_tx_history_table_name(&chain);
             validate_table_name(&table_name)?;
             // todo here add filters
-            let sql_builder = nft_table_builder_preimage(conn, table_name.as_str())?;
+            let sql_builder = nft_history_table_builder_preimage(conn, table_name.as_str(), addr, filters.clone())?;
             let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
+            println!("TABLE PREIMAGE = {} \n", sql_string);
             Ok(sql_string)
         })
         .collect();
@@ -136,6 +136,30 @@ fn get_nft_tx_builder_preimage(
     let union_sql = union_sql_strings.join(" UNION ALL ");
     let final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_history")?;
     Ok(final_sql_builder)
+}
+
+fn nft_history_table_builder_preimage<'a>(
+    conn: &'a Connection,
+    table_name: &'a str,
+    owner_add: String,
+    filters: Option<NftTxHistoryFilters>,
+) -> Result<SqlQuery<'a>, SqlError> {
+    let mut sql_builder = SqlQuery::select_from(conn, table_name)?;
+    if let Some(filters) = filters {
+        let owner_add = format!("'{}'", owner_add);
+        if filters.send && filters.receive {
+            sql_builder
+                .sql_builder()
+                .and_where_eq("from_address", owner_add.clone())
+                .or_where_eq("to_address", owner_add);
+        } else if filters.send {
+            sql_builder.sql_builder().and_where_eq("from_address", owner_add);
+        } else if filters.receive {
+            sql_builder.sql_builder().and_where_eq("to_address", owner_add);
+        }
+    }
+    drop_mutability!(sql_builder);
+    Ok(sql_builder)
 }
 
 fn nft_table_builder_preimage<'a>(conn: &'a Connection, table_name: &'a str) -> MmResult<SqlQuery<'a>, SqlError> {
@@ -356,7 +380,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
 
     async fn get_tx_history(
         &self,
-        chains: Vec<Chain>,
+        chain_addr: Vec<(Chain, String)>,
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
@@ -366,9 +390,11 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
             // todo get_nft_tx_builder_preimage complete filters
-            let mut sql_builder = get_nft_tx_builder_preimage(&conn, chains, filters)?;
+            let mut sql_builder = get_nft_tx_builder_preimage(&conn, chain_addr, filters)?;
             let mut total_count_builder = sql_builder.clone();
             total_count_builder.count_all()?;
+            let str = total_count_builder.clone().sql()?;
+            println!("TOTAL COUNT = {} \n", str);
             let total: isize = total_count_builder
                 .query_single_row(|row| row.get(0))?
                 .or_mm_err(|| SqlError::QueryReturnedNoRows)?;
