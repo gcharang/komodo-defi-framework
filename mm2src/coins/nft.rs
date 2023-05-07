@@ -50,42 +50,21 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 /// of the same token. `get_nft_metadata` returns NFTs info with the most recent owner.
 /// **Dont** use this function to get specific info about owner address, amount etc, you will get info not related to my_address.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
-    let api_key = ctx.conf["api_key"]
-        .as_str()
-        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
-    let chain_str = match req.chain {
-        Chain::Avalanche => "AVALANCHE",
-        Chain::Bsc => "BSC",
-        Chain::Eth => "ETH",
-        Chain::Fantom => "FANTOM",
-        Chain::Polygon => "POLYGON",
-    };
-    let uri = format!(
-        "{}nft/{}/{}?chain={}&{}",
-        URL_MORALIS, req.token_address, req.token_id, chain_str, FORMAT_DECIMAL_MORALIS
-    );
-    let response = send_moralis_request(uri.as_str(), api_key).await?;
-    let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
-    let nft_metadata = Nft {
-        chain: req.chain,
-        token_address: nft_wrapper.token_address,
-        token_id: nft_wrapper.token_id.0,
-        amount: nft_wrapper.amount.0,
-        owner_of: nft_wrapper.owner_of,
-        token_hash: nft_wrapper.token_hash,
-        block_number_minted: *nft_wrapper.block_number_minted,
-        block_number: *nft_wrapper.block_number,
-        contract_type: nft_wrapper.contract_type.map(|v| v.0),
-        name: nft_wrapper.name,
-        symbol: nft_wrapper.symbol,
-        token_uri: nft_wrapper.token_uri,
-        metadata: nft_wrapper.metadata,
-        last_token_uri_sync: nft_wrapper.last_token_uri_sync,
-        last_metadata_sync: nft_wrapper.last_metadata_sync,
-        minter_address: nft_wrapper.minter_address,
-        possible_spam: nft_wrapper.possible_spam,
-    };
-    Ok(nft_metadata)
+    let storage = NftStorageBuilder::new(&ctx).build()?;
+    if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
+        NftListStorageOps::init(&storage, &req.chain).await?;
+    }
+    let nft = storage
+        .get_nft(&req.chain, req.token_address.clone(), req.token_id.clone())
+        .await?;
+    if let Some(nft) = nft {
+        Ok(nft)
+    } else {
+        MmError::err(GetNftInfoError::TokenNotFoundInWallet {
+            token_address: req.token_address,
+            token_id: req.token_id.to_string(),
+        })
+    }
 }
 
 /// `get_nft_transfers` function returns a transfer history of NFTs on requested chains owned by user.
@@ -365,4 +344,44 @@ async fn get_moralis_nft_transfers(
 
     drop_mutability!(res_list);
     Ok(res_list)
+}
+
+#[allow(dead_code)]
+async fn get_moralis_metadata(ctx: &MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
+    let api_key = ctx.conf["api_key"]
+        .as_str()
+        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
+    let chain_str = match req.chain {
+        Chain::Avalanche => "AVALANCHE",
+        Chain::Bsc => "BSC",
+        Chain::Eth => "ETH",
+        Chain::Fantom => "FANTOM",
+        Chain::Polygon => "POLYGON",
+    };
+    let uri = format!(
+        "{}nft/{}/{}?chain={}&{}",
+        URL_MORALIS, req.token_address, req.token_id, chain_str, FORMAT_DECIMAL_MORALIS
+    );
+    let response = send_moralis_request(uri.as_str(), api_key).await?;
+    let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
+    let nft_metadata = Nft {
+        chain: req.chain,
+        token_address: nft_wrapper.token_address,
+        token_id: nft_wrapper.token_id.0,
+        amount: nft_wrapper.amount.0,
+        owner_of: nft_wrapper.owner_of,
+        token_hash: nft_wrapper.token_hash,
+        block_number_minted: *nft_wrapper.block_number_minted,
+        block_number: *nft_wrapper.block_number,
+        contract_type: nft_wrapper.contract_type.map(|v| v.0),
+        name: nft_wrapper.name,
+        symbol: nft_wrapper.symbol,
+        token_uri: nft_wrapper.token_uri,
+        metadata: nft_wrapper.metadata,
+        last_token_uri_sync: nft_wrapper.last_token_uri_sync,
+        last_metadata_sync: nft_wrapper.last_metadata_sync,
+        minter_address: nft_wrapper.minter_address,
+        possible_spam: nft_wrapper.possible_spam,
+    };
+    Ok(nft_metadata)
 }
