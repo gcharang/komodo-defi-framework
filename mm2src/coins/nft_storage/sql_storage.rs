@@ -1,6 +1,7 @@
 use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTransferHistory, NftTxHistoryFilters,
                               NftsTransferHistoryList};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
+use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps,
+                         RemoveNftResult};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
@@ -8,6 +9,7 @@ use db_common::sqlite::rusqlite::types::Type;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row, NO_PARAMS};
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
 use mm2_core::mm_ctx::MmArc;
+use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::mm_error::{MmError, MmResult};
 use mm2_err_handle::or_mm_error::OrMmError;
 use mm2_number::BigDecimal;
@@ -240,6 +242,38 @@ fn insert_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
     Ok(sql)
 }
 
+fn get_nft_metadata_sql(chain: &Chain) -> MmResult<String, SqlError> {
+    let table_name = nft_list_table_name(chain);
+    validate_table_name(&table_name)?;
+    let sql = format!(
+        "SELECT details_json FROM {} WHERE token_address=?1 AND token_id=?2",
+        table_name
+    );
+    Ok(sql)
+}
+
+fn select_last_block_height_sql(chain: &Chain) -> MmResult<String, SqlError> {
+    let table_name = nft_list_table_name(chain);
+    validate_table_name(&table_name)?;
+    let sql = format!(
+        "SELECT block_number FROM {} ORDER BY block_number DESC LIMIT 1",
+        table_name
+    );
+    Ok(sql)
+}
+
+fn delete_nft_sql<F>(chain: &Chain, table_name_creator: F) -> Result<String, MmError<SqlError>>
+where
+    F: FnOnce(&Chain) -> String,
+{
+    let table_name = table_name_creator(chain);
+    validate_table_name(&table_name)?;
+    let sql = format!("DELETE FROM {} WHERE token_address=?1 AND token_id=?2", table_name);
+    Ok(sql)
+}
+
+fn block_height_from_row(row: &Row<'_>) -> Result<u32, SqlError> { row.get(0) }
+
 #[async_trait]
 impl NftListStorageOps for SqliteNftStorage {
     type Error = SqlError;
@@ -348,20 +382,43 @@ impl NftListStorageOps for SqliteNftStorage {
 
     async fn get_nft(
         &self,
-        _chain: &Chain,
-        _token_address: String,
-        _token_id: BigDecimal,
-    ) -> MmResult<(), Self::Error> {
-        todo!()
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<Option<Nft>, Self::Error> {
+        let params = [token_address, token_id.to_string()];
+        let sql = get_nft_metadata_sql(chain)?;
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            query_single_row(&conn, &sql, params, nft_from_row).map_to_mm(SqlError::from)
+        })
+        .await
     }
 
     async fn remove_nft_from_list(
         &self,
-        _chain: &Chain,
-        _token_address: String,
-        _token_id: BigDecimal,
-    ) -> MmResult<(), Self::Error> {
-        todo!()
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<RemoveNftResult, Self::Error> {
+        let sql = delete_nft_sql(chain, nft_list_table_name)?;
+        let params = [token_address, token_id.to_string()];
+        let selfi = self.clone();
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+            let rows_num = sql_transaction.execute(&sql, &params)?;
+
+            let remove_tx_result = if rows_num > 0 {
+                RemoveNftResult::NftRemoved
+            } else {
+                RemoveNftResult::NftDidNotExist
+            };
+            sql_transaction.commit()?;
+            Ok(remove_tx_result)
+        })
+        .await
     }
 }
 
@@ -472,5 +529,13 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_latest_block(&self, _chain: &Chain) -> MmResult<u64, Self::Error> { todo!() }
+    async fn get_latest_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error> {
+        let sql = select_last_block_height_sql(chain)?;
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            query_single_row(&conn, &sql, NO_PARAMS, block_height_from_row).map_to_mm(SqlError::from)
+        })
+        .await
+    }
 }

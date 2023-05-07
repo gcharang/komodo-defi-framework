@@ -11,6 +11,12 @@ use std::num::NonZeroUsize;
 #[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub mod wasm_storage;
 
+#[derive(Debug)]
+pub enum RemoveNftResult {
+    NftRemoved,
+    NftDidNotExist,
+}
+
 pub trait NftStorageError: std::fmt::Debug + NotMmError + NotEqual + Send {}
 
 #[async_trait]
@@ -36,14 +42,19 @@ pub trait NftListStorageOps {
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send;
 
-    async fn get_nft(&self, chain: &Chain, token_address: String, token_id: BigDecimal) -> MmResult<(), Self::Error>;
+    async fn get_nft(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<Option<Nft>, Self::Error>;
 
     async fn remove_nft_from_list(
         &self,
         chain: &Chain,
         token_address: String,
         token_id: BigDecimal,
-    ) -> MmResult<(), Self::Error>;
+    ) -> MmResult<RemoveNftResult, Self::Error>;
 }
 
 #[async_trait]
@@ -70,7 +81,7 @@ pub trait NftTxHistoryStorageOps {
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send;
 
-    async fn get_latest_block(&self, chain: &Chain) -> MmResult<u64, Self::Error>;
+    async fn get_latest_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]
