@@ -101,22 +101,22 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
             NftListStorageOps::init(&storage, chain).await?;
             NftTxHistoryStorageOps::init(&storage, chain).await?;
             let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-            NftListStorageOps::add_nfts_to_list(&storage, chain, nft_list).await?;
+            storage.add_nfts_to_list(chain, nft_list).await?;
             let nft_transfers = get_moralis_nft_transfers(&ctx, chain, None).await?;
-            NftTxHistoryStorageOps::add_txs_to_history(&storage, chain, nft_transfers).await?;
+            storage.add_txs_to_history(chain, nft_transfers).await?;
         } else if !NftListStorageOps::is_initialized(&storage, chain).await?
             && NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
         {
             NftListStorageOps::init(&storage, chain).await?;
             let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-            NftListStorageOps::add_nfts_to_list(&storage, chain, nft_list).await?;
+            storage.add_nfts_to_list(chain, nft_list).await?;
             todo!()
         } else if NftListStorageOps::is_initialized(&storage, chain).await?
             && !NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
         {
             NftTxHistoryStorageOps::init(&storage, chain).await?;
             let nft_transfers = get_moralis_nft_transfers(&ctx, chain, None).await?;
-            NftTxHistoryStorageOps::add_txs_to_history(&storage, chain, nft_transfers).await?;
+            storage.add_txs_to_history(chain, nft_transfers).await?;
             todo!()
         } else if NftListStorageOps::is_initialized(&storage, chain).await?
             && NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
@@ -127,7 +127,26 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     Ok(())
 }
 
-pub async fn refresh_nft_metadata(_ctx: MmArc, _req: UpdateNftReq) -> MmResult<(), UpdateNftError> { todo!() }
+pub async fn refresh_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<(), UpdateNftError> {
+    let moralis_meta = get_moralis_metadata(&ctx, req.token_address.clone(), req.token_id.clone(), &req.chain).await?;
+    let storage = NftStorageBuilder::new(&ctx).build()?;
+    let req = NftMetadataReq {
+        token_address: req.token_address,
+        token_id: req.token_id,
+        chain: req.chain,
+    };
+    let mut nft = get_nft_metadata(ctx, req).await?;
+    nft.name = moralis_meta.name;
+    nft.symbol = moralis_meta.symbol;
+    nft.token_uri = moralis_meta.token_uri;
+    nft.metadata = moralis_meta.metadata;
+    nft.last_token_uri_sync = moralis_meta.last_token_uri_sync;
+    nft.last_metadata_sync = moralis_meta.last_metadata_sync;
+    nft.possible_spam = moralis_meta.possible_spam;
+    drop_mutability!(nft);
+    storage.refresh_nft_metadata(&moralis_meta.chain, nft).await?;
+    Ok(())
+}
 
 /// `withdraw_nft` function generates, signs and returns a transaction that transfers NFT
 /// from my address to recipient's address.
@@ -346,12 +365,16 @@ async fn get_moralis_nft_transfers(
     Ok(res_list)
 }
 
-#[allow(dead_code)]
-async fn get_moralis_metadata(ctx: &MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
+async fn get_moralis_metadata(
+    ctx: &MmArc,
+    token_address: String,
+    token_id: BigDecimal,
+    chain: &Chain,
+) -> MmResult<Nft, GetNftInfoError> {
     let api_key = ctx.conf["api_key"]
         .as_str()
         .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
-    let chain_str = match req.chain {
+    let chain_str = match chain {
         Chain::Avalanche => "AVALANCHE",
         Chain::Bsc => "BSC",
         Chain::Eth => "ETH",
@@ -360,12 +383,12 @@ async fn get_moralis_metadata(ctx: &MmArc, req: NftMetadataReq) -> MmResult<Nft,
     };
     let uri = format!(
         "{}nft/{}/{}?chain={}&{}",
-        URL_MORALIS, req.token_address, req.token_id, chain_str, FORMAT_DECIMAL_MORALIS
+        URL_MORALIS, token_address, token_id, chain_str, FORMAT_DECIMAL_MORALIS
     );
     let response = send_moralis_request(uri.as_str(), api_key).await?;
     let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
     let nft_metadata = Nft {
-        chain: req.chain,
+        chain: *chain,
         token_address: nft_wrapper.token_address,
         token_id: nft_wrapper.token_id.0,
         amount: nft_wrapper.amount.0,

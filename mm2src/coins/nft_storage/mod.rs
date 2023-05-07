@@ -55,6 +55,15 @@ pub trait NftListStorageOps {
         token_address: String,
         token_id: BigDecimal,
     ) -> MmResult<RemoveNftResult, Self::Error>;
+
+    async fn get_nft_amount(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<Option<String>, Self::Error>;
+
+    async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]
