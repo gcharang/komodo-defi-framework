@@ -10,6 +10,7 @@ description = "Provides a CLI interface and facilitates interoperating to komodo
 async-trait = "0.1.68"
 clap = { version = "4.2", features = ["derive"] }
 common = { path = "../common" }
+chrono = "0.4.24"
 derive_more = "0.99"
 directories = "5.0"
 env_logger = "0.7.1"
@@ -33,3 +34,4 @@ rpc = { path = "../mm2_bitcoin/rpc" }
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.3", features = ["processthreadsapi", "winnt"] }
 
+[dev-dependencies]

@@ -1,8 +1,13 @@
+use mm2_number::{BigDecimal, BigRational};
+use mm2_rpc::legacy::{HistoricalOrder, MakerMatchForRpc, OrderConfirmationsSettings};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
+use uuid::Uuid;
 
 use crate::activation_scheme_db::{get_activation_scheme, init_activation_scheme};
 use crate::adex_config::AdexConfigImpl;
@@ -167,7 +172,47 @@ async fn test_buy_morty_for_rick() {
         .unwrap();
 
     let result = String::from_utf8(buffer).unwrap();
-    assert_eq!("Buy order uuid: 4685e133-dfb3-4b31-8d4c-0ffa79933c8e\n", result);
+    assert_eq!("4685e133-dfb3-4b31-8d4c-0ffa79933c8e\n", result);
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MakerOrderForRpcc {
+    pub base: String,
+    pub rel: String,
+    pub price: BigDecimal,
+    pub price_rat: BigRational,
+    pub max_base_vol: BigDecimal,
+    pub max_base_vol_rat: BigRational,
+    pub min_base_vol: BigDecimal,
+    pub min_base_vol_rat: BigRational,
+    pub created_at: u64,
+    pub updated_at: Option<u64>,
+    pub matches: HashMap<Uuid, MakerMatchForRpc>,
+    pub started_swaps: Vec<Uuid>,
+    pub uuid: Uuid,
+    pub conf_settings: Option<OrderConfirmationsSettings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changes_history: Option<Vec<HistoricalOrder>>,
+    pub base_orderbook_ticker: Option<String>,
+    pub rel_orderbook_ticker: Option<String>,
+}
+
+#[tokio::test]
+async fn test_order_status() {
+    tokio::spawn(fake_mm2_server(7792, "src/tests/taker_status.http"));
+    tokio::time::sleep(Duration::from_micros(100)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7792");
+    let args = vec!["adex-cli", "order-status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(TAKER_STATUS_OUTPUT, result);
 }
 
 async fn fake_mm2_server(port: u16, response_path: &'static str) {
@@ -254,4 +299,24 @@ balance: 0.02
 unspendable_balance: 0
 required_confirmations: 3
 requires_notarization: No
+";
+
+const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-bebb-5df8ff74b8e0
+      req.(base,rel): MORTY(0.01), RICK(0.01000001)
+          req.action: Buy
+  req.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d, 0000000000000000000000000000000000000000000000000000000000000000
+        req.match_by: Any
+    reqconf_settings: 111,true:555,true
+          created_at: 2023-05-11 19:28:46 UTC
+          order_type: GoodTillCancelled
+         cancellable: false
+             matches: 
+                      uuid: 600f62b3-5248-4905-9618-14f339cc7d30
+       reserved.(base,rel): MORTY(0.01), RICK(0.0099999999)
+   reserved.(taker, maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
+   reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000
+     reservedconf_settings: 1,false:1,false
+              last_updated: 0
+     connect.(taker,maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
+    connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5
 ";

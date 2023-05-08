@@ -1,8 +1,9 @@
 use common::serde_derive::{Deserialize, Serialize};
 use derive_more::Display;
+
 use mm2_number::{construct_detailed, BigDecimal, BigRational, Fraction, MmNumber};
 use rpc::v1::types::H256 as H256Json;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use uuid::Uuid;
 
@@ -81,7 +82,6 @@ pub struct RpcOrderbookEntry {
     pub min_volume_fraction: Fraction,
     pub pubkey: String,
     pub age: i64,
-    pub zcredits: u64,
     pub uuid: Uuid,
     pub is_mine: bool,
     #[serde(flatten)]
@@ -158,30 +158,7 @@ pub struct SellBuyResponse {
 
 construct_detailed!(DetailedMinVolume, min_volume);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TakerRequestForRpc {
-    pub base: String,
-    pub rel: String,
-    pub base_amount: BigDecimal,
-    pub base_amount_rat: BigRational,
-    pub rel_amount: BigDecimal,
-    pub rel_amount_rat: BigRational,
-    pub action: TakerAction,
-    pub uuid: Uuid,
-    pub method: String,
-    pub sender_pubkey: H256Json,
-    pub dest_pub_key: H256Json,
-    pub match_by: MatchBy,
-    pub conf_settings: Option<OrderConfirmationsSettings>,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum TakerAction {
-    Buy,
-    Sell,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Display, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum OrderType {
     FillOrKill,
@@ -257,3 +234,179 @@ pub struct MmVersionResponse {
 }
 
 fn get_true() -> bool { true }
+
+#[derive(Serialize, Deserialize)]
+pub struct CancelOrderRequest {
+    pub uuid: Uuid,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CancelAllOrdersRequest {
+    pub cancel_by: CancelBy,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CancelAllOrdersResponse {
+    pub cancelled: Vec<Uuid>,
+    pub currently_matching: Vec<Uuid>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum CancelBy {
+    /// All orders of current node
+    All,
+    /// All orders of specific pair
+    Pair { base: String, rel: String },
+    /// All orders using the coin ticker as base or rel
+    Coin { ticker: String },
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OrderStatusRequest {
+    pub uuid: Uuid,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "order")]
+pub enum OrderStatusResponse {
+    Maker(MakerOrderForMyOrdersRpc),
+    Taker(TakerOrderForRpc),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MakerOrderForRpc {
+    pub uuid: Uuid,
+    pub base: String,
+    pub rel: String,
+    pub price: BigDecimal,
+    pub price_rat: BigRational,
+    pub max_base_vol: BigDecimal,
+    pub max_base_vol_rat: BigRational,
+    pub min_base_vol: BigDecimal,
+    pub min_base_vol_rat: BigRational,
+    pub created_at: u64,
+    pub updated_at: Option<u64>,
+    pub matches: HashMap<Uuid, MakerMatchForRpc>,
+    pub started_swaps: Vec<Uuid>,
+    pub conf_settings: Option<OrderConfirmationsSettings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changes_history: Option<Vec<HistoricalOrder>>,
+    pub base_orderbook_ticker: Option<String>,
+    pub rel_orderbook_ticker: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TakerOrderForRpc {
+    pub request: TakerRequestForRpc,
+    pub created_at: u64,
+    pub matches: HashMap<Uuid, TakerMatchForRpc>,
+    pub order_type: OrderType,
+    pub cancellable: bool,
+    pub base_orderbook_ticker: Option<String>,
+    pub rel_orderbook_ticker: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HistoricalOrder {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_base_vol: Option<BigRational>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_base_vol: Option<BigRational>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<BigRational>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conf_settings: Option<OrderConfirmationsSettings>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MakerOrderForMyOrdersRpc {
+    #[serde(flatten)]
+    pub order: MakerOrderForRpc,
+    pub cancellable: bool,
+    pub available_amount: BigDecimal,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TakerMatchForRpc {
+    pub reserved: MakerReservedForRpc,
+    pub connect: TakerConnectForRpc,
+    pub connected: Option<MakerConnectedForRpc>,
+    pub last_updated: u64,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "order")]
+pub enum OrderForRpc {
+    Maker(MakerOrderForRpc),
+    Taker(TakerOrderForRpc),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MakerMatchForRpc {
+    pub request: TakerRequestForRpc,
+    pub reserved: MakerReservedForRpc,
+    pub connect: Option<TakerConnectForRpc>,
+    pub connected: Option<MakerConnectedForRpc>,
+    pub last_updated: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TakerRequestForRpc {
+    pub uuid: Uuid,
+    pub base: String,
+    pub rel: String,
+    pub base_amount: BigDecimal,
+    pub base_amount_rat: BigRational,
+    pub rel_amount: BigDecimal,
+    pub rel_amount_rat: BigRational,
+    pub action: TakerAction,
+    pub method: String,
+    pub sender_pubkey: H256Json,
+    pub dest_pub_key: H256Json,
+    pub match_by: MatchBy,
+    pub conf_settings: Option<OrderConfirmationsSettings>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MakerReservedForRpc {
+    pub base: String,
+    pub rel: String,
+    pub base_amount: BigDecimal,
+    pub base_amount_rat: BigRational,
+    pub rel_amount: BigDecimal,
+    pub rel_amount_rat: BigRational,
+    pub taker_order_uuid: Uuid,
+    pub maker_order_uuid: Uuid,
+    pub sender_pubkey: H256Json,
+    pub dest_pub_key: H256Json,
+    pub conf_settings: Option<OrderConfirmationsSettings>,
+    pub method: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TakerConnectForRpc {
+    pub taker_order_uuid: Uuid,
+    pub maker_order_uuid: Uuid,
+    pub method: String,
+    pub sender_pubkey: H256Json,
+    pub dest_pub_key: H256Json,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MakerConnectedForRpc {
+    pub taker_order_uuid: Uuid,
+    pub maker_order_uuid: Uuid,
+    pub method: String,
+    pub sender_pubkey: H256Json,
+    pub dest_pub_key: H256Json,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Display)]
+pub enum TakerAction {
+    Buy,
+    Sell,
+}

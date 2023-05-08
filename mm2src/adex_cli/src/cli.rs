@@ -72,6 +72,11 @@ enum Command {
         #[command(flatten)]
         order_args: BuyOrderCli,
     },
+    #[command(subcommand, about = "To cancel one or a group of orders")]
+    Cancel(CancelSubcommand),
+    OrderStatus {
+        uuid: Uuid,
+    },
 }
 
 #[derive(Subcommand)]
@@ -144,6 +149,13 @@ impl Cli {
             Command::Buy {
                 order_args: BuyOrderCli { order_cli },
             } => proc.buy(SellBuyRequest::from(order_cli)).await?,
+            Command::Cancel(CancelSubcommand::Order { uuid }) => proc.cancel_order(uuid).await?,
+            Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
+            Command::Cancel(CancelSubcommand::ByPair { base, rel }) => {
+                proc.cancel_by_pair(take(base), take(rel)).await?
+            },
+            Command::Cancel(CancelSubcommand::ByCoin { ticker }) => proc.cancel_by_coin(take(ticker)).await?,
+            Command::OrderStatus { uuid } => proc.order_status(uuid).await?,
         }
         Ok(())
     }
@@ -308,4 +320,27 @@ impl From<&mut OrderCli> for SellBuyRequest {
             save_in_history: value.save_in_history,
         }
     }
+}
+
+#[derive(Subcommand)]
+enum CancelSubcommand {
+    #[command(about = "Cancels certain order by uuid")]
+    Order {
+        #[arg(help = "Order identifier")]
+        uuid: Uuid,
+    },
+    #[command(about = "Cancels all orders of current node")]
+    All,
+    #[command(about = "Cancels all orders of specific pair")]
+    ByPair {
+        #[arg(help = "base coin of the pair; ")]
+        base: String,
+        #[arg(help = "rel coin of the pair; ")]
+        rel: String,
+    },
+    #[command(about = "Cancels all orders using the coin ticker as base or rel")]
+    ByCoin {
+        #[arg(help = "order is cancelled if it uses ticker as base or rel")]
+        ticker: String,
+    },
 }

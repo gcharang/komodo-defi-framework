@@ -28,7 +28,7 @@ use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
 use mm2_number::construct_detailed;
-use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, Mm2RpcResult, MmVersionResponse, Status};
+use mm2_rpc_data::legacy::{BalanceResponse, CancelBy, CoinInitResponse, Mm2RpcResult, MmVersionResponse, Status};
 use serde_json::{self as json, Value as Json};
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -37,7 +37,7 @@ use uuid::Uuid;
 
 use crate::mm2::lp_dispatcher::{dispatch_lp_event, StopCtxEvent};
 use crate::mm2::lp_network::subscribe_to_topic;
-use crate::mm2::lp_ordermatch::{cancel_orders_by, get_matching_orders, CancelBy};
+use crate::mm2::lp_ordermatch::{cancel_orders_by, get_matching_orders};
 use crate::mm2::lp_swap::{active_swaps_using_coins, tx_helper_topic, watcher_topic};
 
 const INTERNAL_SERVER_ERROR_CODE: u16 = 500;

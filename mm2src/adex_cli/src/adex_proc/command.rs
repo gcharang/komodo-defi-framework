@@ -15,7 +15,7 @@ where
 }
 
 #[derive(Serialize, Clone, Display)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum Method {
     Stop,
     Version,
@@ -27,6 +27,9 @@ pub(crate) enum Method {
     GetOrderbook,
     Sell,
     Buy,
+    CancelOrder,
+    CancelAllOrders,
+    OrderStatus,
 }
 
 #[derive(Serialize, Clone, Copy, Display)]
