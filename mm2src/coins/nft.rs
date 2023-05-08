@@ -11,7 +11,7 @@ use nft_structs::{Chain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHi
                   WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft::nft_structs::ConvertChain;
+use crate::nft::nft_structs::{ContractType, ConvertChain};
 use crate::nft_storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::{APPLICATION_JSON, X_API_KEY};
 use http::header::ACCEPT;
@@ -34,6 +34,8 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
         }
+        let last_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
+        println!("LAST BLOCK = {:?} \n", last_block);
     }
     let nfts = storage
         .get_nft_list(req.chains, req.max, req.limit, req.page_number)
@@ -42,13 +44,6 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 }
 
 /// `get_nft_metadata` function returns info of one specific NFT.
-/// Current implementation sends request to Moralis.
-/// Later, after adding caching, metadata lookup can be performed using previously obtained NFTs info without
-/// sending new moralis request. The moralis request can be sent as a fallback, if the data was not found in the cache.
-///
-/// **Caution:** ERC-1155 token can have a total supply more than 1, which means there could be several owners
-/// of the same token. `get_nft_metadata` returns NFTs info with the most recent owner.
-/// **Dont** use this function to get specific info about owner address, amount etc, you will get info not related to my_address.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
     let storage = NftStorageBuilder::new(&ctx).build()?;
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
@@ -68,7 +63,6 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
 }
 
 /// `get_nft_transfers` function returns a transfer history of NFTs on requested chains owned by user.
-/// Currently doesnt support filters.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
@@ -95,33 +89,124 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
 pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNftError> {
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
-        if !NftListStorageOps::is_initialized(&storage, chain).await?
-            && !NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
-        {
-            NftListStorageOps::init(&storage, chain).await?;
-            NftTxHistoryStorageOps::init(&storage, chain).await?;
-            let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-            storage.add_nfts_to_list(chain, nft_list).await?;
-            let nft_transfers = get_moralis_nft_transfers(&ctx, chain, None).await?;
-            storage.add_txs_to_history(chain, nft_transfers).await?;
-        } else if !NftListStorageOps::is_initialized(&storage, chain).await?
-            && NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
-        {
-            NftListStorageOps::init(&storage, chain).await?;
-            let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-            storage.add_nfts_to_list(chain, nft_list).await?;
-            todo!()
-        } else if NftListStorageOps::is_initialized(&storage, chain).await?
-            && !NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
-        {
+        let tx_history_initialized = NftTxHistoryStorageOps::is_initialized(&storage, chain).await?;
+        let list_initialized = NftListStorageOps::is_initialized(&storage, chain).await?;
+
+        if !tx_history_initialized {
             NftTxHistoryStorageOps::init(&storage, chain).await?;
             let nft_transfers = get_moralis_nft_transfers(&ctx, chain, None).await?;
             storage.add_txs_to_history(chain, nft_transfers).await?;
-            todo!()
-        } else if NftListStorageOps::is_initialized(&storage, chain).await?
-            && NftTxHistoryStorageOps::is_initialized(&storage, chain).await?
-        {
-            todo!()
+        } else {
+            let last_tx_block = NftTxHistoryStorageOps::get_last_block_number(&storage, chain).await?;
+            let nft_transfers = get_moralis_nft_transfers(&ctx, chain, last_tx_block.map(|b| b + 1)).await?;
+            storage.add_txs_to_history(chain, nft_transfers).await?;
+        }
+
+        if !list_initialized {
+            NftListStorageOps::init(&storage, chain).await?;
+            let nft_list = get_moralis_nft_list(&ctx, chain).await?;
+            storage.add_nfts_to_list(chain, nft_list).await?;
+        } else {
+            let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
+            // check if last block number exists
+            if let Some(last_block) = last_nft_block {
+                // try to update nft list info using updated tx info from transfer history table
+                let txs = storage.get_txs_from_block(chain, last_block + 1).await?;
+                for tx in txs.into_iter() {
+                    let req = MyAddressReq {
+                        coin: chain.to_ticker(),
+                    };
+                    let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
+                    match (tx.from_address == my_address, tx.contract_type) {
+                        (true, ContractType::Erc721) => {
+                            storage
+                                .remove_nft_from_list(chain, tx.token_address, tx.token_id)
+                                .await?;
+                        },
+                        (false, ContractType::Erc721) => {
+                            let mut nft = get_moralis_metadata(&ctx, tx.token_address, tx.token_id, chain).await?;
+                            // sometimes moralis updates Get All NFTs (which also affects Get Metadata) later
+                            // than History by Wallet update
+                            nft.owner_of = my_address;
+                            nft.block_number = tx.block_number;
+                            drop_mutability!(nft);
+                            storage.add_nfts_to_list(chain, [nft]).await?;
+                        },
+                        (true, ContractType::Erc1155) => {
+                            let nft_db = storage
+                                .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
+                                .await?;
+                            // change amount or delete nft from the list
+                            if let Some(mut nft_db) = nft_db {
+                                match nft_db.amount.cmp(&tx.amount) {
+                                    std::cmp::Ordering::Equal => {
+                                        storage
+                                            .remove_nft_from_list(chain, tx.token_address, tx.token_id)
+                                            .await?;
+                                    },
+                                    std::cmp::Ordering::Greater => {
+                                        nft_db.amount -= tx.amount;
+                                        nft_db.block_number = tx.block_number;
+                                        drop_mutability!(nft_db);
+                                        storage.update_amount_block_number(chain, nft_db).await?;
+                                    },
+                                    std::cmp::Ordering::Less => {
+                                        return MmError::err(UpdateNftError::InsufficientAmountInCache {
+                                            amount_list: nft_db.amount.to_string(),
+                                            amount_history: tx.amount.to_string(),
+                                        });
+                                    },
+                                }
+                            } else {
+                                // if nft list table is not empty token must exist
+                                return MmError::err(UpdateNftError::TokenNotFoundInWallet {
+                                    token_address: tx.token_address,
+                                    token_id: tx.token_id.to_string(),
+                                });
+                            }
+                        },
+                        (false, ContractType::Erc1155) => {
+                            let nft_db = storage
+                                .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
+                                .await?;
+                            // change amount or add nft to the list
+                            if let Some(mut nft_db) = nft_db {
+                                nft_db.amount += tx.amount;
+                                nft_db.block_number = tx.block_number;
+                                drop_mutability!(nft_db);
+                                storage.update_amount_block_number(chain, nft_db).await?;
+                            } else {
+                                let moralis_meta =
+                                    get_moralis_metadata(&ctx, tx.token_address, tx.token_id.clone(), chain).await?;
+                                let nft = Nft {
+                                    chain: *chain,
+                                    token_address: moralis_meta.token_address,
+                                    token_id: moralis_meta.token_id,
+                                    amount: Default::default(),
+                                    owner_of: my_address,
+                                    token_hash: moralis_meta.token_hash,
+                                    block_number_minted: moralis_meta.block_number_minted,
+                                    block_number: tx.block_number,
+                                    contract_type: moralis_meta.contract_type,
+                                    name: moralis_meta.name,
+                                    symbol: moralis_meta.symbol,
+                                    token_uri: moralis_meta.token_uri,
+                                    metadata: moralis_meta.metadata,
+                                    last_token_uri_sync: moralis_meta.last_token_uri_sync,
+                                    last_metadata_sync: moralis_meta.last_metadata_sync,
+                                    minter_address: moralis_meta.minter_address,
+                                    possible_spam: moralis_meta.possible_spam,
+                                };
+                                storage.add_nfts_to_list(chain, [nft]).await?;
+                            }
+                        },
+                    }
+                }
+            } else {
+                // if nft list table is empty, we can try to get info from moralis
+                let nft_list = get_moralis_nft_list(&ctx, chain).await?;
+                storage.add_nfts_to_list(chain, nft_list).await?;
+            }
         }
     }
     Ok(())
@@ -214,6 +299,7 @@ async fn send_moralis_request(uri: &str, api_key: &str) -> MmResult<Json, GetNft
 }
 
 /// This function uses `get_nft_list` method to get the correct info about amount of specific NFT owned by my_address.
+/// todo it is used for withdrawing, remove it and use db instead
 pub(crate) async fn find_wallet_amount(
     ctx: MmArc,
     nft_list: NftListReq,
@@ -293,7 +379,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, 
 async fn get_moralis_nft_transfers(
     ctx: &MmArc,
     chain: &Chain,
-    from_block: Option<u64>,
+    from_block: Option<u32>,
 ) -> MmResult<Vec<NftTransferHistory>, GetNftInfoError> {
     let api_key = ctx.conf["api_key"]
         .as_str()
@@ -365,6 +451,9 @@ async fn get_moralis_nft_transfers(
     Ok(res_list)
 }
 
+/// **Caution:** ERC-1155 token can have a total supply more than 1, which means there could be several owners
+/// of the same token. `get_nft_metadata` returns NFTs info with the most recent owner.
+/// **Dont** use this function to get specific info about owner address, amount etc, you will get info not related to my_address.
 async fn get_moralis_metadata(
     ctx: &MmArc,
     token_address: String,

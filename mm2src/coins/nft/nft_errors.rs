@@ -27,7 +27,7 @@ pub enum GetNftInfoError {
     #[display(fmt = "X-API-Key is missing")]
     ApiKeyError,
     #[display(
-        fmt = "Token: token_address {}, token_id {} was not find in wallet",
+        fmt = "Token: token_address {}, token_id {} was not found in wallet",
         token_address,
         token_id
     )]
@@ -87,11 +87,6 @@ impl<T: NftStorageError> From<T> for GetNftInfoError {
     }
 }
 
-impl From<GetNftInfoError> for UpdateNftError {
-    // expand UpdateNftError::GetNftInfoError
-    fn from(e: GetNftInfoError) -> Self { UpdateNftError::GetNftInfoError(e) }
-}
-
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -116,6 +111,25 @@ pub enum UpdateNftError {
     #[display(fmt = "Internal: {}", _0)]
     Internal(String),
     GetNftInfoError(GetNftInfoError),
+    GetMyAddressError(GetMyAddressError),
+    #[display(
+        fmt = "Token: token_address {}, token_id {} was not found in wallet",
+        token_address,
+        token_id
+    )]
+    TokenNotFoundInWallet {
+        token_address: String,
+        token_id: String,
+    },
+    #[display(
+        fmt = "Insufficient amount NFT token in the cache: amount in list table before transfer {}, transferred {}",
+        amount_list,
+        amount_history
+    )]
+    InsufficientAmountInCache {
+        amount_list: String,
+        amount_history: String,
+    },
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -124,6 +138,14 @@ impl From<CreateNftStorageError> for UpdateNftError {
             CreateNftStorageError::Internal(err) => UpdateNftError::Internal(err),
         }
     }
+}
+
+impl From<GetNftInfoError> for UpdateNftError {
+    fn from(e: GetNftInfoError) -> Self { UpdateNftError::GetNftInfoError(e) }
+}
+
+impl From<GetMyAddressError> for UpdateNftError {
+    fn from(e: GetMyAddressError) -> Self { UpdateNftError::GetMyAddressError(e) }
 }
 
 impl<T: NftStorageError> From<T> for UpdateNftError {
@@ -136,10 +158,12 @@ impl<T: NftStorageError> From<T> for UpdateNftError {
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
-            // expand UpdateNftError::GetNftInfoError
-            UpdateNftError::DbError(_) | UpdateNftError::Internal(_) | UpdateNftError::GetNftInfoError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            },
+            UpdateNftError::DbError(_)
+            | UpdateNftError::Internal(_)
+            | UpdateNftError::GetNftInfoError(_)
+            | UpdateNftError::GetMyAddressError(_)
+            | UpdateNftError::TokenNotFoundInWallet { .. }
+            | UpdateNftError::InsufficientAmountInCache { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

@@ -64,6 +64,10 @@ pub trait NftListStorageOps {
     ) -> MmResult<Option<String>, Self::Error>;
 
     async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
+
+    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
+
+    async fn update_amount_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]
@@ -90,7 +94,13 @@ pub trait NftTxHistoryStorageOps {
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send;
 
-    async fn get_latest_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
+    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
+
+    async fn get_txs_from_block(
+        &self,
+        chain: &Chain,
+        block_number: u32,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]
