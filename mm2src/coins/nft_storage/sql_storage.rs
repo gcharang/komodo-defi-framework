@@ -93,7 +93,9 @@ fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmRes
 
     let union_sql_strings = union_sql_strings?;
     let union_sql = union_sql_strings.join(" UNION ALL ");
-    let final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_list")?;
+    let mut final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_list")?;
+    final_sql_builder.order_desc("nft_list.block_number")?;
+    drop_mutability!(final_sql_builder);
     Ok(final_sql_builder)
 }
 
@@ -115,7 +117,9 @@ fn get_nft_tx_builder_preimage(
 
     let union_sql_strings = union_sql_strings?;
     let union_sql = union_sql_strings.join(" UNION ALL ");
-    let final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_history")?;
+    let mut final_sql_builder = SqlQuery::select_from_union_alias(conn, union_sql.as_str(), "nft_history")?;
+    final_sql_builder.order_desc("nft_history.block_timestamp")?;
+    drop_mutability!(final_sql_builder);
     Ok(final_sql_builder)
 }
 
