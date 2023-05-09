@@ -307,6 +307,7 @@ fn get_txs_from_block_builder<'a>(
     sql_builder
         .sql_builder()
         .and_where(format!("block_number > '{}'", block_number))
+        .order_asc("block_number")
         .field("details_json");
     drop_mutability!(sql_builder);
     Ok(sql_builder)

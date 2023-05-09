@@ -110,7 +110,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
             let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
             // check if last block number exists
             if let Some(last_block) = last_nft_block {
-                // try to update nft list info using updated tx info from transfer history table
+                // try to update nft list info using updated tx info from transfer history table.
                 let txs = storage.get_txs_from_block(chain, last_block + 1).await?;
                 for tx in txs.into_iter() {
                     let req = MyAddressReq {

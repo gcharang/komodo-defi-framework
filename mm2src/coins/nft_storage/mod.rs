@@ -96,6 +96,8 @@ pub trait NftTxHistoryStorageOps {
 
     async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
 
+    /// [`NftTxHistoryStorageOps::get_txs_from_block`] function returns transfers sorted by
+    /// block_number in ascending order. It is needed to update the NFT LIST table correctly.
     async fn get_txs_from_block(
         &self,
         chain: &Chain,
