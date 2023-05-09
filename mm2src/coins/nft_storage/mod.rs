@@ -54,6 +54,7 @@ pub trait NftListStorageOps {
         chain: &Chain,
         token_address: String,
         token_id: BigDecimal,
+        scanned_block: u64,
     ) -> MmResult<RemoveNftResult, Self::Error>;
 
     async fn get_nft_amount(
@@ -65,8 +66,14 @@ pub trait NftListStorageOps {
 
     async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
 
+    /// `get_last_block_number` function returns the height of last block in NFT LIST table
     async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
 
+    /// `get_last_scanned_block` function returns the height of last scanned block
+    /// when token was added or removed from MFT LIST table.
+    async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
+
+    /// `update_amount_block_number` function sets a new amount and block_number of a particular token in NFT LIST table
     async fn update_amount_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
 }
 
@@ -96,12 +103,13 @@ pub trait NftTxHistoryStorageOps {
 
     async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
 
-    /// [`NftTxHistoryStorageOps::get_txs_from_block`] function returns transfers sorted by
+    /// `get_txs_from_block` function returns transfers sorted by
     /// block_number in ascending order. It is needed to update the NFT LIST table correctly.
+    /// Includes from_block number in ordering.
     async fn get_txs_from_block(
         &self,
         chain: &Chain,
-        block_number: u32,
+        from_block: u32,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
 }
 

@@ -22,6 +22,8 @@ fn nft_list_table_name(chain: &Chain) -> String { chain.to_ticker() + "_nft_list
 
 fn nft_tx_history_table_name(chain: &Chain) -> String { chain.to_ticker() + "_nft_tx_history" }
 
+fn scanned_nft_blocks_table_name() -> String { "scanned_nft_blocks".to_string() }
+
 fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_list_table_name(chain);
     validate_table_name(&table_name)?;
@@ -58,6 +60,19 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     amount VARCHAR(256) NOT NULL,
     details_json TEXT
         );",
+        table_name
+    );
+    Ok(sql)
+}
+
+fn create_scanned_nft_blocks_sql() -> MmResult<String, SqlError> {
+    let table_name = scanned_nft_blocks_table_name();
+    validate_table_name(&table_name)?;
+    let sql = format!(
+        "CREATE TABLE IF NOT EXISTS {} (
+    chain TEXT PRIMARY KEY,
+    last_scanned_block INTEGER
+    );",
         table_name
     );
     Ok(sql)
@@ -222,6 +237,12 @@ fn insert_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
     Ok(sql)
 }
 
+fn insert_chain_into_scanned_blocks_sql() -> MmResult<String, SqlError> {
+    let table_name = scanned_nft_blocks_table_name();
+    validate_table_name(&table_name)?;
+    Ok(format!("INSERT OR IGNORE INTO {} (chain) VALUES (?1);", table_name))
+}
+
 fn update_details_json_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
 where
     F: FnOnce(&Chain) -> String,
@@ -250,6 +271,13 @@ where
     Ok(sql)
 }
 
+fn update_last_scanned_block_sql() -> MmResult<String, SqlError> {
+    let table_name = scanned_nft_blocks_table_name();
+    validate_table_name(&table_name)?;
+    let sql = format!("UPDATE {} SET last_scanned_block = ?1 WHERE chain = ?2;", table_name);
+    Ok(sql)
+}
+
 fn get_nft_metadata_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_list_table_name(chain);
     validate_table_name(&table_name)?;
@@ -270,6 +298,13 @@ where
         "SELECT block_number FROM {} ORDER BY block_number DESC LIMIT 1",
         table_name
     );
+    Ok(sql)
+}
+
+fn select_last_scanned_block_sql() -> MmResult<String, SqlError> {
+    let table_name = scanned_nft_blocks_table_name();
+    validate_table_name(&table_name)?;
+    let sql = format!("SELECT last_scanned_block FROM {} WHERE chain=?1", table_name,);
     Ok(sql)
 }
 
@@ -303,14 +338,14 @@ fn nft_amount_from_row(row: &Row<'_>) -> Result<String, SqlError> { row.get(0) }
 fn get_txs_from_block_builder<'a>(
     conn: &'a Connection,
     chain: &'a Chain,
-    block_number: u32,
+    from_block: u32,
 ) -> MmResult<SqlQuery<'a>, SqlError> {
     let table_name = nft_tx_history_table_name(chain);
     validate_table_name(table_name.as_str())?;
     let mut sql_builder = SqlQuery::select_from(conn, table_name.as_str())?;
     sql_builder
         .sql_builder()
-        .and_where(format!("block_number > '{}'", block_number))
+        .and_where(format!("block_number >= '{}'", from_block))
         .order_asc("block_number")
         .field("details_json");
     drop_mutability!(sql_builder);
@@ -324,9 +359,13 @@ impl NftListStorageOps for SqliteNftStorage {
     async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
         let sql_nft_list = create_nft_list_table_sql(chain)?;
+        let scanned_blocks_param = [chain.to_ticker()];
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
             conn.execute(&sql_nft_list, NO_PARAMS).map(|_| ())?;
+            conn.execute(&create_scanned_nft_blocks_sql()?, NO_PARAMS).map(|_| ())?;
+            conn.execute(&insert_chain_into_scanned_blocks_sql()?, scanned_blocks_param)
+                .map(|_| ())?;
             Ok(())
         })
         .await
@@ -339,7 +378,13 @@ impl NftListStorageOps for SqliteNftStorage {
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
             let nft_list_initialized = query_single_row(&conn, CHECK_TABLE_EXISTS_SQL, [table_name], string_from_row)?;
-            Ok(nft_list_initialized.is_some())
+            let scanned_nft_blocks_initialized = query_single_row(
+                &conn,
+                CHECK_TABLE_EXISTS_SQL,
+                [scanned_nft_blocks_table_name()],
+                string_from_row,
+            )?;
+            Ok(nft_list_initialized.is_some() && scanned_nft_blocks_initialized.is_some())
         })
         .await
     }
@@ -405,6 +450,8 @@ impl NftListStorageOps for SqliteNftStorage {
                     Some(nft_json),
                 ];
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, &params)?;
+                let scanned_block_params = [nft.block_number.to_string(), nft.chain.to_ticker()];
+                sql_transaction.execute(&update_last_scanned_block_sql()?, scanned_block_params)?;
             }
             sql_transaction.commit()?;
             Ok(())
@@ -433,22 +480,25 @@ impl NftListStorageOps for SqliteNftStorage {
         chain: &Chain,
         token_address: String,
         token_id: BigDecimal,
+        scanned_block: u64,
     ) -> MmResult<RemoveNftResult, Self::Error> {
         let sql = delete_nft_sql(chain, nft_list_table_name)?;
         let params = [token_address, token_id.to_string()];
+        let scanned_block_params = [scanned_block.to_string(), chain.to_ticker()];
         let selfi = self.clone();
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
             let rows_num = sql_transaction.execute(&sql, &params)?;
 
-            let remove_tx_result = if rows_num > 0 {
+            let remove_nft_result = if rows_num > 0 {
                 RemoveNftResult::NftRemoved
             } else {
                 RemoveNftResult::NftDidNotExist
             };
+            sql_transaction.execute(&update_last_scanned_block_sql()?, &scanned_block_params)?;
             sql_transaction.commit()?;
-            Ok(remove_tx_result)
+            Ok(remove_nft_result)
         })
         .await
     }
@@ -494,9 +544,21 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
+    async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error> {
+        let sql = select_last_scanned_block_sql()?;
+        let params = [chain.to_ticker()];
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            query_single_row(&conn, &sql, params, block_number_from_row).map_to_mm(SqlError::from)
+        })
+        .await
+    }
+
     async fn update_amount_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
         let sql = update_amount_block_number_sql(chain, nft_list_table_name)?;
         let nft_json = json::to_string(&nft).expect("serialization should not fail");
+        let scanned_block_params = [nft.block_number.to_string(), chain.to_ticker()];
         let selfi = self.clone();
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
@@ -509,6 +571,7 @@ impl NftListStorageOps for SqliteNftStorage {
                 Some(nft.token_id.to_string()),
             ];
             sql_transaction.execute(&sql, &params)?;
+            sql_transaction.execute(&update_last_scanned_block_sql()?, &scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(())
         })
@@ -628,13 +691,13 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
     async fn get_txs_from_block(
         &self,
         chain: &Chain,
-        block_number: u32,
+        from_block: u32,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
         let selfi = self.clone();
         let chain = *chain;
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            let sql_builder = get_txs_from_block_builder(&conn, &chain, block_number)?;
+            let sql_builder = get_txs_from_block_builder(&conn, &chain, from_block)?;
             let txs = sql_builder.query(tx_history_from_row)?;
             Ok(txs)
         })

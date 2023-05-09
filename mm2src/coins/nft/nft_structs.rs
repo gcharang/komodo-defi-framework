@@ -24,6 +24,11 @@ pub struct NftMetadataReq {
     pub(crate) chain: Chain,
 }
 
+#[derive(Debug, Display)]
+pub enum ParseChainTypeError {
+    UnsupportedCainType,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Chain {
@@ -72,11 +77,6 @@ impl fmt::Display for Chain {
             Chain::Polygon => write!(f, "POLYGON"),
         }
     }
-}
-
-#[derive(Debug, Display)]
-pub enum ParseChainTypeError {
-    UnsupportedCainType,
 }
 
 impl FromStr for Chain {
