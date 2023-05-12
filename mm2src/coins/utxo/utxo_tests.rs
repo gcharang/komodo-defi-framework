@@ -28,13 +28,12 @@ use crate::utxo::utxo_common_tests::{self, utxo_coin_fields_for_test, utxo_coin_
 use crate::utxo::utxo_standard::{utxo_standard_coin_with_priv_key, UtxoStandardCoin};
 use crate::utxo::utxo_tx_history_v2::{UtxoTxDetailsParams, UtxoTxHistoryOps};
 #[cfg(not(target_arch = "wasm32"))] use crate::WithdrawFee;
-use crate::{BlockHeightAndTime, CoinBalance, IguanaPrivKey, PrivKeyBuildPolicy, SearchForSwapTxSpendInput,
-            SpendPaymentArgs, StakingInfosDetails, SwapOps, TradePreimageValue, TxFeeDetails, TxMarshalingErr,
-            ValidateFeeArgs};
-use crate::{ConfirmPaymentInput, INVALID_SENDER_ERR_LOG};
+use crate::{BlockHeightAndTime, CoinBalance, ConfirmPaymentInput, IguanaPrivKey, PrivKeyBuildPolicy,
+            SearchForSwapTxSpendInput, SpendPaymentArgs, StakingInfosDetails, SwapOps, TradePreimageValue,
+            TxFeeDetails, TxMarshalingErr, ValidateFeeArgs, WaitForHTLCTxSpendArgs, INVALID_SENDER_ERR_LOG};
 use chain::{BlockHeader, BlockHeaderBits, OutPoint};
 use common::executor::Timer;
-use common::{block_on, now_ms, OrdRange, PagingOptionsEnum, DEX_FEE_ADDR_RAW_PUBKEY};
+use common::{block_on, wait_until_sec, OrdRange, PagingOptionsEnum, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::{privkey::key_pair_from_seed, Bip44Chain, RpcDerivationPath, Secp256k1Secret};
 #[cfg(not(target_arch = "wasm32"))]
 use db_common::sqlite::rusqlite::Connection;
@@ -411,18 +410,19 @@ fn test_wait_for_payment_spend_timeout_native() {
     let coin = utxo_coin_for_test(client, None, false);
     let transaction = hex::decode("01000000000102fff7f7881a8099afa6940d42d1e7f6362bec38171ea3edf433541db4e4ad969f00000000494830450221008b9d1dc26ba6a9cb62127b02742fa9d754cd3bebf337f7a55d114c8e5cdd30be022040529b194ba3f9281a99f2b1c0a19c0489bc22ede944ccf4ecbab4cc618ef3ed01eeffffffef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a0100000000ffffffff02202cb206000000001976a9148280b37df378db99f66f85c95a783a76ac7a6d5988ac9093510d000000001976a9143bde42dbee7e4dbe6a21b2d50ce2f0167faa815988ac000247304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee0121025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee635711000000")
         .unwrap();
-    let wait_until = now_ms() / 1000 - 1;
+    let wait_until = now_sec() - 1;
     let from_block = 1000;
 
     assert!(coin
-        .wait_for_htlc_tx_spend(
-            &transaction,
-            &[],
+        .wait_for_htlc_tx_spend(WaitForHTLCTxSpendArgs {
+            tx_bytes: &transaction,
+            secret_hash: &[],
             wait_until,
             from_block,
-            &None,
-            TAKER_PAYMENT_SPEND_SEARCH_INTERVAL
-        )
+            swap_contract_address: &None,
+            check_every: TAKER_PAYMENT_SPEND_SEARCH_INTERVAL,
+            watcher_reward: false
+        })
         .wait()
         .is_err());
     assert!(unsafe { OUTPUT_SPEND_CALLED });
@@ -457,18 +457,19 @@ fn test_wait_for_payment_spend_timeout_electrum() {
     let coin = utxo_coin_for_test(client, None, false);
     let transaction = hex::decode("01000000000102fff7f7881a8099afa6940d42d1e7f6362bec38171ea3edf433541db4e4ad969f00000000494830450221008b9d1dc26ba6a9cb62127b02742fa9d754cd3bebf337f7a55d114c8e5cdd30be022040529b194ba3f9281a99f2b1c0a19c0489bc22ede944ccf4ecbab4cc618ef3ed01eeffffffef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a0100000000ffffffff02202cb206000000001976a9148280b37df378db99f66f85c95a783a76ac7a6d5988ac9093510d000000001976a9143bde42dbee7e4dbe6a21b2d50ce2f0167faa815988ac000247304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee0121025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee635711000000")
         .unwrap();
-    let wait_until = now_ms() / 1000 - 1;
+    let wait_until = now_sec() - 1;
     let from_block = 1000;
 
     assert!(coin
-        .wait_for_htlc_tx_spend(
-            &transaction,
-            &[],
+        .wait_for_htlc_tx_spend(WaitForHTLCTxSpendArgs {
+            tx_bytes: &transaction,
+            secret_hash: &[],
             wait_until,
             from_block,
-            &None,
-            TAKER_PAYMENT_SPEND_SEARCH_INTERVAL
-        )
+            swap_contract_address: &None,
+            check_every: TAKER_PAYMENT_SPEND_SEARCH_INTERVAL,
+            watcher_reward: false
+        })
         .wait()
         .is_err());
     assert!(unsafe { OUTPUT_SPEND_CALLED });
@@ -972,7 +973,7 @@ fn test_spv_proof() {
     let storage = client.block_headers_storage();
     block_on(storage.add_block_headers_to_storage(headers)).unwrap();
 
-    let res = block_on(client.validate_spv_proof(&tx, now_ms() / 1000 + 30));
+    let res = block_on(client.validate_spv_proof(&tx, wait_until_sec(30)));
     res.unwrap();
 }
 
@@ -4120,7 +4121,7 @@ fn test_electrum_display_balances() {
 #[test]
 fn test_for_non_existent_tx_hex_utxo_electrum() {
     // This test shouldn't wait till timeout!
-    let timeout = (now_ms() / 1000) + 120;
+    let timeout = wait_until_sec(120);
     let client = electrum_client_for_test(RICK_ELECTRUM_ADDRS);
     let coin = utxo_coin_for_test(
         client.into(),
@@ -4329,17 +4330,21 @@ fn test_block_header_utxo_loop() {
 
     static mut CURRENT_BLOCK_COUNT: u64 = 13;
 
-    ElectrumClient::get_block_count
-        .mock_safe(move |_| MockResult::Return(Box::new(futures01::future::ok(unsafe { CURRENT_BLOCK_COUNT }))));
+    ElectrumClient::get_servers_with_latest_block_count.mock_safe(move |_| {
+        let servers = RICK_ELECTRUM_ADDRS.iter().map(|url| url.to_string()).collect();
+        MockResult::Return(Box::new(futures01::future::ok((servers, unsafe {
+            CURRENT_BLOCK_COUNT
+        }))))
+    });
     let expected_steps: Arc<Mutex<Vec<(u64, u64)>>> = Arc::new(Mutex::new(Vec::with_capacity(14)));
 
-    ElectrumClient::retrieve_headers.mock_safe({
+    ElectrumClient::retrieve_headers_from.mock_safe({
         let expected_steps = expected_steps.clone();
-        move |this, from, to| {
+        move |this, server_address, from_height, to_height| {
             let (expected_from, expected_to) = expected_steps.lock().unwrap().remove(0);
-            assert_eq!(from, expected_from);
-            assert_eq!(to, expected_to);
-            MockResult::Continue((this, from, to))
+            assert_eq!(from_height, expected_from);
+            assert_eq!(to_height, expected_to);
+            MockResult::Continue((this, server_address, from_height, to_height))
         }
     });
 
@@ -4380,16 +4385,8 @@ fn test_block_header_utxo_loop() {
         "max_stored_block_headers": 15
     }));
 
-    let loop_fut = async move {
-        block_header_utxo_loop(
-            arc.downgrade(),
-            UtxoStandardCoin::from,
-            loop_handle,
-            unsafe { CURRENT_BLOCK_COUNT },
-            spv_conf.unwrap(),
-        )
-        .await
-    };
+    let weak_client = Arc::downgrade(&client.0);
+    let loop_fut = async move { block_header_utxo_loop(weak_client, loop_handle, spv_conf.unwrap()).await };
 
     let test_fut = async move {
         *expected_steps.lock().unwrap() = vec![(2, 5), (6, 9), (10, 13), (14, 14)];
@@ -4472,7 +4469,7 @@ fn test_spv_conf_with_verification() {
     assert!(spv_conf.validate("BTC").is_ok());
 
     // test for bad retarget_block_header_height
-    // Block header hash for BLOCK HEIGHT 4032
+    // Block header hash for BLOCK HEIGHT 4037
     let hash = "0000000045c689dc49dee778a9fbca7b5bc48fceca9f05cde5fc8d667f00e7d2".into();
     spv_conf.starting_block_header = SPVBlockHeader {
         height: 4037,
@@ -4503,4 +4500,155 @@ fn test_spv_conf_with_verification() {
     assert!(validate
         .to_string()
         .contains("max_stored_block_headers 2000 must be greater than retargeting interval"));
+}
+
+fn rick_blocker_5() -> BlockHeader {
+    let header =
+        "0400000028a4f1aa8be606c8bf8195b2e95d478a83314ff9ad7b017457d9e58d00d1710bb43f41db65677e3fdb83ddbd8cfb4a7ad2e110f74bc19726dc949576e003a1ecfbc2f4300c01f0b7820d00e3347c8da4ee614674376cbc45359daa54f9b5493e381b405d0f0f0f2001003cfb15008ad9f4fab1ff4076f8919f743193f007c0db28f5106e003b0000fd400500acba878991f600ed8c022758be9ff9752ef175e7530324df4d1b87f5a03ca5c2c3fce10b08743bd5ba03912703b8f305f7dd382487d437d9b1823cdc11a00f59a20b235ef57502a0a7ad6fc7d3d242e8f4477a01fb8834ac4dc6e2e40e4909f9edc0db07c0f98df40e5a61327311b005c98a727694ebaabcb366b92dda4af9e3f6e72c5461dd81d6daccbd1fca8ec17597df7585947b54deb83554859776b5bcefadfa566ff12c04ac624f9416e76beccec35694ae0ed11dc17a911f114225be62cf5b971628f364f57d8348d95fdc415b0d2a7a477ea130d3320108739edf761f85f81efd6c0e4eafa8166b05bd74af7928b0786b63ae499dba38065be13e7541b7f4e26727d0fa6887e265e09709b940ca87295ce5984de7d4058b5d340b162935fa46ee20cac955379e3c8fa1ff92fb354bb2a0fedf697b683a5875f4ed2bcef984d296b0c1e07a52920f1dd5a60140c7c1245a52ed196df3292db8bfff52923b0a8615b6a99a5fcf1e5f461f01a04b1c3bb517fe16553e1f8e8aa20bd3cc2cac6d3242a2ce373737b57cec4637907fd236e0d44d91d59533484ec23634b93645c10a858d83805d731f300aa27a162e172216d7fc21170b4d232767e4c66f9a871224f13480e89c2edb0e6e1ef5cf75d9203839cc0282fd7852319232057f30793bb5552d94ebf3ffcc67b73f44e80c3de79b9d8d7f0175939722054bc2ddfb84288dff8c7554f191d6ee1b65c40b75d4435712d4e88c64d6379ab7e578bcd8117501504faa7a3be3a6a2826fd7a3e5e9efb1d3642937f3a35be5793be8e1d4acf9dd2dcd356d6e4c7d0c8b87587b8ad901b9ce71792ae0bdae27811b52300e6809e4691bfc7f738252e7c197e228cce5fda6130f8f518e5059530b731fe8afbf51308aa8da3bd31b1d1eb22cca1a896aed281397925265cd861a7eadb80124363dec8cb508aea7c277f04b9841888dd932471349e651ce2622a59065932f463ffce6b19a975d6914336ab49394afd17dfb9a448157007ea1437b1483587bc7de0dec5103cafad76704e91e9ea2b0b9a8570b935d5c65478e7195b08161be4625b8d5fd3658e6164cf2d6898ecbf1f14945fdd75bb991a3d9ffac713a3a7a81a31a765b9c37a578976aa15e66c97c957f4651dc5fc492c2111d8724d375a8293a36e0ddcf2a01facf30401d8677611522882e1447e4c8be5fa9ad073fb3fdcc6f673981484089090fe4c05bfaae173503e0f99c7407b297852d216463924d365d26b4cd63401a46bd7ed969ddb235044eb2373645144976c7f713720c0238ade9d3aae1d2b153e82d093232d4b12b2108ec564ae0e855e09252f1434c28d90bb298ab6d1750498bf90d93c8797901911548b81af1ba185be52c0dff9c1b11812941d2d527c95c4382879298f364077710b5efd56d1bf39148aedc4fcd9e8bddb4c36a3f901dc11f9493d1fbdfe80c88fa8866c1465c939c0d71cb57e78822b5fc3023578aa2d6b9cd3ebaa54f22876b935f251183d8a68459cab30cd19bcb4e4c1e1a5a83e4687a4795dc23732e81b9f024f70db96e412831d26e61d4fa292a95648e0b614d9a148cd852df1bf26a34ea971e63f8c634133ab7b13ac8045f6d6e20af2313b38d12cb8cee54a7aba7a7cd7e8b1b5e0b0931d4665a0bb36b63f325161b571fdd4f159f470e443e9b0cfb193bf4eea5fa9715dc6132cb8ed97f7f097837471a5147d14f2066cd3dcd50460d70180a7a24e2b5b9ab20caf952d2ea1b51747afec975f76d0313a98e444f20938bf709530960f9fbf5af9857cbe3410d37f3cba10ff57642861586b7c1b1c57019602f1529df9d6e45ca2f7663519c58915e9e299d5beee73cb4553238566844f571374d3f6a247dd8ecbbc893";
+
+    BlockHeader::try_from_string_with_coin_variant(header.to_string(), "RICK".into()).unwrap()
+}
+
+#[test]
+fn test_block_header_utxo_loop_with_reorg() {
+    use crate::utxo::utxo_builder::{block_header_utxo_loop, BlockHeaderUtxoLoopExtraArgs};
+    use futures::future::{Either, FutureExt};
+    use keys::hash::H256 as H256Json;
+
+    static mut CURRENT_BLOCK_COUNT: u64 = 3;
+    static mut IS_MISMATCH_HEADER: bool = true;
+    let rick_headers = include_str!("../for_tests/RICK_HEADERS.json");
+    let rick_headers: Vec<String> = serde_json::from_str(rick_headers).unwrap();
+    let mut rick_headers_map = HashMap::new();
+    for (idx, header) in rick_headers.into_iter().enumerate() {
+        rick_headers_map.insert(
+            (idx + 2) as u64,
+            BlockHeader::try_from_string_with_coin_variant(header, "RICK".into()).unwrap(),
+        );
+    }
+
+    ElectrumClient::get_servers_with_latest_block_count.mock_safe(move |_| {
+        let servers = RICK_ELECTRUM_ADDRS.iter().map(|url| url.to_string()).collect();
+        MockResult::Return(Box::new(futures01::future::ok((servers, unsafe {
+            CURRENT_BLOCK_COUNT
+        }))))
+    });
+
+    let mut rick_headers_map_clone = rick_headers_map.clone();
+    ElectrumClient::retrieve_headers_from.mock_safe(move |_this, _server_addr, from_height, to_height| unsafe {
+        let header_map = rick_headers_map_clone
+            .clone()
+            .into_iter()
+            .filter(|(index, _)| index >= &from_height && index <= &to_height)
+            .collect::<HashMap<_, _>>();
+
+        let mut header_vec = vec![];
+
+        for i in from_height..=to_height {
+            header_vec.push(header_map.get(&i).unwrap().clone());
+        }
+        // the first time headers from 5 is requested, we expected chain reorg error so we switch the bad header at
+        // height 5 with a valid header so the next retrieval can validate it.
+        if from_height == 5 && IS_MISMATCH_HEADER {
+            IS_MISMATCH_HEADER = false;
+            if let Some(header) = rick_headers_map_clone.get_mut(&5) {
+                *header = rick_blocker_5();
+            }
+        }
+
+        MockResult::Return(Box::new(futures01::future::ok((
+            header_map.into_iter().collect(),
+            header_vec,
+        ))))
+    });
+
+    BlockHeaderStorage::get_block_header.mock_safe(move |_this, height| {
+        let res = rick_headers_map.get(&height).unwrap();
+        MockResult::Return(Box::pin(futures::future::ok(Some(res.clone()))))
+    });
+
+    BlockHeaderUtxoLoopExtraArgs::default.mock_safe(move || {
+        MockResult::Return(BlockHeaderUtxoLoopExtraArgs {
+            chunk_size: 2,
+            error_sleep: 1.,
+            success_sleep: 0.8,
+        })
+    });
+
+    let ctx = mm_ctx_with_custom_db();
+    let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(H256Json::from([1u8; 32]));
+    let servers: Vec<_> = RICK_ELECTRUM_ADDRS
+        .iter()
+        .map(|server| json!({ "url": server }))
+        .collect();
+    let req = json!({ "method": "electrum", "servers": servers });
+    let params = UtxoActivationParams::from_legacy_req(&req).unwrap();
+    let conf = json!({"coin":"RICK", "asset":"RICK", "rpcport":8923});
+    let builder = UtxoArcBuilder::new(&ctx, "RICK", &conf, &params, priv_key_policy, UtxoStandardCoin::from);
+    let arc: UtxoArc = block_on(builder.build_utxo_fields()).unwrap().into();
+    let client = match &arc.rpc_client {
+        UtxoRpcClientEnum::Electrum(electrum) => electrum.clone(),
+        UtxoRpcClientEnum::Native(_) => unreachable!(),
+    };
+
+    let (sync_status_notifier, _) = channel::<UtxoSyncStatus>(1);
+    let loop_handle = UtxoSyncStatusLoopHandle::new(sync_status_notifier);
+
+    let spv_conf = json::from_value(json!({
+        "starting_block_header": {
+            "height": 1,
+            "hash": "0c714ba4f8d5f2d5c014a08c4e21a5387156e23bcc819c0f9bc536437586cdf5",
+            "time": 1564482125,
+            "bits": 537857807
+        },
+        "max_stored_block_headers": 100
+    }));
+
+    let weak_client = Arc::downgrade(&client.0);
+    let loop_fut = async move { block_header_utxo_loop(weak_client, loop_handle, spv_conf.unwrap()).await };
+
+    let test_fut = async move {
+        Timer::sleep(2.).await;
+        let get_headers_count = client
+            .block_headers_storage()
+            .get_last_block_height()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(get_headers_count, 3);
+
+        unsafe { CURRENT_BLOCK_COUNT = 5 }
+        Timer::sleep(2.).await;
+        let get_headers_count = client
+            .block_headers_storage()
+            .get_last_block_height()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(get_headers_count, 5);
+
+        unsafe { CURRENT_BLOCK_COUNT = 8 }
+        Timer::sleep(2.).await;
+        let get_headers_count = client
+            .block_headers_storage()
+            .get_last_block_height()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(get_headers_count, 8);
+
+        unsafe { CURRENT_BLOCK_COUNT = 10 }
+        Timer::sleep(2.).await;
+        let get_headers_count = client
+            .block_headers_storage()
+            .get_last_block_height()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(get_headers_count, 10);
+    };
+
+    if let Either::Left(_) = block_on(futures::future::select(loop_fut.boxed(), test_fut.boxed())) {
+        panic!("Loop shouldn't stop")
+    };
 }

@@ -1195,6 +1195,7 @@ pub struct WatcherConf {
 pub struct DisableResult {
     pub coin: String,
     pub cancelled_orders: HashSet<String>,
+    pub passivized: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -1203,7 +1204,6 @@ pub struct DisableCoinError {
     pub error: String,
     pub orders: DisableCoinOrders,
     pub active_swaps: Vec<Uuid>,
-    pub dependent_tokens: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
