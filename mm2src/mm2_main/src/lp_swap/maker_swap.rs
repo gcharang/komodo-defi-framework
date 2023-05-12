@@ -12,7 +12,7 @@ use super::{broadcast_my_swap_status, broadcast_p2p_tx_msg, broadcast_swap_messa
             SwapsContext, TransactionIdentifier, WAIT_CONFIRM_INTERVAL};
 use crate::mm2::lp_dispatcher::{DispatcherContext, LpEvents};
 use crate::mm2::lp_network::subscribe_to_topic;
-use crate::mm2::lp_ordermatch::{MakerOrderBuilder, OrderConfirmationsSettings};
+use crate::mm2::lp_ordermatch::MakerOrderBuilder;
 use crate::mm2::lp_swap::{broadcast_swap_message, taker_payment_spend_duration};
 use coins::lp_price::fetch_swap_coins_price;
 use coins::{CanRefundHtlc, CheckIfMyPaymentSentArgs, ConfirmPaymentInput, FeeApproxStage, FoundSwapTxSpend,
