@@ -5,8 +5,7 @@ use mm2_rpc_data::legacy::{MatchBy as SuperMatchBy, OrderConfirmationsSettings, 
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use super::{MatchBy as SuperMatchBy, TakerAction};
-use crate::mm2::lp_ordermatch::{AlbOrderedOrderbookPair, OrderConfirmationsSettings, H64};
+use crate::mm2::lp_ordermatch::{AlbOrderedOrderbookPair, H64};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
