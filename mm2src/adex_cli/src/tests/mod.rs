@@ -9,7 +9,7 @@ use crate::adex_config::AdexConfigImpl;
 use crate::adex_proc::ResponseHandlerImpl;
 use crate::cli::Cli;
 
-const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 1;
+const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 100;
 
 #[tokio::test]
 async fn test_get_version() {
