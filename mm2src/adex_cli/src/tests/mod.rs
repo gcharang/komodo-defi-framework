@@ -9,12 +9,12 @@ use crate::adex_config::AdexConfigImpl;
 use crate::adex_proc::ResponseHandlerImpl;
 use crate::cli::Cli;
 
-const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 100;
+const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 10;
 
 #[tokio::test]
 async fn test_get_version() {
     tokio::spawn(fake_mm2_server(7784, "src/tests/version.http"));
-
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -35,7 +35,7 @@ async fn test_get_version() {
 #[tokio::test]
 async fn test_get_orderbook() {
     tokio::spawn(fake_mm2_server(7785, "src/tests/orderbook.http"));
-
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -71,7 +71,7 @@ async fn test_get_orderbook_with_uuids() {
 #[tokio::test]
 async fn test_get_orderbook_with_publics() {
     tokio::spawn(fake_mm2_server(7787, "src/tests/orderbook.http"));
-
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -107,7 +107,7 @@ async fn test_get_enabled() {
 #[tokio::test]
 async fn test_get_balance() {
     tokio::spawn(fake_mm2_server(7789, "src/tests/balance.http"));
-
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -154,7 +154,7 @@ async fn test_activation_scheme() {
 #[tokio::test]
 async fn test_buy_morty_for_rick() {
     tokio::spawn(fake_mm2_server(7791, "src/tests/buy.http"));
-
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
