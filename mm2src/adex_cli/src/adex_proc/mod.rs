@@ -1,9 +1,9 @@
-mod adex_proc;
+mod adex_proc_impl;
 mod command;
 mod response_handler;
 mod smart_fraction_fmt;
 
-pub(crate) use adex_proc::AdexProc;
+pub(crate) use adex_proc_impl::AdexProc;
 pub(crate) use response_handler::{ResponseHandler, ResponseHandlerImpl};
 
 #[derive(Clone)]

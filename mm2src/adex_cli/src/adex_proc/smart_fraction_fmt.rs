@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use ToString;
 
 pub(crate) struct SmartFractionFmt {
     precision_min: i32,
@@ -14,9 +13,7 @@ pub(crate) enum SmartFractionTrimErr {
 
 impl SmartFractionFmt {
     pub fn new(precision_min: usize, precision_max: usize, num: f64) -> Result<Self, SmartFractionTrimErr> {
-        if precision_min == 0 {
-            return Err(SmartFractionTrimErr::WrongParams);
-        } else if precision_min > precision_max {
+        if precision_min == 0 || precision_min > precision_max {
             return Err(SmartFractionTrimErr::WrongParams);
         }
         Ok(Self {
