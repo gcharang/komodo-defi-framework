@@ -101,6 +101,7 @@ impl AdexConfigImpl {
         }
     }
 
+    #[cfg(not(test))]
     pub fn read_config() -> Result<AdexConfigImpl, ()> {
         let config = AdexConfigImpl::from_config_path().map_err(|_| error!("Failed to get adex_config"))?;
         match config {

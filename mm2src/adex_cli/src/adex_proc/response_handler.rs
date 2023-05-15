@@ -236,6 +236,7 @@ struct AskBidRow<'a> {
 }
 
 impl<'a> AskBidRow<'a> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         volume: &str,
         price: &str,

@@ -22,7 +22,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Enabling asset: {asset}");
 
         let activation_scheme = get_activation_scheme();
-        let Some(activate_specific_settings) = activation_scheme.get_activation_method(&asset) else {
+        let Some(activate_specific_settings) = activation_scheme.get_activation_method(asset) else {
             warn!("Asset is not known: {asset}");
             return Err(());
         };
@@ -202,9 +202,9 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             Ok(Ok(ok)) => self.response_handler.on_version_response(&ok),
             Ok(Err(error)) => {
                 error!("Failed get version through the API: {error}");
-                return Err(());
+                Err(())
             },
-            _ => return Err(()),
+            _ => Err(()),
         }
     }
 }
