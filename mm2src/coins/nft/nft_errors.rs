@@ -130,6 +130,22 @@ pub enum UpdateNftError {
         amount_list: String,
         amount_history: String,
     },
+    #[display(
+        fmt = "Last scanned nft block {} should be >= last block number in nft table {}",
+        last_scanned_block,
+        last_nft_block
+    )]
+    InvalidBlockOrder {
+        last_scanned_block: String,
+        last_nft_block: String,
+    },
+    #[display(
+        fmt = "Last scanned block not found, while the last NFT block exists: {}",
+        last_nft_block
+    )]
+    LastScannedBlockNotFound {
+        last_nft_block: String,
+    },
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -163,7 +179,9 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::GetNftInfoError(_)
             | UpdateNftError::GetMyAddressError(_)
             | UpdateNftError::TokenNotFoundInWallet { .. }
-            | UpdateNftError::InsufficientAmountInCache { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::InsufficientAmountInCache { .. }
+            | UpdateNftError::InvalidBlockOrder { .. }
+            | UpdateNftError::LastScannedBlockNotFound { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

@@ -104,33 +104,58 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         if !list_initialized {
             NftListStorageOps::init(&storage, chain).await?;
             let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-            storage.add_nfts_to_list(chain, nft_list).await?;
+            let last_scanned_block = NftTxHistoryStorageOps::get_last_block_number(&storage, chain)
+                .await?
+                .unwrap_or(0);
+            storage.add_nfts_to_list(chain, nft_list, last_scanned_block).await?;
         } else {
             let last_scanned_block = storage.get_last_scanned_block(chain).await?;
             let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
 
             match (last_scanned_block, last_nft_block) {
-                // Check if both block number exist, choose the highest for update_nft_list.
-                // Usually last_scanned_block should be the same
-                // or higher than last block in NFT LIST table (in the case of removing nft, then scanned block will be higher).
+                // if both block numbers exist, last scanned block should be equal
+                // or higher than last block number from NFT LIST table.
                 (Some(scanned_block), Some(nft_block)) => {
-                    let last_block = std::cmp::max(scanned_block, nft_block);
-                    update_nft_list(ctx.clone(), &storage, chain, last_block + 1).await?;
+                    if scanned_block >= nft_block {
+                        update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1).await?;
+                    } else {
+                        return MmError::err(UpdateNftError::InvalidBlockOrder {
+                            last_scanned_block: scanned_block.to_string(),
+                            last_nft_block: nft_block.to_string(),
+                        });
+                    }
                 },
-                // check if last scanned block number exists in last scanned block table
-                // if not try to check blocks existence in NFT LIST table.
-                (Some(last_block), None) | (None, Some(last_block)) => {
-                    update_nft_list(ctx.clone(), &storage, chain, last_block + 1).await?;
+                // If the last scanned block value is absent, we cannot accurately update the NFT cache.
+                // This is because a situation may occur where a user doesn't transfer all ERC-1155 tokens,
+                // resulting in the block number of NFT remaining unchanged.
+                (None, Some(nft_block)) => {
+                    return MmError::err(UpdateNftError::LastScannedBlockNotFound {
+                        last_nft_block: nft_block.to_string(),
+                    });
                 },
-                // if all blocks are empty we can try to get info from moralis
+                // if there are no rows in NFT LIST table or in both tables there are no rows
+                // we can try to get all info from moralis.
+                (Some(_), None) => {
+                    cache_nfts_from_moralis(&ctx, &storage, chain).await?;
+                },
                 (None, None) => {
-                    let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-                    storage.add_nfts_to_list(chain, nft_list).await?;
+                    cache_nfts_from_moralis(&ctx, &storage, chain).await?;
                 },
             }
         }
     }
     Ok(())
+}
+
+async fn cache_nfts_from_moralis<T>(ctx: &MmArc, storage: &T, chain: &Chain) -> MmResult<(), UpdateNftError>
+where
+    T: NftListStorageOps + NftTxHistoryStorageOps,
+{
+    let nft_list = get_moralis_nft_list(ctx, chain).await?;
+    let last_scanned_block = NftTxHistoryStorageOps::get_last_block_number(storage, chain)
+        .await?
+        .unwrap_or(0);
+    Ok(storage.add_nfts_to_list(chain, nft_list, last_scanned_block).await?)
 }
 
 pub async fn refresh_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<(), UpdateNftError> {
@@ -449,7 +474,7 @@ where
                 nft.owner_of = my_address;
                 nft.block_number = tx.block_number;
                 drop_mutability!(nft);
-                storage.add_nfts_to_list(chain, [nft]).await?;
+                storage.add_nfts_to_list(chain, [nft], tx.block_number as u32).await?;
             },
             (true, ContractType::Erc1155) => {
                 let nft_db = storage
@@ -487,11 +512,12 @@ where
                 let nft_db = storage
                     .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
                     .await?;
-                // change amount or add nft to the list
+                // change amount and block number or add nft to the list
                 if let Some(mut nft_db) = nft_db {
                     nft_db.amount += tx.amount;
+                    nft_db.block_number = tx.block_number;
                     drop_mutability!(nft_db);
-                    storage.update_nft_amount(chain, nft_db, tx.block_number).await?;
+                    storage.update_nft_amount_and_block_number(chain, nft_db).await?;
                 } else {
                     let moralis_meta = get_moralis_metadata(&ctx, tx.token_address, tx.token_id.clone(), chain).await?;
                     let nft = Nft {
@@ -513,7 +539,7 @@ where
                         minter_address: moralis_meta.minter_address,
                         possible_spam: moralis_meta.possible_spam,
                     };
-                    storage.add_nfts_to_list(chain, [nft]).await?;
+                    storage.add_nfts_to_list(chain, [nft], tx.block_number as u32).await?;
                 }
             },
         }

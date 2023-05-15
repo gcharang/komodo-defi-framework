@@ -37,7 +37,7 @@ pub trait NftListStorageOps {
         page_number: Option<NonZeroUsize>,
     ) -> MmResult<NftList, Self::Error>;
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u32) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send;
@@ -75,6 +75,8 @@ pub trait NftListStorageOps {
 
     /// `update_nft_amount` function sets a new amount of a particular token in NFT LIST table
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error>;
+
+    async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]
@@ -105,7 +107,6 @@ pub trait NftTxHistoryStorageOps {
 
     /// `get_txs_from_block` function returns transfers sorted by
     /// block_number in ascending order. It is needed to update the NFT LIST table correctly.
-    /// Includes from_block number in ordering.
     async fn get_txs_from_block(
         &self,
         chain: &Chain,

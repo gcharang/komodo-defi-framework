@@ -271,6 +271,20 @@ where
     Ok(sql)
 }
 
+fn update_nft_amount_and_block_number_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
+where
+    F: FnOnce(&Chain) -> String,
+{
+    let table_name = table_name_creator(chain);
+
+    validate_table_name(&table_name)?;
+    let sql = format!(
+        "UPDATE {} SET amount = ?1, block_number = ?2, details_json = ?3 WHERE token_address = ?4 AND token_id = ?5;",
+        table_name
+    );
+    Ok(sql)
+}
+
 fn update_last_scanned_block_sql() -> MmResult<String, SqlError> {
     let table_name = scanned_nft_blocks_table_name();
     validate_table_name(&table_name)?;
@@ -359,13 +373,10 @@ impl NftListStorageOps for SqliteNftStorage {
     async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
         let sql_nft_list = create_nft_list_table_sql(chain)?;
-        let scanned_blocks_param = [chain.to_ticker()];
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
             conn.execute(&sql_nft_list, NO_PARAMS).map(|_| ())?;
             conn.execute(&create_scanned_nft_blocks_sql()?, NO_PARAMS).map(|_| ())?;
-            conn.execute(&insert_chain_into_scanned_blocks_sql()?, scanned_blocks_param)
-                .map(|_| ())?;
             Ok(())
         })
         .await
@@ -427,7 +438,7 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u32) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send,
@@ -450,9 +461,10 @@ impl NftListStorageOps for SqliteNftStorage {
                     Some(nft_json),
                 ];
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, &params)?;
-                let scanned_block_params = [nft.block_number.to_string(), nft.chain.to_ticker()];
-                sql_transaction.execute(&update_last_scanned_block_sql()?, scanned_block_params)?;
             }
+            sql_transaction.execute(&insert_chain_into_scanned_blocks_sql()?, [chain.to_ticker()])?;
+            let scanned_block_params = [last_scanned_block.to_string(), chain.to_ticker()];
+            sql_transaction.execute(&update_last_scanned_block_sql()?, scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(())
         })
@@ -484,6 +496,7 @@ impl NftListStorageOps for SqliteNftStorage {
     ) -> MmResult<RemoveNftResult, Self::Error> {
         let sql = delete_nft_sql(chain, nft_list_table_name)?;
         let params = [token_address, token_id.to_string()];
+        let chain_param = [chain.to_ticker()];
         let scanned_block_params = [scanned_block.to_string(), chain.to_ticker()];
         let selfi = self.clone();
         async_blocking(move || {
@@ -496,6 +509,7 @@ impl NftListStorageOps for SqliteNftStorage {
             } else {
                 RemoveNftResult::NftDidNotExist
             };
+            sql_transaction.execute(&insert_chain_into_scanned_blocks_sql()?, chain_param)?;
             sql_transaction.execute(&update_last_scanned_block_sql()?, &scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(remove_nft_result)
@@ -558,6 +572,7 @@ impl NftListStorageOps for SqliteNftStorage {
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error> {
         let sql = update_nft_amount_sql(chain, nft_list_table_name)?;
         let nft_json = json::to_string(&nft).expect("serialization should not fail");
+        let chain_param = [chain.to_ticker()];
         let scanned_block_params = [scanned_block.to_string(), chain.to_ticker()];
         let selfi = self.clone();
         async_blocking(move || {
@@ -570,6 +585,32 @@ impl NftListStorageOps for SqliteNftStorage {
                 Some(nft.token_id.to_string()),
             ];
             sql_transaction.execute(&sql, &params)?;
+            sql_transaction.execute(&insert_chain_into_scanned_blocks_sql()?, chain_param)?;
+            sql_transaction.execute(&update_last_scanned_block_sql()?, &scanned_block_params)?;
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
+        let sql = update_nft_amount_and_block_number_sql(chain, nft_list_table_name)?;
+        let nft_json = json::to_string(&nft).expect("serialization should not fail");
+        let chain_param = [chain.to_ticker()];
+        let scanned_block_params = [nft.block_number.to_string(), chain.to_ticker()];
+        let selfi = self.clone();
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+            let params = [
+                Some(nft.amount.to_string()),
+                Some(nft.block_number.to_string()),
+                Some(nft_json),
+                Some(nft.token_address),
+                Some(nft.token_id.to_string()),
+            ];
+            sql_transaction.execute(&sql, &params)?;
+            sql_transaction.execute(&insert_chain_into_scanned_blocks_sql()?, chain_param)?;
             sql_transaction.execute(&update_last_scanned_block_sql()?, &scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(())
