@@ -71,7 +71,7 @@ fn create_scanned_nft_blocks_sql() -> MmResult<String, SqlError> {
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS {} (
     chain TEXT PRIMARY KEY,
-    last_scanned_block INTEGER
+    last_scanned_block INTEGER DEFAULT 0
     );",
         table_name
     );
@@ -257,7 +257,7 @@ where
     Ok(sql)
 }
 
-fn update_amount_block_number_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
+fn update_nft_amount_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
 where
     F: FnOnce(&Chain) -> String,
 {
@@ -265,7 +265,7 @@ where
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET amount = ?1, block_number = ?2, details_json = ?3 WHERE token_address = ?4 AND token_id = ?5;",
+        "UPDATE {} SET amount = ?1, details_json = ?2 WHERE token_address = ?3 AND token_id = ?4;",
         table_name
     );
     Ok(sql)
@@ -555,17 +555,16 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn update_amount_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
-        let sql = update_amount_block_number_sql(chain, nft_list_table_name)?;
+    async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error> {
+        let sql = update_nft_amount_sql(chain, nft_list_table_name)?;
         let nft_json = json::to_string(&nft).expect("serialization should not fail");
-        let scanned_block_params = [nft.block_number.to_string(), chain.to_ticker()];
+        let scanned_block_params = [scanned_block.to_string(), chain.to_ticker()];
         let selfi = self.clone();
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
             let params = [
                 Some(nft.amount.to_string()),
-                Some(nft.block_number.to_string()),
                 Some(nft_json),
                 Some(nft.token_address),
                 Some(nft.token_id.to_string()),

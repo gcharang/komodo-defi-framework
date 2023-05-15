@@ -73,8 +73,8 @@ pub trait NftListStorageOps {
     /// when token was added or removed from MFT LIST table.
     async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error>;
 
-    /// `update_amount_block_number` function sets a new amount and block_number of a particular token in NFT LIST table
-    async fn update_amount_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
+    /// `update_nft_amount` function sets a new amount of a particular token in NFT LIST table
+    async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]

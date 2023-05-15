@@ -84,6 +84,7 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
     Ok(transfer_history_list)
 }
 
+/// `update_nft` function updates cache of nft transfer history and nft list.
 pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNftError> {
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
@@ -105,20 +106,27 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
             let nft_list = get_moralis_nft_list(&ctx, chain).await?;
             storage.add_nfts_to_list(chain, nft_list).await?;
         } else {
-            let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
             let last_scanned_block = storage.get_last_scanned_block(chain).await?;
+            let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
 
-            // check if last scanned block number exists in last scanned block table
-            // if not try to check blocks existence in NFT LIST table.
-            if let Some(last_block) = last_scanned_block {
-                // try to update nft list info using updated tx info from transfer history table.
-                update_nft_list(ctx.clone(), &storage, chain, last_block + 1).await?;
-            } else if let Some(last_block) = last_nft_block {
-                update_nft_list(ctx.clone(), &storage, chain, last_block + 1).await?;
-            } else {
-                // if nft list table is empty, we can try to get info from moralis
-                let nft_list = get_moralis_nft_list(&ctx, chain).await?;
-                storage.add_nfts_to_list(chain, nft_list).await?;
+            match (last_scanned_block, last_nft_block) {
+                // Check if both block number exist, choose the highest for update_nft_list.
+                // Usually last_scanned_block should be the same
+                // or higher than last block in NFT LIST table (in the case of removing nft, then scanned block will be higher).
+                (Some(scanned_block), Some(nft_block)) => {
+                    let last_block = std::cmp::max(scanned_block, nft_block);
+                    update_nft_list(ctx.clone(), &storage, chain, last_block + 1).await?;
+                },
+                // check if last scanned block number exists in last scanned block table
+                // if not try to check blocks existence in NFT LIST table.
+                (Some(last_block), None) | (None, Some(last_block)) => {
+                    update_nft_list(ctx.clone(), &storage, chain, last_block + 1).await?;
+                },
+                // if all blocks are empty we can try to get info from moralis
+                (None, None) => {
+                    let nft_list = get_moralis_nft_list(&ctx, chain).await?;
+                    storage.add_nfts_to_list(chain, nft_list).await?;
+                },
             }
         }
     }
@@ -412,7 +420,7 @@ async fn get_moralis_metadata(
 }
 
 /// `update_nft_list` function gets nft transfers from NFT HISTORY table, iterates through them
-/// and updates NFT LIST table info
+/// and updates NFT LIST table info.
 async fn update_nft_list<T>(
     ctx: MmArc,
     storage: &T,
@@ -457,9 +465,8 @@ where
                         },
                         std::cmp::Ordering::Greater => {
                             nft_db.amount -= tx.amount;
-                            nft_db.block_number = tx.block_number;
                             drop_mutability!(nft_db);
-                            storage.update_amount_block_number(chain, nft_db).await?;
+                            storage.update_nft_amount(chain, nft_db, tx.block_number).await?;
                         },
                         std::cmp::Ordering::Less => {
                             return MmError::err(UpdateNftError::InsufficientAmountInCache {
@@ -483,9 +490,8 @@ where
                 // change amount or add nft to the list
                 if let Some(mut nft_db) = nft_db {
                     nft_db.amount += tx.amount;
-                    nft_db.block_number = tx.block_number;
                     drop_mutability!(nft_db);
-                    storage.update_amount_block_number(chain, nft_db).await?;
+                    storage.update_nft_amount(chain, nft_db, tx.block_number).await?;
                 } else {
                     let moralis_meta = get_moralis_metadata(&ctx, tx.token_address, tx.token_id.clone(), chain).await?;
                     let nft = Nft {
