@@ -9,6 +9,8 @@ use crate::adex_config::AdexConfigImpl;
 use crate::adex_proc::ResponseHandlerImpl;
 use crate::cli::Cli;
 
+const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 1;
+
 #[tokio::test]
 async fn test_get_version() {
     tokio::spawn(fake_mm2_server(7784, "src/tests/version.http"));
@@ -184,6 +186,7 @@ async fn handle_connection(mut stream: TcpStream, response_path: &'static str) {
     let (reader, mut writer) = stream.split();
     reader.readable().await.unwrap();
     writer.write_all(&buffer).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_COOLDOWN_TIMEOUT_MS)).await;
 }
 
 const RICK_AND_MORTY_ORDERBOOK: &str = r"     Volume: RICK Price: MORTY  
