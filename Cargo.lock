@@ -4144,6 +4144,7 @@ dependencies = [
  "mm2_core",
  "mm2_main",
  "mm2_rpc",
+ "mm2_rpc_data",
  "num-traits",
  "regex",
  "serde",

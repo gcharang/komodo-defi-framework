@@ -82,11 +82,11 @@ impl Display for AdexConfigImpl {
             return writeln!(f, "adex configuration is not set");
         }
         if let Some(rpc_api_uri) = &self.rpc_uri {
-            writeln!(f, "kmd wallet RPC URL: {}", rpc_api_uri)?
+            writeln!(f, "mm2 RPC URL: {}", rpc_api_uri)?
         };
 
         if self.rpc_password.is_some() {
-            writeln!(f, "kmd wallet RPC password: *************")?
+            writeln!(f, "mm2 RPC password: *************")?
         }
         Ok(())
     }

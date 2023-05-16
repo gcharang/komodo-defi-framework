@@ -45,7 +45,7 @@ enum Command {
     Status,
     #[command(about = "Gets version of intermediary mm2 service")]
     Version,
-    #[command(subcommand, about = "To manage rpc_password and kmd wallet RPC URL")]
+    #[command(subcommand, about = "To manage rpc_password and mm2 RPC URL")]
     Config(ConfigSubcommand),
     #[command(about = "Puts an asset to the trading index")]
     Enable {

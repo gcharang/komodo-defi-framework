@@ -28,7 +28,6 @@ dependencies = [
  "log 0.4.17",
  "mm2_net",
  "mm2_number",
- "mm2_rpc",
  "mm2_rpc_data",
  "passwords",
  "rpc",

@@ -46,7 +46,7 @@ use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, 
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
-use mm2_rpc_data::legacy::{KmdWalletRpcResult, MatchBy, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry,
+use mm2_rpc_data::legacy::{MatchBy, Mm2RpcResult, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry,
                            SellBuyRequest, SellBuyResponse, TakerAction, TakerRequestForRpc};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
@@ -3819,7 +3819,7 @@ pub async fn lp_auto_buy(
         order.p2p_keypair(),
     );
 
-    let res = try_s!(serde_json::to_vec(&KmdWalletRpcResult::new(SellBuyResponse {
+    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(SellBuyResponse {
         request: (&order.request).into(),
         order_type: order.order_type,
         min_volume: order.min_volume.clone().into(),
@@ -4571,7 +4571,7 @@ pub async fn set_price(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, Strin
     let req: SetPriceReq = try_s!(json::from_value(req));
     let maker_order = create_maker_order(&ctx, req).await?;
     let rpc_result = MakerOrderForRpc::from(&maker_order);
-    let res = try_s!(json::to_vec(&KmdWalletRpcResult::new(rpc_result)));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(rpc_result)));
     Ok(try_s!(Response::builder().body(res)))
 }
 
@@ -4742,7 +4742,7 @@ pub async fn update_maker_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Ve
     let req: MakerOrderUpdateReq = try_s!(json::from_value(req));
     let order = try_s!(update_maker_order(&ctx, req).await);
     let rpc_result = MakerOrderForRpc::from(&order);
-    let res = try_s!(json::to_vec(&KmdWalletRpcResult::new(rpc_result)));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(rpc_result)));
 
     Ok(try_s!(Response::builder().body(res)))
 }

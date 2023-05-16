@@ -64,7 +64,7 @@ use mm2_err_handle::prelude::*;
 use mm2_metrics::MetricsWeak;
 use mm2_number::{bigdecimal::{BigDecimal, ParseBigDecimalError, Zero},
                  MmNumber};
-use mm2_rpc_data::legacy::{EnabledCoin, GetEnabledResponse, KmdWalletRpcResult};
+use mm2_rpc_data::legacy::{EnabledCoin, GetEnabledResponse, Mm2RpcResult};
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -3484,7 +3484,7 @@ pub async fn get_enabled_coins(ctx: MmArc) -> Result<Response<Vec<u8>>, String> 
             })
         })
         .collect());
-    let res = try_s!(serde_json::to_vec(&KmdWalletRpcResult::new(enabled_coins)));
+    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(enabled_coins)));
     Ok(try_s!(Response::builder().body(res)))
 }
 

@@ -7,15 +7,15 @@ use std::ops::Deref;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
-pub struct KmdWalletRpcResult<T> {
+pub struct Mm2RpcResult<T> {
     pub result: T,
 }
 
-impl<T> KmdWalletRpcResult<T> {
+impl<T> Mm2RpcResult<T> {
     pub fn new(result: T) -> Self { Self { result } }
 }
 
-impl<T> Deref for KmdWalletRpcResult<T> {
+impl<T> Deref for Mm2RpcResult<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target { &self.result }
 }
