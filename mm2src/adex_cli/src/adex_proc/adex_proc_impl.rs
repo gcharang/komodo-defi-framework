@@ -1,7 +1,6 @@
 use log::{error, info, warn};
-use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, KmdWalletRpcResult,
-                           MmVersionResponse, OrderbookRequest, OrderbookResponse, SellBuyRequest, SellBuyResponse,
-                           Status};
+use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
+                           OrderbookRequest, OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
 use serde_json::{json, Value as Json};
 
 use super::command::{Command, Dummy, Method};
@@ -70,7 +69,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self
             .transport
-            .send::<_, KmdWalletRpcResult<GetEnabledResponse>, Json>(command)
+            .send::<_, Mm2RpcResult<GetEnabledResponse>, Json>(command)
             .await
         {
             Ok(Ok(ok)) => self.response_handler.on_get_enabled_response(&ok),
@@ -126,7 +125,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self
             .transport
-            .send::<_, KmdWalletRpcResult<SellBuyResponse>, Json>(command)
+            .send::<_, Mm2RpcResult<SellBuyResponse>, Json>(command)
             .await
         {
             Ok(Ok(ok)) => self.response_handler.on_sell_response(&ok),
@@ -158,7 +157,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self
             .transport
-            .send::<_, KmdWalletRpcResult<SellBuyResponse>, Json>(command)
+            .send::<_, Mm2RpcResult<SellBuyResponse>, Json>(command)
             .await
         {
             Ok(Ok(ok)) => self.response_handler.on_buy_response(&ok),
@@ -177,11 +176,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .method(Method::Stop)
             .build();
 
-        match self
-            .transport
-            .send::<_, KmdWalletRpcResult<Status>, Json>(stop_command)
-            .await
-        {
+        match self.transport.send::<_, Mm2RpcResult<Status>, Json>(stop_command).await {
             Ok(Ok(ok)) => self.response_handler.on_stop_response(&ok),
             Ok(Err(error)) => {
                 error!("Failed to stop through the API: {error}");

@@ -28,7 +28,7 @@ use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
 use mm2_number::construct_detailed;
-use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, KmdWalletRpcResult, MmVersionResponse, Status};
+use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, Mm2RpcResult, MmVersionResponse, Status};
 use serde_json::{self as json, Value as Json};
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -261,7 +261,7 @@ pub async fn stop(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
     // and it may lead to an unexpected behaviour.
     common::executor::spawn(fut);
 
-    let res = try_s!(serde_json::to_vec(&KmdWalletRpcResult::new(Status::Success)));
+    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(Status::Success)));
     Ok(try_s!(Response::builder().body(res)))
 }
 

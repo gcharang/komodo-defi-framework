@@ -2,7 +2,7 @@ use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc_data::legacy::{AggregatedOrderbookEntry, BalanceResponse, CoinInitResponse, GetEnabledResponse,
-                           KmdWalletRpcResult, MmVersionResponse, OrderbookResponse, SellBuyResponse, Status};
+                           Mm2RpcResult, MmVersionResponse, OrderbookResponse, SellBuyResponse, Status};
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -23,13 +23,13 @@ pub(crate) trait ResponseHandler {
         config: &Cfg,
         otderbook_config: OrderbookConfig,
     ) -> Result<(), ()>;
-    fn on_get_enabled_response(&self, enabled: &KmdWalletRpcResult<GetEnabledResponse>) -> Result<(), ()>;
+    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<(), ()>;
     fn on_version_response(&self, response: &MmVersionResponse) -> Result<(), ()>;
     fn on_enable_response(&self, response: &CoinInitResponse) -> Result<(), ()>;
     fn on_balance_response(&self, response: &BalanceResponse) -> Result<(), ()>;
-    fn on_sell_response(&self, response: &KmdWalletRpcResult<SellBuyResponse>) -> Result<(), ()>;
-    fn on_buy_response(&self, response: &KmdWalletRpcResult<SellBuyResponse>) -> Result<(), ()>;
-    fn on_stop_response(&self, response: &KmdWalletRpcResult<Status>) -> Result<(), ()>;
+    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
+    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -125,7 +125,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_get_enabled_response(&self, enabled: &KmdWalletRpcResult<GetEnabledResponse>) -> Result<(), ()> {
+    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<(), ()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "{:8} {}", "Ticker", "Address");
         for row in &enabled.result {
@@ -175,17 +175,17 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_sell_response(&self, response: &KmdWalletRpcResult<SellBuyResponse>) -> Result<(), ()> {
+    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Order uuid: {}", response.request.uuid);
         Ok(())
     }
 
-    fn on_buy_response(&self, response: &KmdWalletRpcResult<SellBuyResponse>) -> Result<(), ()> {
+    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Buy order uuid: {}", response.request.uuid);
         Ok(())
     }
 
-    fn on_stop_response(&self, response: &KmdWalletRpcResult<Status>) -> Result<(), ()> {
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Service stopped: {}", response.result);
         Ok(())
     }
