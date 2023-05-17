@@ -527,7 +527,7 @@ dependencies = [
  "serialization",
  "sha-1",
  "sha2 0.9.9",
- "sha3 0.9.1",
+ "sha3 0.10.4",
  "siphasher",
 ]
 
@@ -1102,7 +1102,7 @@ dependencies = [
  "serialization",
  "serialization_derive",
  "sha2 0.9.9",
- "sha3 0.9.1",
+ "sha3 0.10.4",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",

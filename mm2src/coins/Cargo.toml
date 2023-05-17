@@ -90,7 +90,7 @@ serialization = { path = "../mm2_bitcoin/serialization" }
 serialization_derive = { path = "../mm2_bitcoin/serialization_derive" }
 spv_validation = { path = "../mm2_bitcoin/spv_validation" }
 sha2 = "0.9"
-sha3 = "0.9"
+sha3 = "0.10"
 utxo_signer = { path = "utxo_signer" }
 # using the same version as cosmrs
 tendermint-rpc = { version = "=0.23.7", default-features = false }

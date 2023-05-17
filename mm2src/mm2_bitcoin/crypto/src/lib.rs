@@ -12,7 +12,7 @@ use primitives::hash::{H160, H256, H32, H512};
 use ripemd160::{Digest, Ripemd160};
 use sha1::Sha1;
 use sha2::Sha256;
-use sha3::Keccak256;
+use sha3::{Digest as Sha3Digest, Keccak256};
 use siphasher::sip::SipHasher24;
 use std::hash::Hasher;
 
