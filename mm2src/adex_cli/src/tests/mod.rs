@@ -1,5 +1,5 @@
 use mm2_number::{BigDecimal, BigRational};
-use mm2_rpc::legacy::{HistoricalOrder, MakerMatchForRpc, OrderConfirmationsSettings};
+use mm2_rpc_data::legacy::{HistoricalOrder, MakerMatchForRpc, OrderConfirmationsSettings};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;

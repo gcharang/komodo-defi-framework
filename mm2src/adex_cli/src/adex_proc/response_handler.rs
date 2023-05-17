@@ -4,10 +4,10 @@ use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_number::BigRational;
 use mm2_rpc_data::legacy::{AggregatedOrderbookEntry, BalanceResponse, CancelAllOrdersResponse, CoinInitResponse,
-                           GetEnabledResponse, HistoricalOrder, KmdWalletRpcResult, MakerMatchForRpc,
-                           MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy, MmVersionResponse,
-                           OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse, SellBuyResponse,
-                           Status, TakerMatchForRpc, TakerOrderForRpc};
+                           GetEnabledResponse, HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
+                           MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse, OrderConfirmationsSettings,
+                           OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
+                           TakerOrderForRpc};
 use serde_json::Value as Json;
 use std::cell::{RefCell, RefMut};
 use std::cmp::Ordering;
@@ -40,8 +40,8 @@ pub(crate) trait ResponseHandler {
     fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
     fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
     fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
-    fn on_cancel_order_response(&self, response: &KmdWalletRpcResult<Status>) -> Result<(), ()>;
-    fn on_cancel_all_response(&self, response: &KmdWalletRpcResult<CancelAllOrdersResponse>) -> Result<(), ()>;
+    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
+    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<(), ()>;
     fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()>;
 }
 
@@ -166,12 +166,8 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
             response.required_confirmations,
             if response.requires_notarization { "Yes" } else { "No" }
         );
-        if response.mature_confirmations.is_some() {
-            writeln_safe_io!(
-                writer,
-                "mature_confirmations: {}",
-                response.mature_confirmations.unwrap()
-            );
+        if let Some(mature_confirmations) = response.mature_confirmations {
+            writeln_safe_io!(writer, "mature_confirmations: {}", mature_confirmations);
         }
         Ok(())
     }
@@ -194,27 +190,25 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
-        writeln_safe_io!(self.writer.borrow_mut(), "Buy order uuid: {}", response.request.uuid);
-    fn on_buy_response(&self, response: &KmdWalletRpcResult<SellBuyResponse>) -> Result<(), ()> {
         writeln_safe_io!(self.writer.borrow_mut(), "{}", response.request.uuid);
         Ok(())
     }
 
-    fn on_stop_response(&self, response: &KmdWalletRpcResult<Status>) -> Result<(), ()> {
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
         match response.result {
             Status::Success => writeln_safe_io!(self.writer.borrow_mut(), "Service stopped"),
         }
         Ok(())
     }
 
-    fn on_cancel_order_response(&self, response: &KmdWalletRpcResult<Status>) -> Result<(), ()> {
+    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
         match response.result {
             Status::Success => writeln_safe_io!(self.writer.borrow_mut(), "Order cancelled"),
         }
         Ok(())
     }
 
-    fn on_cancel_all_response(&self, response: &KmdWalletRpcResult<CancelAllOrdersResponse>) -> Result<(), ()> {
+    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<(), ()> {
         let cancelled = &response.result.cancelled;
         let mut writer = self.writer.borrow_mut();
         if cancelled.is_empty() {
@@ -229,9 +223,6 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         }
         Ok(())
     }
-
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
-        writeln_safe_io!(self.writer.borrow_mut(), "Service stopped: {}", response.result);
 
     fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()> {
         match response {
@@ -251,13 +242,8 @@ impl ResponseHandlerImpl<'_> {
         write_field!(writer, "price", format_ratio(&order.price_rat)?, COMMON_INDENT);
         write_field!(writer, "uuid", order.uuid, COMMON_INDENT);
         write_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
-        if order.updated_at.is_some() {
-            write_field!(
-                writer,
-                "updated at",
-                format_datetime(order.updated_at.unwrap())?,
-                COMMON_INDENT
-            );
+        if let Some(updated_at) = order.updated_at {
+            write_field!(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
         }
         write_field!(
             writer,
@@ -274,30 +260,25 @@ impl ResponseHandlerImpl<'_> {
         write_field!(
             writer,
             "swaps",
-            format!("[{}]", order.started_swaps.iter().join(", ")),
+            format!("{}", order.started_swaps.iter().join(", ")),
             COMMON_INDENT
         );
 
-        if order.conf_settings.is_some() {
-            let settings = order.conf_settings.as_ref().unwrap();
+        if let Some(ref conf_settings) = order.conf_settings {
             write_field!(
                 writer,
                 "conf_settings",
-                format_confirmation_settings(settings),
+                format_confirmation_settings(conf_settings),
                 COMMON_INDENT
             );
         }
-
-        if order.changes_history.is_some() {
+        if let Some(ref changes_history) = order.changes_history {
             write_field!(
                 writer,
                 "changes_history",
-                order
-                    .changes_history
-                    .as_ref()
-                    .unwrap()
+                changes_history
                     .iter()
-                    .map(|val| format_historical_order(&val).unwrap_or("error".to_string()))
+                    .map(|val| format_historical_order(val).unwrap_or_else(|_| "error".into()))
                     .join(", "),
                 COMMON_INDENT
             );
@@ -352,6 +333,9 @@ impl ResponseHandlerImpl<'_> {
         writer: &mut RefMut<&mut dyn Write>,
         matches: &HashMap<Uuid, MakerMatchForRpc>,
     ) -> Result<(), ()> {
+        if matches.is_empty() {
+            return Ok(());
+        }
         write_field!(writer, "matches", "", COMMON_INDENT);
         for (uid, m) in matches {
             let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
@@ -369,13 +353,13 @@ impl ResponseHandlerImpl<'_> {
             );
             Self::write_maker_reserved_for_rpc(writer, reserved);
 
-            connected.as_ref().map(|connected| {
+            if let Some(ref connected) = connected {
                 write_connected!(writer, connected, NESTED_INDENT);
-            });
+            }
 
-            connect.as_ref().map(|connect| {
+            if let Some(ref connect) = connect {
                 write_connected!(writer, connect, NESTED_INDENT);
-            });
+            }
         }
         Ok(())
     }
@@ -384,6 +368,9 @@ impl ResponseHandlerImpl<'_> {
         writer: &mut RefMut<&mut dyn Write>,
         matches: &HashMap<Uuid, TakerMatchForRpc>,
     ) -> Result<(), ()> {
+        if matches.is_empty() {
+            return Ok(());
+        }
         write_field!(writer, "matches", "", COMMON_INDENT);
         for (uuid, m) in matches {
             let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
@@ -391,9 +378,9 @@ impl ResponseHandlerImpl<'_> {
             Self::write_maker_reserved_for_rpc(writer, reserved);
             write_field!(writer, "last_updated", m.last_updated, NESTED_INDENT);
             write_connected!(writer, connect, NESTED_INDENT);
-            connected.as_ref().map(|connected| {
+            if let Some(ref connected) = connected {
                 write_connected!(writer, connected, NESTED_INDENT);
-            });
+            }
         }
         Ok(())
     }
@@ -426,8 +413,7 @@ mod macros {
     #[macro_export]
     macro_rules! write_field_option {
         ($writer:ident, $name:expr, $value:expr, $width:ident) => {
-            if $value.is_some() {
-                let value = $value.as_ref().unwrap();
+            if let Some(ref value) = $value {
                 writeln_safe_io!($writer, "{:>width$}: {}", $name, value, width = $width);
             }
         };
@@ -483,6 +469,7 @@ mod macros {
 
     pub use {write_confirmation_settings, write_connected, write_field};
 }
+
 use crate::{write_base_rel, write_field_option};
 use macros::{write_confirmation_settings, write_connected, write_field};
 
@@ -695,29 +682,20 @@ fn format_ratio(rational: &BigRational) -> Result<f64, ()> {
 
 fn format_historical_order(historical_order: &HistoricalOrder) -> Result<String, ()> {
     let mut result = String::new();
-    if historical_order.max_base_vol.is_some() {
-        result += &format!(
-            "max_base_vol: {}, ",
-            format_ratio(&historical_order.max_base_vol.as_ref().unwrap())?
-        )
+    if let Some(ref max_base_vol) = historical_order.max_base_vol {
+        result += &format!("max_base_vol: {}, ", format_ratio(max_base_vol)?)
     }
-    if historical_order.min_base_vol.is_some() {
-        result += &format!(
-            "min_base_vol: {}, ",
-            format_ratio(&historical_order.min_base_vol.as_ref().unwrap())?
-        )
+    if let Some(ref min_base_vol) = historical_order.min_base_vol {
+        result += &format!("min_base_vol: {}, ", format_ratio(min_base_vol)?)
     }
-    if historical_order.price.is_some() {
-        result += &format!("price: {}, ", format_ratio(&historical_order.price.as_ref().unwrap())?);
+    if let Some(ref price) = historical_order.price {
+        result += &format!("price: {}, ", format_ratio(price)?);
     }
-    if historical_order.updated_at.is_some() {
-        result += &format!("updated_at: {}", format_datetime(historical_order.updated_at.unwrap())?);
+    if let Some(updated_at) = historical_order.updated_at {
+        result += &format!("updated_at: {}", format_datetime(updated_at)?);
     }
-    if historical_order.conf_settings.is_some() {
-        result += &format!(
-            "conf_settings: {}",
-            format_confirmation_settings(historical_order.conf_settings.as_ref().unwrap())
-        );
+    if let Some(ref conf_settings) = historical_order.conf_settings {
+        result += &format!("conf_settings: {}", format_confirmation_settings(conf_settings));
     }
     Ok(result)
 }

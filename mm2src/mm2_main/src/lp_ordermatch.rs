@@ -46,8 +46,12 @@ use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, 
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
-use mm2_rpc_data::legacy::{MatchBy, Mm2RpcResult, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry,
-                           SellBuyRequest, SellBuyResponse, TakerAction, TakerRequestForRpc};
+use mm2_rpc_data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
+                           HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
+                           MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, OrderConfirmationsSettings,
+                           OrderForRpc, OrderStatusRequest, OrderStatusResponse, OrderType, RpcOrderbookEntry,
+                           SellBuyRequest, SellBuyResponse, Status, TakerAction, TakerConnectForRpc, TakerMatchForRpc,
+                           TakerOrderForRpc, TakerRequestForRpc};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
                         save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,
@@ -1719,11 +1723,11 @@ impl<'a> From<&'a MakerOrder> for MakerOrderForRpc {
             base: order.base.to_string(),
             rel: order.rel.to_string(),
             price: order.price.to_decimal(),
-            price_rat: order.price.clone(),
+            price_rat: order.price.clone().into(),
             max_base_vol: order.max_base_vol.to_decimal(),
-            max_base_vol_rat: order.max_base_vol.clone(),
+            max_base_vol_rat: order.max_base_vol.clone().into(),
             min_base_vol: order.min_base_vol.to_decimal(),
-            min_base_vol_rat: order.min_base_vol.clone(),
+            min_base_vol_rat: order.min_base_vol.clone().into(),
             created_at: order.created_at,
             updated_at: order.updated_at,
             matches: order
@@ -1733,7 +1737,7 @@ impl<'a> From<&'a MakerOrder> for MakerOrderForRpc {
                 .collect(),
             started_swaps: order.started_swaps.clone(),
             uuid: order.uuid,
-            conf_settings: order.conf_settings.clone(),
+            conf_settings: order.conf_settings,
             changes_history: order.changes_history.clone(),
             base_orderbook_ticker: order.base_orderbook_ticker.clone(),
             rel_orderbook_ticker: order.rel_orderbook_ticker.clone(),
@@ -2298,11 +2302,11 @@ impl<'a> From<&'a MakerReserved> for MakerReservedForRpc {
             base_amount_rat: reserved.base_amount.to_ratio(),
             rel_amount: reserved.rel_amount.to_decimal(),
             rel_amount_rat: reserved.rel_amount.to_ratio(),
-            taker_order_uuid: reserved.taker_order_uuid.clone(),
-            maker_order_uuid: reserved.maker_order_uuid.clone(),
-            sender_pubkey: reserved.sender_pubkey.clone(),
-            dest_pub_key: reserved.dest_pub_key.clone(),
-            conf_settings: reserved.conf_settings.clone(),
+            taker_order_uuid: reserved.taker_order_uuid,
+            maker_order_uuid: reserved.maker_order_uuid,
+            sender_pubkey: reserved.sender_pubkey,
+            dest_pub_key: reserved.dest_pub_key,
+            conf_settings: reserved.conf_settings,
             method: "reserved".to_string(),
         }
     }
@@ -5012,7 +5016,7 @@ pub async fn cancel_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
                 .ok();
         }
         return Response::builder()
-            .body(json::to_vec(&KmdWalletRpcResult::new(Status::Success)).expect("Serialization failed"))
+            .body(json::to_vec(&Mm2RpcResult::new(Status::Success)).expect("Serialization failed"))
             .map_err(|e| ERRL!("{}", e));
     }
 
@@ -5286,7 +5290,7 @@ pub async fn cancel_all_orders_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec
     let request: CancelAllOrdersRequest = try_s!(json::from_value(req.clone()));
 
     let (cancelled, currently_matching) = try_s!(cancel_orders_by(&ctx, request.cancel_by).await);
-    let response = KmdWalletRpcResult::new(CancelAllOrdersResponse {
+    let response = Mm2RpcResult::new(CancelAllOrdersResponse {
         cancelled,
         currently_matching,
     });

@@ -17,7 +17,7 @@ use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::MmNumber;
-use mm2_rpc::legacy::{CancelBy, CancelOrderRequest};
+use mm2_rpc_data::legacy::{CancelBy, CancelOrderRequest};
 use serde_json::Value as Json;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

@@ -1,7 +1,11 @@
 use log::{error, info, warn};
-use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
-                           OrderbookRequest, OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
+
+use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
+                           CancelOrderRequest, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
+                           OrderStatusRequest, OrderStatusResponse, OrderbookRequest, OrderbookResponse,
+                           SellBuyRequest, SellBuyResponse, Status};
 use serde_json::{json, Value as Json};
+use uuid::Uuid;
 
 use super::command::{Command, Dummy, Method};
 use super::response_handler::ResponseHandler;
@@ -199,6 +203,75 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 error!("Failed get version through the API: {error}");
                 Err(())
             },
+            _ => Err(()),
+        }
+    }
+
+    pub async fn cancel_order(&self, order_id: &Uuid) -> Result<(), ()> {
+        info!("Cancelling order: {order_id}");
+        let cancel_command = Command::builder()
+            .userpass(self.config.rpc_password())
+            .method(Method::CancelOrder)
+            .flatten_data(CancelOrderRequest { uuid: *order_id })
+            .build();
+
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<Status>, Json>(cancel_command)
+            .await
+        {
+            Ok(Ok(ok)) => self.response_handler.on_cancel_order_response(&ok),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => Err(()),
+        }
+    }
+
+    pub async fn cancel_all_orders(&self) -> Result<(), ()> {
+        info!("Cancelling all orders");
+        self.cancel_all_orders_impl(CancelBy::All).await
+    }
+
+    pub async fn cancel_by_pair(&self, base: String, rel: String) -> Result<(), ()> {
+        info!("Cancelling by pair, base: {base}, rel: {rel}");
+        self.cancel_all_orders_impl(CancelBy::Pair { base, rel }).await
+    }
+
+    pub async fn cancel_by_coin(&self, ticker: String) -> Result<(), ()> {
+        info!("Cancelling by coin: {ticker}");
+        self.cancel_all_orders_impl(CancelBy::Coin { ticker }).await
+    }
+
+    async fn cancel_all_orders_impl(&self, cancel_by: CancelBy) -> Result<(), ()> {
+        let cancel_all_orders = Command::builder()
+            .userpass(self.config.rpc_password())
+            .method(Method::CancelAllOrders)
+            .flatten_data(CancelAllOrdersRequest { cancel_by })
+            .build();
+
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<CancelAllOrdersResponse>, Json>(cancel_all_orders)
+            .await
+        {
+            Ok(Ok(ok)) => self.response_handler.on_cancel_all_response(&ok),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => Err(()),
+        }
+    }
+
+    pub async fn order_status(&self, uuid: &Uuid) -> Result<(), ()> {
+        let order_status_command = Command::builder()
+            .userpass(self.config.rpc_password())
+            .method(Method::OrderStatus)
+            .flatten_data(OrderStatusRequest { uuid: *uuid })
+            .build();
+        match self
+            .transport
+            .send::<_, OrderStatusResponse, Json>(order_status_command)
+            .await
+        {
+            Ok(Ok(ok)) => self.response_handler.on_order_status(&ok),
+            Ok(Err(error)) => self.response_handler.print_response(error),
             _ => Err(()),
         }
     }

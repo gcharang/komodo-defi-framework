@@ -16,6 +16,7 @@ name = "adex-cli"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "clap",
  "common",
  "derive_more",
