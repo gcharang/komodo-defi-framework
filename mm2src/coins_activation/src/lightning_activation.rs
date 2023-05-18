@@ -14,7 +14,7 @@ use coins::lightning::ln_utils::{get_open_channels_nodes_addresses, init_channel
                                  init_persister, PAYMENT_RETRY_ATTEMPTS};
 use coins::lightning::{InvoicePayer, LightningCoin};
 use coins::utxo::utxo_standard::UtxoStandardCoin;
-use coins::utxo::UtxoCommonOps;
+use coins::utxo::{BlockchainNetwork, UtxoCommonOps};
 use coins::{BalanceError, CoinBalance, CoinProtocol, MarketCoinOps, MmCoinEnum, RegisterCoinError};
 use common::executor::{SpawnFuture, Timer};
 use crypto::hw_rpc_task::{HwRpcTaskAwaitingStatus, HwRpcTaskUserAction};
@@ -33,8 +33,6 @@ use ser_error_derive::SerializeErrorType;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{self as json, Value as Json};
 use std::sync::Arc;
-
-const DEFAULT_LISTENING_PORT: u16 = 9735;
 
 pub type LightningTaskManagerShared = InitL2TaskManagerShared<LightningCoin>;
 pub type LightningRpcTaskHandle = InitL2TaskHandle<LightningCoin>;
@@ -98,6 +96,24 @@ impl L2ProtocolParams for LightningProtocolConf {
     fn platform_coin_ticker(&self) -> &str { &self.platform_coin_ticker }
 }
 
+/// https://lightning.readthedocs.io/lightningd-config.5.html#networking-options
+#[repr(u16)]
+enum DefaultListeningPort {
+    Mainnet = 9735,
+    Testnet = 19735,
+    Regtest = 19846,
+}
+
+impl DefaultListeningPort {
+    fn from_network(network: &BlockchainNetwork) -> u16 {
+        match network {
+            BlockchainNetwork::Mainnet => DefaultListeningPort::Mainnet as u16,
+            BlockchainNetwork::Testnet => DefaultListeningPort::Testnet as u16,
+            BlockchainNetwork::Regtest => DefaultListeningPort::Regtest as u16,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct LightningActivationParams {
     // The listening port for the p2p LN node
@@ -144,6 +160,7 @@ pub enum LightningValidationErr {
 #[derive(Clone, Debug, Serialize)]
 pub struct LightningActivationResult {
     platform_coin: String,
+    // Todo: use NodeAddress instead of String and use the returned address in tests
     address: String,
     balance: CoinBalance,
 }
@@ -261,6 +278,7 @@ impl InitL2ActivationOps for LightningCoin {
 
     fn validate_activation_params(
         activation_params: Self::ActivationParams,
+        protocol_conf: &Self::ProtocolInfo,
     ) -> Result<Self::ValidatedParams, MmError<Self::ActivationError>> {
         if activation_params.name.len() > 32 {
             return MmError::err(
@@ -278,7 +296,9 @@ impl InitL2ActivationOps for LightningCoin {
         )
         .map_to_mm(|_| LightningValidationErr::InvalidRequest("Invalid Hex Color".into()))?;
 
-        let listening_port = activation_params.listening_port.unwrap_or(DEFAULT_LISTENING_PORT);
+        let listening_port = activation_params
+            .listening_port
+            .unwrap_or_else(|| DefaultListeningPort::from_network(&protocol_conf.network));
 
         Ok(LightningValidatedParams {
             listening_port,

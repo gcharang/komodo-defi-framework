@@ -53,6 +53,7 @@ pub trait InitL2ActivationOps: Into<MmCoinEnum> + Send + Sync + 'static {
 
     fn validate_activation_params(
         activation_params: Self::ActivationParams,
+        protocol_conf: &Self::ProtocolInfo,
     ) -> Result<Self::ValidatedParams, MmError<Self::ActivationError>>;
 
     async fn init_l2(
@@ -94,7 +95,7 @@ where
 
     L2::validate_platform_configuration(&platform_coin)?;
 
-    let validated_params = L2::validate_activation_params(req.activation_params.clone())?;
+    let validated_params = L2::validate_activation_params(req.activation_params.clone(), &protocol_conf)?;
 
     let coins_act_ctx = CoinsActivationContext::from_ctx(&ctx).map_to_mm(InitL2Error::Internal)?;
     let spawner = ctx.spawner();
