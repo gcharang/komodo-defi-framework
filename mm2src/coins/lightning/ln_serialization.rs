@@ -119,14 +119,19 @@ pub struct ChannelDetailsForRPC {
     pub inbound_capacity_msat: u64,
     pub current_confirmations: Option<u32>,
     pub required_confirmations: Option<u32>,
-    // Channel is confirmed onchain, this means that funding_locked messages have been exchanged,
-    // the channel is not currently being shut down, and the required confirmation count has been reached.
+    /// Channel is confirmed onchain, this means that funding_locked messages have been exchanged,
+    /// the channel is not currently being shut down, and the required confirmation count has been reached.
     pub is_ready: bool,
-    // Channel is confirmed and channel_ready messages have been exchanged, the peer is connected,
-    // and the channel is not currently negotiating a shutdown.
+    /// Channel is confirmed and channel_ready messages have been exchanged, the peer is connected,
+    /// and the channel is not currently negotiating a shutdown.
     pub is_usable: bool,
-    // A publicly-announced channel.
+    /// A publicly-announced channel.
     pub is_public: bool,
+    /// The number of blocks (after our commitment transaction confirms) that we will need to
+    /// wait until we can claim our funds after we force-close the channel.
+    /// If our counterparty force-closes the channel and broadcasts a commitment transaction
+    /// we do not have to wait any time to claim our non-HTLC-encumbered funds.
+    pub force_close_spend_delay: Option<u16>,
 }
 
 impl From<ChannelDetails> for ChannelDetailsForRPC {
@@ -147,6 +152,7 @@ impl From<ChannelDetails> for ChannelDetailsForRPC {
             is_ready: details.is_channel_ready,
             is_usable: details.is_usable,
             is_public: details.is_public,
+            force_close_spend_delay: details.force_close_spend_delay,
         }
     }
 }

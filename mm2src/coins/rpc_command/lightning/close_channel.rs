@@ -5,6 +5,9 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use uuid::Uuid;
 
+const CLOSE_CHANNEL_MSG_HELPER: &str =
+    "To see if the channel is closed or not, you can use `lightning::channel::get_channel_details`";
+
 type CloseChannelResult<T> = Result<T, MmError<CloseChannelError>>;
 
 #[derive(Debug, Deserialize, Display, Serialize, SerializeErrorType)]
@@ -46,7 +49,26 @@ pub struct CloseChannelReq {
     pub force_close: bool,
 }
 
-pub async fn close_channel(ctx: MmArc, req: CloseChannelReq) -> CloseChannelResult<String> {
+#[derive(Display)]
+pub enum CloseChannelResponseMessage {
+    #[display(fmt = "Initiated closing of the channel. {}", CLOSE_CHANNEL_MSG_HELPER)]
+    ChannelClosed,
+    #[display(
+        fmt = "Initiated force closing of the channel by broadcasting the latest local commitment transaction. {}",
+        CLOSE_CHANNEL_MSG_HELPER
+    )]
+    ChannelForceClosed,
+}
+
+#[derive(Serialize)]
+pub struct CloseChannelResponse {
+    uuid: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    force_close_spend_delay: Option<u16>,
+    message: String,
+}
+
+pub async fn close_channel(ctx: MmArc, req: CloseChannelReq) -> CloseChannelResult<CloseChannelResponse> {
     let ln_coin = match lp_coinfind_or_err(&ctx, &req.coin).await? {
         MmCoinEnum::LightningCoin(c) => c,
         e => return MmError::err(CloseChannelError::UnsupportedCoin(e.ticker().to_string())),
@@ -67,6 +89,11 @@ pub async fn close_channel(ctx: MmArc, req: CloseChannelReq) -> CloseChannelResu
                 .map_to_mm(|e| CloseChannelError::CloseChannelError(format!("{:?}", e)))
         })
         .await?;
+        Ok(CloseChannelResponse {
+            uuid: req.uuid,
+            force_close_spend_delay: channel_details.force_close_spend_delay,
+            message: CloseChannelResponseMessage::ChannelForceClosed.to_string(),
+        })
     } else {
         async_blocking(move || {
             ln_coin
@@ -75,7 +102,10 @@ pub async fn close_channel(ctx: MmArc, req: CloseChannelReq) -> CloseChannelResu
                 .map_to_mm(|e| CloseChannelError::CloseChannelError(format!("{:?}", e)))
         })
         .await?;
+        Ok(CloseChannelResponse {
+            uuid: req.uuid,
+            force_close_spend_delay: None,
+            message: CloseChannelResponseMessage::ChannelClosed.to_string(),
+        })
     }
-
-    Ok(format!("Initiated closing of channel with uuid: {}", req.uuid))
 }
