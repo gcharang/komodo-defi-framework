@@ -34,6 +34,9 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::{self as json, Value as Json};
 use std::sync::Arc;
 
+/// Default node color is Komodo Light Blue https://github.com/KomodoPlatform/komodo-docs-mdx/pull/31#discussion_r1194743418
+const DEFAULT_NODE_COLOR: &str = "2b6680";
+
 pub type LightningTaskManagerShared = InitL2TaskManagerShared<LightningCoin>;
 pub type LightningRpcTaskHandle = InitL2TaskHandle<LightningCoin>;
 pub type LightningAwaitingStatus = HwRpcTaskAwaitingStatus;
@@ -291,7 +294,7 @@ impl InitL2ActivationOps for LightningCoin {
 
         let mut node_color = [0u8; 3];
         hex::decode_to_slice(
-            activation_params.color.unwrap_or_else(|| "000000".into()),
+            activation_params.color.unwrap_or_else(|| DEFAULT_NODE_COLOR.into()),
             &mut node_color as &mut [u8],
         )
         .map_to_mm(|_| LightningValidationErr::InvalidRequest("Invalid Hex Color".into()))?;
