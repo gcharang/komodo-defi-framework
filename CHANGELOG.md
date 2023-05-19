@@ -1,3 +1,24 @@
+## v1.0.4-beta - 2023-05-12
+
+**Features:**
+- NFT integration [#900](https://github.com/KomodoPlatform/atomicDEX-API/issues/900)
+  - Proxy support was added [#1775](https://github.com/KomodoPlatform/atomicDEX-API/pull/1775)
+
+**Enhancements/Fixes:**
+- Some enhancements were done for `enable_bch_with_tokens`,`enable_eth_with_tokens`,`enable_tendermint_with_assets` RPCs in [#1762](https://github.com/KomodoPlatform/atomicDEX-API/pull/1762)
+  - A new parameter `get_balances` was added to the above methods requests, when this parameter is set to `false`, balances will not be returned in the response. The default value for this parameter is `true` to ensure backward compatibility.
+  - Token balances requests are now performed concurrently for the above methods.
+- Swap watcher nodes [#1750](https://github.com/KomodoPlatform/atomicDEX-API/pull/1750)
+  - PoC for ETH/UTXO and ERC20/UTXO swaps with rewards
+  - Improved protocol to let only the taker pay the reward
+- Add passive parent coin state for keeping tokens active when platform is disabled [#1763](https://github.com/KomodoPlatform/atomicDEX-API/pull/1763)
+- Optimize release compilation profile for mm2 [#1821](https://github.com/KomodoPlatform/atomicDEX-API/pull/1821)
+- CI flows for `adex-cli` added [#1818](https://github.com/KomodoPlatform/atomicDEX-API/pull/1818)
+- Detect a chain reorganization, if it occurs, redownload and revalidate the new best chain headers for SPV  [#1728](https://github.com/KomodoPlatform/atomicDEX-API/pull/1728)
+- Fix moralis request in wasm target, add moralis tests [#1817](https://github.com/KomodoPlatform/atomicDEX-API/pull/1817)
+- PoSV support for UTXO coins was added in [#1815](https://github.com/KomodoPlatform/atomicDEX-API/pull/1815)
+
+
 ## v1.0.3-beta - 2023-04-28
 
 **Features:**
@@ -5,9 +26,9 @@
 **Enhancements/Fixes:**
 - cosmos/iris ethermint account compatibility implemented [#1765](https://github.com/KomodoPlatform/atomicDEX-API/pull/1765)
 - p2p stack is improved [#1755](https://github.com/KomodoPlatform/atomicDEX-API/pull/1755)
-- - Validate topics if they are mixed or not.
-- - Do early return if the message data is not valid (since no point to iterate over and over on the invalid message)
-- - Break the loop right after processing any of `SWAP_PREFIX`, `WATCHER_PREFIX`, `TX_HELPER_PREFIX` topic.
+  - Validate topics if they are mixed or not.
+  - Do early return if the message data is not valid (since no point to iterate over and over on the invalid message)
+  - Break the loop right after processing any of `SWAP_PREFIX`, `WATCHER_PREFIX`, `TX_HELPER_PREFIX` topic.
 - An issue was fixed where we don't have to wait for all EVM nodes to sync the latest account nonce [#1757](https://github.com/KomodoPlatform/atomicDEX-API/pull/1757)
 - optimized dev and release compilation profiles and removed ci [#1759](https://github.com/KomodoPlatform/atomicDEX-API/pull/1759)
 - fix receiver trade fee for cosmos swaps [#1767](https://github.com/KomodoPlatform/atomicDEX-API/pull/1767)

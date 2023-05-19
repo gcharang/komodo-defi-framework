@@ -1,7 +1,6 @@
 use crate::docker_tests::docker_tests_common::*;
 use mm2_number::bigdecimal::Zero;
-use mm2_test_helpers::for_tests::{disable_coin, disable_coin_err, enable_solana_with_tokens, enable_spl, sign_message,
-                                  verify_message};
+use mm2_test_helpers::for_tests::{disable_coin, enable_solana_with_tokens, enable_spl, sign_message, verify_message};
 use mm2_test_helpers::structs::{EnableSolanaWithTokensResponse, EnableSplResponse, RpcV2Response, SignatureResponse,
                                 VerificationResponse};
 use serde_json as json;
@@ -26,15 +25,18 @@ fn test_solana_and_spl_balance_enable_spl_v2() {
         .into_iter()
         .next()
         .unwrap();
-    assert!(solana_balance.balances.spendable > 0.into());
+    assert!(solana_balance.balances.unwrap().spendable > 0.into());
 
-    let (_, spl_balances) = enable_solana_with_tokens
+    let spl_balances = enable_solana_with_tokens
         .result
         .spl_addresses_infos
         .into_iter()
         .next()
+        .unwrap()
+        .1
+        .balances
         .unwrap();
-    let usdc_spl = spl_balances.balances.get("USDC-SOL-DEVNET").unwrap();
+    let usdc_spl = spl_balances.get("USDC-SOL-DEVNET").unwrap();
     assert!(usdc_spl.spendable.is_zero());
 
     let enable_spl = block_on(enable_spl(&mm, "ADEX-SOL-DEVNET"));
@@ -125,14 +127,18 @@ fn test_disable_solana_platform_coin_with_tokens() {
     ));
     block_on(enable_spl(&mm, "ADEX-SOL-DEVNET"));
 
-    // Try to disable platform coin, SOL-DEVNET. This should fail due to the dependent tokens.
-    let error = block_on(disable_coin_err(&mm, "SOL-DEVNET"));
-    assert_eq!(error.dependent_tokens, ["ADEX-SOL-DEVNET", "USDC-SOL-DEVNET"]);
+    // Try to passive platform coin, SOL-DEVNET.
+    let res = block_on(disable_coin(&mm, "SOL-DEVNET", false));
+    assert!(res.passivized);
 
-    // Try to disable ADEX-SOL-DEVNET token first.
-    block_on(disable_coin(&mm, "ADEX-SOL-DEVNET"));
-    // Try to disable USDC-SOL-DEVNET token first.
-    block_on(disable_coin(&mm, "USDC-SOL-DEVNET"));
-    // Then try to disable SOL-DEVNET platform coin.
-    block_on(disable_coin(&mm, "SOL-DEVNET"));
+    // Try to disable ADEX-SOL-DEVNET and USDC-SOL-DEVNET
+    // This should work, because platform coin is still in the memory.
+    let res = block_on(disable_coin(&mm, "ADEX-SOL-DEVNET", false));
+    assert!(!res.passivized);
+    let res = block_on(disable_coin(&mm, "USDC-SOL-DEVNET", false));
+    assert!(!res.passivized);
+
+    // Then try to force disable SOL-DEVNET platform coin.
+    let res = block_on(disable_coin(&mm, "SOL-DEVNET", true));
+    assert!(!res.passivized);
 }

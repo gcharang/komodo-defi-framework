@@ -1116,11 +1116,13 @@ dependencies = [
  "tokio-rustls",
  "tonic",
  "tonic-build",
+ "url",
  "utxo_signer",
  "uuid 1.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
+ "wasm-timer",
  "web-sys",
  "web3",
  "webpki-roots",
@@ -4128,7 +4130,7 @@ dependencies = [
 
 [[package]]
 name = "mm2_bin_lib"
-version = "1.0.3-beta"
+version = "1.0.4-beta"
 dependencies = [
  "chrono",
  "common",
@@ -8482,6 +8484,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

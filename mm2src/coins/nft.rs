@@ -3,27 +3,30 @@ use mm2_err_handle::prelude::{MmError, MmResult};
 
 pub(crate) mod nft_errors;
 pub(crate) mod nft_structs;
+#[cfg(any(test, target_arch = "wasm32"))] mod nft_tests;
 
 use crate::{get_my_address, MyAddressReq, WithdrawError};
 use nft_errors::{GetNftInfoError, UpdateNftError};
-use nft_structs::{Chain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory, NftTransferHistoryWrapper,
+use nft_structs::{Chain, ConvertChain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory, NftTransferHistoryWrapper,
                   NftTransfersReq, NftWrapper, NftsTransferHistoryList, TransactionNftDetails, UpdateNftReq,
-                  WithdrawNftReq};
+                  WithdrawNftReq, ContractType};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft::nft_structs::{ContractType, ConvertChain};
+use crate::nft::nft_structs::WithdrawNftType;
+use common::APPLICATION_JSON;
 use crate::nft_storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
-use common::{APPLICATION_JSON, X_API_KEY};
 use http::header::ACCEPT;
+use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
 
-/// url for moralis requests
-pub const URL_MORALIS: &str = "https://deep-index.moralis.io/api/v2/";
-/// query parameter for moralis request: The format of the token ID
-pub const FORMAT_DECIMAL_MORALIS: &str = "format=decimal";
-/// query parameter for moralis request: The transfer direction
-pub const DIRECTION_BOTH_MORALIS: &str = "direction=both";
+const MORALIS_API_ENDPOINT: &str = "api/v2";
+/// query parameters for moralis request: The format of the token ID
+const MORALIS_FORMAT_QUERY_NAME: &str = "format";
+const MORALIS_FORMAT_QUERY_VALUE: &str = "decimal";
+/// query parameters for moralis request: The transfer direction
+const MORALIS_DIRECTION_QUERY_NAME: &str = "direction";
+const MORALIS_DIRECTION_QUERY_VALUE: &str = "both";
 
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
@@ -281,7 +284,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain) -> MmResult<Vec<Nft>, 
     let mut cursor = String::new();
     loop {
         let uri = format!("{}{}", uri_without_cursor, cursor);
-        let response = send_moralis_request(uri.as_str(), api_key).await?;
+        let response = send_moralis_request(uri.as_str()).await?;
         if let Some(nfts_list) = response["result"].as_array() {
             for nft_json in nfts_list {
                 let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string())?;
@@ -355,7 +358,7 @@ async fn get_moralis_nft_transfers(
     let mut cursor = String::new();
     loop {
         let uri = format!("{}{}", uri_without_cursor, cursor);
-        let response = send_moralis_request(uri.as_str(), api_key).await?;
+        let response = send_moralis_request(uri.as_str()).await?;
         if let Some(transfer_list) = response["result"].as_array() {
             for transfer in transfer_list {
                 let transfer_wrapper: NftTransferHistoryWrapper = serde_json::from_str(&transfer.to_string())?;
@@ -397,51 +400,65 @@ async fn get_moralis_nft_transfers(
     Ok(res_list)
 }
 
-/// **Caution:** ERC-1155 token can have a total supply more than 1, which means there could be several owners
-/// of the same token. `get_nft_metadata` returns NFTs info with the most recent owner.
-/// **Dont** use this function to get specific info about owner address, amount etc, you will get info not related to my_address.
-async fn get_moralis_metadata(
-    ctx: &MmArc,
-    token_address: String,
-    token_id: BigDecimal,
-    chain: &Chain,
-) -> MmResult<Nft, GetNftInfoError> {
-    let api_key = ctx.conf["api_key"]
-        .as_str()
-        .ok_or_else(|| MmError::new(GetNftInfoError::ApiKeyError))?;
-    let chain_str = match chain {
-        Chain::Avalanche => "AVALANCHE",
-        Chain::Bsc => "BSC",
-        Chain::Eth => "ETH",
-        Chain::Fantom => "FANTOM",
-        Chain::Polygon => "POLYGON",
-    };
-    let uri = format!(
-        "{}nft/{}/{}?chain={}&{}",
-        URL_MORALIS, token_address, token_id, chain_str, FORMAT_DECIMAL_MORALIS
-    );
-    let response = send_moralis_request(uri.as_str(), api_key).await?;
-    let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
-    let nft_metadata = Nft {
-        chain: *chain,
-        token_address: nft_wrapper.token_address,
-        token_id: nft_wrapper.token_id.0,
-        amount: nft_wrapper.amount.0,
-        owner_of: nft_wrapper.owner_of,
-        token_hash: nft_wrapper.token_hash,
-        block_number_minted: *nft_wrapper.block_number_minted,
-        block_number: *nft_wrapper.block_number,
-        contract_type: nft_wrapper.contract_type.map(|v| v.0),
-        name: nft_wrapper.name,
-        symbol: nft_wrapper.symbol,
-        token_uri: nft_wrapper.token_uri,
-        metadata: nft_wrapper.metadata,
-        last_token_uri_sync: nft_wrapper.last_token_uri_sync,
-        last_metadata_sync: nft_wrapper.last_metadata_sync,
-        minter_address: nft_wrapper.minter_address,
-        possible_spam: nft_wrapper.possible_spam,
-    };
-    Ok(nft_metadata)
+/// `withdraw_nft` function generates, signs and returns a transaction that transfers NFT
+/// from my address to recipient's address.
+/// This method generates a raw transaction which should then be broadcast using `send_raw_transaction`.
+pub async fn withdraw_nft(ctx: MmArc, req: WithdrawNftReq) -> WithdrawNftResult {
+    match req.withdraw_type {
+        WithdrawNftType::WithdrawErc1155(erc1155_withdraw) => withdraw_erc1155(ctx, erc1155_withdraw, req.url).await,
+        WithdrawNftType::WithdrawErc721(erc721_withdraw) => withdraw_erc721(ctx, erc721_withdraw).await,
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn send_moralis_request(uri: &str) -> MmResult<Json, GetNftInfoError> {
+    use http::header::HeaderValue;
+    use mm2_net::transport::slurp_req_body;
+
+    let request = http::Request::builder()
+        .method("GET")
+        .uri(uri)
+        .header(ACCEPT, HeaderValue::from_static(APPLICATION_JSON))
+        .body(hyper::Body::from(""))?;
+
+    let (status, _header, body) = slurp_req_body(request).await?;
+    if !status.is_success() {
+        return Err(MmError::new(GetNftInfoError::Transport(format!(
+            "Response !200 from {}: {}, {}",
+            uri, status, body
+        ))));
+    }
+    Ok(body)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn send_moralis_request(uri: &str) -> MmResult<Json, GetNftInfoError> {
+    use mm2_net::wasm_http::FetchRequest;
+
+    macro_rules! try_or {
+        ($exp:expr, $errtype:ident) => {
+            match $exp {
+                Ok(x) => x,
+                Err(e) => return Err(MmError::new(GetNftInfoError::$errtype(ERRL!("{:?}", e)))),
+            }
+        };
+    }
+
+    let result = FetchRequest::get(uri)
+        .header(ACCEPT.as_str(), APPLICATION_JSON)
+        .request_str()
+        .await;
+    let (status_code, response_str) = try_or!(result, Transport);
+    if !status_code.is_success() {
+        return Err(MmError::new(GetNftInfoError::Transport(ERRL!(
+            "!200: {}, {}",
+            status_code,
+            response_str
+        ))));
+    }
+
+    let response: Json = try_or!(serde_json::from_str(&response_str), InvalidResponse);
+    Ok(response)
 }
 
 /// `update_nft_list` function gets nft transfers from NFT HISTORY table, iterates through them

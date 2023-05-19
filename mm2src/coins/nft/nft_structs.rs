@@ -1,4 +1,5 @@
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
+use ethereum_types::Address;
 use common::ten;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
@@ -6,10 +7,12 @@ use serde::Deserialize;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
+use url::Url;
 
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
+    pub(crate) url: Url,
     #[serde(default)]
     pub(crate) max: bool,
     #[serde(default = "ten")]
@@ -19,9 +22,10 @@ pub struct NftListReq {
 
 #[derive(Debug, Deserialize)]
 pub struct NftMetadataReq {
-    pub(crate) token_address: String,
+    pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) chain: Chain,
+    pub(crate) url: Url,
 }
 
 #[derive(Debug, Display)]
@@ -41,8 +45,6 @@ pub enum Chain {
 
 pub(crate) trait ConvertChain {
     fn to_ticker(&self) -> String;
-
-    fn to_ticker_chain(&self) -> (String, String);
 }
 
 impl ConvertChain for Chain {
@@ -53,16 +55,6 @@ impl ConvertChain for Chain {
             Chain::Eth => "ETH".to_owned(),
             Chain::Fantom => "FTM".to_owned(),
             Chain::Polygon => "MATIC".to_owned(),
-        }
-    }
-
-    fn to_ticker_chain(&self) -> (String, String) {
-        match self {
-            Chain::Avalanche => ("AVAX".to_owned(), "AVALANCHE".to_owned()),
-            Chain::Bsc => ("BNB".to_owned(), "BSC".to_owned()),
-            Chain::Eth => ("ETH".to_owned(), "ETH".to_owned()),
-            Chain::Fantom => ("FTM".to_owned(), "FANTOM".to_owned()),
-            Chain::Polygon => ("MATIC".to_owned(), "POLYGON".to_owned()),
         }
     }
 }
@@ -224,8 +216,15 @@ pub struct WithdrawErc721 {
 }
 
 #[derive(Clone, Deserialize)]
+pub struct WithdrawNftReq {
+    pub(crate) url: Url,
+    pub(crate) withdraw_type: WithdrawNftType,
+}
+
+#[derive(Clone, Deserialize)]
 #[serde(tag = "type", content = "withdraw_data")]
-pub enum WithdrawNftReq {
+#[serde(rename_all = "snake_case")]
+pub enum WithdrawNftType {
     WithdrawErc1155(WithdrawErc1155),
     WithdrawErc721(WithdrawErc721),
 }
@@ -260,6 +259,7 @@ pub struct TransactionNftDetails {
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
+    pub(crate) url: Url,
     pub(crate) filters: Option<NftTxHistoryFilters>,
     #[serde(default)]
     pub(crate) max: bool,
