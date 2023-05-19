@@ -2,6 +2,7 @@ use crate::utxo::BlockchainNetwork;
 use lightning::util::config::{ChannelConfig, ChannelHandshakeConfig, ChannelHandshakeLimits, UserConfig};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlatformCoinConfirmationTargets {
     pub background: u32,
     pub normal: u32,
@@ -16,6 +17,7 @@ pub struct LightningProtocolConf {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChannelOptions {
     /// Amount (in millionths of a satoshi) charged per satoshi for payments forwarded outbound
     /// over the channel.
@@ -85,6 +87,7 @@ impl From<ChannelOptions> for ChannelConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OurChannelsConfigs {
     /// Confirmations we will wait for before considering an inbound channel locked in.
     pub inbound_channels_confirmations: Option<u32>,
@@ -110,12 +113,12 @@ pub struct OurChannelsConfigs {
     pub announced_channel: Option<bool>,
     /// When set, we commit to an upfront shutdown_pubkey at channel open.
     pub commit_upfront_shutdown_pubkey: Option<bool>,
-    /// The minimum balance that the other node has to maintain on their side, at all times.
+    /// The Proportion of the channel value to configure as counterparty's channel reserve.
     /// This ensures that if our counterparty broadcasts a revoked state, we can punish them by claiming
     /// at least this value on chain.
-    /// Default value: 1% of channel value.
-    /// Minimum value: 1000 sats
-    pub their_channel_reserve_sats: Option<u32>,
+    /// Default value: 10000, which is 1% of channel value in millionth.
+    /// Minimum allowed value: 1000 sats
+    pub their_channel_reserve_proportional_millionths: Option<u32>,
 }
 
 impl OurChannelsConfigs {
@@ -148,8 +151,8 @@ impl OurChannelsConfigs {
             self.commit_upfront_shutdown_pubkey = Some(commit);
         }
 
-        if let Some(reserve) = config.their_channel_reserve_sats {
-            self.their_channel_reserve_sats = Some(reserve);
+        if let Some(reserve) = config.their_channel_reserve_proportional_millionths {
+            self.their_channel_reserve_proportional_millionths = Some(reserve);
         }
     }
 }
@@ -186,7 +189,7 @@ impl From<OurChannelsConfigs> for ChannelHandshakeConfig {
             channel_handshake_config.commit_upfront_shutdown_pubkey = commit;
         }
 
-        if let Some(reserve) = config.their_channel_reserve_sats {
+        if let Some(reserve) = config.their_channel_reserve_proportional_millionths {
             channel_handshake_config.their_channel_reserve_proportional_millionths = reserve;
         }
 
@@ -195,6 +198,7 @@ impl From<OurChannelsConfigs> for ChannelHandshakeConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CounterpartyLimits {
     /// Minimum allowed satoshis when an inbound channel is funded.
     pub min_funding_sats: Option<u64>,

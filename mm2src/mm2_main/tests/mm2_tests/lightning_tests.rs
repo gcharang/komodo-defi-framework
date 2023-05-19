@@ -76,8 +76,8 @@ fn start_lightning_nodes(enable_0_confs: bool) -> (MarketMakerIt, MarketMakerIt,
               // todo: When this was 100% I got "lightning:channelmanager:2525] ERROR Cannot send value that would put our balance under counterparty-announced channel reserve value (1000000)"
               // todo: This seems to be a bug in rust-lightning for mpp, I informed their team and will revert this to 100 if it was fixed https://github.com/lightningdevkit/rust-lightning/issues/1126#issuecomment-1414308252
               "max_inbound_in_flight_htlc_percent": 90,
-              // If this is set to 0 it will default to 1000 sats since it's the min allowed value
-              "their_channel_reserve_sats": 1000,
+              // When set to 0 this will default to 1000 sats since it's the min allowed value.
+              "their_channel_reserve_proportional_millionths": 0,
             },
             "counterparty_channel_config_limits": {
               "outbound_channels_confirmations": 1,
