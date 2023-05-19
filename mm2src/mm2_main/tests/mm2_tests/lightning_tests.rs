@@ -483,7 +483,7 @@ fn test_open_channel() {
     let list_channels_node_1_res: Json = json::from_str(&list_channels_node_1.1).unwrap();
     log!("list_channels_node_1_res {:?}", list_channels_node_1_res);
     assert_eq!(
-        list_channels_node_1_res["result"]["open_channels"][0]["counterparty_node_id"],
+        list_channels_node_1_res["result"]["open_channels"][0]["counterparty_details"]["node_id"],
         node_2_id
     );
     assert_eq!(
@@ -493,6 +493,10 @@ fn test_open_channel() {
     assert_eq!(
         list_channels_node_1_res["result"]["open_channels"][0]["balance_msat"],
         0
+    );
+    assert_eq!(
+        list_channels_node_1_res["result"]["open_channels"][0]["force_close_spend_delay"],
+        144
     );
 
     let list_channels_node_2 = block_on(mm_node_2.rpc(&json!({
@@ -511,7 +515,7 @@ fn test_open_channel() {
     );
     let list_channels_node_2_res: Json = json::from_str(&list_channels_node_2.1).unwrap();
     assert_eq!(
-        list_channels_node_2_res["result"]["open_channels"][0]["counterparty_node_id"],
+        list_channels_node_2_res["result"]["open_channels"][0]["counterparty_details"]["node_id"],
         node_1_id
     );
     assert_eq!(
@@ -521,6 +525,10 @@ fn test_open_channel() {
     assert_eq!(
         list_channels_node_2_res["result"]["open_channels"][0]["balance_msat"],
         20000000
+    );
+    assert_eq!(
+        list_channels_node_2_res["result"]["open_channels"][0]["force_close_spend_delay"],
+        144
     );
 
     block_on(mm_node_1.stop()).unwrap();

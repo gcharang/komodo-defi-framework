@@ -101,6 +101,32 @@ impl<'de> de::Deserialize<'de> for PublicKeyForRPC {
 }
 
 #[derive(Clone, Serialize)]
+pub struct CounterpartyForwardingInfo {
+    /// Base routing fee in millisatoshis.
+    pub fee_base_msat: u32,
+    /// Amount in millionths of a satoshi the channel will charge per transferred satoshi.
+    pub fee_proportional_millionths: u32,
+    /// The minimum difference in cltv_expiry between an ingoing HTLC and its outgoing counterpart for this counterparty.
+    pub cltv_expiry_delta: u16,
+}
+
+#[derive(Clone, Serialize)]
+pub struct CounterpartyDetails {
+    /// The node_id of our counterparty
+    pub node_id: PublicKeyForRPC,
+    /// The value, in satoshis, that must always be held in the channel for our counterparty.
+    /// This value ensures that if our counterparty broadcasts a revoked state, we can punish them by claiming at least this value on chain.
+    /// This value is not included in inbound_capacity_msat as it can never be spent.
+    pub unspendable_punishment_reserve: u64,
+    /// Information on the fees and requirements that the counterparty requires when forwarding payments to us through this channel.
+    pub forwarding_info: Option<CounterpartyForwardingInfo>,
+    /// The smallest value HTLC (in msat) the remote peer will accept, for this channel.
+    pub outbound_htlc_minimum_msat: Option<u64>,
+    /// The largest value HTLC (in msat) the remote peer currently will accept, for this channel.
+    pub outbound_htlc_maximum_msat: Option<u64>,
+}
+
+#[derive(Clone, Serialize)]
 pub struct ChannelDetailsForRPC {
     /// An internal identifier for the channel that doesn't change throughout the channels lifetime.
     pub uuid: Uuid,
@@ -108,7 +134,6 @@ pub struct ChannelDetailsForRPC {
     /// after funding transaction generation, this is the txid of the funding transaction xor the funding transaction output.
     /// Note that this means this value is *not* persistent - it can change once during the lifetime of the channel.
     pub channel_id: H256Json,
-    pub counterparty_node_id: PublicKeyForRPC,
     pub funding_tx: Option<H256Json>,
     pub funding_tx_output_index: Option<u16>,
     pub funding_tx_value_sats: u64,
@@ -117,6 +142,8 @@ pub struct ChannelDetailsForRPC {
     pub balance_msat: u64,
     pub outbound_capacity_msat: u64,
     pub inbound_capacity_msat: u64,
+    /// Details about the channel's counterparty.
+    pub counterparty_details: CounterpartyDetails,
     pub current_confirmations: Option<u32>,
     pub required_confirmations: Option<u32>,
     /// Channel is confirmed onchain, this means that funding_locked messages have been exchanged,
@@ -139,7 +166,6 @@ impl From<ChannelDetails> for ChannelDetailsForRPC {
         ChannelDetailsForRPC {
             uuid: Uuid::from_u128(details.user_channel_id),
             channel_id: details.channel_id.into(),
-            counterparty_node_id: PublicKeyForRPC(details.counterparty.node_id),
             funding_tx: details.funding_txo.map(|tx| h256_json_from_txid(tx.txid)),
             funding_tx_output_index: details.funding_txo.map(|tx| tx.index),
             funding_tx_value_sats: details.channel_value_satoshis,
@@ -147,6 +173,20 @@ impl From<ChannelDetails> for ChannelDetailsForRPC {
             balance_msat: details.balance_msat,
             outbound_capacity_msat: details.outbound_capacity_msat,
             inbound_capacity_msat: details.inbound_capacity_msat,
+            counterparty_details: CounterpartyDetails {
+                node_id: PublicKeyForRPC(details.counterparty.node_id),
+                unspendable_punishment_reserve: details.counterparty.unspendable_punishment_reserve,
+                forwarding_info: details
+                    .counterparty
+                    .forwarding_info
+                    .map(|fwd_info| CounterpartyForwardingInfo {
+                        fee_base_msat: fwd_info.fee_base_msat,
+                        fee_proportional_millionths: fwd_info.fee_proportional_millionths,
+                        cltv_expiry_delta: fwd_info.cltv_expiry_delta,
+                    }),
+                outbound_htlc_minimum_msat: details.counterparty.outbound_htlc_minimum_msat,
+                outbound_htlc_maximum_msat: details.counterparty.outbound_htlc_maximum_msat,
+            },
             current_confirmations: details.confirmations,
             required_confirmations: details.confirmations_required,
             is_ready: details.is_channel_ready,

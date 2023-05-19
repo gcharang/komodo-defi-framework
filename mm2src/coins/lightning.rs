@@ -193,6 +193,7 @@ impl LightningSpecificBalance {
     }
 }
 
+// Todo: Add additional filters from ChannelDetails to this struct if needed.
 #[derive(Deserialize)]
 pub struct OpenChannelsFilter {
     pub channel_id: Option<H256Json>,
@@ -376,7 +377,7 @@ impl LightningCoin {
 
             // Checking if counterparty_node_id is some and not equal
             if filter.counterparty_node_id.is_some()
-                && Some(&channel_details.counterparty_node_id) != filter.counterparty_node_id.as_ref()
+                && Some(&channel_details.counterparty_details.node_id) != filter.counterparty_node_id.as_ref()
             {
                 return false;
             }
