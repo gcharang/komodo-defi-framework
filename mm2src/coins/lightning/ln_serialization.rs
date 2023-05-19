@@ -1,3 +1,4 @@
+use crate::lightning::ln_conf::ChannelOptions;
 use crate::lightning::ln_db::{DBPaymentsFilter, HTLCStatus, PaymentInfo, PaymentType};
 use crate::lightning::ln_platform::h256_json_from_txid;
 use crate::H256Json;
@@ -134,14 +135,32 @@ pub struct ChannelDetailsForRPC {
     /// after funding transaction generation, this is the txid of the funding transaction xor the funding transaction output.
     /// Note that this means this value is *not* persistent - it can change once during the lifetime of the channel.
     pub channel_id: H256Json,
+    /// The position of the funding transaction in the chain.
+    /// None if the funding transaction has not yet been confirmed and the channel has not been fully opened.
+    pub short_channel_id: Option<u64>,
     pub funding_tx: Option<H256Json>,
     pub funding_tx_output_index: Option<u16>,
     pub funding_tx_value_sats: u64,
     /// True if the channel was initiated (and thus funded) by us.
     pub is_outbound: bool,
     pub balance_msat: u64,
+    // Todo: should include these in their own structs
     pub outbound_capacity_msat: u64,
+    /// The available outbound capacity for sending a single HTLC to the remote peer.
+    /// This is similar to outbound_capacity_msat but it may be further restricted by the current state and per-HTLC limit(s).
+    // Todo: can this be used straight in protocol specific balance and in balance checks instead of calculating it?
+    pub next_outbound_htlc_limit_msat: u64,
+    /// The value, in satoshis, that must always be held in the channel for us.
+    /// This value ensures that if we broadcast a revoked state, our counterparty can punish us by claiming at least this value on chain.
+    /// This value is not included in outbound_capacity_msat as it can never be spent.
+    /// This value will be None for outbound channels until the counterparty accepts the channel.
+    pub unspendable_punishment_reserve: Option<u64>,
+    // Todo: should include these in their own structs
     pub inbound_capacity_msat: u64,
+    /// The smallest value HTLC (in msat) we will accept, for this channel.
+    pub inbound_htlc_minimum_msat: Option<u64>,
+    /// The largest value HTLC (in msat) we currently will accept, for this channel.
+    pub inbound_htlc_maximum_msat: Option<u64>,
     /// Details about the channel's counterparty.
     pub counterparty_details: CounterpartyDetails,
     pub current_confirmations: Option<u32>,
@@ -159,6 +178,11 @@ pub struct ChannelDetailsForRPC {
     /// If our counterparty force-closes the channel and broadcasts a commitment transaction
     /// we do not have to wait any time to claim our non-HTLC-encumbered funds.
     pub force_close_spend_delay: Option<u16>,
+    // Todo: Maybe I should rename it to ChannelConfig to be inline with rust-lightning
+    /// Set of configurable parameters that affect channel operation
+    /// Options may change at runtime or based on negotiation with our counterparty.
+    /// To negotiate new channel options from our side, [`lightning::channels::update_channel`] can be used.
+    channel_options: Option<ChannelOptions>,
 }
 
 impl From<ChannelDetails> for ChannelDetailsForRPC {
@@ -166,13 +190,18 @@ impl From<ChannelDetails> for ChannelDetailsForRPC {
         ChannelDetailsForRPC {
             uuid: Uuid::from_u128(details.user_channel_id),
             channel_id: details.channel_id.into(),
+            short_channel_id: details.short_channel_id,
             funding_tx: details.funding_txo.map(|tx| h256_json_from_txid(tx.txid)),
             funding_tx_output_index: details.funding_txo.map(|tx| tx.index),
             funding_tx_value_sats: details.channel_value_satoshis,
             is_outbound: details.is_outbound,
             balance_msat: details.balance_msat,
             outbound_capacity_msat: details.outbound_capacity_msat,
+            next_outbound_htlc_limit_msat: details.next_outbound_htlc_limit_msat,
+            unspendable_punishment_reserve: details.unspendable_punishment_reserve,
             inbound_capacity_msat: details.inbound_capacity_msat,
+            inbound_htlc_minimum_msat: details.inbound_htlc_minimum_msat,
+            inbound_htlc_maximum_msat: details.inbound_htlc_maximum_msat,
             counterparty_details: CounterpartyDetails {
                 node_id: PublicKeyForRPC(details.counterparty.node_id),
                 unspendable_punishment_reserve: details.counterparty.unspendable_punishment_reserve,
@@ -193,6 +222,13 @@ impl From<ChannelDetails> for ChannelDetailsForRPC {
             is_usable: details.is_usable,
             is_public: details.is_public,
             force_close_spend_delay: details.force_close_spend_delay,
+            channel_options: details.config.map(|config| ChannelOptions {
+                proportional_fee_in_millionths_sats: Some(config.forwarding_fee_proportional_millionths),
+                base_fee_msat: Some(config.forwarding_fee_base_msat),
+                cltv_expiry_delta: Some(config.cltv_expiry_delta),
+                max_dust_htlc_exposure_msat: Some(config.max_dust_htlc_exposure_msat),
+                force_close_avoidance_max_fee_sats: Some(config.force_close_avoidance_max_fee_satoshis),
+            }),
         }
     }
 }
