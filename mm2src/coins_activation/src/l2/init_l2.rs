@@ -83,13 +83,14 @@ where
     let (coin_conf_json, protocol_conf): (Json, L2::ProtocolInfo) = coin_conf_with_protocol(&ctx, &ticker)?;
     let coin_conf = L2::coin_conf_from_json(coin_conf_json)?;
 
-    let platform_coin = lp_coinfind_or_err(&ctx, protocol_conf.platform_coin_ticker())
+    let platform_coin_ticker = protocol_conf.platform_coin_ticker().to_string();
+    let platform_coin = lp_coinfind_or_err(&ctx, &platform_coin_ticker)
         .await
-        .mm_err(|_| InitL2Error::PlatformCoinIsNotActivated(ticker.clone()))?;
+        .mm_err(|_| InitL2Error::PlatformCoinIsNotActivated(platform_coin_ticker.clone()))?;
 
     let platform_coin =
         L2::PlatformCoin::try_from_mm_coin(platform_coin).or_mm_err(|| InitL2Error::UnsupportedPlatformCoin {
-            platform_coin_ticker: protocol_conf.platform_coin_ticker().into(),
+            platform_coin_ticker,
             l2_ticker: ticker.clone(),
         })?;
 
