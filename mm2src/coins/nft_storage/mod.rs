@@ -91,7 +91,7 @@ pub trait NftTxHistoryStorageOps {
 
     async fn get_tx_history(
         &self,
-        chain_addr: Vec<(Chain, String)>,
+        chains: Vec<Chain>,
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
@@ -112,6 +112,29 @@ pub trait NftTxHistoryStorageOps {
         chain: &Chain,
         from_block: u32,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
+
+    async fn get_txs_by_token_addr_id(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
+
+    async fn get_tx_by_tx_hash(
+        &self,
+        chain: &Chain,
+        transaction_hash: String,
+    ) -> MmResult<Option<NftTransferHistory>, Self::Error>;
+
+    async fn update_tx_details_json_by_hash(&self, chain: &Chain, tx: NftTransferHistory) -> MmResult<(), Self::Error>;
+
+    async fn update_txs_coll_name_by_token_addr_id(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+        collection_name: Option<String>,
+    ) -> MmResult<(), Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]

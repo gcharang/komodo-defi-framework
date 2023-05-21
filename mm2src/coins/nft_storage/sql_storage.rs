@@ -55,8 +55,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     contract_type TEXT NOT NULL,
     token_address VARCHAR(256) NOT NULL,
     token_id VARCHAR(256) NOT NULL,
-    from_address TEXT NOT NULL,
-    to_address TEXT NOT NULL,
+    status TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
     details_json TEXT
         );",
@@ -116,15 +115,15 @@ fn get_nft_list_builder_preimage(conn: &Connection, chains: Vec<Chain>) -> MmRes
 
 fn get_nft_tx_builder_preimage(
     conn: &Connection,
-    chain_addr: Vec<(Chain, String)>,
+    chains: Vec<Chain>,
     filters: Option<NftTxHistoryFilters>,
 ) -> MmResult<SqlQuery, SqlError> {
-    let union_sql_strings: MmResult<Vec<_>, SqlError> = chain_addr
+    let union_sql_strings: MmResult<Vec<_>, SqlError> = chains
         .into_iter()
-        .map(|(chain, addr)| {
+        .map(|chain| {
             let table_name = nft_tx_history_table_name(&chain);
             validate_table_name(&table_name)?;
-            let sql_builder = nft_history_table_builder_preimage(conn, table_name.as_str(), addr, filters.clone())?;
+            let sql_builder = nft_history_table_builder_preimage(conn, table_name.as_str(), filters.clone())?;
             let sql_string = sql_builder.sql()?.trim_end_matches(';').to_string();
             Ok(sql_string)
         })
@@ -141,21 +140,14 @@ fn get_nft_tx_builder_preimage(
 fn nft_history_table_builder_preimage<'a>(
     conn: &'a Connection,
     table_name: &'a str,
-    owner_add: String,
     filters: Option<NftTxHistoryFilters>,
 ) -> Result<SqlQuery<'a>, SqlError> {
     let mut sql_builder = SqlQuery::select_from(conn, table_name)?;
     if let Some(filters) = filters {
-        let owner_add = format!("'{}'", owner_add);
-        if filters.send && filters.receive {
-            sql_builder
-                .sql_builder()
-                .and_where_eq("from_address", owner_add.clone())
-                .or_where_eq("to_address", owner_add);
-        } else if filters.send {
-            sql_builder.sql_builder().and_where_eq("from_address", owner_add);
-        } else if filters.receive {
-            sql_builder.sql_builder().and_where_eq("to_address", owner_add);
+        if filters.send && !filters.receive {
+            sql_builder.sql_builder().and_where_eq("status", "Send");
+        } else if filters.receive && !filters.send {
+            sql_builder.sql_builder().and_where_eq("status", "Receive");
         }
 
         if filters.from_date.is_some() && filters.to_date.is_some() {
@@ -228,9 +220,9 @@ fn insert_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let sql = format!(
         "INSERT OR IGNORE INTO {} (
             transaction_hash, chain, block_number, block_timestamp, contract_type,
-            token_address, token_id, from_address, to_address, amount, details_json
+            token_address, token_id, status, amount, details_json
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
         );",
         table_name
     );
@@ -243,7 +235,7 @@ fn insert_chain_into_scanned_blocks_sql() -> MmResult<String, SqlError> {
     Ok(format!("INSERT OR IGNORE INTO {} (chain) VALUES (?1);", table_name))
 }
 
-fn update_details_json_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
+fn update_details_json_by_token_add_id_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
 where
     F: FnOnce(&Chain) -> String,
 {
@@ -252,6 +244,17 @@ where
     validate_table_name(&table_name)?;
     let sql = format!(
         "UPDATE {} SET details_json = ?1 WHERE token_address = ?2 AND token_id = ?3;",
+        table_name
+    );
+    Ok(sql)
+}
+
+fn update_details_json_by_tx_hash_sql(chain: &Chain) -> MmResult<String, SqlError> {
+    let table_name = nft_tx_history_table_name(chain);
+
+    validate_table_name(&table_name)?;
+    let sql = format!(
+        "UPDATE {} SET details_json = ?1 WHERE transaction_hash = ?2;",
         table_name
     );
     Ok(sql)
@@ -364,6 +367,31 @@ fn get_txs_from_block_builder<'a>(
         .field("details_json");
     drop_mutability!(sql_builder);
     Ok(sql_builder)
+}
+
+fn get_txs_by_token_addr_id_builder<'a>(
+    conn: &'a Connection,
+    chain: &'a Chain,
+    token_address: String,
+    token_id: String,
+) -> MmResult<SqlQuery<'a>, SqlError> {
+    let table_name = nft_tx_history_table_name(chain);
+    validate_table_name(table_name.as_str())?;
+    let mut sql_builder = SqlQuery::select_from(conn, table_name.as_str())?;
+    sql_builder
+        .sql_builder()
+        .and_where_eq("token_address", format!("'{}'", token_address))
+        .and_where_eq("token_id", format!("'{}'", token_id))
+        .field("details_json");
+    drop_mutability!(sql_builder);
+    Ok(sql_builder)
+}
+
+fn get_tx_by_tx_hash_sql(chain: &Chain) -> MmResult<String, SqlError> {
+    let table_name = nft_tx_history_table_name(chain);
+    validate_table_name(&table_name)?;
+    let sql = format!("SELECT details_json FROM {} WHERE transaction_hash=?1", table_name);
+    Ok(sql)
 }
 
 #[async_trait]
@@ -534,13 +562,13 @@ impl NftListStorageOps for SqliteNftStorage {
     }
 
     async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
-        let sql = update_details_json_sql(chain, nft_list_table_name)?;
+        let sql = update_details_json_by_token_add_id_sql(chain, nft_list_table_name)?;
         let nft_json = json::to_string(&nft).expect("serialization should not fail");
         let selfi = self.clone();
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
-            let params = [Some(nft_json), Some(nft.token_address), Some(nft.token_id.to_string())];
+            let params = [nft_json, nft.token_address, nft.token_id.to_string()];
             sql_transaction.execute(&sql, &params)?;
             sql_transaction.commit()?;
             Ok(())
@@ -648,7 +676,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
 
     async fn get_tx_history(
         &self,
-        chain_addr: Vec<(Chain, String)>,
+        chains: Vec<Chain>,
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
@@ -657,7 +685,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            let mut sql_builder = get_nft_tx_builder_preimage(&conn, chain_addr, filters)?;
+            let mut sql_builder = get_nft_tx_builder_preimage(&conn, chains, filters)?;
             let mut total_count_builder = sql_builder.clone();
             total_count_builder.count_all()?;
             let total: isize = total_count_builder
@@ -705,8 +733,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.contract_type.to_string()),
                     Some(tx.token_address),
                     Some(tx.token_id.to_string()),
-                    Some(tx.from_address),
-                    Some(tx.to_address),
+                    Some(tx.status.to_string()),
                     Some(tx.amount.to_string()),
                     Some(tx_json),
                 ];
@@ -742,5 +769,69 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
             Ok(txs)
         })
         .await
+    }
+
+    async fn get_txs_by_token_addr_id(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        let selfi = self.clone();
+        let chain = *chain;
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            let sql_builder = get_txs_by_token_addr_id_builder(&conn, &chain, token_address, token_id.to_string())?;
+            let txs = sql_builder.query(tx_history_from_row)?;
+            Ok(txs)
+        })
+        .await
+    }
+
+    async fn get_tx_by_tx_hash(
+        &self,
+        chain: &Chain,
+        transaction_hash: String,
+    ) -> MmResult<Option<NftTransferHistory>, Self::Error> {
+        let sql = get_tx_by_tx_hash_sql(chain)?;
+        let selfi = self.clone();
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            query_single_row(&conn, &sql, [transaction_hash], tx_history_from_row).map_to_mm(SqlError::from)
+        })
+        .await
+    }
+
+    async fn update_tx_details_json_by_hash(&self, chain: &Chain, tx: NftTransferHistory) -> MmResult<(), Self::Error> {
+        let sql = update_details_json_by_tx_hash_sql(chain)?;
+        let tx_json = json::to_string(&tx).expect("serialization should not fail");
+        let params = [tx_json, tx.transaction_hash];
+        let selfi = self.clone();
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+
+            sql_transaction.execute(&sql, &params)?;
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn update_txs_coll_name_by_token_addr_id(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+        collection_name: Option<String>,
+    ) -> MmResult<(), Self::Error> {
+        let selfi = self.clone();
+        let txs = selfi.get_txs_by_token_addr_id(chain, token_address, token_id).await?;
+        for mut tx in txs.into_iter() {
+            tx.collection_name = collection_name.clone();
+            drop_mutability!(tx);
+            selfi.update_tx_details_json_by_hash(chain, tx).await?;
+        }
+        Ok(())
     }
 }

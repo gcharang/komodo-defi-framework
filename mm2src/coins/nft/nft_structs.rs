@@ -1,9 +1,10 @@
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
-use ethereum_types::Address;
 use common::ten;
+use ethereum_types::Address;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
+use serde_json::Value as Json;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
@@ -12,7 +13,6 @@ use url::Url;
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
-    pub(crate) url: Url,
     #[serde(default)]
     pub(crate) max: bool,
     #[serde(default = "ten")]
@@ -92,7 +92,7 @@ pub(crate) enum ParseContractTypeError {
     UnsupportedContractType,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub(crate) enum ContractType {
     Erc1155,
@@ -121,7 +121,17 @@ impl fmt::Display for ContractType {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub(crate) struct UriMeta {
+    image: Option<String>,
+    #[serde(rename(deserialize = "name"))]
+    token_name: Option<String>,
+    description: Option<String>,
+    attributes: Option<Json>,
+    animation_url: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Nft {
     pub(crate) chain: Chain,
     pub(crate) token_address: String,
@@ -132,7 +142,7 @@ pub struct Nft {
     pub(crate) block_number_minted: u64,
     pub(crate) block_number: u64,
     pub(crate) contract_type: Option<ContractType>,
-    pub(crate) name: Option<String>,
+    pub(crate) collection_name: Option<String>,
     pub(crate) symbol: Option<String>,
     pub(crate) token_uri: Option<String>,
     pub(crate) metadata: Option<String>,
@@ -140,6 +150,7 @@ pub struct Nft {
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
     pub(crate) possible_spam: Option<bool>,
+    pub(crate) uri_meta: UriMeta,
 }
 
 /// This structure is for deserializing NFT json to struct.
@@ -217,7 +228,6 @@ pub struct WithdrawErc721 {
 
 #[derive(Clone, Deserialize)]
 pub struct WithdrawNftReq {
-    pub(crate) url: Url,
     pub(crate) withdraw_type: WithdrawNftType,
 }
 
@@ -259,13 +269,45 @@ pub struct TransactionNftDetails {
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
-    pub(crate) url: Url,
     pub(crate) filters: Option<NftTxHistoryFilters>,
     #[serde(default)]
     pub(crate) max: bool,
     #[serde(default = "ten")]
     pub(crate) limit: usize,
     pub(crate) page_number: Option<NonZeroUsize>,
+}
+
+#[derive(Debug, Display)]
+pub(crate) enum ParseTransferStatusError {
+    UnsupportedTransferStatus,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub(crate) enum TransferStatus {
+    Receive,
+    Send,
+}
+
+impl FromStr for TransferStatus {
+    type Err = ParseTransferStatusError;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<TransferStatus, ParseTransferStatusError> {
+        match s {
+            "Receive" => Ok(TransferStatus::Receive),
+            "Send" => Ok(TransferStatus::Send),
+            _ => Err(ParseTransferStatusError::UnsupportedTransferStatus),
+        }
+    }
+}
+
+impl fmt::Display for TransferStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TransferStatus::Receive => write!(f, "Receive"),
+            TransferStatus::Send => write!(f, "Send"),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -283,8 +325,10 @@ pub struct NftTransferHistory {
     pub(crate) transaction_type: String,
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
+    pub(crate) collection_name: Option<String>,
     pub(crate) from_address: String,
     pub(crate) to_address: String,
+    pub(crate) status: TransferStatus,
     pub(crate) amount: BigDecimal,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
@@ -333,4 +377,5 @@ pub struct NftTxHistoryFilters {
 #[derive(Debug, Deserialize)]
 pub struct UpdateNftReq {
     pub(crate) chains: Vec<Chain>,
+    pub(crate) url: Url,
 }

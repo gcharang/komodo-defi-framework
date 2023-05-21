@@ -1,4 +1,5 @@
 use crate::eth::GetEthAddressError;
+use crate::nft::GetInfoFromUriError;
 use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 use crate::GetMyAddressError;
 use common::HttpStatusCode;
@@ -35,11 +36,6 @@ pub enum GetNftInfoError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
-    GetMyAddressError(GetMyAddressError),
-}
-
-impl From<GetMyAddressError> for GetNftInfoError {
-    fn from(e: GetMyAddressError) -> Self { GetNftInfoError::GetMyAddressError(e) }
 }
 
 impl From<SlurpError> for GetNftInfoError {
@@ -85,6 +81,17 @@ impl<T: NftStorageError> From<T> for GetNftInfoError {
     }
 }
 
+impl From<GetInfoFromUriError> for GetNftInfoError {
+    fn from(e: GetInfoFromUriError) -> Self {
+        match e {
+            GetInfoFromUriError::InvalidRequest(e) => GetNftInfoError::InvalidRequest(e),
+            GetInfoFromUriError::Transport(e) => GetNftInfoError::Transport(e),
+            GetInfoFromUriError::InvalidResponse(e) => GetNftInfoError::InvalidResponse(e),
+            GetInfoFromUriError::Internal(e) => GetNftInfoError::Internal(e),
+        }
+    }
+}
+
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -94,8 +101,7 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
-            | GetNftInfoError::DbError(_)
-            | GetNftInfoError::GetMyAddressError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

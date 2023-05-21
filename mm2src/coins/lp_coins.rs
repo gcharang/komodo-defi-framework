@@ -100,7 +100,6 @@ cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked, SharedDb};
     use tx_history_storage::wasm::{clear_tx_history, load_tx_history, save_tx_history, TxHistoryDb};
     pub type TxHistoryDbLocked<'a> = DbLocked<'a, TxHistoryDb>;
-    #[cfg(feature = "enable-nft-integration")]
     use nft_storage::wasm_storage::NftCacheIDB;
 }
 
@@ -289,7 +288,8 @@ use utxo::{BlockchainNetwork, GenerateTxError, UtxoFeeDetails, UtxoTx};
 pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 
-#[cfg(feature = "enable-nft-integration")] pub mod nft_storage;
+pub mod nft_storage;
+
 #[cfg(not(target_arch = "wasm32"))] pub mod z_coin;
 
 #[cfg(not(target_arch = "wasm32"))] use z_coin::ZCoin;
@@ -2552,7 +2552,6 @@ pub struct CoinsContext {
     tx_history_db: SharedDb<TxHistoryDb>,
     #[cfg(target_arch = "wasm32")]
     hd_wallet_db: SharedDb<HDWalletDb>,
-    #[cfg(feature = "enable-nft-integration")]
     #[cfg(target_arch = "wasm32")]
     pub nft_cache_db: SharedDb<NftCacheIDB>,
 }
@@ -2579,7 +2578,6 @@ impl CoinsContext {
                 tx_history_db: ConstructibleDb::new(ctx).into_shared(),
                 #[cfg(target_arch = "wasm32")]
                 hd_wallet_db: ConstructibleDb::new_shared_db(ctx).into_shared(),
-                #[cfg(feature = "enable-nft-integration")]
                 #[cfg(target_arch = "wasm32")]
                 nft_cache_db: ConstructibleDb::new(ctx).into_shared(),
             })
