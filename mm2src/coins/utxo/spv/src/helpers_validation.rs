@@ -385,9 +385,9 @@ pub async fn validate_headers(
                 compare_block_bits(
                     algorithm,
                     should_check_difficulty,
-                    &current_block_bits,
+                    &last_validated_bits,
                     &next_block_bits,
-                    previous_height,
+                    last_validated_height,
                 )?;
             }
         }
