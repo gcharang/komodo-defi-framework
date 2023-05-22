@@ -139,7 +139,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn buy(&self, order: SellBuyRequest) -> Result<(), ()> {
         info!(
-            "Buying: {} {} for: {} {} at the price of {} {} per {}",
+            "Buying: {} {} with: {} {} at the price of {} {} per {}",
             order.volume,
             order.base,
             order.volume.clone() * order.price.clone(),

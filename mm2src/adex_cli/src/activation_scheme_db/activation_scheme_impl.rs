@@ -8,7 +8,6 @@ use crate::helpers::read_json_file;
 pub(crate) trait ActivationScheme {
     type ActivationCommand;
     fn get_activation_method(&self, coin: &str) -> Option<Self::ActivationCommand>;
-    fn get_coins_list(&self) -> Vec<String>;
 }
 
 struct ActivationSchemeJson {
@@ -72,8 +71,6 @@ impl ActivationScheme for ActivationSchemeJson {
         }
         Some(copy)
     }
-
-    fn get_coins_list(&self) -> Vec<String> { vec!["".to_string()] }
 }
 
 pub(crate) fn get_activation_scheme() -> Box<dyn ActivationScheme<ActivationCommand = Json>> {
