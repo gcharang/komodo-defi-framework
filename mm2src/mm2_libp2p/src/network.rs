@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::RelayAddress;
 use libp2p::PeerId;
 

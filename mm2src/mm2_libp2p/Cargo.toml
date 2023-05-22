@@ -9,10 +9,10 @@ doctest = false
 
 [dependencies]
 async-trait = "0.1"
-atomicdex-gossipsub = { path = "../gossipsub" }
+libp2p-gossipsub = { git = "https://github.com/libp2p/rust-libp2p.git", tag ="v0.45.1" }
 common = { path = "../common" }
 derive_more = "0.99"
-libp2p-floodsub = { path = "../floodsub" }
+libp2p-floodsub = { git = "https://github.com/libp2p/rust-libp2p.git", tag ="v0.45.1", default-features = false }
 futures = { version = "0.3.1", package = "futures", features = ["compat", "async-await"] }
 futures-rustls = { version = "0.21.1" }
 hex = "0.4.2"

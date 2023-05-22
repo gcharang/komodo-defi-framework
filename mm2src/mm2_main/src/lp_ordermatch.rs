@@ -509,7 +509,7 @@ fn remove_pubkey_pair_orders(orderbook: &mut Orderbook, pubkey: &str, alb_pair: 
 
 pub async fn handle_orderbook_msg(
     ctx: MmArc,
-    topics: &[TopicHash],
+    topic: &TopicHash,
     from_peer: String,
     msg: &[u8],
     i_am_relay: bool,
@@ -520,17 +520,15 @@ pub async fn handle_orderbook_msg(
 
     let mut orderbook_pairs = vec![];
 
-    for topic in topics {
-        let mut split = topic.as_str().split(TOPIC_SEPARATOR);
-        match (split.next(), split.next()) {
-            (Some(ORDERBOOK_PREFIX), Some(pair)) => {
-                orderbook_pairs.push(pair.to_string());
-            },
-            _ => {
-                return MmError::err(OrderbookP2PHandlerError::InvalidTopic(topic.as_str().to_owned()));
-            },
-        };
-    }
+    let mut split = topic.as_str().split(TOPIC_SEPARATOR);
+    match (split.next(), split.next()) {
+        (Some(ORDERBOOK_PREFIX), Some(pair)) => {
+            orderbook_pairs.push(pair.to_string());
+        },
+        _ => {
+            return MmError::err(OrderbookP2PHandlerError::InvalidTopic(topic.as_str().to_owned()));
+        },
+    };
 
     drop_mutability!(orderbook_pairs);
 

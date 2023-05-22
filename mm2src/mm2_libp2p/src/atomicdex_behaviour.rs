@@ -1,39 +1,35 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use crate::{adex_ping::AdexPing,
-            network::{get_all_network_seednodes, NETID_7777},
+            network::NETID_7777,
             peers_exchange::{PeerAddresses, PeersExchange},
-            request_response::{build_request_response_behaviour, PeerRequest, PeerResponse, RequestResponseBehaviour,
-                               RequestResponseBehaviourEvent, RequestResponseSender},
+            request_response::{PeerRequest, PeerResponse, RequestResponseBehaviour, RequestResponseBehaviourEvent,
+                               RequestResponseSender},
             runtime::SwarmRuntime,
             NetworkInfo, NetworkPorts, RelayAddress, RelayAddressError};
-use atomicdex_gossipsub::{Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, MessageId, Topic,
-                          TopicHash};
+use libp2p_gossipsub::{Gossipsub, GossipsubEvent, GossipsubMessage, MessageId, TopicHash};
 use common::executor::SpawnFuture;
 use derive_more::Display;
-use futures::{channel::{mpsc::{channel, Receiver, Sender},
+use futures::{channel::{mpsc::{Receiver, Sender},
                         oneshot},
-              future::{join_all, poll_fn},
-              Future, FutureExt, SinkExt, StreamExt};
+              future::join_all,
+              Future, SinkExt};
 use futures_rustls::rustls;
 use libp2p::core::transport::Boxed as BoxedTransport;
-use libp2p::{core::{ConnectedPoint, Multiaddr, Transport},
+use libp2p::{core::{Multiaddr, Transport},
              identity,
              multiaddr::Protocol,
              noise,
              request_response::ResponseChannel,
-             swarm::{NetworkBehaviourEventProcess, Swarm},
-             NetworkBehaviour, PeerId};
+             swarm::NetworkBehaviourEventProcess,
+             PeerId};
+use libp2p::{NetworkBehaviour, Swarm};
 use libp2p_floodsub::{Floodsub, FloodsubEvent, Topic as FloodsubTopic};
-use log::{debug, error, info};
-use rand::seq::SliceRandom;
+use log::{debug, error};
 use rand::Rng;
-use std::{collections::hash_map::{DefaultHasher, HashMap},
-          hash::{Hash, Hasher},
-          iter,
-          net::IpAddr,
-          task::{Context, Poll},
-          time::Duration};
+use std::{collections::hash_map::HashMap, net::IpAddr, time::Duration};
 use void::Void;
-use wasm_timer::{Instant, Interval};
 
 pub type AdexCmdTx = Sender<AdexBehaviourCmd>;
 pub type AdexEventRx = Receiver<AdexBehaviourEvent>;
@@ -224,11 +220,14 @@ pub enum AdexBehaviourEvent {
 impl From<GossipsubEvent> for AdexBehaviourEvent {
     fn from(event: GossipsubEvent) -> Self {
         match event {
-            GossipsubEvent::Message(peer_id, message_id, gossipsub_message) => {
-                AdexBehaviourEvent::Message(peer_id, message_id, gossipsub_message)
-            },
+            GossipsubEvent::Message {
+                propagation_source,
+                message_id,
+                message,
+            } => AdexBehaviourEvent::Message(propagation_source, message_id, message),
             GossipsubEvent::Subscribed { peer_id, topic } => AdexBehaviourEvent::Subscribed { peer_id, topic },
             GossipsubEvent::Unsubscribed { peer_id, topic } => AdexBehaviourEvent::Unsubscribed { peer_id, topic },
+            GossipsubEvent::GossipsubNotSupported { peer_id } => todo!(),
         }
     }
 }
@@ -262,155 +261,168 @@ impl AtomicDexBehaviour {
     fn spawn(&self, fut: impl Future<Output = ()> + Send + 'static) { self.runtime.spawn(fut) }
 
     fn process_cmd(&mut self, cmd: AdexBehaviourCmd) {
-        match cmd {
-            AdexBehaviourCmd::Subscribe { topic } => {
-                let topic = Topic::new(topic);
-                self.gossipsub.subscribe(topic);
-            },
-            AdexBehaviourCmd::PublishMsg { topics, msg } => {
-                self.gossipsub.publish_many(topics.into_iter().map(Topic::new), msg);
-            },
-            AdexBehaviourCmd::PublishMsgFrom { topics, msg, from } => {
-                self.gossipsub
-                    .publish_many_from(topics.into_iter().map(Topic::new), msg, from);
-            },
-            AdexBehaviourCmd::RequestAnyRelay { req, response_tx } => {
-                let relays = self.gossipsub.get_relay_mesh();
-                // spawn the `request_any_peer` future
-                let future = request_any_peer(relays, req, self.request_response.sender(), response_tx);
-                self.spawn(future);
-            },
-            AdexBehaviourCmd::RequestPeers {
-                req,
-                peers,
-                response_tx,
-            } => {
-                let peers = peers
-                    .into_iter()
-                    .filter_map(|peer| match peer.parse() {
-                        Ok(p) => Some(p),
-                        Err(e) => {
-                            error!("Error on parse peer id {:?}: {:?}", peer, e);
-                            None
-                        },
-                    })
-                    .collect();
-                let future = request_peers(peers, req, self.request_response.sender(), response_tx);
-                self.spawn(future);
-            },
-            AdexBehaviourCmd::RequestRelays { req, response_tx } => {
-                let relays = self.gossipsub.get_relay_mesh();
-                // spawn the `request_peers` future
-                let future = request_peers(relays, req, self.request_response.sender(), response_tx);
-                self.spawn(future);
-            },
-            AdexBehaviourCmd::SendResponse { res, response_channel } => {
-                if let Err(response) = self.request_response.send_response(response_channel.into(), res.into()) {
-                    error!("Error sending response: {:?}", response);
-                }
-            },
-            AdexBehaviourCmd::GetPeersInfo { result_tx } => {
-                let result = self
-                    .gossipsub
-                    .get_peers_connections()
-                    .into_iter()
-                    .map(|(peer_id, connected_points)| {
-                        let peer_id = peer_id.to_base58();
-                        let connected_points = connected_points
-                            .into_iter()
-                            .map(|(_conn_id, point)| match point {
-                                ConnectedPoint::Dialer { address, .. } => address.to_string(),
-                                ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.to_string(),
-                            })
-                            .collect();
-                        (peer_id, connected_points)
-                    })
-                    .collect();
-                if result_tx.send(result).is_err() {
-                    debug!("Result rx is dropped");
-                }
-            },
-            AdexBehaviourCmd::GetGossipMesh { result_tx } => {
-                let result = self
-                    .gossipsub
-                    .get_mesh()
-                    .iter()
-                    .map(|(topic, peers)| {
-                        let topic = topic.to_string();
-                        let peers = peers.iter().map(|peer| peer.to_string()).collect();
-                        (topic, peers)
-                    })
-                    .collect();
-                if result_tx.send(result).is_err() {
-                    debug!("Result rx is dropped");
-                }
-            },
-            AdexBehaviourCmd::GetGossipPeerTopics { result_tx } => {
-                let result = self
-                    .gossipsub
-                    .get_all_peer_topics()
-                    .iter()
-                    .map(|(peer, topics)| {
-                        let peer = peer.to_string();
-                        let topics = topics.iter().map(|topic| topic.to_string()).collect();
-                        (peer, topics)
-                    })
-                    .collect();
-                if result_tx.send(result).is_err() {
-                    error!("Result rx is dropped");
-                }
-            },
-            AdexBehaviourCmd::GetGossipTopicPeers { result_tx } => {
-                let result = self
-                    .gossipsub
-                    .get_all_topic_peers()
-                    .iter()
-                    .map(|(topic, peers)| {
-                        let topic = topic.to_string();
-                        let peers = peers.iter().map(|peer| peer.to_string()).collect();
-                        (topic, peers)
-                    })
-                    .collect();
-                if result_tx.send(result).is_err() {
-                    error!("Result rx is dropped");
-                }
-            },
-            AdexBehaviourCmd::GetRelayMesh { result_tx } => {
-                let result = self
-                    .gossipsub
-                    .get_relay_mesh()
-                    .into_iter()
-                    .map(|peer| peer.to_string())
-                    .collect();
-                if result_tx.send(result).is_err() {
-                    error!("Result rx is dropped");
-                }
-            },
-            AdexBehaviourCmd::AddReservedPeer { peer, addresses } => {
-                self.peers_exchange
-                    .add_peer_addresses_to_reserved_peers(&peer, addresses);
-            },
-            AdexBehaviourCmd::PropagateMessage {
-                message_id,
-                propagation_source,
-            } => {
-                self.gossipsub.propagate_message(&message_id, &propagation_source);
-            },
-        }
+        // match cmd {
+        //     AdexBehaviourCmd::Subscribe { topic } => {
+        //         let topic = Topic::new(topic);
+        //         self.gossipsub.subscribe(&topic);
+        //     },
+        //     AdexBehaviourCmd::PublishMsg { topics, msg } => {
+        //         self.gossipsub.publish_many(topics.into_iter().map(Topic::new), msg);
+        //     },
+        //     AdexBehaviourCmd::PublishMsgFrom { topics, msg, from } => {
+        //         self.gossipsub
+        //             .publish_many_from(topics.into_iter().map(Topic::new), msg, from);
+        //     },
+        //     AdexBehaviourCmd::RequestAnyRelay { req, response_tx } => {
+        //         let relays = self.gossipsub.get_relay_mesh();
+        //         // spawn the `request_any_peer` future
+        //         let future = request_any_peer(relays, req, self.request_response.sender(), response_tx);
+        //         self.spawn(future);
+        //     },
+        //     AdexBehaviourCmd::RequestPeers {
+        //         req,
+        //         peers,
+        //         response_tx,
+        //     } => {
+        //         let peers = peers
+        //             .into_iter()
+        //             .filter_map(|peer| match peer.parse() {
+        //                 Ok(p) => Some(p),
+        //                 Err(e) => {
+        //                     error!("Error on parse peer id {:?}: {:?}", peer, e);
+        //                     None
+        //                 },
+        //             })
+        //             .collect();
+        //         let future = request_peers(peers, req, self.request_response.sender(), response_tx);
+        //         self.spawn(future);
+        //     },
+        //     AdexBehaviourCmd::RequestRelays { req, response_tx } => {
+        //         let relays = self.gossipsub.get_relay_mesh();
+        //         // spawn the `request_peers` future
+        //         let future = request_peers(relays, req, self.request_response.sender(), response_tx);
+        //         self.spawn(future);
+        //     },
+        //     AdexBehaviourCmd::SendResponse { res, response_channel } => {
+        //         if let Err(response) = self.request_response.send_response(response_channel.into(), res.into()) {
+        //             error!("Error sending response: {:?}", response);
+        //         }
+        //     },
+        //     AdexBehaviourCmd::GetPeersInfo { result_tx } => {
+        //         let result = self
+        //             .gossipsub
+        //             .get_peers_connections()
+        //             .into_iter()
+        //             .map(|(peer_id, connected_points)| {
+        //                 let peer_id = peer_id.to_base58();
+        //                 let connected_points = connected_points
+        //                     .into_iter()
+        //                     .map(|(_conn_id, point)| match point {
+        //                         ConnectedPoint::Dialer { address, .. } => address.to_string(),
+        //                         ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.to_string(),
+        //                     })
+        //                     .collect();
+        //                 (peer_id, connected_points)
+        //             })
+        //             .collect();
+        //         if result_tx.send(result).is_err() {
+        //             debug!("Result rx is dropped");
+        //         }
+        //     },
+        //     AdexBehaviourCmd::GetGossipMesh { result_tx } => {
+        //         let result = self
+        //             .gossipsub
+        //             .get_mesh()
+        //             .iter()
+        //             .map(|(topic, peers)| {
+        //                 let topic = topic.to_string();
+        //                 let peers = peers.iter().map(|peer| peer.to_string()).collect();
+        //                 (topic, peers)
+        //             })
+        //             .collect();
+        //         if result_tx.send(result).is_err() {
+        //             debug!("Result rx is dropped");
+        //         }
+        //     },
+        //     AdexBehaviourCmd::GetGossipPeerTopics { result_tx } => {
+        //         let result = self
+        //             .gossipsub
+        //             .get_all_peer_topics()
+        //             .iter()
+        //             .map(|(peer, topics)| {
+        //                 let peer = peer.to_string();
+        //                 let topics = topics.iter().map(|topic| topic.to_string()).collect();
+        //                 (peer, topics)
+        //             })
+        //             .collect();
+        //         if result_tx.send(result).is_err() {
+        //             error!("Result rx is dropped");
+        //         }
+        //     },
+        //     AdexBehaviourCmd::GetGossipTopicPeers { result_tx } => {
+        //         let result = self
+        //             .gossipsub
+        //             .get_all_topic_peers()
+        //             .iter()
+        //             .map(|(topic, peers)| {
+        //                 let topic = topic.to_string();
+        //                 let peers = peers.iter().map(|peer| peer.to_string()).collect();
+        //                 (topic, peers)
+        //             })
+        //             .collect();
+        //         if result_tx.send(result).is_err() {
+        //             error!("Result rx is dropped");
+        //         }
+        //     },
+        //     AdexBehaviourCmd::GetRelayMesh { result_tx } => {
+        //         let result = self
+        //             .gossipsub
+        //             .get_relay_mesh()
+        //             .into_iter()
+        //             .map(|peer| peer.to_string())
+        //             .collect();
+        //         if result_tx.send(result).is_err() {
+        //             error!("Result rx is dropped");
+        //         }
+        //     },
+        //     AdexBehaviourCmd::AddReservedPeer { peer, addresses } => {
+        //         self.peers_exchange
+        //             .add_peer_addresses_to_reserved_peers(&peer, addresses);
+        //     },
+        //     AdexBehaviourCmd::PropagateMessage {
+        //         message_id,
+        //         propagation_source,
+        //     } => {
+        //         self.gossipsub.propagate_message(&message_id, &propagation_source);
+        //     },
+        // }
+        todo!()
     }
 
-    fn announce_listeners(&mut self, listeners: PeerAddresses) {
-        let serialized = rmp_serde::to_vec(&listeners).expect("PeerAddresses serialization should never fail");
-        self.floodsub.publish(FloodsubTopic::new(PEERS_TOPIC), serialized);
+    // fn announce_listeners(&mut self, listeners: PeerAddresses) {
+    //     let serialized = rmp_serde::to_vec(&listeners).expect("PeerAddresses serialization should never fail");
+    //     self.floodsub.publish(FloodsubTopic::new(PEERS_TOPIC), serialized);
+    // }
+
+    pub fn connected_relays_len(&self) -> usize {
+        //self.gossipsub.connected_relays_len()
+        todo!()
     }
 
-    pub fn connected_relays_len(&self) -> usize { self.gossipsub.connected_relays_len() }
+    pub fn relay_mesh_len(&self) -> usize {
+        // self.gossipsub.relay_mesh_len()
+        todo!()
+    }
 
-    pub fn relay_mesh_len(&self) -> usize { self.gossipsub.relay_mesh_len() }
+    pub fn received_messages_in_period(&self) -> (Duration, usize) {
+        // self.gossipsub.get_received_messages_in_period()
+        todo!()
+    }
 
-    pub fn received_messages_in_period(&self) -> (Duration, usize) { self.gossipsub.get_received_messages_in_period() }
-
-    pub fn connected_peers_len(&self) -> usize { self.gossipsub.get_num_peers() }
+    pub fn connected_peers_len(&self) -> usize {
+        // self.gossipsub.get_num_peers()
+        todo!()
+    }
 }
 
 impl NetworkBehaviourEventProcess<GossipsubEvent> for AtomicDexBehaviour {
@@ -469,69 +481,70 @@ impl NetworkBehaviourEventProcess<RequestResponseBehaviourEvent> for AtomicDexBe
 type AtomicDexSwarm = Swarm<AtomicDexBehaviour>;
 
 fn maintain_connection_to_relays(swarm: &mut AtomicDexSwarm, bootstrap_addresses: &[Multiaddr]) {
-    let behaviour = swarm.behaviour();
-    let connected_relays = behaviour.gossipsub.connected_relays();
-    let mesh_n_low = behaviour.gossipsub.get_config().mesh_n_low;
-    let mesh_n = behaviour.gossipsub.get_config().mesh_n;
-    // allow 2 * mesh_n_high connections to other nodes
-    let max_n = behaviour.gossipsub.get_config().mesh_n_high * 2;
+    // let behaviour = swarm.behaviour();
+    // let connected_relays = behaviour.gossipsub.connected_relays();
+    // let mesh_n_low = behaviour.gossipsub.get_config().mesh_n_low;
+    // let mesh_n = behaviour.gossipsub.get_config().mesh_n;
+    // // allow 2 * mesh_n_high connections to other nodes
+    // let max_n = behaviour.gossipsub.get_config().mesh_n_high * 2;
 
-    let mut rng = rand::thread_rng();
-    if connected_relays.len() < mesh_n_low {
-        let to_connect_num = mesh_n - connected_relays.len();
-        let to_connect = swarm
-            .behaviour_mut()
-            .peers_exchange
-            .get_random_peers(to_connect_num, |peer| !connected_relays.contains(peer));
+    // let mut rng = rand::thread_rng();
+    // if connected_relays.len() < mesh_n_low {
+    //     let to_connect_num = mesh_n - connected_relays.len();
+    //     let to_connect = swarm
+    //         .behaviour_mut()
+    //         .peers_exchange
+    //         .get_random_peers(to_connect_num, |peer| !connected_relays.contains(peer));
 
-        // choose some random bootstrap addresses to connect if peers exchange returned not enough peers
-        if to_connect.len() < to_connect_num {
-            let connect_bootstrap_num = to_connect_num - to_connect.len();
-            for addr in bootstrap_addresses
-                .iter()
-                .filter(|addr| !swarm.behaviour().gossipsub.is_connected_to_addr(addr))
-                .collect::<Vec<_>>()
-                .choose_multiple(&mut rng, connect_bootstrap_num)
-            {
-                if let Err(e) = libp2p::Swarm::dial(swarm, (*addr).clone()) {
-                    error!("Bootstrap addr {} dial error {}", addr, e);
-                }
-            }
-        }
-        for (peer, addresses) in to_connect {
-            for addr in addresses {
-                if swarm.behaviour().gossipsub.is_connected_to_addr(&addr) {
-                    continue;
-                }
-                if let Err(e) = libp2p::Swarm::dial(swarm, addr.clone()) {
-                    error!("Peer {} address {} dial error {}", peer, addr, e);
-                }
-            }
-        }
-    }
+    //     // choose some random bootstrap addresses to connect if peers exchange returned not enough peers
+    //     if to_connect.len() < to_connect_num {
+    //         let connect_bootstrap_num = to_connect_num - to_connect.len();
+    //         for addr in bootstrap_addresses
+    //             .iter()
+    //             .filter(|addr| !swarm.behaviour().gossipsub.is_connected_to_addr(addr))
+    //             .collect::<Vec<_>>()
+    //             .choose_multiple(&mut rng, connect_bootstrap_num)
+    //         {
+    //             if let Err(e) = libp2p::Swarm::dial(swarm, (*addr).clone()) {
+    //                 error!("Bootstrap addr {} dial error {}", addr, e);
+    //             }
+    //         }
+    //     }
+    //     for (peer, addresses) in to_connect {
+    //         for addr in addresses {
+    //             if swarm.behaviour().gossipsub.is_connected_to_addr(&addr) {
+    //                 continue;
+    //             }
+    //             if let Err(e) = libp2p::Swarm::dial(swarm, addr.clone()) {
+    //                 error!("Peer {} address {} dial error {}", peer, addr, e);
+    //             }
+    //         }
+    //     }
+    // }
 
-    if connected_relays.len() > max_n {
-        let to_disconnect_num = connected_relays.len() - max_n;
-        let relays_mesh = swarm.behaviour().gossipsub.get_relay_mesh();
-        let not_in_mesh: Vec<_> = connected_relays
-            .iter()
-            .filter(|peer| !relays_mesh.contains(peer))
-            .collect();
-        for peer in not_in_mesh.choose_multiple(&mut rng, to_disconnect_num) {
-            if !swarm.behaviour().peers_exchange.is_reserved_peer(peer) {
-                info!("Disconnecting peer {}", peer);
-                if Swarm::disconnect_peer_id(swarm, **peer).is_err() {
-                    error!("Peer {} disconnect error", peer);
-                }
-            }
-        }
-    }
+    // if connected_relays.len() > max_n {
+    //     let to_disconnect_num = connected_relays.len() - max_n;
+    //     let relays_mesh = swarm.behaviour().gossipsub.get_relay_mesh();
+    //     let not_in_mesh: Vec<_> = connected_relays
+    //         .iter()
+    //         .filter(|peer| !relays_mesh.contains(peer))
+    //         .collect();
+    //     for peer in not_in_mesh.choose_multiple(&mut rng, to_disconnect_num) {
+    //         if !swarm.behaviour().peers_exchange.is_reserved_peer(peer) {
+    //             info!("Disconnecting peer {}", peer);
+    //             if Swarm::disconnect_peer_id(swarm, **peer).is_err() {
+    //                 error!("Peer {} disconnect error", peer);
+    //             }
+    //         }
+    //     }
+    // }
 
-    for relay in connected_relays {
-        if !swarm.behaviour().peers_exchange.is_known_peer(&relay) {
-            swarm.behaviour_mut().peers_exchange.add_known_peer(relay);
-        }
-    }
+    // for relay in connected_relays {
+    //     if !swarm.behaviour().peers_exchange.is_known_peer(&relay) {
+    //         swarm.behaviour_mut().peers_exchange.add_known_peer(relay);
+    //     }
+    // }
+    todo!()
 }
 
 fn announce_my_addresses(swarm: &mut AtomicDexSwarm) {
@@ -548,7 +561,8 @@ fn announce_my_addresses(swarm: &mut AtomicDexSwarm) {
         .cloned()
         .collect();
     if !global_listeners.is_empty() {
-        swarm.behaviour_mut().announce_listeners(global_listeners);
+        // swarm.behaviour_mut().announce_listeners(global_listeners);
+        todo!()
     }
 }
 
@@ -646,169 +660,170 @@ fn start_gossipsub(
     node_type: NodeType,
     on_poll: impl Fn(&AtomicDexSwarm) + Send + 'static,
 ) -> Result<(Sender<AdexBehaviourCmd>, AdexEventRx, PeerId), AdexBehaviourError> {
-    let i_am_relay = node_type.is_relay();
-    let mut rng = rand::thread_rng();
-    let local_key = generate_ed25519_keypair(&mut rng, force_key);
-    let local_peer_id = PeerId::from(local_key.public());
-    info!("Local peer id: {:?}", local_peer_id);
+    // let i_am_relay = node_type.is_relay();
+    // let mut rng = rand::thread_rng();
+    // let local_key = generate_ed25519_keypair(&mut rng, force_key);
+    // let local_peer_id = PeerId::from(local_key.public());
+    // info!("Local peer id: {:?}", local_peer_id);
 
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-        .into_authentic(&local_key)
-        .expect("Signing libp2p-noise static DH keypair failed.");
+    // let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+    //     .into_authentic(&local_key)
+    //     .expect("Signing libp2p-noise static DH keypair failed.");
 
-    let network_info = node_type.to_network_info();
-    let transport = match network_info {
-        NetworkInfo::InMemory => build_memory_transport(noise_keys),
-        NetworkInfo::Distributed { .. } => build_dns_ws_transport(noise_keys, node_type.wss_certs()),
-    };
+    // let network_info = node_type.to_network_info();
+    // let transport = match network_info {
+    //     NetworkInfo::InMemory => build_memory_transport(noise_keys),
+    //     NetworkInfo::Distributed { .. } => build_dns_ws_transport(noise_keys, node_type.wss_certs()),
+    // };
 
-    let (cmd_tx, cmd_rx) = channel(CHANNEL_BUF_SIZE);
-    let (event_tx, event_rx) = channel(CHANNEL_BUF_SIZE);
+    // let (cmd_tx, cmd_rx) = channel(CHANNEL_BUF_SIZE);
+    // let (event_tx, event_rx) = channel(CHANNEL_BUF_SIZE);
 
-    let bootstrap = to_dial
-        .into_iter()
-        .map(|addr| addr.try_to_multiaddr(network_info))
-        .collect::<Result<Vec<Multiaddr>, _>>()?;
+    // let bootstrap = to_dial
+    //     .into_iter()
+    //     .map(|addr| addr.try_to_multiaddr(network_info))
+    //     .collect::<Result<Vec<Multiaddr>, _>>()?;
 
-    let (mesh_n_low, mesh_n, mesh_n_high) = if i_am_relay { (4, 6, 12) } else { (2, 3, 4) };
+    // let (mesh_n_low, mesh_n, mesh_n_high) = if i_am_relay { (4, 6, 12) } else { (2, 3, 4) };
 
-    // Create a Swarm to manage peers and events
-    let mut swarm = {
-        // to set default parameters for gossipsub use:
-        // let gossipsub_config = gossipsub::GossipsubConfig::default();
+    // // Create a Swarm to manage peers and events
+    // let mut swarm = {
+    //     // to set default parameters for gossipsub use:
+    //     // let gossipsub_config = gossipsub::GossipsubConfig::default();
 
-        // To content-address message, we can take the hash of message and use it as an ID.
-        let message_id_fn = |message: &GossipsubMessage| {
-            let mut s = DefaultHasher::new();
-            message.data.hash(&mut s);
-            message.sequence_number.hash(&mut s);
-            MessageId(s.finish().to_string())
-        };
+    //     // To content-address message, we can take the hash of message and use it as an ID.
+    //     let message_id_fn = |message: &GossipsubMessage| {
+    //         let mut s = DefaultHasher::new();
+    //         message.data.hash(&mut s);
+    //         message.sequence_number.hash(&mut s);
+    //         MessageId(s.finish().to_string().into())
+    //     };
 
-        // set custom gossipsub
-        let gossipsub_config = GossipsubConfigBuilder::new()
-            .message_id_fn(message_id_fn)
-            .i_am_relay(i_am_relay)
-            .mesh_n_low(mesh_n_low)
-            .mesh_n(mesh_n)
-            .mesh_n_high(mesh_n_high)
-            .manual_propagation()
-            .max_transmit_size(1024 * 1024 - 100)
-            .build();
-        // build a gossipsub network behaviour
-        let mut gossipsub = Gossipsub::new(local_peer_id, gossipsub_config);
+    //     // set custom gossipsub
+    //     let gossipsub_config = GossipsubConfigBuilder::default()
+    //         .message_id_fn(message_id_fn)
+    //         .i_am_relay(i_am_relay)
+    //         .mesh_n_low(mesh_n_low)
+    //         .mesh_n(mesh_n)
+    //         .mesh_n_high(mesh_n_high)
+    //         .manual_propagation()
+    //         .max_transmit_size(1024 * 1024 - 100)
+    //         .build();
+    //     // build a gossipsub network behaviour
+    //     let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(local_peer_id), gossipsub_config).expect("TODO");
 
-        let floodsub = Floodsub::new(local_peer_id, netid != NETID_7777);
+    //     let floodsub = Floodsub::new(local_peer_id);
 
-        let mut peers_exchange = PeersExchange::new(network_info);
-        if !network_info.in_memory() {
-            // Please note WASM nodes don't support `PeersExchange` currently,
-            // so `get_all_network_seednodes` returns an empty list.
-            for (peer_id, addr) in get_all_network_seednodes(netid) {
-                let multiaddr = addr.try_to_multiaddr(network_info)?;
-                peers_exchange.add_peer_addresses_to_known_peers(&peer_id, iter::once(multiaddr).collect());
-                gossipsub.add_explicit_relay(peer_id);
-            }
-        }
+    //     let mut peers_exchange = PeersExchange::new(network_info);
+    //     if !network_info.in_memory() {
+    //         // Please note WASM nodes don't support `PeersExchange` currently,
+    //         // so `get_all_network_seednodes` returns an empty list.
+    //         for (peer_id, addr) in get_all_network_seednodes(netid) {
+    //             let multiaddr = addr.try_to_multiaddr(network_info)?;
+    //             peers_exchange.add_peer_addresses_to_known_peers(&peer_id, iter::once(multiaddr).collect());
+    //             gossipsub.add_explicit_relay(peer_id);
+    //         }
+    //     }
 
-        // build a request-response network behaviour
-        let request_response = build_request_response_behaviour();
+    //     // build a request-response network behaviour
+    //     let request_response = build_request_response_behaviour();
 
-        // use default ping config with 15s interval, 20s timeout and 1 max failure
-        let ping = AdexPing::new();
+    //     // use default ping config with 15s interval, 20s timeout and 1 max failure
+    //     let ping = AdexPing::new();
 
-        let adex_behavior = AtomicDexBehaviour {
-            floodsub,
-            event_tx,
-            runtime: runtime.clone(),
-            cmd_rx,
-            netid,
-            gossipsub,
-            request_response,
-            peers_exchange,
-            ping,
-        };
-        libp2p::swarm::SwarmBuilder::new(transport, adex_behavior, local_peer_id)
-            .executor(Box::new(runtime.clone()))
-            .build()
-    };
-    swarm
-        .behaviour_mut()
-        .floodsub
-        .subscribe(FloodsubTopic::new(PEERS_TOPIC.to_owned()));
+    //     let adex_behavior = AtomicDexBehaviour {
+    //         floodsub,
+    //         event_tx,
+    //         runtime: runtime.clone(),
+    //         cmd_rx,
+    //         netid,
+    //         gossipsub,
+    //         request_response,
+    //         peers_exchange,
+    //         ping,
+    //     };
+    //     libp2p::swarm::SwarmBuilder::new(transport, adex_behavior, local_peer_id)
+    //         .executor(Box::new(runtime.clone()))
+    //         .build()
+    // };
+    // swarm
+    //     .behaviour_mut()
+    //     .floodsub
+    //     .subscribe(FloodsubTopic::new(PEERS_TOPIC.to_owned()));
 
-    match node_type {
-        NodeType::Relay {
-            ip,
-            network_ports,
-            wss_certs,
-        } => {
-            let dns_addr: Multiaddr = format!("/ip4/{}/tcp/{}", ip, network_ports.tcp).parse().unwrap();
-            libp2p::Swarm::listen_on(&mut swarm, dns_addr).unwrap();
-            if wss_certs.is_some() {
-                let wss_addr: Multiaddr = format!("/ip4/{}/tcp/{}/wss", ip, network_ports.wss).parse().unwrap();
-                libp2p::Swarm::listen_on(&mut swarm, wss_addr).unwrap();
-            }
-        },
-        NodeType::RelayInMemory { port } => {
-            let memory_addr: Multiaddr = format!("/memory/{}", port).parse().unwrap();
-            libp2p::Swarm::listen_on(&mut swarm, memory_addr).unwrap();
-        },
-        _ => (),
-    }
+    // match node_type {
+    //     NodeType::Relay {
+    //         ip,
+    //         network_ports,
+    //         wss_certs,
+    //     } => {
+    //         let dns_addr: Multiaddr = format!("/ip4/{}/tcp/{}", ip, network_ports.tcp).parse().unwrap();
+    //         libp2p::Swarm::listen_on(&mut swarm, dns_addr).unwrap();
+    //         if wss_certs.is_some() {
+    //             let wss_addr: Multiaddr = format!("/ip4/{}/tcp/{}/wss", ip, network_ports.wss).parse().unwrap();
+    //             libp2p::Swarm::listen_on(&mut swarm, wss_addr).unwrap();
+    //         }
+    //     },
+    //     NodeType::RelayInMemory { port } => {
+    //         let memory_addr: Multiaddr = format!("/memory/{}", port).parse().unwrap();
+    //         libp2p::Swarm::listen_on(&mut swarm, memory_addr).unwrap();
+    //     },
+    //     _ => (),
+    // }
 
-    for relay in bootstrap.choose_multiple(&mut rng, mesh_n) {
-        match libp2p::Swarm::dial(&mut swarm, relay.clone()) {
-            Ok(_) => info!("Dialed {}", relay),
-            Err(e) => error!("Dial {:?} failed: {:?}", relay, e),
-        }
-    }
+    // for relay in bootstrap.choose_multiple(&mut rng, mesh_n) {
+    //     match libp2p::Swarm::dial(&mut swarm, relay.clone()) {
+    //         Ok(_) => info!("Dialed {}", relay),
+    //         Err(e) => error!("Dial {:?} failed: {:?}", relay, e),
+    //     }
+    // }
 
-    let mut check_connected_relays_interval = Interval::new_at(
-        Instant::now() + CONNECTED_RELAYS_CHECK_INTERVAL,
-        CONNECTED_RELAYS_CHECK_INTERVAL,
-    );
-    let mut announce_interval = Interval::new_at(Instant::now() + ANNOUNCE_INITIAL_DELAY, ANNOUNCE_INTERVAL);
-    let mut listening = false;
-    let polling_fut = poll_fn(move |cx: &mut Context| {
-        loop {
-            match swarm.behaviour_mut().cmd_rx.poll_next_unpin(cx) {
-                Poll::Ready(Some(cmd)) => swarm.behaviour_mut().process_cmd(cmd),
-                Poll::Ready(None) => return Poll::Ready(()),
-                Poll::Pending => break,
-            }
-        }
+    // let mut check_connected_relays_interval = Interval::new_at(
+    //     Instant::now() + CONNECTED_RELAYS_CHECK_INTERVAL,
+    //     CONNECTED_RELAYS_CHECK_INTERVAL,
+    // );
+    // let mut announce_interval = Interval::new_at(Instant::now() + ANNOUNCE_INITIAL_DELAY, ANNOUNCE_INTERVAL);
+    // let mut listening = false;
+    // let polling_fut = poll_fn(move |cx: &mut Context| {
+    //     loop {
+    //         match swarm.behaviour_mut().cmd_rx.poll_next_unpin(cx) {
+    //             Poll::Ready(Some(cmd)) => swarm.behaviour_mut().process_cmd(cmd),
+    //             Poll::Ready(None) => return Poll::Ready(()),
+    //             Poll::Pending => break,
+    //         }
+    //     }
 
-        loop {
-            match swarm.poll_next_unpin(cx) {
-                Poll::Ready(Some(event)) => debug!("Swarm event {:?}", event),
-                Poll::Ready(None) => return Poll::Ready(()),
-                Poll::Pending => break,
-            }
-        }
+    //     loop {
+    //         match swarm.poll_next_unpin(cx) {
+    //             Poll::Ready(Some(event)) => debug!("Swarm event {:?}", event),
+    //             Poll::Ready(None) => return Poll::Ready(()),
+    //             Poll::Pending => break,
+    //         }
+    //     }
 
-        if swarm.behaviour().gossipsub.is_relay() {
-            while let Poll::Ready(Some(())) = announce_interval.poll_next_unpin(cx) {
-                announce_my_addresses(&mut swarm);
-            }
-        }
+    //     if swarm.behaviour().gossipsub.is_relay() {
+    //         while let Poll::Ready(Some(())) = announce_interval.poll_next_unpin(cx) {
+    //             announce_my_addresses(&mut swarm);
+    //         }
+    //     }
 
-        while let Poll::Ready(Some(())) = check_connected_relays_interval.poll_next_unpin(cx) {
-            maintain_connection_to_relays(&mut swarm, &bootstrap);
-        }
+    //     while let Poll::Ready(Some(())) = check_connected_relays_interval.poll_next_unpin(cx) {
+    //         maintain_connection_to_relays(&mut swarm, &bootstrap);
+    //     }
 
-        if !listening && i_am_relay {
-            for listener in Swarm::listeners(&swarm) {
-                info!("Listening on {}", listener);
-                listening = true;
-            }
-        }
-        on_poll(&swarm);
-        Poll::Pending
-    });
+    //     if !listening && i_am_relay {
+    //         for listener in Swarm::listeners(&swarm) {
+    //             info!("Listening on {}", listener);
+    //             listening = true;
+    //         }
+    //     }
+    //     on_poll(&swarm);
+    //     Poll::Pending
+    // });
 
-    runtime.spawn(polling_fut.then(|_| futures::future::ready(())));
-    Ok((cmd_tx, event_rx, local_peer_id))
+    // runtime.spawn(polling_fut.then(|_| futures::future::ready(())));
+    // Ok((cmd_tx, event_rx, local_peer_id))
+    todo!()
 }
 
 #[cfg(target_arch = "wasm32")]

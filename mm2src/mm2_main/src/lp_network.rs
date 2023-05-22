@@ -136,7 +136,7 @@ async fn process_p2p_message(
     ctx: MmArc,
     peer_id: PeerId,
     message_id: MessageId,
-    mut message: GossipsubMessage,
+    message: GossipsubMessage,
     i_am_relay: bool,
 ) {
     fn is_valid(topics: &[TopicHash]) -> Result<(), String> {
@@ -159,83 +159,81 @@ async fn process_p2p_message(
 
     let mut to_propagate = false;
 
-    message.topics.dedup();
+    // FIXME message.topics.dedup();
     drop_mutability!(message);
 
-    if let Err(err) = is_valid(&message.topics) {
-        log::error!("{}", err);
-        return;
-    }
+    // FIXME
+    // if let Err(err) = is_valid(&message.topics) {
+    //     log::error!("{}", err);
+    //     return;
+    // }
 
-    let inform_about_break = |used: &str, all: &[TopicHash]| {
-        log::debug!(
-            "Topic '{}' proceed and loop is killed. Whole topic list was '{:?}'",
-            used,
-            all
-        );
-    };
+    // FIXME
+    // let inform_about_break = |used: &str, all: &[TopicHash]| {
+    //     log::debug!(
+    //         "Topic '{}' proceed and loop is killed. Whole topic list was '{:?}'",
+    //         used,
+    //         all
+    //     );
+    // };
 
-    for topic in message.topics.iter() {
-        let mut split = topic.as_str().split(TOPIC_SEPARATOR);
+    let mut split = message.topic.as_str().split(TOPIC_SEPARATOR);
 
-        match split.next() {
-            Some(lp_ordermatch::ORDERBOOK_PREFIX) => {
-                let fut = lp_ordermatch::handle_orderbook_msg(
-                    ctx.clone(),
-                    &message.topics,
-                    peer_id.to_string(),
-                    &message.data,
-                    i_am_relay,
-                );
+    match split.next() {
+        Some(lp_ordermatch::ORDERBOOK_PREFIX) => {
+            let fut = lp_ordermatch::handle_orderbook_msg(
+                ctx.clone(),
+                &message.topic,
+                peer_id.to_string(),
+                &message.data,
+                i_am_relay,
+            );
 
-                if let Err(e) = fut.await {
-                    if e.get_inner().is_warning() {
-                        log::warn!("{}", e);
-                    } else {
-                        log::error!("{}", e);
-                    }
-                    return;
+            if let Err(e) = fut.await {
+                if e.get_inner().is_warning() {
+                    log::warn!("{}", e);
+                } else {
+                    log::error!("{}", e);
                 }
+                return;
+            }
 
-                to_propagate = true;
-                break;
-            },
-            Some(lp_swap::SWAP_PREFIX) => {
-                if let Err(e) =
-                    lp_swap::process_swap_msg(ctx.clone(), split.next().unwrap_or_default(), &message.data).await
-                {
+            to_propagate = true;
+        },
+        Some(lp_swap::SWAP_PREFIX) => {
+            if let Err(e) =
+                lp_swap::process_swap_msg(ctx.clone(), split.next().unwrap_or_default(), &message.data).await
+            {
+                log::error!("{}", e);
+                return;
+            }
+
+            to_propagate = true;
+
+            // FIXME inform_about_break(topic.as_str(), &message.topics);
+        },
+        Some(lp_swap::WATCHER_PREFIX) => {
+            if ctx.is_watcher() {
+                if let Err(e) = lp_swap::process_watcher_msg(ctx.clone(), &message.data) {
                     log::error!("{}", e);
                     return;
                 }
+            }
 
-                to_propagate = true;
+            to_propagate = true;
 
-                inform_about_break(topic.as_str(), &message.topics);
-                break;
-            },
-            Some(lp_swap::WATCHER_PREFIX) => {
-                if ctx.is_watcher() {
-                    if let Err(e) = lp_swap::process_watcher_msg(ctx.clone(), &message.data) {
-                        log::error!("{}", e);
+            // FIXME inform_about_break(topic.as_str(), &message.topics);
+        },
+        Some(lp_swap::TX_HELPER_PREFIX) => {
+            if let Some(pair) = split.next() {
+                if let Ok(Some(coin)) = lp_coinfind(&ctx, pair).await {
+                    if let Err(e) = coin.tx_enum_from_bytes(&message.data) {
+                        log::error!("Message cannot continue the process due to: {:?}", e);
                         return;
-                    }
-                }
+                    };
 
-                to_propagate = true;
-
-                inform_about_break(topic.as_str(), &message.topics);
-                break;
-            },
-            Some(lp_swap::TX_HELPER_PREFIX) => {
-                if let Some(pair) = split.next() {
-                    if let Ok(Some(coin)) = lp_coinfind(&ctx, pair).await {
-                        if let Err(e) = coin.tx_enum_from_bytes(&message.data) {
-                            log::error!("Message cannot continue the process due to: {:?}", e);
-                            return;
-                        };
-
-                        let fut = coin.send_raw_tx_bytes(&message.data);
-                        ctx.spawner().spawn(async {
+                    let fut = coin.send_raw_tx_bytes(&message.data);
+                    ctx.spawner().spawn(async {
                             match fut.compat().await {
                                 Ok(id) => log::debug!("Transaction broadcasted successfully: {:?} ", id),
                                 // TODO (After https://github.com/KomodoPlatform/atomicDEX-API/pull/1433)
@@ -244,14 +242,12 @@ async fn process_p2p_message(
                                 Err(e) => log::error!("Broadcast transaction failed (ignore this error if the transaction already sent by another seednode). {}", e),
                             };
                         })
-                    }
                 }
+            }
 
-                inform_about_break(topic.as_str(), &message.topics);
-                break;
-            },
-            None | Some(_) => (),
-        }
+            // FIXME inform_about_break(topic.as_str(), &message.topics);
+        },
+        None | Some(_) => (),
     }
 
     if to_propagate && i_am_relay {
