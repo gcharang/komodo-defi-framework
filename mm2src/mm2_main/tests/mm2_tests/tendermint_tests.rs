@@ -1,18 +1,19 @@
 use common::block_on;
 use mm2_number::BigDecimal;
 use mm2_test_helpers::for_tests::{atom_testnet_conf, disable_coin, disable_coin_err, enable_tendermint,
-                                  enable_tendermint_token, get_tendermint_my_tx_history, ibc_withdraw,
-                                  iris_nimda_testnet_conf, iris_testnet_conf, my_balance, send_raw_transaction,
-                                  withdraw_v1, MarketMakerIt, Mm2TestConf};
+                                  enable_tendermint_token, enable_tendermint_without_balance,
+                                  get_tendermint_my_tx_history, ibc_withdraw, iris_nimda_testnet_conf,
+                                  iris_testnet_conf, my_balance, send_raw_transaction, withdraw_v1, MarketMakerIt,
+                                  Mm2TestConf};
 use mm2_test_helpers::structs::{RpcV2Response, TendermintActivationResult, TransactionDetails};
 use serde_json::{self as json, json};
 
-const IRIS_TEST_SEED: &str = "iris test seed";
 const ATOM_TEST_BALANCE_SEED: &str = "atom test seed";
 const ATOM_TEST_WITHDRAW_SEED: &str = "atom test withdraw seed";
 const ATOM_TICKER: &str = "ATOM";
 const ATOM_TENDERMINT_RPC_URLS: &[&str] = &["https://rpc.sentry-02.theta-testnet.polypore.xyz"];
 
+const IRIS_TEST_SEED: &str = "iris test seed";
 const IRIS_TESTNET_RPC_URLS: &[&str] = &["http://34.80.202.172:26657"];
 
 #[test]
@@ -34,13 +35,35 @@ fn test_tendermint_activation_and_balance() {
     let result: RpcV2Response<TendermintActivationResult> = json::from_value(activation_result).unwrap();
     assert_eq!(result.result.address, expected_address);
     let expected_balance: BigDecimal = "8.0959".parse().unwrap();
-    assert_eq!(result.result.balance.spendable, expected_balance);
+    assert_eq!(result.result.balance.unwrap().spendable, expected_balance);
 
     let my_balance = block_on(my_balance(&mm, ATOM_TICKER));
     assert_eq!(my_balance.balance, expected_balance);
     assert_eq!(my_balance.unspendable_balance, BigDecimal::default());
     assert_eq!(my_balance.address, expected_address);
     assert_eq!(my_balance.coin, ATOM_TICKER);
+}
+
+#[test]
+fn test_tendermint_activation_without_balance() {
+    let coins = json!([atom_testnet_conf()]);
+
+    let conf = Mm2TestConf::seednode(ATOM_TEST_BALANCE_SEED, &coins);
+    let mm = MarketMakerIt::start(conf.conf, conf.rpc_password, None).unwrap();
+
+    let activation_result = block_on(enable_tendermint_without_balance(
+        &mm,
+        ATOM_TICKER,
+        &[],
+        ATOM_TENDERMINT_RPC_URLS,
+        false,
+    ));
+
+    let result: RpcV2Response<TendermintActivationResult> = json::from_value(activation_result).unwrap();
+
+    assert!(result.result.balance.is_none());
+    assert!(result.result.tokens_balances.is_none());
+    assert!(result.result.tokens_tickers.unwrap().is_empty());
 }
 
 #[test]
@@ -329,12 +352,60 @@ fn test_disable_tendermint_platform_coin_with_token() {
     let activation_res = block_on(enable_tendermint_token(&mm, token));
     assert!(&activation_res.get("result").unwrap().get("balances").is_some());
 
-    // Try to disable platform coin, IRIS-TEST. This should fail due to the dependent tokens.
-    let error = block_on(disable_coin_err(&mm, "IRIS-TEST"));
-    assert_eq!(error.dependent_tokens, ["IRIS-NIMDA"]);
+    // Try to passive platform coin, IRIS-TEST.
+    let res = block_on(disable_coin(&mm, "IRIS-TEST", false));
+    assert!(res.passivized);
 
-    // Try to disable IRIS-NIMDA token first.
-    block_on(disable_coin(&mm, "IRIS-NIMDA"));
-    // Then try to disable IRIS-TEST platform coin.
-    block_on(disable_coin(&mm, "IRIS-TEST"));
+    // Try to disable IRIS-NIMDA token when platform coin is passived.
+    // This should work, because platform coin is still in the memory.
+    let res = block_on(disable_coin(&mm, "IRIS-NIMDA", false));
+    assert!(!res.passivized);
+
+    // Then try to force disable IRIS-TEST platform coin.
+    let res = block_on(disable_coin(&mm, "IRIS-TEST", true));
+    assert!(!res.passivized);
+}
+
+#[test]
+fn test_passive_coin_and_force_disable() {
+    const TEST_SEED: &str = "iris test seed";
+    let coins = json!([iris_testnet_conf(), iris_nimda_testnet_conf()]);
+    let platform_coin = coins[0]["coin"].as_str().unwrap();
+    let token = coins[1]["coin"].as_str().unwrap();
+
+    let conf = Mm2TestConf::seednode(TEST_SEED, &coins);
+    let mm = MarketMakerIt::start(conf.conf, conf.rpc_password, None).unwrap();
+
+    // Enable platform coin IRIS-TEST
+    let activation_res = block_on(enable_tendermint(&mm, platform_coin, &[], IRIS_TESTNET_RPC_URLS, false));
+    assert!(&activation_res.get("result").unwrap().get("address").is_some());
+
+    // Enable platform coin token IRIS-NIMDA
+    let activation_res = block_on(enable_tendermint_token(&mm, token));
+    assert!(&activation_res.get("result").unwrap().get("balances").is_some());
+
+    // Try to passive platform coin, IRIS-TEST.
+    let res = block_on(disable_coin(&mm, "IRIS-TEST", false));
+    assert!(res.passivized);
+
+    // Try to disable IRIS-NIMDA token when platform coin is passived.
+    // This should work, because platform coin is still in the memory.
+    let res = block_on(disable_coin(&mm, "IRIS-NIMDA", false));
+    assert!(!res.passivized);
+
+    // Re-activate passive coin
+    let activation_res = block_on(enable_tendermint(&mm, platform_coin, &[], IRIS_TESTNET_RPC_URLS, false));
+    assert!(&activation_res.get("result").unwrap().get("address").is_some());
+
+    // Enable platform coin token IRIS-NIMDA
+    let activation_res = block_on(enable_tendermint_token(&mm, token));
+    assert!(&activation_res.get("result").unwrap().get("balances").is_some());
+
+    // Try to force disable platform coin, IRIS-TEST.
+    let res = block_on(disable_coin(&mm, "IRIS-TEST", true));
+    assert!(!res.passivized);
+
+    // Try to disable IRIS-NIMDA token when platform coin force disabled.
+    // This should failed, because platform coin was purged with it's tokens.
+    block_on(disable_coin_err(&mm, "IRIS-NIMDA", false));
 }

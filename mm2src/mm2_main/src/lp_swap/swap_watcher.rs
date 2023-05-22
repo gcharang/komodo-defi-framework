@@ -1,16 +1,18 @@
-use super::{broadcast_p2p_tx_msg, get_payment_locktime, lp_coinfind, min_watcher_reward, taker_payment_spend_deadline,
-            tx_helper_topic, H256Json, SwapsContext, WAIT_CONFIRM_INTERVAL};
+use super::{broadcast_p2p_tx_msg, get_payment_locktime, lp_coinfind, taker_payment_spend_deadline, tx_helper_topic,
+            H256Json, SwapsContext, WAIT_CONFIRM_INTERVAL};
+use crate::mm2::lp_network::{P2PRequestError, P2PRequestResult};
 use crate::mm2::MmError;
 use async_trait::async_trait;
 use coins::{CanRefundHtlc, ConfirmPaymentInput, FoundSwapTxSpend, MmCoinEnum, RefundPaymentArgs,
-            SendMakerPaymentSpendPreimageInput, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
-            WatcherValidateTakerFeeInput};
+            SendMakerPaymentSpendPreimageInput, WaitForHTLCTxSpendArgs, WatcherSearchForSwapTxSpendInput,
+            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput};
 use common::executor::{AbortSettings, SpawnAbortable, Timer};
 use common::log::{debug, error, info};
 use common::state_machine::prelude::*;
-use common::{now_ms, DEX_FEE_ADDR_RAW_PUBKEY};
+use common::{now_sec, DEX_FEE_ADDR_RAW_PUBKEY};
 use futures::compat::Future01CompatExt;
 use mm2_core::mm_ctx::MmArc;
+use mm2_err_handle::prelude::MapToMmResult;
 use mm2_libp2p::{decode_signed, pub_sub_topic, TopicPrefix};
 use serde::{Deserialize, Serialize};
 use serde_json as json;
@@ -142,7 +144,6 @@ enum WatcherError {
     MakerPaymentSpendFailed(String),
     MakerPaymentCouldNotBeFound(String),
     TakerPaymentRefundFailed(String),
-    InternalError(String),
 }
 
 impl Stopped {
@@ -191,6 +192,7 @@ impl State for ValidateTakerFee {
     }
 }
 
+// TODO: Validate also maker payment
 #[async_trait]
 impl State for ValidateTakerPayment {
     type Ctx = WatcherContext;
@@ -235,33 +237,19 @@ impl State for ValidateTakerPayment {
             )));
         }
 
-        let min_watcher_reward = if watcher_ctx.watcher_reward {
-            let reward = match min_watcher_reward(&watcher_ctx.taker_coin, &watcher_ctx.maker_coin).await {
-                Ok(reward) => reward,
-                Err(err) => {
-                    return Self::change_state(Stopped::from_reason(StopReason::Error(
-                        WatcherError::InternalError(err.into_inner().to_string()).into(),
-                    )))
-                },
-            };
-            Some(reward)
-        } else {
-            None
-        };
-
         let validate_input = WatcherValidatePaymentInput {
             payment_tx: taker_payment_hex.clone(),
             taker_payment_refund_preimage: watcher_ctx.data.taker_payment_refund_preimage.clone(),
-            time_lock: match std::env::var("REFUND_TEST") {
+            time_lock: match std::env::var("USE_TEST_LOCKTIME") {
                 Ok(_) => watcher_ctx.data.swap_started_at as u32,
                 Err(_) => watcher_ctx.taker_locktime() as u32,
             },
             taker_pub: watcher_ctx.verified_pub.clone(),
             maker_pub: watcher_ctx.data.maker_pub.clone(),
             secret_hash: watcher_ctx.data.secret_hash.clone(),
-            try_spv_proof_until: taker_payment_spend_deadline,
+            wait_until: taker_payment_spend_deadline,
             confirmations,
-            min_watcher_reward,
+            maker_coin: watcher_ctx.maker_coin.clone(),
         };
 
         let validated_f = watcher_ctx
@@ -298,7 +286,7 @@ impl State for WaitForTakerPaymentSpend {
         };
 
         loop {
-            if now_ms() / 1000 > wait_until {
+            if now_sec() > wait_until {
                 info!(
                     "Waited too long until {} for transaction {:?} to be spent",
                     wait_until, self.taker_payment_hex
@@ -333,7 +321,7 @@ impl State for WaitForTakerPaymentSpend {
                 },
             };
 
-            let now = now_ms() / 1000;
+            let now = now_sec();
             if now < watcher_ctx.taker_locktime() {
                 let wait_until = watcher_ctx.wait_for_maker_payment_spend_deadline();
                 let maker_payment_hex_fut = watcher_ctx
@@ -348,14 +336,15 @@ impl State for WaitForTakerPaymentSpend {
                     },
                 };
 
-                let f = watcher_ctx.maker_coin.wait_for_htlc_tx_spend(
-                    &maker_payment_hex,
-                    &watcher_ctx.data.secret_hash,
+                let f = watcher_ctx.maker_coin.wait_for_htlc_tx_spend(WaitForHTLCTxSpendArgs {
+                    tx_bytes: &maker_payment_hex,
+                    secret_hash: &watcher_ctx.data.secret_hash,
                     wait_until,
-                    watcher_ctx.data.maker_coin_start_block,
-                    &None,
-                    payment_search_interval,
-                );
+                    from_block: watcher_ctx.data.maker_coin_start_block,
+                    swap_contract_address: &None,
+                    check_every: payment_search_interval,
+                    watcher_reward: watcher_ctx.watcher_reward,
+                });
 
                 if f.compat().await.is_ok() {
                     info!("{}", MAKER_PAYMENT_SPEND_FOUND_LOG);
@@ -368,7 +357,7 @@ impl State for WaitForTakerPaymentSpend {
             let tx_hex = tx.tx_hex();
             let secret = match watcher_ctx
                 .taker_coin
-                .extract_secret(&watcher_ctx.data.secret_hash, &tx_hex, watcher_ctx.watcher_reward)
+                .extract_secret(&watcher_ctx.data.secret_hash, &tx_hex, true)
                 .await
             {
                 Ok(bytes) => H256Json::from(bytes.as_slice()),
@@ -441,7 +430,7 @@ impl State for RefundTakerPayment {
     type Result = ();
 
     async fn on_changed(self: Box<Self>, watcher_ctx: &mut WatcherContext) -> StateResult<Self::Ctx, Self::Result> {
-        if std::env::var("REFUND_TEST").is_err() {
+        if std::env::var("USE_TEST_LOCKTIME").is_err() {
             loop {
                 match watcher_ctx
                     .taker_coin
@@ -513,16 +502,8 @@ impl LastState for Stopped {
     async fn on_changed(self: Box<Self>, _watcher_ctx: &mut Self::Ctx) -> Self::Result {}
 }
 
-pub async fn process_watcher_msg(ctx: MmArc, msg: &[u8]) {
-    let msg = match decode_signed::<SwapWatcherMsg>(msg) {
-        Ok(m) => m,
-        Err(watcher_msg_err) => {
-            error!("Couldn't deserialize 'SwapWatcherMsg': {:?}", watcher_msg_err);
-            // Drop it to avoid dead_code warning
-            drop(watcher_msg_err);
-            return;
-        },
-    };
+pub fn process_watcher_msg(ctx: MmArc, msg: &[u8]) -> P2PRequestResult<()> {
+    let msg = decode_signed::<SwapWatcherMsg>(msg).map_to_mm(|e| P2PRequestError::DecodeError(e.to_string()))?;
 
     let watcher_data = msg.0;
     let verified_pubkey = msg.2;
@@ -530,7 +511,9 @@ pub async fn process_watcher_msg(ctx: MmArc, msg: &[u8]) {
         SwapWatcherMsg::TakerSwapWatcherMsg(watcher_data) => {
             spawn_taker_swap_watcher(ctx, watcher_data, verified_pubkey.to_bytes())
         },
-    }
+    };
+
+    Ok(())
 }
 
 /// Currently, Taker Swap Watcher is supported only.
@@ -640,8 +623,7 @@ fn spawn_taker_swap_watcher(ctx: MmArc, watcher_data: TakerSwapWatcherData, veri
         );
 
         let conf = json::from_value::<WatcherConf>(ctx.conf["watcher_conf"].clone()).unwrap_or_default();
-        //let watcher_reward = taker_coin.is_eth() || maker_coin.is_eth();
-        let watcher_reward = false;
+        let watcher_reward = maker_coin.is_eth();
         let watcher_ctx = WatcherContext {
             ctx,
             maker_coin,

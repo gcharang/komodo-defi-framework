@@ -57,18 +57,18 @@
 //  marketmaker
 //
 
-use crate::mm2::lp_network::{broadcast_p2p_msg, Libp2pPeerId};
+use super::lp_network::P2PRequestResult;
+use crate::mm2::lp_network::{broadcast_p2p_msg, Libp2pPeerId, P2PRequestError};
 use bitcrypto::{dhash160, sha256};
-use coins::eth::Web3RpcError;
 use coins::{lp_coinfind, lp_coinfind_or_err, CoinFindError, MmCoinEnum, TradeFee, TransactionEnum};
 use common::log::{debug, warn};
+use common::now_sec;
 use common::time_cache::DuplicateCache;
 use common::{bits256, calc_total_pages,
              executor::{spawn_abortable, AbortOnDropHandle, SpawnFuture, Timer},
              log::{error, info},
-             now_ms, var, HttpStatusCode, PagingOptions, StatusCode};
+             var, HttpStatusCode, PagingOptions, StatusCode};
 use derive_more::Display;
-use futures::compat::Future01CompatExt;
 use http::Response;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_err_handle::prelude::*;
@@ -97,7 +97,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[path = "lp_swap/recreate_swap_data.rs"] mod recreate_swap_data;
 #[path = "lp_swap/saved_swap.rs"] mod saved_swap;
 #[path = "lp_swap/swap_lock.rs"] mod swap_lock;
-#[path = "lp_swap/swap_watcher.rs"] mod swap_watcher;
+#[path = "lp_swap/swap_watcher.rs"] pub(crate) mod swap_watcher;
 #[path = "lp_swap/taker_swap.rs"] mod taker_swap;
 #[path = "lp_swap/trade_preimage.rs"] mod trade_preimage;
 
@@ -236,31 +236,35 @@ pub fn broadcast_p2p_tx_msg(ctx: &MmArc, topic: String, msg: &TransactionEnum, p
     broadcast_p2p_msg(ctx, vec![topic], encoded_msg, from);
 }
 
-pub async fn process_msg(ctx: MmArc, topic: &str, msg: &[u8]) {
-    let uuid = match Uuid::from_str(topic) {
-        Ok(u) => u,
-        Err(_) => return,
-    };
+pub async fn process_swap_msg(ctx: MmArc, topic: &str, msg: &[u8]) -> P2PRequestResult<()> {
+    let uuid = Uuid::from_str(topic).map_to_mm(|e| P2PRequestError::DecodeError(e.to_string()))?;
 
     let msg = match decode_signed::<SwapMsg>(msg) {
         Ok(m) => m,
         Err(swap_msg_err) => {
             #[cfg(not(target_arch = "wasm32"))]
-            match json::from_slice::<SwapStatus>(msg) {
+            return match json::from_slice::<SwapStatus>(msg) {
                 Ok(mut status) => {
                     status.data.fetch_and_set_usd_prices().await;
                     if let Err(e) = save_stats_swap(&ctx, &status.data).await {
                         error!("Error saving the swap {} status: {}", status.data.uuid(), e);
                     }
+                    Ok(())
                 },
                 Err(swap_status_err) => {
-                    error!("Couldn't deserialize 'SwapMsg': {:?}", swap_msg_err);
-                    error!("Couldn't deserialize 'SwapStatus': {:?}", swap_status_err);
+                    let error = format!(
+                        "Couldn't deserialize swap msg to either 'SwapMsg': {} or to 'SwapStatus': {}",
+                        swap_msg_err, swap_status_err
+                    );
+                    MmError::err(P2PRequestError::DecodeError(error))
                 },
             };
-            // Drop it to avoid dead_code warning
-            drop(swap_msg_err);
-            return;
+
+            #[cfg(target_arch = "wasm32")]
+            return MmError::err(P2PRequestError::DecodeError(format!(
+                "Couldn't deserialize 'SwapMsg': {}",
+                swap_msg_err
+            )));
         },
     };
 
@@ -280,7 +284,9 @@ pub async fn process_msg(ctx: MmArc, topic: &str, msg: &[u8]) {
         } else {
             warn!("Received message from unexpected sender for swap {}", uuid);
         }
-    }
+    };
+
+    Ok(())
 }
 
 pub fn swap_topic(uuid: &Uuid) -> String { pub_sub_topic(SWAP_PREFIX, &uuid.to_string()) }
@@ -301,7 +307,7 @@ async fn recv_swap_msg<T>(
     uuid: &Uuid,
     timeout: u64,
 ) -> Result<T, String> {
-    let started = now_ms() / 1000;
+    let started = now_sec();
     let timeout = BASIC_COMM_TIMEOUT + timeout;
     let wait_until = started + timeout;
     loop {
@@ -313,7 +319,7 @@ async fn recv_swap_msg<T>(
                 return Ok(msg);
             }
         }
-        let now = now_ms() / 1000;
+        let now = now_sec();
         if now > wait_until {
             return ERR!("Timeout ({} > {})", now - started, timeout);
         }
@@ -643,7 +649,7 @@ pub fn lp_atomic_locktime(maker_coin: &str, taker_coin: &str, version: AtomicLoc
     }
 }
 
-fn dex_fee_threshold(min_tx_amount: MmNumber) -> MmNumber {
+pub fn dex_fee_threshold(min_tx_amount: MmNumber) -> MmNumber {
     // Todo: This should be reduced for lightning swaps.
     // 0.0001
     let min_fee = MmNumber::from((1, 10000));
@@ -682,72 +688,6 @@ pub fn dex_fee_amount_from_taker_coin(taker_coin: &MmCoinEnum, maker_coin: &str,
     let min_tx_amount = MmNumber::from(taker_coin.min_tx_amount());
     let dex_fee_threshold = dex_fee_threshold(min_tx_amount);
     dex_fee_amount(taker_coin.ticker(), maker_coin, trade_amount, &dex_fee_threshold)
-}
-
-#[derive(Debug, Display)]
-pub enum WatcherRewardError {
-    RPCError(Web3RpcError),
-    InvalidCoinType(String),
-}
-
-// This needs discussion. We need a way to determine the watcher reward amount, and a way to validate it at watcher side so
-// that watchers won't accept it if it's less than the expected amount. This has to be done for all coin types, because watcher rewards
-// will be required by both parties even if only one side is ETH coin. Artem's suggestion was first calculating the reward for ETH and
-// converting the value to other coins, which is what I'm planning to do. I based the values to be higher than the gas amounts used
-// when the watcher spends the maker payment or refunds the taker payment. For the validation, I check if the reward is higher
-// than a minimum amount using the min_watcher_reward method. I can't make an exact comparison because the gas price and relative
-// price of the coins will be different when the taker/maker sends their payment and when the watcher receives the message. This should
-// work fine if we pick the WATCHER_REWARD_GAS and MIN_WATCHER_REWARD_GAS constants good. The advantage of this is that the reward will
-// be directly based on the amount of gas burned when the watcher will call the contract functions (Artem's idea was to make it slightly
-// profitable for the watchers). The disadvantage is the comparison during the validations using a separate minimum value. If we want
-// validations with exact values, there are two other ways I could think of:
-// 1.  Precalculating fixed rewards for all coins. The disadvantage is that the gas price and the relative price of coins will change over
-// time and the reward will deviate from the actual gas used by the watchers, and we can't keep updating the values.
-// 2. Picking the reward to be a percentage of the trade amount like the taker fee. The disadvantage is it will be extremely hard to
-// pick the right ratio such that it will be slightly profitable for watchers.
-pub async fn watcher_reward_amount(
-    coin: &MmCoinEnum,
-    other_coin: &MmCoinEnum,
-) -> Result<u64, MmError<WatcherRewardError>> {
-    const WATCHER_REWARD_GAS: u64 = 100_000;
-    watcher_reward_from_gas(coin, other_coin, WATCHER_REWARD_GAS).await
-}
-
-pub async fn min_watcher_reward(
-    coin: &MmCoinEnum,
-    other_coin: &MmCoinEnum,
-) -> Result<u64, MmError<WatcherRewardError>> {
-    const MIN_WATCHER_REWARD_GAS: u64 = 70_000;
-    watcher_reward_from_gas(coin, other_coin, MIN_WATCHER_REWARD_GAS).await
-}
-
-pub async fn watcher_reward_from_gas(
-    coin: &MmCoinEnum,
-    other_coin: &MmCoinEnum,
-    gas: u64,
-) -> Result<u64, MmError<WatcherRewardError>> {
-    match (coin, other_coin) {
-        (MmCoinEnum::EthCoin(coin), _) | (_, MmCoinEnum::EthCoin(coin)) => {
-            let mut attempts = 0;
-            loop {
-                match coin.get_gas_price().compat().await {
-                    Ok(gas_price) => return Ok(gas * gas_price.as_u64()),
-                    Err(err) => {
-                        if attempts >= 3 {
-                            return MmError::err(WatcherRewardError::RPCError(err.into_inner()));
-                        } else {
-                            attempts += 1;
-                            Timer::sleep(10.).await;
-                        }
-                    },
-                };
-            }
-        },
-        _ => Err(WatcherRewardError::InvalidCoinType(
-            "At least one coin must be ETH to use watcher reward".to_string(),
-        )
-        .into()),
-    }
 }
 
 #[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]

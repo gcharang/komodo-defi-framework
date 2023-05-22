@@ -16,7 +16,6 @@ custom-swap-locktime = [] # only for testing purposes, should never be activated
 native = [] # Deprecated
 track-ctx-pointer = ["common/track-ctx-pointer"]
 zhtlc-native-tests = ["coins/zhtlc-native-tests"]
-enable-nft-integration = ["coins/enable-nft-integration"]
 run-docker-tests = []
 # TODO
 enable-solana = []
@@ -42,7 +41,6 @@ either = "1.6"
 ethereum-types = { version = "0.13", default-features = false, features = ["std", "serialize"] }
 enum_from = { path = "../derives/enum_from" }
 enum-primitive-derive = "0.2"
-env_logger = "0.7.1"
 futures01 = { version = "0.1", package = "futures" }
 futures = { version = "0.3.1", package = "futures", features = ["compat", "async-await"] }
 gstuff = { version = "0.7", features = ["nightly"] }

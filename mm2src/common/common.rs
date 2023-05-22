@@ -118,6 +118,7 @@ pub mod custom_futures;
 pub mod custom_iter;
 #[path = "executor/mod.rs"] pub mod executor;
 pub mod number_type_casting;
+pub mod password_policy;
 pub mod seri;
 #[path = "patterns/state_machine.rs"] pub mod state_machine;
 pub mod time_cache;
@@ -137,11 +138,13 @@ use futures01::{future, Future};
 use http::header::CONTENT_TYPE;
 use http::Response;
 use parking_lot::{Mutex as PaMutex, MutexGuard as PaMutexGuard};
+use rand::RngCore;
 use rand::{rngs::SmallRng, SeedableRng};
 use serde::{de, ser};
 use serde_json::{self as json, Value as Json};
 use sha2::{Digest, Sha256};
 use std::alloc::Allocator;
+use std::convert::TryInto;
 use std::fmt::Write as FmtWrite;
 use std::fs::File;
 use std::future::Future as Future03;
@@ -182,9 +185,15 @@ pub const APPLICATION_GRPC_WEB_PROTO: &str = "application/grpc-web+proto";
 pub const SATOSHIS: u64 = 100_000_000;
 
 pub const DEX_FEE_ADDR_PUBKEY: &str = "03bc2c7ba671bae4a6fc835244c9762b41647b9827d4780a89a949b984a8ddcc06";
+
 lazy_static! {
     pub static ref DEX_FEE_ADDR_RAW_PUBKEY: Vec<u8> =
         hex::decode(DEX_FEE_ADDR_PUBKEY).expect("DEX_FEE_ADDR_PUBKEY is expected to be a hexadecimal string");
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+lazy_static! {
+    pub(crate) static ref LOG_FILE: Mutex<Option<std::fs::File>> = Mutex::new(open_log_file());
 }
 
 pub auto trait NotSame {}
@@ -653,6 +662,24 @@ pub fn now_float() -> f64 {
     duration_to_float(Duration::from_millis(now_ms()))
 }
 
+pub fn wait_until_sec(seconds: u64) -> u64 { (now_ms() / 1000) + seconds }
+
+pub fn wait_until_ms(milliseconds: u64) -> u64 { now_ms() + milliseconds }
+
+pub fn now_sec() -> u64 { now_ms() / 1000 }
+
+pub fn now_sec_u32() -> u32 {
+    (now_ms() / 1000)
+        .try_into()
+        .expect("current time in seconds should fit into u32 until 2106!")
+}
+
+pub fn now_sec_i64() -> i64 {
+    (now_ms() / 1000)
+        .try_into()
+        .expect("current time in seconds should fit into i64 for the foreseeable future!")
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn temp_dir() -> PathBuf { env::temp_dir() }
 
@@ -660,7 +687,7 @@ pub fn temp_dir() -> PathBuf { env::temp_dir() }
 /// Prints a warning to `stdout` if there's a problem opening the file.  
 /// Returns `None` if `MM_LOG` variable is not present or if the specified path can't be opened.
 #[cfg(not(target_arch = "wasm32"))]
-fn open_log_file() -> Option<std::fs::File> {
+pub(crate) fn open_log_file() -> Option<std::fs::File> {
     let mm_log = match var("MM_LOG") {
         Ok(v) => v,
         Err(_) => return None,
@@ -684,10 +711,6 @@ fn open_log_file() -> Option<std::fs::File> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn writeln(line: &str) {
     use std::panic::catch_unwind;
-
-    lazy_static! {
-        static ref LOG_FILE: Mutex<Option<std::fs::File>> = Mutex::new(open_log_file());
-    }
 
     // `catch_unwind` protects the tests from error
     //
@@ -743,6 +766,9 @@ pub fn writeln(line: &str) {
 }
 
 pub fn small_rng() -> SmallRng { SmallRng::seed_from_u64(now_ms()) }
+
+#[inline(always)]
+pub fn os_rng(dest: &mut [u8]) -> Result<(), rand::Error> { rand::rngs::OsRng.try_fill_bytes(dest) }
 
 #[derive(Debug, Clone)]
 /// Ordered from low to height inclusive range.

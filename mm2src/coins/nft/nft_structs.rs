@@ -1,19 +1,24 @@
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
+use ethereum_types::Address;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
+use std::fmt;
 use std::str::FromStr;
+use url::Url;
 
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
+    pub(crate) url: Url,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct NftMetadataReq {
-    pub(crate) token_address: String,
+    pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) chain: Chain,
+    pub(crate) url: Url,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -26,10 +31,20 @@ pub(crate) enum Chain {
     Polygon,
 }
 
+impl fmt::Display for Chain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            Chain::Avalanche => write!(f, "avalanche"),
+            Chain::Bsc => write!(f, "bsc"),
+            Chain::Eth => write!(f, "eth"),
+            Chain::Fantom => write!(f, "fantom"),
+            Chain::Polygon => write!(f, "polygon"),
+        }
+    }
+}
+
 pub(crate) trait ConvertChain {
     fn to_ticker(&self) -> String;
-
-    fn to_ticker_chain(&self) -> (String, String);
 }
 
 impl ConvertChain for Chain {
@@ -40,16 +55,6 @@ impl ConvertChain for Chain {
             Chain::Eth => "ETH".to_owned(),
             Chain::Fantom => "FTM".to_owned(),
             Chain::Polygon => "MATIC".to_owned(),
-        }
-    }
-
-    fn to_ticker_chain(&self) -> (String, String) {
-        match self {
-            Chain::Avalanche => ("AVAX".to_owned(), "avalanche".to_owned()),
-            Chain::Bsc => ("BNB".to_owned(), "bsc".to_owned()),
-            Chain::Eth => ("ETH".to_owned(), "eth".to_owned()),
-            Chain::Fantom => ("FTM".to_owned(), "fantom".to_owned()),
-            Chain::Polygon => ("MATIC".to_owned(), "polygon".to_owned()),
         }
     }
 }
@@ -97,6 +102,7 @@ pub struct Nft {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 /// This structure is for deserializing NFT json to struct.
@@ -118,6 +124,7 @@ pub(crate) struct NftWrapper {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -170,8 +177,15 @@ pub struct WithdrawErc721 {
 }
 
 #[derive(Clone, Deserialize)]
+pub struct WithdrawNftReq {
+    pub(crate) url: Url,
+    pub(crate) withdraw_type: WithdrawNftType,
+}
+
+#[derive(Clone, Deserialize)]
 #[serde(tag = "type", content = "withdraw_data")]
-pub enum WithdrawNftReq {
+#[serde(rename_all = "snake_case")]
+pub enum WithdrawNftType {
     WithdrawErc1155(WithdrawErc1155),
     WithdrawErc721(WithdrawErc721),
 }
@@ -206,6 +220,7 @@ pub struct TransactionNftDetails {
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
+    pub(crate) url: Url,
 }
 
 #[derive(Debug, Serialize)]
@@ -228,6 +243,7 @@ pub(crate) struct NftTransferHistory {
     pub(crate) amount: BigDecimal,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -249,6 +265,7 @@ pub(crate) struct NftTransferHistoryWrapper {
     pub(crate) amount: SerdeStringWrap<BigDecimal>,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
+    pub(crate) possible_spam: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]

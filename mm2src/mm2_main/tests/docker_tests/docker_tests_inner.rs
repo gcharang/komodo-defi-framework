@@ -1,5 +1,6 @@
+use crate::docker_tests::docker_tests_common::generate_utxo_coin_with_privkey;
 use crate::integration_tests_common::*;
-use crate::{fill_address, fill_eth, generate_utxo_coin_with_random_privkey, random_secp256k1_secret, rmd160_from_priv,
+use crate::{fill_address, generate_utxo_coin_with_random_privkey, random_secp256k1_secret, rmd160_from_priv,
             utxo_coin_from_privkey};
 use bitcrypto::dhash160;
 use chain::OutPoint;
@@ -7,13 +8,14 @@ use coins::utxo::rpc_clients::UnspentInfo;
 use coins::utxo::{GetUtxoListOps, UtxoCommonOps};
 use coins::{ConfirmPaymentInput, FoundSwapTxSpend, MarketCoinOps, MmCoin, RefundPaymentArgs,
             SearchForSwapTxSpendInput, SendPaymentArgs, SpendPaymentArgs, SwapOps, TransactionEnum, WithdrawRequest};
-use common::{block_on, now_ms};
+use common::{block_on, now_sec_u32, wait_until_sec};
+use crypto::privkey::key_pair_from_seed;
 use futures01::Future;
 use mm2_number::{BigDecimal, MmNumber};
 use mm2_test_helpers::for_tests::{check_my_swap_status_amounts, eth_testnet_conf, get_locked_amount, kmd_conf,
                                   max_maker_vol, mm_dump, mycoin1_conf, mycoin_conf, set_price, start_swaps,
-                                  MarketMakerIt, Mm2TestConf};
-use mm2_test_helpers::structs::*;
+                                  MarketMakerIt, Mm2TestConf, ETH_DEV_NODES};
+use mm2_test_helpers::{get_passphrase, structs::*};
 use serde_json::Value as Json;
 use std::collections::HashMap;
 use std::env;
@@ -22,11 +24,11 @@ use std::time::Duration;
 
 #[test]
 fn test_search_for_swap_tx_spend_native_was_refunded_taker() {
-    let timeout = (now_ms() / 1000) + 120; // timeout if test takes more than 120 seconds to run
+    let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = (now_ms() / 1000) as u32 - 3600;
+    let time_lock = now_sec_u32() - 3600;
     let taker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -74,7 +76,7 @@ fn test_search_for_swap_tx_spend_native_was_refunded_taker() {
 
     let search_input = SearchForSwapTxSpendInput {
         time_lock,
-        other_pub: &*coin.my_public_key().unwrap(),
+        other_pub: coin.my_public_key().unwrap(),
         secret_hash: &[0; 20],
         tx: &tx.tx_hex(),
         search_from_block: 0,
@@ -91,7 +93,7 @@ fn test_search_for_swap_tx_spend_native_was_refunded_taker() {
 #[test]
 fn test_for_non_existent_tx_hex_utxo() {
     // This test shouldn't wait till timeout!
-    let timeout = (now_ms() / 1000) + 120;
+    let timeout = wait_until_sec(120);
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     // bad transaction hex
     let tx = hex::decode("0400008085202f8902bf17bf7d1daace52e08f732a6b8771743ca4b1cb765a187e72fd091a0aabfd52000000006a47304402203eaaa3c4da101240f80f9c5e9de716a22b1ec6d66080de6a0cca32011cd77223022040d9082b6242d6acf9a1a8e658779e1c655d708379862f235e8ba7b8ca4e69c6012102031d4256c4bc9f99ac88bf3dba21773132281f65f9bf23a59928bce08961e2f3ffffffffff023ca13c0e9e085dd13f481f193e8a3e8fd609020936e98b5587342d994f4d020000006b483045022100c0ba56adb8de923975052312467347d83238bd8d480ce66e8b709a7997373994022048507bcac921fdb2302fa5224ce86e41b7efc1a2e20ae63aa738dfa99b7be826012102031d4256c4bc9f99ac88bf3dba21773132281f65f9bf23a59928bce08961e2f3ffffffff0300e1f5050000000017a9141ee6d4c38a3c078eab87ad1a5e4b00f21259b10d87000000000000000016611400000000000000000000000000000000000000001b94d736000000001976a91405aab5342166f8594baf17a7d9bef5d56744332788ac2d08e35e000000000000000000000000000000").unwrap();
@@ -110,11 +112,11 @@ fn test_for_non_existent_tx_hex_utxo() {
 
 #[test]
 fn test_search_for_swap_tx_spend_native_was_refunded_maker() {
-    let timeout = (now_ms() / 1000) + 120; // timeout if test takes more than 120 seconds to run
+    let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = (now_ms() / 1000) as u32 - 3600;
+    let time_lock = now_sec_u32() - 3600;
     let maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -162,7 +164,7 @@ fn test_search_for_swap_tx_spend_native_was_refunded_maker() {
 
     let search_input = SearchForSwapTxSpendInput {
         time_lock,
-        other_pub: &*coin.my_public_key().unwrap(),
+        other_pub: coin.my_public_key().unwrap(),
         secret_hash: &[0; 20],
         tx: &tx.tx_hex(),
         search_from_block: 0,
@@ -178,13 +180,13 @@ fn test_search_for_swap_tx_spend_native_was_refunded_maker() {
 
 #[test]
 fn test_search_for_taker_swap_tx_spend_native_was_spent_by_maker() {
-    let timeout = (now_ms() / 1000) + 120; // timeout if test takes more than 120 seconds to run
+    let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let secret = [0; 32];
     let my_pubkey = coin.my_public_key().unwrap();
 
     let secret_hash = dhash160(&secret);
-    let time_lock = (now_ms() / 1000) as u32 - 3600;
+    let time_lock = now_sec_u32() - 3600;
     let taker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -233,7 +235,7 @@ fn test_search_for_taker_swap_tx_spend_native_was_spent_by_maker() {
 
     let search_input = SearchForSwapTxSpendInput {
         time_lock,
-        other_pub: &*coin.my_public_key().unwrap(),
+        other_pub: coin.my_public_key().unwrap(),
         secret_hash: &*dhash160(&secret),
         tx: &tx.tx_hex(),
         search_from_block: 0,
@@ -249,12 +251,12 @@ fn test_search_for_taker_swap_tx_spend_native_was_spent_by_maker() {
 
 #[test]
 fn test_search_for_maker_swap_tx_spend_native_was_spent_by_taker() {
-    let timeout = (now_ms() / 1000) + 120; // timeout if test takes more than 120 seconds to run
+    let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let secret = [0; 32];
     let my_pubkey = coin.my_public_key().unwrap();
 
-    let time_lock = (now_ms() / 1000) as u32 - 3600;
+    let time_lock = now_sec_u32() - 3600;
     let secret_hash = dhash160(&secret);
     let maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
@@ -304,7 +306,7 @@ fn test_search_for_maker_swap_tx_spend_native_was_spent_by_taker() {
 
     let search_input = SearchForSwapTxSpendInput {
         time_lock,
-        other_pub: &*coin.my_public_key().unwrap(),
+        other_pub: coin.my_public_key().unwrap(),
         secret_hash: &*dhash160(&secret),
         tx: &tx.tx_hex(),
         search_from_block: 0,
@@ -326,7 +328,7 @@ fn test_one_hundred_maker_payments_in_a_row_native() {
     let secret = [0; 32];
     let my_pubkey = coin.my_public_key().unwrap();
 
-    let time_lock = (now_ms() / 1000) as u32 - 3600;
+    let time_lock = now_sec_u32() - 3600;
     let mut unspents = vec![];
     let mut sent_tx = vec![];
     for i in 0..100 {
@@ -2477,7 +2479,7 @@ fn test_maker_order_should_not_kick_start_and_appear_in_orderbook_if_balance_is_
         payment_tx: withdraw.tx_hex.0,
         confirmations: 1,
         requires_nota: false,
-        wait_until: (now_ms() / 1000) + 10,
+        wait_until: wait_until_sec(10),
         check_every: 1,
     };
     coin.wait_for_confirmations(confirm_payment_input).wait().unwrap();
@@ -2955,7 +2957,7 @@ fn test_utxo_merge() {
 
     thread::sleep(Duration::from_secs(2));
     let (unspents, _) =
-        block_on(coin.get_unspent_ordered_list(&coin.as_ref().derivation_method.unwrap_single_addr())).unwrap();
+        block_on(coin.get_unspent_ordered_list(coin.as_ref().derivation_method.unwrap_single_addr())).unwrap();
     assert_eq!(unspents.len(), 1);
 }
 
@@ -3009,7 +3011,7 @@ fn test_utxo_merge_max_merge_at_once() {
 
     thread::sleep(Duration::from_secs(2));
     let (unspents, _) =
-        block_on(coin.get_unspent_ordered_list(&coin.as_ref().derivation_method.unwrap_single_addr())).unwrap();
+        block_on(coin.get_unspent_ordered_list(coin.as_ref().derivation_method.unwrap_single_addr())).unwrap();
     // 4 utxos are merged of 5 so the resulting unspents len must be 2
     assert_eq!(unspents.len(), 2);
 }
@@ -3365,8 +3367,14 @@ fn test_taker_should_match_with_best_price_sell() {
 #[test]
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/1074
 fn test_match_utxo_with_eth_taker_sell() {
-    let (_ctx, _, bob_priv_key) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000.into());
-    let (_ctx, _, alice_priv_key) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000.into());
+    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_priv_key = key_pair_from_seed(&alice_passphrase).unwrap().private().secret;
+    let bob_priv_key = key_pair_from_seed(&bob_passphrase).unwrap().private().secret;
+
+    generate_utxo_coin_with_privkey("MYCOIN", 1000.into(), alice_priv_key);
+    generate_utxo_coin_with_privkey("MYCOIN", 1000.into(), bob_priv_key);
+
     let coins = json!([mycoin_conf(1000), eth_testnet_conf()]);
 
     let mut mm_bob = MarketMakerIt::start(
@@ -3403,13 +3411,8 @@ fn test_match_utxo_with_eth_taker_sell() {
 
     log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
     log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    let eth_bob = block_on(enable_native(&mm_bob, "ETH", &["http://195.201.0.6:8565"]));
-    // pass without 0x
-    fill_eth(&eth_bob.address[2..]);
-
-    let eth_alice = block_on(enable_native(&mm_alice, "ETH", &["http://195.201.0.6:8565"]));
-    // pass without 0x
-    fill_eth(&eth_alice.address[2..]);
+    block_on(enable_native(&mm_bob, "ETH", ETH_DEV_NODES));
+    block_on(enable_native(&mm_alice, "ETH", ETH_DEV_NODES));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -3417,7 +3420,7 @@ fn test_match_utxo_with_eth_taker_sell() {
         "base": "MYCOIN",
         "rel": "ETH",
         "price": 1,
-        "volume": "0.1",
+        "volume": "0.0001",
     })))
     .unwrap();
     assert!(rc.0.is_success(), "!setprice: {}", rc.1);
@@ -3427,7 +3430,7 @@ fn test_match_utxo_with_eth_taker_sell() {
         "base": "ETH",
         "rel": "MYCOIN",
         "price": 1,
-        "volume": "0.1",
+        "volume": "0.0001",
     })))
     .unwrap();
     assert!(rc.0.is_success(), "!sell: {}", rc.1);
@@ -3441,10 +3444,14 @@ fn test_match_utxo_with_eth_taker_sell() {
 
 #[test]
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/1074
-#[ignore] // https://github.com/KomodoPlatform/atomicDEX-API/issues/1712
 fn test_match_utxo_with_eth_taker_buy() {
-    let (_ctx, _, bob_priv_key) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000.into());
-    let (_ctx, _, alice_priv_key) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000.into());
+    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_priv_key = key_pair_from_seed(&alice_passphrase).unwrap().private().secret;
+    let bob_priv_key = key_pair_from_seed(&bob_passphrase).unwrap().private().secret;
+
+    generate_utxo_coin_with_privkey("MYCOIN", 1000.into(), alice_priv_key);
+    generate_utxo_coin_with_privkey("MYCOIN", 1000.into(), bob_priv_key);
     let coins = json!([mycoin_conf(1000), eth_testnet_conf()]);
     let mut mm_bob = MarketMakerIt::start(
         json!({
@@ -3480,13 +3487,9 @@ fn test_match_utxo_with_eth_taker_buy() {
 
     log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
     log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    let eth_bob = block_on(enable_native(&mm_bob, "ETH", &["http://195.201.0.6:8565"]));
-    // pass without 0x
-    fill_eth(&eth_bob.address[2..]);
+    block_on(enable_native(&mm_bob, "ETH", ETH_DEV_NODES));
 
-    let eth_alice = block_on(enable_native(&mm_alice, "ETH", &["http://195.201.0.6:8565"]));
-    // pass without 0x
-    fill_eth(&eth_alice.address[2..]);
+    block_on(enable_native(&mm_alice, "ETH", ETH_DEV_NODES));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -3494,7 +3497,7 @@ fn test_match_utxo_with_eth_taker_buy() {
         "base": "MYCOIN",
         "rel": "ETH",
         "price": 1,
-        "volume": "0.1",
+        "volume": "0.0001",
     })))
     .unwrap();
     assert!(rc.0.is_success(), "!setprice: {}", rc.1);
@@ -3505,7 +3508,7 @@ fn test_match_utxo_with_eth_taker_buy() {
         "base": "MYCOIN",
         "rel": "ETH",
         "price": 1,
-        "volume": "0.1",
+        "volume": "0.0001",
     })))
     .unwrap();
     assert!(rc.0.is_success(), "!buy: {}", rc.1);

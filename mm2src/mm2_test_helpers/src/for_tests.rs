@@ -5,7 +5,7 @@ use crate::structs::*;
 use common::custom_futures::repeatable::{Ready, Retry};
 use common::executor::Timer;
 use common::log::debug;
-use common::{cfg_native, now_float, now_ms, repeatable, PagingOptionsEnum};
+use common::{cfg_native, now_float, now_ms, repeatable, wait_until_ms, PagingOptionsEnum};
 use common::{get_utc_timestamp, log};
 use crypto::CryptoCtx;
 use gstuff::{try_s, ERR, ERRL};
@@ -126,8 +126,8 @@ pub const ZOMBIE_TICKER: &str = "ZOMBIE";
 pub const ARRR: &str = "ARRR";
 pub const ZOMBIE_ELECTRUMS: &[&str] = &["zombie.dragonhound.info:10033"];
 pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &["http://zombie.dragonhound.info:443"];
-pub const PIRATE_ELECTRUMS: &[&str] = &["pirate.dragonhound.info:10032"];
-pub const PIRATE_LIGHTWALLETD_URLS: &[&str] = &["http://pirate.dragonhound.info:443"];
+pub const PIRATE_ELECTRUMS: &[&str] = &["node1.chainkeeper.pro:10132"];
+pub const PIRATE_LIGHTWALLETD_URLS: &[&str] = &["http://node1.chainkeeper.pro:443"];
 pub const DEFAULT_RPC_PASSWORD: &str = "pass";
 pub const QRC20_ELECTRUMS: &[&str] = &[
     "electrum1.cipig.net:10071",
@@ -143,12 +143,15 @@ pub const TBTC_ELECTRUMS: &[&str] = &[
 pub const ETH_MAINNET_NODE: &str = "https://mainnet.infura.io/v3/c01c1b4cf66642528547624e1d6d9d6b";
 pub const ETH_MAINNET_SWAP_CONTRACT: &str = "0x24abe4c71fc658c91313b6552cd40cd808b3ea80";
 
-pub const ETH_DEV_NODES: &[&str] = &["http://195.201.0.6:8565"];
-pub const ETH_DEV_SWAP_CONTRACT: &str = "0xa09ad3cd7e96586ebd05a2607ee56b56fb2db8fd";
+pub const ETH_DEV_NODE: &str = "http://195.201.137.5:8545";
+pub const ETH_DEV_NODES: &[&str] = &["http://195.201.137.5:8545"];
+pub const ETH_DEV_SWAP_CONTRACT: &str = "0x83965c539899cc0f918552e5a26915de40ee8852";
+pub const ETH_DEV_FALLBACK_CONTRACT: &str = "0xEA6CFe3D0f6B8814A88027b9cA865b82816409a4";
+pub const ETH_DEV_TOKEN_CONTRACT: &str = "0x6c2858f6aFaC835c43ffDa248aFA167e1a58436C";
 
-pub const ETH_SEPOLIA_NODE: &[&str] = &["https://rpc-sepolia.rockx.com/"];
-pub const ETH_SEPOLIA_SWAP_CONTRACT: &str = "0x5BCC05dD32a87fABEDBcbbfeb77476eaD1F7051C";
-pub const ETH_SEPOLIA_TOKEN_CONTRACT: &str = "0x948BF5172383F1Bc0Fdf3aBe0630b855694A5D2c";
+pub const ETH_SEPOLIA_NODE: &[&str] = &["https://rpc2.sepolia.org"];
+pub const ETH_SEPOLIA_SWAP_CONTRACT: &str = "0xeA6D65434A15377081495a9E7C5893543E7c32cB";
+pub const ETH_SEPOLIA_TOKEN_CONTRACT: &str = "0x09d0d71FBC00D7CCF9CFf132f5E6825C88293F19";
 
 pub const BCHD_TESTNET_URLS: &[&str] = &["https://bchd-testnet.greyh.at:18335"];
 
@@ -643,6 +646,17 @@ pub fn eth_testnet_conf() -> Json {
     })
 }
 
+pub fn eth_sepolia_conf() -> Json {
+    json!({
+        "coin": "ETH",
+        "name": "ethereum",
+        "chain_id": 11155111,
+        "protocol": {
+            "type": "ETH"
+        }
+    })
+}
+
 pub fn eth_jst_testnet_conf() -> Json {
     json!({
         "coin": "JST",
@@ -652,21 +666,23 @@ pub fn eth_jst_testnet_conf() -> Json {
             "type": "ERC20",
             "protocol_data": {
                 "platform": "ETH",
-                "contract_address": "0x2b294F029Fde858b2c62184e8390591755521d8E"
+                "contract_address": ETH_DEV_TOKEN_CONTRACT
             }
         }
     })
 }
 
-pub fn eth_jst_conf(contract_address: &str) -> Json {
+pub fn jst_sepolia_conf() -> Json {
     json!({
         "coin": "JST",
         "name": "jst",
+        "chain_id": 11155111,
         "protocol": {
             "type": "ERC20",
             "protocol_data": {
                 "platform": "ETH",
-                "contract_address": contract_address
+                "chain_id": 11155111,
+                "contract_address": ETH_SEPOLIA_TOKEN_CONTRACT
             }
         }
     })
@@ -1579,7 +1595,7 @@ pub async fn enable_native(mm: &MarketMakerIt, coin: &str, urls: &[&str]) -> Jso
             "coin": coin,
             "urls": urls,
             // Dev chain swap contract address
-            "swap_contract_address": "0xa09ad3cd7e96586ebd05a2607ee56b56fb2db8fd",
+            "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
             "mm2": 1,
         }))
         .await
@@ -1602,6 +1618,7 @@ pub async fn enable_eth_coin(
             "method": "enable",
             "coin": coin,
             "urls": urls,
+            "chain_id": 5,
             "swap_contract_address": swap_contract_address,
             "fallback_swap_contract": fallback_swap_contract,
             "mm2": 1,
@@ -2070,7 +2087,7 @@ pub async fn check_recent_swaps(mm: &MarketMakerIt, expected_len: usize) {
 pub async fn wait_till_history_has_records(mm: &MarketMakerIt, coin: &str, expected_len: usize) {
     // give 2 second max to fetch a single transaction
     let to_wait = expected_len as u64 * 2;
-    let wait_until = now_ms() + to_wait * 1000;
+    let wait_until = wait_until_ms(to_wait * 1000);
     loop {
         let tx_history = mm
             .rpc(&json!({
@@ -2435,11 +2452,12 @@ pub async fn max_maker_vol(mm: &MarketMakerIt, coin: &str) -> RpcResponse {
     RpcResponse::new("max_maker_vol", rc)
 }
 
-pub async fn disable_coin(mm: &MarketMakerIt, coin: &str) -> DisableResult {
+pub async fn disable_coin(mm: &MarketMakerIt, coin: &str, force_disable: bool) -> DisableResult {
     let req = json! ({
         "userpass": mm.userpass,
         "method": "disable_coin",
         "coin": coin,
+        "force_disable": force_disable,
     });
     let disable = mm.rpc(&req).await.unwrap();
     assert_eq!(disable.0, StatusCode::OK, "!disable_coin: {}", disable.1);
@@ -2449,12 +2467,13 @@ pub async fn disable_coin(mm: &MarketMakerIt, coin: &str) -> DisableResult {
 
 /// Checks whether the `disable_coin` RPC fails.
 /// Returns a `DisableCoinError` error.
-pub async fn disable_coin_err(mm: &MarketMakerIt, coin: &str) -> DisableCoinError {
+pub async fn disable_coin_err(mm: &MarketMakerIt, coin: &str, force_disable: bool) -> DisableCoinError {
     let disable = mm
         .rpc(&json! ({
             "userpass": mm.userpass,
             "method": "disable_coin",
             "coin": coin,
+            "force_disable": force_disable,
         }))
         .await
         .unwrap();
@@ -2509,6 +2528,43 @@ pub async fn enable_tendermint(
     );
     println!("enable_tendermint_with_assets response {}", request.1);
     json::from_str(&request.1).unwrap()
+}
+
+pub async fn enable_tendermint_without_balance(
+    mm: &MarketMakerIt,
+    coin: &str,
+    ibc_assets: &[&str],
+    rpc_urls: &[&str],
+    tx_history: bool,
+) -> Json {
+    let ibc_requests: Vec<_> = ibc_assets.iter().map(|ticker| json!({ "ticker": ticker })).collect();
+
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "enable_tendermint_with_assets",
+        "mmrpc": "2.0",
+        "params": {
+            "ticker": coin,
+            "tokens_params": ibc_requests,
+            "rpc_urls": rpc_urls,
+            "tx_history": tx_history,
+            "get_balances": false
+        }
+    });
+    println!(
+        "enable_tendermint_with_assets request {}",
+        serde_json::to_string(&request).unwrap()
+    );
+
+    let request = mm.rpc(&request).await.unwrap();
+    assert_eq!(
+        request.0,
+        StatusCode::OK,
+        "'enable_tendermint_with_assets' failed: {}",
+        request.1
+    );
+    println!("enable_tendermint_with_assets response {}", request.1);
+    serde_json::from_str(&request.1).unwrap()
 }
 
 pub async fn get_tendermint_my_tx_history(mm: &MarketMakerIt, coin: &str, limit: usize, page_number: usize) -> Json {
