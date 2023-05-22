@@ -20,7 +20,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub async fn enable(&self, asset: &str) -> Result<(), ()> {
         info!("Enabling asset: {asset}");
 
-        let activation_scheme = get_activation_scheme();
+        let activation_scheme = get_activation_scheme()?;
         let Some(activate_specific_settings) = activation_scheme.get_activation_method(asset) else {
             warn!("Asset is not known: {asset}");
             return Err(());

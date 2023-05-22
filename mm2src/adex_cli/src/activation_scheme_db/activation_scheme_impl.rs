@@ -7,6 +7,7 @@ use crate::helpers::read_json_file;
 
 pub(crate) trait ActivationScheme {
     type ActivationCommand;
+    fn load_scheme(&mut self) -> Result<(), ()>;
     fn get_activation_method(&self, coin: &str) -> Option<Self::ActivationCommand>;
 }
 
@@ -16,15 +17,9 @@ struct ActivationSchemeJson {
 
 impl ActivationSchemeJson {
     fn new() -> Self {
-        let mut new = Self {
+        Self {
             scheme: HashMap::<String, Json>::new(),
-        };
-
-        let Ok(Json::Array(mut results)) = Self::load_json_file() else {
-            return new;
-        };
-        new.scheme = results.iter_mut().map(Self::get_coin_pair).collect();
-        new
+        }
     }
 
     fn get_coin_pair(element: &mut Json) -> (String, Json) {
@@ -42,17 +37,20 @@ impl ActivationSchemeJson {
         Ok((coin, command))
     }
 
-    fn load_json_file() -> Result<Json, ()> {
+    fn load_json_file() -> Result<Vec<Json>, ()> {
         let activation_scheme_path = get_activation_scheme_path()?;
         debug!("Start reading activation_scheme from: {activation_scheme_path:?}");
 
         let mut activation_scheme: Json = read_json_file(&activation_scheme_path)?;
 
-        let results = activation_scheme
+        let Json::Array(results) = activation_scheme
             .get_mut("results")
-            .ok_or_else(|| error!("Failed to get results section"))?
-            .take();
-
+            .ok_or_else(|| error!("Failed to load activation scheme json file, no results section"))?
+            .take()
+        else {
+            error!("Failed to load activation scheme json file, wrong format");
+            return Err(());
+        };
         Ok(results)
     }
 }
@@ -71,9 +69,17 @@ impl ActivationScheme for ActivationSchemeJson {
         }
         Some(copy)
     }
+
+    fn load_scheme(&mut self) -> Result<(), ()> {
+        let mut results: Vec<Json> = Self::load_json_file()?;
+        self.scheme = results.iter_mut().map(Self::get_coin_pair).collect();
+        Ok(())
+    }
 }
 
-pub(crate) fn get_activation_scheme() -> Box<dyn ActivationScheme<ActivationCommand = Json>> {
-    let activation_scheme: Box<dyn ActivationScheme<ActivationCommand = Json>> = Box::new(ActivationSchemeJson::new());
-    activation_scheme
+pub(crate) fn get_activation_scheme() -> Result<Box<dyn ActivationScheme<ActivationCommand = Json>>, ()> {
+    let mut activation_scheme: Box<dyn ActivationScheme<ActivationCommand = Json>> =
+        Box::new(ActivationSchemeJson::new());
+    activation_scheme.as_mut().load_scheme()?;
+    Ok(activation_scheme)
 }
