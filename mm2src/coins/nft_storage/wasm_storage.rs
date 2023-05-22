@@ -1,5 +1,6 @@
 use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps};
+use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryFilters,
+                         NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
 use derive_more::Display;
@@ -79,12 +80,13 @@ impl DbInstance for NftCacheIDB {
     fn db_name() -> &'static str { DB_NAME }
 
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
-        // todo add tables for each chain?
+        // todo add tables for each chain
         let inner = IndexedDbBuilder::new(db_id).with_version(DB_VERSION).build().await?;
         Ok(NftCacheIDB { inner })
     }
 }
 
+#[allow(dead_code)]
 impl NftCacheIDB {
     fn get_inner(&self) -> &IndexedDb { &self.inner }
 }
@@ -102,6 +104,7 @@ impl IndexedDbNftStorage {
         })
     }
 
+    #[allow(dead_code)]
     async fn lock_db(&self) -> WasmNftCacheResult<NftCacheIDBLocked<'_>> {
         self.db.get_or_initialize().await.mm_err(WasmNftCacheError::from)
     }
@@ -133,6 +136,15 @@ impl NftListStorageOps for IndexedDbNftStorage {
         todo!()
     }
 
+    async fn get_nft(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<Option<Nft>, Self::Error> {
+        todo!()
+    }
+
     async fn remove_nft_from_list(
         &self,
         _chain: &Chain,
@@ -156,6 +168,8 @@ impl NftListStorageOps for IndexedDbNftStorage {
 
     async fn get_last_block_number(&self, _chain: &Chain) -> MmResult<Option<u32>, Self::Error> { todo!() }
 
+    async fn get_last_scanned_block(&self, _chain: &Chain) -> MmResult<Option<u32>, Self::Error> { todo!() }
+
     async fn update_nft_amount(&self, _chain: &Chain, _nft: Nft, _scanned_block: u64) -> MmResult<(), Self::Error> {
         todo!()
     }
@@ -173,13 +187,67 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
 
     async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { todo!() }
 
-    async fn get_tx_history(&self, _chain: &Chain) -> MmResult<NftsTransferHistoryList, Self::Error> { todo!() }
+    async fn get_tx_history(
+        &self,
+        _chains: Vec<Chain>,
+        _max: bool,
+        _limit: usize,
+        _page_number: Option<NonZeroUsize>,
+        _filters: Option<NftTxHistoryFilters>,
+    ) -> MmResult<NftsTransferHistoryList, Self::Error> {
+        todo!()
+    }
 
-    async fn add_txs_to_history<I>(&self, _chain: &Chain, _nfts: I) -> MmResult<(), Self::Error>
+    async fn add_txs_to_history<I>(&self, _chain: &Chain, _txs: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send,
     {
+        todo!()
+    }
+
+    async fn get_last_block_number(&self, _chain: &Chain) -> MmResult<Option<u32>, Self::Error> { todo!() }
+
+    async fn get_txs_from_block(
+        &self,
+        _chain: &Chain,
+        _from_block: u32,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_txs_by_token_addr_id(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_tx_by_tx_hash(
+        &self,
+        _chain: &Chain,
+        _transaction_hash: String,
+    ) -> MmResult<Option<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn update_tx_details_json_by_hash(
+        &self,
+        _chain: &Chain,
+        _tx: NftTransferHistory,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+
+    async fn update_txs_coll_name_by_token_addr_id(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+        _collection_name: Option<String>,
+    ) -> MmResult<(), Self::Error> {
         todo!()
     }
 }

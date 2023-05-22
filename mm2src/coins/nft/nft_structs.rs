@@ -364,6 +364,7 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct NftTxHistoryFilters {
     #[serde(default)]
