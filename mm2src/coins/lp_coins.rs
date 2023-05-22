@@ -292,6 +292,7 @@ pub mod nft_storage;
 
 #[cfg(not(target_arch = "wasm32"))] pub mod z_coin;
 
+use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 #[cfg(not(target_arch = "wasm32"))] use z_coin::ZCoin;
 
 pub type TransactionFut = Box<dyn Future<Item = TransactionEnum, Error = TransactionErr> + Send>;
@@ -1929,10 +1930,27 @@ pub enum WithdrawError {
         available: BigDecimal,
         required: BigDecimal,
     },
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
 }
 
 impl From<GetNftInfoError> for WithdrawError {
     fn from(e: GetNftInfoError) -> Self { WithdrawError::GetNftInfoError(e) }
+}
+
+impl<T: NftStorageError> From<T> for WithdrawError {
+    fn from(err: T) -> Self {
+        let msg = format!("{:?}", err);
+        WithdrawError::DbError(msg)
+    }
+}
+
+impl From<CreateNftStorageError> for WithdrawError {
+    fn from(e: CreateNftStorageError) -> Self {
+        match e {
+            CreateNftStorageError::Internal(err) => WithdrawError::InternalError(err),
+        }
+    }
 }
 
 impl HttpStatusCode for WithdrawError {
@@ -1961,7 +1979,9 @@ impl HttpStatusCode for WithdrawError {
             WithdrawError::HwError(_) => StatusCode::GONE,
             #[cfg(target_arch = "wasm32")]
             WithdrawError::BroadcastExpected(_) => StatusCode::BAD_REQUEST,
-            WithdrawError::Transport(_) | WithdrawError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            WithdrawError::Transport(_) | WithdrawError::InternalError(_) | WithdrawError::DbError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            },
         }
     }
 }

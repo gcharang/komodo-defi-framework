@@ -614,3 +614,32 @@ where
     }
     Ok(())
 }
+
+/// `find_wallet_nft_amount` function returns NFT amount of cached NFT.
+/// In db token_address is kept in lowercase, because Moralis returns all addresses in lowercase.
+pub(crate) async fn find_wallet_nft_amount(
+    ctx: &MmArc,
+    chain: &Chain,
+    token_address: String,
+    token_id: BigDecimal,
+) -> MmResult<BigDecimal, GetNftInfoError> {
+    let storage = NftStorageBuilder::new(ctx).build()?;
+    if !NftListStorageOps::is_initialized(&storage, chain).await? {
+        NftListStorageOps::init(&storage, chain).await?;
+    }
+
+    let nft_meta = storage
+        .get_nft(chain, token_address.to_lowercase(), token_id.clone())
+        .await?;
+
+    let wallet_amount = match nft_meta {
+        Some(nft) => nft.amount,
+        None => {
+            return MmError::err(GetNftInfoError::TokenNotFoundInWallet {
+                token_address,
+                token_id: token_id.to_string(),
+            })
+        },
+    };
+    Ok(wallet_amount)
+}

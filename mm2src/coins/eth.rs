@@ -105,7 +105,7 @@ pub use rlp;
 mod web3_transport;
 
 #[path = "eth/v2_activation.rs"] pub mod v2_activation;
-use crate::nft::WithdrawNftResult;
+use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
 
 mod nonce;
@@ -879,9 +879,13 @@ pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> Wit
         get_valid_nft_add_to_withdraw(coin, &withdraw_type.to, &withdraw_type.token_address)?;
     let my_address = eth_coin.my_address()?;
 
-    // todo check amount in nft cache, instead of sending new moralis req
-    let wallet_amount = BigDecimal::default();
-
+    let wallet_amount = find_wallet_nft_amount(
+        &ctx,
+        &withdraw_type.chain,
+        withdraw_type.token_address.to_lowercase(),
+        withdraw_type.token_id.clone(),
+    )
+    .await?;
     let amount_dec = if withdraw_type.max {
         wallet_amount.clone()
     } else {
