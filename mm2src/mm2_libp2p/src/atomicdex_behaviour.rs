@@ -8,7 +8,6 @@ use crate::{adex_ping::AdexPing,
                                RequestResponseSender},
             runtime::SwarmRuntime,
             NetworkInfo, NetworkPorts, RelayAddress, RelayAddressError};
-use libp2p_gossipsub::{Gossipsub, GossipsubEvent, GossipsubMessage, MessageId, TopicHash};
 use common::executor::SpawnFuture;
 use derive_more::Display;
 use futures::{channel::{mpsc::{Receiver, Sender},
@@ -26,6 +25,7 @@ use libp2p::{core::{Multiaddr, Transport},
              PeerId};
 use libp2p::{NetworkBehaviour, Swarm};
 use libp2p_floodsub::{Floodsub, FloodsubEvent, Topic as FloodsubTopic};
+use libp2p_gossipsub::{Gossipsub, GossipsubEvent, GossipsubMessage, MessageId, TopicHash};
 use log::{debug, error};
 use rand::Rng;
 use std::{collections::hash_map::HashMap, net::IpAddr, time::Duration};
