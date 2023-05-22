@@ -5,21 +5,34 @@ use std::collections::HashMap;
 use super::init_activation_scheme::get_activation_scheme_path;
 use crate::helpers::read_json_file;
 
-pub(crate) trait ActivationScheme {
-    type ActivationCommand;
-    fn init(&mut self) -> Result<(), ()>;
-    fn get_activation_method(&self, coin: &str) -> Option<Self::ActivationCommand>;
-}
-
-struct ActivationSchemeJson {
+pub struct ActivationScheme {
     scheme: HashMap<String, Json>,
 }
 
-impl ActivationSchemeJson {
+impl ActivationScheme {
     fn new() -> Self {
         Self {
             scheme: HashMap::<String, Json>::new(),
         }
+    }
+
+    pub fn get_activation_method(&self, coin: &str) -> Option<Json> {
+        let Some(Json::Object(object)) = self.scheme.get(coin) else { return None };
+        let mut copy = json!({});
+        for (k, v) in object.iter() {
+            // WORKAROUND: serde_json::Value does not support removing key
+            if *k == "userpass" {
+                continue;
+            }
+            copy[k] = v.clone();
+        }
+        Some(copy)
+    }
+
+    fn init(&mut self) -> Result<(), ()> {
+        let mut results: Vec<Json> = Self::load_json_file()?;
+        self.scheme = results.iter_mut().map(Self::get_coin_pair).collect();
+        Ok(())
     }
 
     fn get_coin_pair(element: &mut Json) -> (String, Json) {
@@ -55,31 +68,8 @@ impl ActivationSchemeJson {
     }
 }
 
-impl ActivationScheme for ActivationSchemeJson {
-    type ActivationCommand = Json;
-    fn get_activation_method(&self, coin: &str) -> Option<Self::ActivationCommand> {
-        let Some(Json::Object(object)) = self.scheme.get(coin) else { return None };
-        let mut copy = json!({});
-        for (k, v) in object.iter() {
-            // WORKAROUND: serde_json::Value does not support removing key
-            if *k == "userpass" {
-                continue;
-            }
-            copy[k] = v.clone();
-        }
-        Some(copy)
-    }
-
-    fn init(&mut self) -> Result<(), ()> {
-        let mut results: Vec<Json> = Self::load_json_file()?;
-        self.scheme = results.iter_mut().map(Self::get_coin_pair).collect();
-        Ok(())
-    }
-}
-
-pub(crate) fn get_activation_scheme() -> Result<Box<dyn ActivationScheme<ActivationCommand = Json>>, ()> {
-    let mut activation_scheme: Box<dyn ActivationScheme<ActivationCommand = Json>> =
-        Box::new(ActivationSchemeJson::new());
-    activation_scheme.as_mut().init()?;
+pub(crate) fn get_activation_scheme() -> Result<ActivationScheme, ()> {
+    let mut activation_scheme = ActivationScheme::new();
+    activation_scheme.init()?;
     Ok(activation_scheme)
 }
