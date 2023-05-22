@@ -123,9 +123,9 @@ impl fmt::Display for ContractType {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct UriMeta {
-    image: Option<String>,
+    pub(crate) image: Option<String>,
     #[serde(rename(deserialize = "name"))]
-    token_name: Option<String>,
+    pub(crate) token_name: Option<String>,
     description: Option<String>,
     attributes: Option<Json>,
     animation_url: Option<String>,
@@ -227,14 +227,9 @@ pub struct WithdrawErc721 {
 }
 
 #[derive(Clone, Deserialize)]
-pub struct WithdrawNftReq {
-    pub(crate) withdraw_type: WithdrawNftType,
-}
-
-#[derive(Clone, Deserialize)]
 #[serde(tag = "type", content = "withdraw_data")]
 #[serde(rename_all = "snake_case")]
-pub enum WithdrawNftType {
+pub enum WithdrawNftReq {
     WithdrawErc1155(WithdrawErc1155),
     WithdrawErc721(WithdrawErc721),
 }
@@ -326,6 +321,8 @@ pub struct NftTransferHistory {
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
     pub(crate) collection_name: Option<String>,
+    pub(crate) image: Option<String>,
+    pub(crate) token_name: Option<String>,
     pub(crate) from_address: String,
     pub(crate) to_address: String,
     pub(crate) status: TransferStatus,
@@ -364,7 +361,6 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct NftTxHistoryFilters {
     #[serde(default)]
@@ -379,4 +375,10 @@ pub struct NftTxHistoryFilters {
 pub struct UpdateNftReq {
     pub(crate) chains: Vec<Chain>,
     pub(crate) url: Url,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NftTokenAddrId {
+    pub(crate) token_address: String,
+    pub(crate) token_id: BigDecimal,
 }

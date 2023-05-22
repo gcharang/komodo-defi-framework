@@ -241,12 +241,14 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         todo!()
     }
 
-    async fn update_txs_coll_name_by_token_addr_id(
+    async fn update_txs_meta_by_token_addr_id(
         &self,
         _chain: &Chain,
         _token_address: String,
         _token_id: BigDecimal,
         _collection_name: Option<String>,
+        _image: Option<String>,
+        _token_name: Option<String>,
     ) -> MmResult<(), Self::Error> {
         todo!()
     }

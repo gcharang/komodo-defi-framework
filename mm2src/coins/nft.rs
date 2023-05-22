@@ -13,7 +13,7 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftList, NftListReq, N
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft::nft_structs::{TransferStatus, UriMeta, WithdrawNftType};
+use crate::nft::nft_structs::{TransferStatus, UriMeta};
 use crate::nft_storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::APPLICATION_JSON;
 use enum_from::EnumFromStringify;
@@ -22,6 +22,7 @@ use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::SlurpError;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
+use std::cmp::Ordering;
 
 const MORALIS_API_ENDPOINT: &str = "api/v2";
 /// query parameters for moralis request: The format of the token ID
@@ -108,7 +109,9 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
             storage
                 .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
                 .await?;
-            update_coll_name_in_txs(&storage, chain, nft_list).await?;
+            // this will update only txs related to current nfts in wallet.
+            update_meta_in_txs(&storage, chain, nft_list).await?;
+            update_txs_with_empty_meta(&storage, chain, &req.url).await?;
         } else {
             let last_scanned_block = storage.get_last_scanned_block(chain).await?;
             let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
@@ -119,6 +122,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 (Some(scanned_block), Some(nft_block)) => {
                     if scanned_block >= nft_block {
                         update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
+                        update_txs_with_empty_meta(&storage, chain, &req.url).await?;
                     } else {
                         return MmError::err(UpdateNftError::InvalidBlockOrder {
                             last_scanned_block: scanned_block.to_string(),
@@ -138,45 +142,16 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 // we can try to get all info from moralis.
                 (Some(_), None) => {
                     let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
-                    update_coll_name_in_txs(&storage, chain, nfts).await?;
+                    update_meta_in_txs(&storage, chain, nfts).await?;
+                    update_txs_with_empty_meta(&storage, chain, &req.url).await?;
                 },
                 (None, None) => {
                     let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
-                    update_coll_name_in_txs(&storage, chain, nfts).await?;
+                    update_meta_in_txs(&storage, chain, nfts).await?;
+                    update_txs_with_empty_meta(&storage, chain, &req.url).await?;
                 },
             }
         }
-    }
-    Ok(())
-}
-
-async fn cache_nfts_from_moralis<T>(
-    ctx: &MmArc,
-    storage: &T,
-    chain: &Chain,
-    url: &Url,
-) -> MmResult<Vec<Nft>, UpdateNftError>
-where
-    T: NftListStorageOps + NftTxHistoryStorageOps,
-{
-    let nft_list = get_moralis_nft_list(ctx, chain, url).await?;
-    let last_scanned_block = NftTxHistoryStorageOps::get_last_block_number(storage, chain)
-        .await?
-        .unwrap_or(0);
-    storage
-        .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
-        .await?;
-    Ok(nft_list)
-}
-
-async fn update_coll_name_in_txs<T>(storage: &T, chain: &Chain, nfts: Vec<Nft>) -> MmResult<(), UpdateNftError>
-where
-    T: NftListStorageOps + NftTxHistoryStorageOps,
-{
-    for nft in nfts.into_iter() {
-        storage
-            .update_txs_coll_name_by_token_addr_id(chain, nft.token_address, nft.token_id, nft.collection_name)
-            .await?;
     }
     Ok(())
 }
@@ -196,16 +171,30 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<(
         chain: req.chain,
         url: req.url,
     };
-    let mut nft = get_nft_metadata(ctx, req).await?;
-    nft.collection_name = moralis_meta.collection_name;
-    nft.symbol = moralis_meta.symbol;
-    nft.token_uri = moralis_meta.token_uri;
-    nft.metadata = moralis_meta.metadata;
-    nft.last_token_uri_sync = moralis_meta.last_token_uri_sync;
-    nft.last_metadata_sync = moralis_meta.last_metadata_sync;
-    nft.possible_spam = moralis_meta.possible_spam;
-    drop_mutability!(nft);
-    storage.refresh_nft_metadata(&moralis_meta.chain, nft).await?;
+    let mut nft_db = get_nft_metadata(ctx, req).await?;
+    let uri_meta = try_get_uri_meta(&moralis_meta.token_uri).await?;
+    nft_db.collection_name = moralis_meta.collection_name;
+    nft_db.symbol = moralis_meta.symbol;
+    nft_db.token_uri = moralis_meta.token_uri;
+    nft_db.metadata = moralis_meta.metadata;
+    nft_db.last_token_uri_sync = moralis_meta.last_token_uri_sync;
+    nft_db.last_metadata_sync = moralis_meta.last_metadata_sync;
+    nft_db.possible_spam = moralis_meta.possible_spam;
+    nft_db.uri_meta = uri_meta;
+    drop_mutability!(nft_db);
+    storage
+        .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
+        .await?;
+    storage
+        .update_txs_meta_by_token_addr_id(
+            &nft_db.chain,
+            nft_db.token_address,
+            nft_db.token_id,
+            nft_db.collection_name,
+            nft_db.uri_meta.image,
+            nft_db.uri_meta.token_name,
+        )
+        .await?;
     Ok(())
 }
 
@@ -329,6 +318,8 @@ async fn get_moralis_nft_transfers(
                     token_address: transfer_wrapper.token_address,
                     token_id: transfer_wrapper.token_id.0,
                     collection_name: None,
+                    image: None,
+                    token_name: None,
                     from_address: transfer_wrapper.from_address,
                     to_address: transfer_wrapper.to_address,
                     status,
@@ -406,9 +397,9 @@ async fn get_moralis_metadata(
 /// from my address to recipient's address.
 /// This method generates a raw transaction which should then be broadcast using `send_raw_transaction`.
 pub async fn withdraw_nft(ctx: MmArc, req: WithdrawNftReq) -> WithdrawNftResult {
-    match req.withdraw_type {
-        WithdrawNftType::WithdrawErc1155(erc1155_withdraw) => withdraw_erc1155(ctx, erc1155_withdraw).await,
-        WithdrawNftType::WithdrawErc721(erc721_withdraw) => withdraw_erc721(ctx, erc721_withdraw).await,
+    match req {
+        WithdrawNftReq::WithdrawErc1155(erc1155_withdraw) => withdraw_erc1155(ctx, erc1155_withdraw).await,
+        WithdrawNftReq::WithdrawErc721(erc721_withdraw) => withdraw_erc721(ctx, erc721_withdraw).await,
     }
 }
 
@@ -521,13 +512,30 @@ where
             coin: chain.to_ticker(),
         };
         let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
-        match (tx.from_address == my_address, tx.contract_type) {
-            (true, ContractType::Erc721) => {
+        match (tx.status, tx.contract_type) {
+            (TransferStatus::Send, ContractType::Erc721) => {
+                if let Some(nft) = storage
+                    .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
+                    .await?
+                {
+                    storage
+                        .update_txs_meta_by_token_addr_id(
+                            chain,
+                            nft.token_address,
+                            nft.token_id,
+                            nft.collection_name,
+                            nft.uri_meta.image,
+                            nft.uri_meta.token_name,
+                        )
+                        .await?;
+                } else {
+                    continue;
+                };
                 storage
                     .remove_nft_from_list(chain, tx.token_address, tx.token_id, tx.block_number)
                     .await?;
             },
-            (false, ContractType::Erc721) => {
+            (TransferStatus::Receive, ContractType::Erc721) => {
                 let mut nft = get_moralis_metadata(tx.token_address, tx.token_id, chain, url).await?;
                 // sometimes moralis updates Get All NFTs (which also affects Get Metadata) later
                 // than History by Wallet update
@@ -537,26 +545,52 @@ where
                 storage
                     .add_nfts_to_list(chain, [nft.clone()], tx.block_number as u32)
                     .await?;
-                update_coll_name_in_txs(storage, chain, vec![nft]).await?;
+                storage
+                    .update_txs_meta_by_token_addr_id(
+                        chain,
+                        nft.token_address,
+                        nft.token_id,
+                        nft.collection_name,
+                        nft.uri_meta.image,
+                        nft.uri_meta.token_name,
+                    )
+                    .await?;
             },
-            (true, ContractType::Erc1155) => {
+            (TransferStatus::Send, ContractType::Erc1155) => {
                 let nft_db = storage
                     .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
                     .await?;
-                // change amount or delete nft from the list
+                // If nft exists then check the amount
                 if let Some(mut nft_db) = nft_db {
                     match nft_db.amount.cmp(&tx.amount) {
-                        std::cmp::Ordering::Equal => {
+                        Ordering::Equal => {
+                            if let Some(nft) = storage
+                                .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
+                                .await?
+                            {
+                                storage
+                                    .update_txs_meta_by_token_addr_id(
+                                        chain,
+                                        nft.token_address,
+                                        nft.token_id,
+                                        nft.collection_name,
+                                        nft.uri_meta.image,
+                                        nft.uri_meta.token_name,
+                                    )
+                                    .await?;
+                            } else {
+                                continue;
+                            };
                             storage
                                 .remove_nft_from_list(chain, tx.token_address, tx.token_id, tx.block_number)
                                 .await?;
                         },
-                        std::cmp::Ordering::Greater => {
+                        Ordering::Greater => {
                             nft_db.amount -= tx.amount;
                             drop_mutability!(nft_db);
                             storage.update_nft_amount(chain, nft_db, tx.block_number).await?;
                         },
-                        std::cmp::Ordering::Less => {
+                        Ordering::Less => {
                             return MmError::err(UpdateNftError::InsufficientAmountInCache {
                                 amount_list: nft_db.amount.to_string(),
                                 amount_history: tx.amount.to_string(),
@@ -571,16 +605,32 @@ where
                     });
                 }
             },
-            (false, ContractType::Erc1155) => {
+            (TransferStatus::Receive, ContractType::Erc1155) => {
                 let nft_db = storage
                     .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
                     .await?;
-                // change amount and block number or add nft to the list
+                // If token isn't in NFT LIST table then add nft to the table.
                 if let Some(mut nft_db) = nft_db {
-                    nft_db.amount += tx.amount;
+                    // if owner address == from address, then owner sent tokens to themself,
+                    // which means that the amount will not change.
+                    if my_address != tx.from_address {
+                        nft_db.amount += tx.amount;
+                    }
                     nft_db.block_number = tx.block_number;
                     drop_mutability!(nft_db);
-                    storage.update_nft_amount_and_block_number(chain, nft_db).await?;
+                    storage
+                        .update_nft_amount_and_block_number(chain, nft_db.clone())
+                        .await?;
+                    storage
+                        .update_txs_meta_by_token_addr_id(
+                            chain,
+                            nft_db.token_address,
+                            nft_db.token_id,
+                            nft_db.collection_name,
+                            nft_db.uri_meta.image,
+                            nft_db.uri_meta.token_name,
+                        )
+                        .await?;
                 } else {
                     let moralis_meta = get_moralis_metadata(tx.token_address, tx.token_id.clone(), chain, url).await?;
                     let uri_meta = try_get_uri_meta(&moralis_meta.token_uri).await?;
@@ -607,7 +657,16 @@ where
                     storage
                         .add_nfts_to_list(chain, [nft.clone()], tx.block_number as u32)
                         .await?;
-                    update_coll_name_in_txs(storage, chain, vec![nft]).await?;
+                    storage
+                        .update_txs_meta_by_token_addr_id(
+                            chain,
+                            nft.token_address,
+                            nft.token_id,
+                            nft.collection_name,
+                            nft.uri_meta.image,
+                            nft.uri_meta.token_name,
+                        )
+                        .await?;
                 }
             },
         }
@@ -616,7 +675,7 @@ where
 }
 
 /// `find_wallet_nft_amount` function returns NFT amount of cached NFT.
-/// In db token_address is kept in lowercase, because Moralis returns all addresses in lowercase.
+/// Note: in db **token_address** is kept in **lowercase**, because Moralis returns all addresses in lowercase.
 pub(crate) async fn find_wallet_nft_amount(
     ctx: &MmArc,
     chain: &Chain,
@@ -642,4 +701,63 @@ pub(crate) async fn find_wallet_nft_amount(
         },
     };
     Ok(wallet_amount)
+}
+
+async fn cache_nfts_from_moralis<T>(
+    ctx: &MmArc,
+    storage: &T,
+    chain: &Chain,
+    url: &Url,
+) -> MmResult<Vec<Nft>, UpdateNftError>
+where
+    T: NftListStorageOps + NftTxHistoryStorageOps,
+{
+    let nft_list = get_moralis_nft_list(ctx, chain, url).await?;
+    let last_scanned_block = NftTxHistoryStorageOps::get_last_block_number(storage, chain)
+        .await?
+        .unwrap_or(0);
+    storage
+        .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
+        .await?;
+    Ok(nft_list)
+}
+
+async fn update_meta_in_txs<T>(storage: &T, chain: &Chain, nfts: Vec<Nft>) -> MmResult<(), UpdateNftError>
+where
+    T: NftListStorageOps + NftTxHistoryStorageOps,
+{
+    for nft in nfts.into_iter() {
+        storage
+            .update_txs_meta_by_token_addr_id(
+                chain,
+                nft.token_address,
+                nft.token_id,
+                nft.collection_name,
+                nft.uri_meta.image,
+                nft.uri_meta.token_name,
+            )
+            .await?;
+    }
+    Ok(())
+}
+
+async fn update_txs_with_empty_meta<T>(storage: &T, chain: &Chain, url: &Url) -> MmResult<(), UpdateNftError>
+where
+    T: NftListStorageOps + NftTxHistoryStorageOps,
+{
+    let nft_token_addr_id = storage.get_txs_with_empty_meta(chain).await?;
+    for addr_id_pair in nft_token_addr_id.into_iter() {
+        let nft_meta = get_moralis_metadata(addr_id_pair.token_address, addr_id_pair.token_id, chain, url).await?;
+        storage
+            .update_txs_meta_by_token_addr_id(
+                chain,
+                nft_meta.token_address,
+                nft_meta.token_id,
+                nft_meta.collection_name,
+                nft_meta.uri_meta.image,
+                nft_meta.uri_meta.token_name,
+            )
+            .await?;
+    }
+    Ok(())
 }
