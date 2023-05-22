@@ -7,7 +7,7 @@ use crate::helpers::read_json_file;
 
 pub(crate) trait ActivationScheme {
     type ActivationCommand;
-    fn load_scheme(&mut self) -> Result<(), ()>;
+    fn init(&mut self) -> Result<(), ()>;
     fn get_activation_method(&self, coin: &str) -> Option<Self::ActivationCommand>;
 }
 
@@ -70,7 +70,7 @@ impl ActivationScheme for ActivationSchemeJson {
         Some(copy)
     }
 
-    fn load_scheme(&mut self) -> Result<(), ()> {
+    fn init(&mut self) -> Result<(), ()> {
         let mut results: Vec<Json> = Self::load_json_file()?;
         self.scheme = results.iter_mut().map(Self::get_coin_pair).collect();
         Ok(())
@@ -80,6 +80,6 @@ impl ActivationScheme for ActivationSchemeJson {
 pub(crate) fn get_activation_scheme() -> Result<Box<dyn ActivationScheme<ActivationCommand = Json>>, ()> {
     let mut activation_scheme: Box<dyn ActivationScheme<ActivationCommand = Json>> =
         Box::new(ActivationSchemeJson::new());
-    activation_scheme.as_mut().load_scheme()?;
+    activation_scheme.as_mut().init()?;
     Ok(activation_scheme)
 }
