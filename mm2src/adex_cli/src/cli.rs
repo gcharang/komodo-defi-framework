@@ -3,6 +3,8 @@ use common::serde_derive::Serialize;
 use mm2_number::bigdecimal::ParseBigDecimalError;
 use mm2_number::{BigDecimal, MmNumber};
 use mm2_rpc_data::legacy::{MatchBy, OrderType, SellBuyRequest};
+use mm2_rpc_data::version2::{BestOrdersAction, BestOrdersRequestV2, RequestBestOrdersBy};
+
 use rpc::v1::types::H256 as H256Json;
 use std::collections::HashSet;
 use std::mem::take;
@@ -77,6 +79,34 @@ enum Command {
     OrderStatus {
         uuid: Uuid,
     },
+
+    BestOrders {
+        #[arg(help = "Whether to buy or sell the selected coin")]
+        coin: String,
+        #[arg(help = "The ticker of the coin to get best orders")]
+        action: ActionCli,
+        #[command(flatten)]
+        delegate: BestOrdersByCli,
+        #[arg(
+            long,
+            help = "Tickers included in response when orderbook_ticker is configured for the queried coin in coins file",
+            default_value = "false"
+        )]
+        show_orig_tickets: bool,
+    },
+}
+
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+struct BestOrdersByCli {
+    #[arg(long, group = "best-orders", value_parser=parse_mm_number, help="The returned results will show the best prices for trades that can fill the requested volume")]
+    volume: Option<MmNumber>,
+    #[arg(
+        long,
+        group = "best-orders",
+        help = "The returned results will show a list of the best prices"
+    )]
+    number: Option<usize>,
 }
 
 #[derive(Subcommand)]
@@ -156,6 +186,22 @@ impl Cli {
             },
             Command::Cancel(CancelSubcommand::ByCoin { ticker }) => proc.cancel_by_coin(take(ticker)).await?,
             Command::OrderStatus { uuid } => proc.order_status(uuid).await?,
+            Command::BestOrders {
+                delegate,
+                coin,
+                action,
+                show_orig_tickets,
+            } => {
+                proc.best_orders(
+                    BestOrdersRequestV2 {
+                        coin: take(coin),
+                        action: action.into(),
+                        request_by: delegate.into(),
+                    },
+                    *show_orig_tickets,
+                )
+                .await?
+            },
         }
         Ok(())
     }
@@ -280,6 +326,35 @@ enum OrderTypeCli {
     GoodTillCancelled,
 }
 
+#[derive(Copy, Clone, ValueEnum)]
+enum ActionCli {
+    Buy,
+    Sell,
+}
+
+#[derive(Subcommand)]
+enum CancelSubcommand {
+    #[command(about = "Cancels certain order by uuid")]
+    Order {
+        #[arg(help = "Order identifier")]
+        uuid: Uuid,
+    },
+    #[command(about = "Cancels all orders of current node")]
+    All,
+    #[command(about = "Cancels all orders of specific pair")]
+    ByPair {
+        #[arg(help = "base coin of the pair; ")]
+        base: String,
+        #[arg(help = "rel coin of the pair; ")]
+        rel: String,
+    },
+    #[command(about = "Cancels all orders using the coin ticker as base or rel")]
+    ByCoin {
+        #[arg(help = "order is cancelled if it uses ticker as base or rel")]
+        ticker: String,
+    },
+}
+
 impl From<OrderTypeCli> for OrderType {
     fn from(value: OrderTypeCli) -> Self {
         match value {
@@ -322,25 +397,23 @@ impl From<&mut OrderCli> for SellBuyRequest {
     }
 }
 
-#[derive(Subcommand)]
-enum CancelSubcommand {
-    #[command(about = "Cancels certain order by uuid")]
-    Order {
-        #[arg(help = "Order identifier")]
-        uuid: Uuid,
-    },
-    #[command(about = "Cancels all orders of current node")]
-    All,
-    #[command(about = "Cancels all orders of specific pair")]
-    ByPair {
-        #[arg(help = "base coin of the pair; ")]
-        base: String,
-        #[arg(help = "rel coin of the pair; ")]
-        rel: String,
-    },
-    #[command(about = "Cancels all orders using the coin ticker as base or rel")]
-    ByCoin {
-        #[arg(help = "order is cancelled if it uses ticker as base or rel")]
-        ticker: String,
-    },
+impl From<&mut BestOrdersByCli> for RequestBestOrdersBy {
+    fn from(value: &mut BestOrdersByCli) -> Self {
+        if let Some(number) = value.number {
+            RequestBestOrdersBy::Number(number)
+        } else if let Some(ref mut volume) = value.volume {
+            RequestBestOrdersBy::Volume(take(volume))
+        } else {
+            panic!("Unreachable state during converting BestOrdersCli into RequestBestOrdersBy");
+        }
+    }
+}
+
+impl From<&mut ActionCli> for BestOrdersAction {
+    fn from(value: &mut ActionCli) -> Self {
+        match value {
+            ActionCli::Buy => BestOrdersAction::Buy,
+            ActionCli::Sell => BestOrdersAction::Sell,
+        }
+    }
 }

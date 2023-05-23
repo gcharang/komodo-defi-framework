@@ -48,7 +48,8 @@ use futures::Future as Future03;
 use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use mm2_rpc::mm_protocol::{MmRpcBuilder, MmRpcRequest, MmRpcVersion};
+use mm2_rpc::mm_protocol::MmRpcBuilder;
+use mm2_rpc_data::version2::{MmRpcRequest, MmRpcVersion};
 use nft::{get_nft_list, get_nft_metadata, get_nft_transfers, withdraw_nft};
 use serde::de::DeserializeOwned;
 use serde_json::{self as json, Value as Json};
@@ -65,7 +66,7 @@ pub async fn process_single_request(
     client: SocketAddr,
     local_only: bool,
 ) -> DispatcherResult<Response<Vec<u8>>> {
-    let request: MmRpcRequest = json::from_value(req)?;
+    let request: MmRpcRequest<String, Json> = json::from_value(req)?;
 
     // https://github.com/artemii235/SuperNET/issues/368
     let method_name = Some(request.method.as_str());
@@ -96,7 +97,7 @@ pub async fn process_single_request(
 ///     `E` = `WithdrawError`
 async fn handle_mmrpc<Handler, Fut, Request, T, E>(
     ctx: MmArc,
-    request: MmRpcRequest,
+    request: MmRpcRequest<String, Json>,
     handler: Handler,
 ) -> DispatcherResult<Response<Vec<u8>>>
 where
@@ -119,7 +120,7 @@ where
     Ok(response.serialize_http_response())
 }
 
-async fn auth(request: &MmRpcRequest, ctx: &MmArc, client: &SocketAddr) -> DispatcherResult<()> {
+async fn auth(request: &MmRpcRequest<String, Json>, ctx: &MmArc, client: &SocketAddr) -> DispatcherResult<()> {
     if PUBLIC_METHODS.contains(&Some(request.method.as_str())) {
         return Ok(());
     }
@@ -135,7 +136,7 @@ async fn auth(request: &MmRpcRequest, ctx: &MmArc, client: &SocketAddr) -> Dispa
     }
 }
 
-async fn dispatcher_v2(request: MmRpcRequest, ctx: MmArc) -> DispatcherResult<Response<Vec<u8>>> {
+async fn dispatcher_v2(request: MmRpcRequest<String, Json>, ctx: MmArc) -> DispatcherResult<Response<Vec<u8>>> {
     if let Some(task_method) = request.method.strip_prefix("task::") {
         let task_method = task_method.to_string();
         return rpc_task_dispatcher(request, ctx, task_method).await;
@@ -221,7 +222,7 @@ async fn dispatcher_v2(request: MmRpcRequest, ctx: MmArc) -> DispatcherResult<Re
 ///
 /// `task_method` is a method name with the `task::` prefix removed.
 async fn rpc_task_dispatcher(
-    request: MmRpcRequest,
+    request: MmRpcRequest<String, Json>,
     ctx: MmArc,
     task_method: String,
 ) -> DispatcherResult<Response<Vec<u8>>> {
@@ -286,7 +287,7 @@ async fn rpc_task_dispatcher(
 ///
 /// `gui_storage_method` is a method name with the `gui_storage::` prefix removed.
 async fn gui_storage_dispatcher(
-    request: MmRpcRequest,
+    request: MmRpcRequest<String, Json>,
     ctx: MmArc,
     gui_storage_method: &str,
 ) -> DispatcherResult<Response<Vec<u8>>> {
@@ -315,7 +316,7 @@ async fn gui_storage_dispatcher(
 /// `lightning_method` is a method name with the `lightning::` prefix removed.
 #[cfg(not(target_arch = "wasm32"))]
 async fn lightning_dispatcher(
-    request: MmRpcRequest,
+    request: MmRpcRequest<String, Json>,
     ctx: MmArc,
     lightning_method: &str,
 ) -> DispatcherResult<Response<Vec<u8>>> {

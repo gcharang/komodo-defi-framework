@@ -1,4 +1,10 @@
+mod orderbook;
+mod smart_fraction_fmt;
+
 use chrono::{TimeZone, Utc};
+use cli_table::{format::{Border, Separator},
+                Table, WithTitle};
+use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
 use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
@@ -7,6 +13,7 @@ use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRes
                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
                            Mm2RpcResult, MmVersionResponse, OrderConfirmationsSettings, OrderStatusResponse,
                            OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc, TakerOrderForRpc};
+use mm2_rpc_data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
@@ -16,7 +23,7 @@ use uuid::Uuid;
 
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
-use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
+use crate::adex_proc::response_handler::smart_fraction_fmt::SmartFractionFmt;
 
 const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
@@ -40,6 +47,7 @@ pub(crate) trait ResponseHandler {
     fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
     fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<(), ()>;
     fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()>;
+    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<(), ()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -228,6 +236,70 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         }
         Ok(())
     }
+
+    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<(), ()> {
+        let mut writer = self.writer.borrow_mut();
+        if show_orig_tickets {
+            write_field!(writer, "Original tickers", "", 0);
+            for (coin, ticker) in best_orders.original_tickers {
+                write_field!(writer, coin, ticker.iter().join(","), 8);
+            }
+            return Ok(());
+        }
+
+        macro_rules! fract {
+            ($field:expr) => {
+                SmartFractionFmt::new(2, 5, $field.rational.to_f64().unwrap())
+                    .unwrap()
+                    .to_string()
+            };
+        }
+
+        #[derive(Table)]
+        struct BestOrdersRow {
+            #[table(title = "")]
+            is_mine: &'static str,
+            #[table(title = "Price")]
+            price: String,
+            #[table(title = "Base Vol.")]
+            base_vol: String,
+            #[table(title = "Rel Vol.")]
+            rel_vol: String,
+            #[table(title = "Uuid")]
+            uuid: Uuid,
+            #[table(title = "Address")]
+            address: String,
+            #[table(title = "Confirmation")]
+            conf_settings: String,
+        }
+        for (coin, mut data) in best_orders.orders {
+            writeln_safe_io!(writer, "{}: ", coin);
+            let rows: Vec<BestOrdersRow> = data
+                .iter_mut()
+                .map(|value| BestOrdersRow {
+                    is_mine: if value.is_mine { "*" } else { "" },
+                    price: fract!(value.price),
+                    uuid: value.uuid,
+                    address: value.address.to_string(),
+                    base_vol: format!("{}:{}", fract!(value.base_min_volume), fract!(value.base_max_volume)),
+                    rel_vol: format!("{}:{}", fract!(value.rel_min_volume), fract!(value.rel_max_volume)),
+                    conf_settings: value
+                        .conf_settings
+                        .map_or("".to_string(), |conf| format_confirmation_settings(&conf)),
+                })
+                .collect();
+
+            let table = rows
+                .with_title()
+                .separator(Separator::builder().build())
+                .border(Border::builder().build())
+                .display()
+                .unwrap();
+            writeln_safe_io!(writer, "{}", table);
+        }
+
+        Ok(())
+    }
 }
 
 impl ResponseHandlerImpl<'_> {
@@ -403,13 +475,13 @@ impl ResponseHandlerImpl<'_> {
 mod macros {
     #[macro_export]
     macro_rules! write_field {
-        ($writer:ident, $name:expr, $value:expr, $width:ident) => {
+        ($writer:ident, $name:expr, $value:expr, $width:expr) => {
             writeln_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width);
         };
     }
     #[macro_export]
     macro_rules! write_field_option {
-        ($writer:ident, $name:expr, $value:expr, $width:ident) => {
+        ($writer:ident, $name:expr, $value:expr, $width:expr) => {
             if let Some(ref value) = $value {
                 writeln_safe_io!($writer, "{:>width$}: {}", $name, value, width = $width);
             }
@@ -464,11 +536,11 @@ mod macros {
         };
     }
 
-    pub use {write_confirmation_settings, write_connected, write_field};
+    pub use {write_base_rel, write_confirmation_settings, write_connected, write_field};
 }
 
-use crate::{write_base_rel, write_field_option};
-use macros::{write_confirmation_settings, write_connected, write_field};
+use crate::write_field_option;
+use macros::{write_base_rel, write_confirmation_settings, write_connected, write_field};
 
 struct SimpleCliTable<'a> {
     key: &'a String,
@@ -480,188 +552,6 @@ impl<'a> SimpleCliTable<'a> {
         SimpleCliTable {
             key: pair.0,
             value: pair.1,
-        }
-    }
-}
-
-mod orderbook {
-    use mm2_number::bigdecimal::ToPrimitive;
-    use mm2_rpc_data::legacy::AggregatedOrderbookEntry;
-    use std::cmp::Ordering;
-    use std::fmt::{Display, Formatter};
-
-    use super::super::{smart_fraction_fmt::SmartFractionFmt, OrderbookConfig};
-    use super::format_confirmation_settings;
-    use crate::adex_config::{PricePrecision, VolumePrecision};
-
-    pub fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
-        let cmp = left.entry.price.cmp(&right.entry.price).reverse();
-        if cmp.is_eq() {
-            return left
-                .entry
-                .base_max_volume
-                .base_max_volume
-                .cmp(&right.entry.base_max_volume.base_max_volume)
-                .reverse();
-        }
-        cmp
-    }
-
-    pub fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
-        let cmp = left.entry.price.cmp(&right.entry.price).reverse();
-        if cmp.is_eq() {
-            return left
-                .entry
-                .base_max_volume
-                .base_max_volume
-                .cmp(&right.entry.base_max_volume.base_max_volume);
-        }
-        cmp
-    }
-
-    enum AskBidRowVal {
-        Value(String),
-        Delim,
-    }
-
-    pub struct AskBidRow<'a> {
-        volume: AskBidRowVal,
-        price: AskBidRowVal,
-        uuid: AskBidRowVal,
-        min_volume: AskBidRowVal,
-        max_volume: AskBidRowVal,
-        age: AskBidRowVal,
-        public: AskBidRowVal,
-        address: AskBidRowVal,
-        is_mine: AskBidRowVal,
-        conf_settings: AskBidRowVal,
-        config: &'a OrderbookConfig,
-    }
-
-    impl<'a> AskBidRow<'a> {
-        #[allow(clippy::too_many_arguments)]
-        pub(crate) fn new(
-            volume: &str,
-            price: &str,
-            uuid: &str,
-            min_volume: &str,
-            max_volume: &str,
-            age: &str,
-            public: &str,
-            address: &str,
-            conf_settings: &str,
-            config: &'a OrderbookConfig,
-        ) -> Self {
-            Self {
-                is_mine: AskBidRowVal::Value(String::new()),
-                volume: AskBidRowVal::Value(volume.into()),
-                price: AskBidRowVal::Value(price.into()),
-                uuid: AskBidRowVal::Value(uuid.into()),
-                min_volume: AskBidRowVal::Value(min_volume.into()),
-                max_volume: AskBidRowVal::Value(max_volume.into()),
-                age: AskBidRowVal::Value(age.into()),
-                public: AskBidRowVal::Value(public.into()),
-                address: AskBidRowVal::Value(address.into()),
-                conf_settings: AskBidRowVal::Value(conf_settings.into()),
-                config,
-            }
-        }
-
-        pub(crate) fn new_delimiter(config: &'a OrderbookConfig) -> Self {
-            Self {
-                is_mine: AskBidRowVal::Delim,
-                volume: AskBidRowVal::Delim,
-                price: AskBidRowVal::Delim,
-                uuid: AskBidRowVal::Delim,
-                min_volume: AskBidRowVal::Delim,
-                max_volume: AskBidRowVal::Delim,
-                age: AskBidRowVal::Delim,
-                public: AskBidRowVal::Delim,
-                address: AskBidRowVal::Delim,
-                conf_settings: AskBidRowVal::Delim,
-                config,
-            }
-        }
-
-        pub(crate) fn from_orderbook_entry(
-            entry: &AggregatedOrderbookEntry,
-            vol_prec: &VolumePrecision,
-            price_prec: &PricePrecision,
-            config: &'a OrderbookConfig,
-        ) -> Self {
-            AskBidRow {
-                is_mine: AskBidRowVal::Value(if entry.entry.is_mine { "*".into() } else { "".into() }),
-                volume: AskBidRowVal::Value(
-                    SmartFractionFmt::new(
-                        vol_prec.0,
-                        vol_prec.1,
-                        entry.entry.base_max_volume.base_max_volume.to_f64().unwrap(),
-                    )
-                    .expect("volume smart fraction should be constructed properly")
-                    .to_string(),
-                ),
-                price: AskBidRowVal::Value(
-                    SmartFractionFmt::new(price_prec.0, price_prec.1, entry.entry.price.to_f64().unwrap())
-                        .expect("price smart fraction should be constructed properly")
-                        .to_string(),
-                ),
-                uuid: AskBidRowVal::Value(entry.entry.uuid.to_string()),
-                min_volume: AskBidRowVal::Value(
-                    SmartFractionFmt::new(vol_prec.0, vol_prec.1, entry.entry.min_volume.to_f64().unwrap())
-                        .expect("min_volume smart fraction should be constructed properly")
-                        .to_string(),
-                ),
-                max_volume: AskBidRowVal::Value(
-                    SmartFractionFmt::new(vol_prec.0, vol_prec.1, entry.entry.max_volume.to_f64().unwrap())
-                        .expect("max_volume smart fraction should be constructed properly")
-                        .to_string(),
-                ),
-                age: AskBidRowVal::Value(entry.entry.age.to_string()),
-                public: AskBidRowVal::Value(entry.entry.pubkey.clone()),
-                address: AskBidRowVal::Value(entry.entry.address.clone()),
-                conf_settings: AskBidRowVal::Value(
-                    entry
-                        .entry
-                        .conf_settings
-                        .map_or("none".into(), |settings| format_confirmation_settings(&settings)),
-                ),
-                config,
-            }
-        }
-    }
-
-    impl Display for AskBidRow<'_> {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            macro_rules! write_ask_bid_row {
-                ($value: expr, $width: expr, $alignment: literal) => {
-                    if let AskBidRowVal::Value(value) = &$value {
-                        write!(
-                            f,
-                            concat!("{:", $alignment, "width$} "),
-                            value,
-                            width = $width
-                        )?;
-                    } else {
-                        write!(f, "{:-<width$} ", "", width = $width)?;
-                    };
-                };
-                ($config: expr, $value: expr, $width: expr, $alignment: literal) => {
-                    if $config {
-                        write_ask_bid_row!($value, $width, $alignment);
-                    }
-                };
-            }
-            write_ask_bid_row!(self.is_mine, 1, "<");
-            write_ask_bid_row!(self.volume, 15, ">");
-            write_ask_bid_row!(self.price, 13, "<");
-            write_ask_bid_row!(self.config.uuids, self.uuid, 36, "<");
-            write_ask_bid_row!(self.config.min_volume, self.min_volume, 10, "<");
-            write_ask_bid_row!(self.config.max_volume, self.max_volume, 10, "<");
-            write_ask_bid_row!(self.config.age, self.age, 10, "<");
-            write_ask_bid_row!(self.config.publics, self.public, 66, "<");
-            write_ask_bid_row!(self.config.address, self.address, 34, "<");
-            write_ask_bid_row!(self.config.conf_settings, self.conf_settings, 24, "<");
-            Ok(())
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::{addr_format_from_protocol_info, BaseRelProtocolInfo, OrderbookP2PItemWithProof, OrdermatchContext,
             OrdermatchRequest};
 use crate::mm2::lp_network::{request_any_relay, P2PRequest};
-use crate::mm2::lp_ordermatch::{orderbook_address, RpcOrderbookEntryV2};
+use crate::mm2::lp_ordermatch::orderbook_address;
 use coins::{address_by_coin_conf_and_pubkey_str, coin_conf, is_wallet_only_conf, is_wallet_only_ticker};
 use common::{log, HttpStatusCode};
 use derive_more::Display;
@@ -10,17 +10,11 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber};
 use mm2_rpc_data::legacy::OrderConfirmationsSettings;
+use mm2_rpc_data::version2::{BestOrdersAction, BestOrdersRequestV2, BestOrdersV2Response, RequestBestOrdersBy};
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use uuid::Uuid;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum BestOrdersAction {
-    Buy,
-    Sell,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct BestOrdersRequest {
@@ -36,22 +30,6 @@ struct BestOrdersP2PRes {
     protocol_infos: HashMap<Uuid, BaseRelProtocolInfo>,
     #[serde(default)]
     conf_infos: HashMap<Uuid, OrderConfirmationsSettings>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", content = "value")]
-pub enum RequestBestOrdersBy {
-    #[serde(rename = "volume")]
-    Volume(MmNumber),
-    #[serde(rename = "number")]
-    Number(usize),
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BestOrdersRequestV2 {
-    coin: String,
-    action: BestOrdersAction,
-    request_by: RequestBestOrdersBy,
 }
 
 pub fn process_best_orders_p2p_request(

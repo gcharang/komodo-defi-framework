@@ -1,5 +1,5 @@
 use super::{addr_format_from_protocol_info, is_my_order, orderbook_address, subscribe_to_orderbook_topic,
-            OrdermatchContext, RpcOrderbookEntryV2};
+            OrdermatchContext};
 use coins::{address_by_coin_conf_and_pubkey_str, coin_conf, is_wallet_only_conf};
 use common::log::warn;
 use common::{now_sec, HttpStatusCode};
@@ -10,6 +10,7 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber, MmNumberMultiRepr};
 use mm2_rpc_data::legacy::{AggregatedOrderbookEntry, OrderbookRequest, OrderbookResponse, RpcOrderbookEntry};
+use mm2_rpc_data::version2::RpcOrderbookEntryV2;
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
 

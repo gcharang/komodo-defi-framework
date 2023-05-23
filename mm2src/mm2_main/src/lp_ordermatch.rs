@@ -21,7 +21,6 @@
 //
 
 use async_trait::async_trait;
-use best_orders::BestOrdersAction;
 use blake2::digest::{Update, VariableOutput};
 use blake2::Blake2bVar;
 use coins::utxo::{compressed_pub_key_from_priv_raw, ChecksumType, UtxoAddressFormat};
@@ -45,13 +44,14 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, TopicHash, TopicPrefix,
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
-use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
+use mm2_number::{BigDecimal, BigRational, MmNumber};
 use mm2_rpc_data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
                            HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
                            MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, OrderConfirmationsSettings,
                            OrderForRpc, OrderStatusRequest, OrderStatusResponse, OrderType, RpcOrderbookEntry,
                            SellBuyRequest, SellBuyResponse, Status, TakerAction, TakerConnectForRpc, TakerMatchForRpc,
                            TakerOrderForRpc, TakerRequestForRpc};
+use mm2_rpc_data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
                         save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,
@@ -5349,21 +5349,6 @@ pub(self) async fn subscribe_to_orderbook_topic(
     Ok(())
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct RpcOrderbookEntryV2 {
-    coin: String,
-    address: OrderbookAddress,
-    price: MmNumberMultiRepr,
-    pubkey: String,
-    uuid: Uuid,
-    is_mine: bool,
-    base_max_volume: MmNumberMultiRepr,
-    base_min_volume: MmNumberMultiRepr,
-    rel_max_volume: MmNumberMultiRepr,
-    rel_min_volume: MmNumberMultiRepr,
-    conf_settings: Option<OrderConfirmationsSettings>,
-}
-
 fn choose_maker_confs_and_notas(
     maker_confs: Option<OrderConfirmationsSettings>,
     taker_req: &TakerRequest,
@@ -5472,13 +5457,6 @@ fn choose_taker_confs_and_notas(
         taker_coin_confs,
         taker_coin_nota,
     }
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "address_type", content = "address_data")]
-pub enum OrderbookAddress {
-    Transparent(String),
-    Shielded,
 }
 
 #[derive(Debug, Display)]

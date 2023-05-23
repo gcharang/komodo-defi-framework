@@ -1,5 +1,6 @@
 use derive_more::Display;
 use log::error;
+use mm2_rpc_data::version2::{MmRpcRequest, MmRpcVersion};
 use serde::Serialize;
 
 #[derive(Serialize, Clone)]
@@ -30,6 +31,7 @@ pub(crate) enum Method {
     CancelOrder,
     CancelAllOrders,
     OrderStatus,
+    BestOrders,
 }
 
 #[derive(Serialize, Clone, Copy, Display)]
@@ -75,16 +77,37 @@ where
         self
     }
 
-    pub(crate) fn build(&mut self) -> Command<T> {
-        Command {
+    pub(crate) fn build(&mut self) -> Result<Command<T>, ()> {
+        Ok(Command {
             userpass: self
                 .userpass
                 .take()
-                .ok_or_else(|| error!("Build command failed, no userpass"))
-                .expect("Unexpected error during building api command"),
+                .ok_or_else(|| error!("Build command failed, no userpass"))?,
             method: self.method.take(),
             flatten_data: self.flatten_data.take(),
-        }
+        })
+    }
+
+    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<Method, T>, ()> {
+        let mm2_rpc_request = MmRpcRequest {
+            mmrpc: MmRpcVersion::V2,
+            userpass: Some(
+                self.userpass
+                    .take()
+                    .ok_or_else(|| error!("Build command failed, no userpass"))?,
+            ),
+            method: self
+                .method
+                .take()
+                .ok_or_else(|| error!("Failed to get method, not set"))?,
+            params: self
+                .flatten_data
+                .take()
+                .ok_or_else(|| error!("Failed to get flatten_data, not set"))?,
+            id: None,
+        };
+
+        Ok(mm2_rpc_request)
     }
 }
 

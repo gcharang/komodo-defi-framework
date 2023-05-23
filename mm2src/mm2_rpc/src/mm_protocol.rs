@@ -1,27 +1,10 @@
 use common::{HttpStatusCode, SerializationError};
 use http::{Response, StatusCode};
 use mm2_err_handle::prelude::*;
-use serde::{Deserialize, Serialize};
+use mm2_rpc_data::version2::MmRpcVersion;
+use serde::Serialize;
 use serde_json as json;
 use serde_json::Value as Json;
-
-/// Please note there is no standardized `1.0` version, so this enumeration should not be used in the legacy protocol context.
-#[derive(Clone, Copy, Deserialize, Serialize)]
-pub enum MmRpcVersion {
-    #[serde(rename = "2.0")]
-    V2,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct MmRpcRequest {
-    pub mmrpc: MmRpcVersion,
-    pub userpass: Option<String>,
-    pub method: String,
-    #[serde(default)]
-    pub params: Json,
-    pub id: Option<usize>,
-}
 
 pub struct MmRpcBuilder<T: Serialize, E: SerMmErrorType> {
     version: MmRpcVersion,
@@ -30,7 +13,7 @@ pub struct MmRpcBuilder<T: Serialize, E: SerMmErrorType> {
 }
 
 impl<T: Serialize, E: SerMmErrorType> MmRpcBuilder<T, E> {
-    pub fn ok(r: T) -> Self {
+    fn ok(r: T) -> Self {
         MmRpcBuilder {
             version: MmRpcVersion::V2,
             result: MmRpcResult::Ok { result: r },
@@ -90,13 +73,6 @@ where
             MmRpcResult::Err(e) => e.status_code(),
         }
     }
-}
-
-impl<T: Serialize, E: SerMmErrorType> MmRpcResult<T, E> {
-    pub fn ok(result: T) -> MmRpcResult<T, E> { MmRpcResult::Ok { result } }
-
-    #[track_caller]
-    pub fn mm_err(error: E) -> MmRpcResult<T, E> { MmRpcResult::Err(MmError::new(error)) }
 }
 
 impl<T, E1> MmRpcResult<T, E1>

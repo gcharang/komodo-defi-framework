@@ -4,6 +4,7 @@ use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrd
                            CancelOrderRequest, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
                            OrderStatusRequest, OrderStatusResponse, OrderbookRequest, OrderbookResponse,
                            SellBuyRequest, SellBuyResponse, Status};
+use mm2_rpc_data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
 
@@ -33,7 +34,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::builder()
             .flatten_data(activate_specific_settings.clone())
             .userpass(self.config.rpc_password())
-            .build();
+            .build()?;
 
         match self.transport.send::<_, CoinInitResponse, Json>(command).await {
             Ok(Ok(ref ok)) => self.response_handler.on_enable_response(ok),
@@ -51,7 +52,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .method(Method::GetBalance)
             .flatten_data(json!({ "coin": asset }))
             .userpass(self.config.rpc_password())
-            .build();
+            .build()?;
 
         match self.transport.send::<_, BalanceResponse, Json>(command).await {
             Ok(Ok(balance_response)) => self.response_handler.on_balance_response(&balance_response),
@@ -69,7 +70,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::<i32>::builder()
             .method(Method::GetEnabledCoins)
             .userpass(self.config.rpc_password())
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -95,7 +96,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 base: base.into(),
                 rel: rel.into(),
             })
-            .build();
+            .build()?;
 
         match self.transport.send::<_, OrderbookResponse, Json>(command).await {
             Ok(Ok(ok)) => self
@@ -125,7 +126,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password())
             .method(Method::Sell)
             .flatten_data(order)
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -157,7 +158,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password())
             .method(Method::Buy)
             .flatten_data(order)
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -178,7 +179,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let stop_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password())
             .method(Method::Stop)
-            .build();
+            .build()?;
 
         match self.transport.send::<_, Mm2RpcResult<Status>, Json>(stop_command).await {
             Ok(Ok(ok)) => self.response_handler.on_stop_response(&ok),
@@ -195,7 +196,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let version_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password())
             .method(Method::Version)
-            .build();
+            .build()?;
 
         match self.transport.send::<_, MmVersionResponse, Json>(version_command).await {
             Ok(Ok(ok)) => self.response_handler.on_version_response(&ok),
@@ -213,7 +214,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password())
             .method(Method::CancelOrder)
             .flatten_data(CancelOrderRequest { uuid: *order_id })
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -246,7 +247,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password())
             .method(Method::CancelAllOrders)
             .flatten_data(CancelAllOrdersRequest { cancel_by })
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -260,17 +261,56 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn order_status(&self, uuid: &Uuid) -> Result<(), ()> {
+        info!("Getting order status: {uuid}");
         let order_status_command = Command::builder()
             .userpass(self.config.rpc_password())
             .method(Method::OrderStatus)
             .flatten_data(OrderStatusRequest { uuid: *uuid })
-            .build();
+            .build()?;
         match self
             .transport
             .send::<_, OrderStatusResponse, Json>(order_status_command)
             .await
         {
             Ok(Ok(ok)) => self.response_handler.on_order_status(&ok),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => Err(()),
+        }
+    }
+
+    pub async fn best_orders(
+        &self,
+        best_orders_request: BestOrdersRequestV2,
+        show_orig_tickets: bool,
+    ) -> Result<(), ()> {
+        info!(
+            "Getting best orders: {} {}",
+            best_orders_request.action, best_orders_request.coin
+        );
+        let best_orders_command = Command::builder()
+            .userpass(self.config.rpc_password())
+            .method(Method::BestOrders)
+            .flatten_data(best_orders_request)
+            .build_v2()?;
+
+        match self
+            .transport
+            .send::<_, MmRpcResponseV2<BestOrdersV2Response>, Json>(best_orders_command)
+            .await
+        {
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: _,
+                result: MmRpcResultV2::Ok { result },
+                id: _,
+            })) => self.response_handler.on_best_orders(result, show_orig_tickets),
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: _,
+                result: MmRpcResultV2::Err(error),
+                id: _,
+            })) => {
+                error!("Got error: {:?}", error);
+                Err(())
+            },
             Ok(Err(error)) => self.response_handler.print_response(error),
             _ => Err(()),
         }
