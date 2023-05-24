@@ -16,10 +16,11 @@ use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRes
                            TakerOrderForRpc};
 use mm2_rpc_data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Write;
+use std::ops::DerefMut;
 use uuid::Uuid;
 
 use super::OrderbookConfig;
@@ -56,8 +57,11 @@ pub(crate) struct ResponseHandlerImpl<'a> {
     pub writer: RefCell<&'a mut dyn Write>,
 }
 
-impl ResponseHandler for ResponseHandlerImpl<'_> {
+impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
     fn print_response(&self, result: Json) -> Result<(), ()> {
+        let mut binding = self.writer.borrow_mut();
+        let writer = binding.deref_mut();
+
         let object = result
             .as_object()
             .ok_or_else(|| error!("Failed to cast result as object"))?;
@@ -65,7 +69,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         object
             .iter()
             .map(SimpleCliTable::from_pair)
-            .for_each(|value| writeln_safe_io!(self.writer.borrow_mut(), "{}: {:?}", value.key, value.value));
+            .for_each(|value| writeln_safe_io!(writer, "{}: {:?}", value.key, value.value));
         Ok(())
     }
 
@@ -232,9 +236,11 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()> {
+        let mut binding = self.writer.borrow_mut();
+        let mut writer: &mut dyn Write = binding.deref_mut();
         match response {
-            OrderStatusResponse::Maker(maker_status) => self.print_maker_status(maker_status)?,
-            OrderStatusResponse::Taker(taker_status) => self.print_taker_status(taker_status)?,
+            OrderStatusResponse::Maker(maker_status) => self.print_maker_order(writer, maker_status)?,
+            OrderStatusResponse::Taker(taker_status) => self.print_taker_order(&mut writer, taker_status)?,
         }
         Ok(())
     }
@@ -303,17 +309,35 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_my_orders(&self, _my_orders: MyOrdersResponse) -> Result<(), ()> {
-        _my_orders.taker_orders
-        info!("on_my_orders");
+    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<(), ()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer: &mut dyn Write = writer.deref_mut();
+
+        if my_orders.taker_orders.is_empty() {
+            write_field!(writer, "Taker orders", "empty", COMMON_INDENT);
+        } else {
+            write_field!(writer, "Taker orders", "", COMMON_INDENT);
+            for taker_order in my_orders.taker_orders.values() {
+                self.print_taker_order(writer, taker_order)?
+            }
+        }
+
+        if my_orders.maker_orders.is_empty() {
+            write_field!(writer, "Maker orders", "empty", COMMON_INDENT);
+        } else {
+            write_field!(writer, "Maker orders", "", COMMON_INDENT);
+            for maker_order in my_orders.maker_orders.values() {
+                self.print_maker_order(writer, maker_order)?
+            }
+        }
+
         Ok(())
     }
 }
 
 impl ResponseHandlerImpl<'_> {
-    fn print_maker_status(&self, maker_status: &MakerOrderForMyOrdersRpc) -> Result<(), ()> {
+    fn print_maker_order(&self, writer: &mut dyn Write, maker_status: &MakerOrderForMyOrdersRpc) -> Result<(), ()> {
         let order = &maker_status.order;
-        let mut writer = self.writer.borrow_mut();
         write_field!(writer, "base", order.base, COMMON_INDENT);
         write_field!(writer, "rel", order.rel, COMMON_INDENT);
         write_field!(writer, "price", format_ratio(&order.price_rat)?, COMMON_INDENT);
@@ -337,7 +361,11 @@ impl ResponseHandlerImpl<'_> {
         write_field!(
             writer,
             "swaps",
-            format!("{}", order.started_swaps.iter().join(", ")),
+            if order.started_swaps.is_empty() {
+                "empty".to_string()
+            } else {
+                format!("{}", order.started_swaps.iter().join(", "))
+            },
             COMMON_INDENT
         );
 
@@ -364,16 +392,14 @@ impl ResponseHandlerImpl<'_> {
         write_field!(writer, "cancellable", maker_status.cancellable, COMMON_INDENT);
         write_field!(writer, "available_amount", maker_status.available_amount, COMMON_INDENT);
 
-        Self::write_maker_matches(&mut writer, &order.matches)?;
-
+        Self::write_maker_matches(writer, &order.matches)?;
+        writeln_safe_io!(writer, "");
         Ok(())
     }
 
-    fn write_maker_matches(
-        writer: &mut RefMut<&mut dyn Write>,
-        matches: &HashMap<Uuid, MakerMatchForRpc>,
-    ) -> Result<(), ()> {
+    fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<(), ()> {
         if matches.is_empty() {
+            write_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
         }
         write_field!(writer, "matches", "", COMMON_INDENT);
@@ -404,8 +430,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn print_taker_status(&self, taker_status: &TakerOrderForRpc) -> Result<(), ()> {
-        let mut writer = self.writer.borrow_mut();
+    fn print_taker_order(&self, writer: &mut dyn Write, taker_status: &TakerOrderForRpc) -> Result<(), ()> {
         let req = &taker_status.request;
         write_field!(writer, "uuid", req.uuid, COMMON_INDENT);
         write_base_rel!(writer, req, COMMON_INDENT);
@@ -438,14 +463,14 @@ impl ResponseHandlerImpl<'_> {
             taker_status.rel_orderbook_ticker,
             COMMON_INDENT
         );
-        Self::write_taker_matches(&mut writer, &taker_status.matches)
+        Self::write_taker_matches(writer, &taker_status.matches)?;
+        writeln_safe_io!(writer, "");
+        Ok(())
     }
 
-    fn write_taker_matches(
-        writer: &mut RefMut<&mut dyn Write>,
-        matches: &HashMap<Uuid, TakerMatchForRpc>,
-    ) -> Result<(), ()> {
+    fn write_taker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, TakerMatchForRpc>) -> Result<(), ()> {
         if matches.is_empty() {
+            write_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
         }
         write_field!(writer, "matches", "", COMMON_INDENT);
@@ -462,7 +487,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn write_maker_reserved_for_rpc(writer: &mut RefMut<&mut dyn Write>, reserved: &MakerReservedForRpc) {
+    fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) {
         write_base_rel!(writer, reserved, NESTED_INDENT);
         write_field!(
             writer,
