@@ -276,12 +276,6 @@ impl HttpStatusCode for BestOrdersRpcError {
     }
 }
 
-#[derive(Serialize)]
-pub struct BestOrdersV2Response {
-    orders: HashMap<String, Vec<RpcOrderbookEntryV2>>,
-    original_tickers: HashMap<String, HashSet<String>>,
-}
-
 pub async fn best_orders_rpc_v2(
     ctx: MmArc,
     req: BestOrdersRequestV2,

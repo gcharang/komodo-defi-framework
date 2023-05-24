@@ -409,3 +409,9 @@ pub struct MakerConnectedForRpc {
 }
 
 fn get_true() -> bool { true }
+
+#[derive(Serialize, Deserialize)]
+pub struct MyOrdersResponse {
+    pub maker_orders: HashMap<Uuid, MakerOrderForMyOrdersRpc>,
+    pub taker_orders: HashMap<Uuid, TakerOrderForRpc>,
+}

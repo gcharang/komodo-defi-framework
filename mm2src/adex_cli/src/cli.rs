@@ -79,21 +79,26 @@ enum Command {
     OrderStatus {
         uuid: Uuid,
     },
-
     BestOrders {
-        #[arg(help = "Whether to buy or sell the selected coin")]
-        coin: String,
-        #[arg(help = "The ticker of the coin to get best orders")]
-        action: ActionCli,
         #[command(flatten)]
-        delegate: BestOrdersByCli,
-        #[arg(
-            long,
-            help = "Tickers included in response when orderbook_ticker is configured for the queried coin in coins file",
-            default_value = "false"
-        )]
-        show_orig_tickets: bool,
+        delegate: BestOrderSubcommand,
     },
+    MyOrders,
+}
+#[derive(Args)]
+struct BestOrderSubcommand {
+    #[arg(help = "Whether to buy or sell the selected coin")]
+    coin: String,
+    #[arg(help = "The ticker of the coin to get best orders")]
+    action: ActionCli,
+    #[command(flatten)]
+    delegate: BestOrdersByCli,
+    #[arg(
+        long,
+        help = "Tickers included in response when orderbook_ticker is configured for the queried coin in coins file",
+        default_value = "false"
+    )]
+    show_orig_tickets: bool,
 }
 
 #[derive(Args)]
@@ -187,10 +192,13 @@ impl Cli {
             Command::Cancel(CancelSubcommand::ByCoin { ticker }) => proc.cancel_by_coin(take(ticker)).await?,
             Command::OrderStatus { uuid } => proc.order_status(uuid).await?,
             Command::BestOrders {
-                delegate,
-                coin,
-                action,
-                show_orig_tickets,
+                delegate:
+                    BestOrderSubcommand {
+                        delegate,
+                        coin,
+                        action,
+                        show_orig_tickets,
+                    },
             } => {
                 proc.best_orders(
                     BestOrdersRequestV2 {
@@ -202,6 +210,7 @@ impl Cli {
                 )
                 .await?
             },
+            Command::MyOrders => proc.my_orders().await?,
         }
         Ok(())
     }

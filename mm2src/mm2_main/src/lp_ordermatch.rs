@@ -47,10 +47,10 @@ use mm2_metrics::mm_gauge;
 use mm2_number::{BigDecimal, BigRational, MmNumber};
 use mm2_rpc_data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
                            HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
-                           MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, OrderConfirmationsSettings,
-                           OrderForRpc, OrderStatusRequest, OrderStatusResponse, OrderType, RpcOrderbookEntry,
-                           SellBuyRequest, SellBuyResponse, Status, TakerAction, TakerConnectForRpc, TakerMatchForRpc,
-                           TakerOrderForRpc, TakerRequestForRpc};
+                           MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MyOrdersResponse,
+                           OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest, OrderStatusResponse,
+                           OrderType, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, Status, TakerAction,
+                           TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
 use mm2_rpc_data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
@@ -5059,24 +5059,22 @@ pub async fn my_orders(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
         let order = order_mutex.lock().await.clone();
         maker_orders_map.insert(uuid, order);
     }
-    let maker_orders_for_rpc: HashMap<_, _> = maker_orders_map
-        .iter()
-        .map(|(uuid, order)| (uuid, MakerOrderForMyOrdersRpc::from(order)))
-        .collect();
 
     let taker_orders = ordermatch_ctx.my_taker_orders.lock().await;
-    let taker_orders_for_rpc: HashMap<_, _> = taker_orders
-        .iter()
-        .map(|(uuid, order)| (uuid, TakerOrderForRpc::from(order)))
-        .collect();
-    let res = json!({
-        "result": {
-            "maker_orders": maker_orders_for_rpc,
-            "taker_orders": taker_orders_for_rpc,
-        }
+
+    let response = Mm2RpcResult::new(MyOrdersResponse {
+        maker_orders: maker_orders_map
+            .iter()
+            .map(|(uuid, order)| (**uuid, MakerOrderForMyOrdersRpc::from(order)))
+            .collect(),
+        taker_orders: taker_orders
+            .iter()
+            .map(|(uuid, order)| (*uuid, TakerOrderForRpc::from(order)))
+            .collect(),
     });
+
     Response::builder()
-        .body(json::to_vec(&res).expect("Serialization failed"))
+        .body(json::to_vec(&response).expect("Serialization failed"))
         .map_err(|e| ERRL!("{}", e))
 }
 

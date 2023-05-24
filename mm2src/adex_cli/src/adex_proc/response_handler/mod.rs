@@ -11,8 +11,9 @@ use mm2_number::bigdecimal::ToPrimitive;
 use mm2_number::BigRational;
 use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
-                           Mm2RpcResult, MmVersionResponse, OrderConfirmationsSettings, OrderStatusResponse,
-                           OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc, TakerOrderForRpc};
+                           Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderConfirmationsSettings,
+                           OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
+                           TakerOrderForRpc};
 use mm2_rpc_data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
 use std::cell::{RefCell, RefMut};
@@ -48,6 +49,7 @@ pub(crate) trait ResponseHandler {
     fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<(), ()>;
     fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()>;
     fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<(), ()>;
+    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<(), ()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -300,6 +302,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
 
         Ok(())
     }
+
+    fn on_my_orders(&self, _my_orders: MyOrdersResponse) -> Result<(), ()> {
+        _my_orders.taker_orders
+        info!("on_my_orders");
+        Ok(())
+    }
 }
 
 impl ResponseHandlerImpl<'_> {
@@ -361,6 +369,41 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
+    fn write_maker_matches(
+        writer: &mut RefMut<&mut dyn Write>,
+        matches: &HashMap<Uuid, MakerMatchForRpc>,
+    ) -> Result<(), ()> {
+        if matches.is_empty() {
+            return Ok(());
+        }
+        write_field!(writer, "matches", "", COMMON_INDENT);
+        for (uid, m) in matches {
+            let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
+            write_field!(writer, "uuid", uid, NESTED_INDENT);
+            write_field!(writer, "req.uuid", req.uuid, NESTED_INDENT);
+            write_base_rel!(writer, req, NESTED_INDENT);
+            write_field!(writer, "req.match_by", format_match_by(&req.match_by), NESTED_INDENT);
+            write_field!(writer, "req.action", req.action, NESTED_INDENT);
+            write_confirmation_settings!(writer, req, NESTED_INDENT);
+            write_field!(
+                writer,
+                "req.(sender, dest)",
+                format!("{},{}", req.sender_pubkey, req.dest_pub_key),
+                NESTED_INDENT
+            );
+            Self::write_maker_reserved_for_rpc(writer, reserved);
+
+            if let Some(ref connected) = connected {
+                write_connected!(writer, connected, NESTED_INDENT);
+            }
+
+            if let Some(ref connect) = connect {
+                write_connected!(writer, connect, NESTED_INDENT);
+            }
+        }
+        Ok(())
+    }
+
     fn print_taker_status(&self, taker_status: &TakerOrderForRpc) -> Result<(), ()> {
         let mut writer = self.writer.borrow_mut();
         let req = &taker_status.request;
@@ -396,41 +439,6 @@ impl ResponseHandlerImpl<'_> {
             COMMON_INDENT
         );
         Self::write_taker_matches(&mut writer, &taker_status.matches)
-    }
-
-    fn write_maker_matches(
-        writer: &mut RefMut<&mut dyn Write>,
-        matches: &HashMap<Uuid, MakerMatchForRpc>,
-    ) -> Result<(), ()> {
-        if matches.is_empty() {
-            return Ok(());
-        }
-        write_field!(writer, "matches", "", COMMON_INDENT);
-        for (uid, m) in matches {
-            let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
-            write_field!(writer, "uuid", uid, NESTED_INDENT);
-            write_field!(writer, "req.uuid", req.uuid, NESTED_INDENT);
-            write_base_rel!(writer, req, NESTED_INDENT);
-            write_field!(writer, "req.match_by", format_match_by(&req.match_by), NESTED_INDENT);
-            write_field!(writer, "req.action", req.action, NESTED_INDENT);
-            write_confirmation_settings!(writer, req, NESTED_INDENT);
-            write_field!(
-                writer,
-                "req.(sender, dest)",
-                format!("{},{}", req.sender_pubkey, req.dest_pub_key),
-                NESTED_INDENT
-            );
-            Self::write_maker_reserved_for_rpc(writer, reserved);
-
-            if let Some(ref connected) = connected {
-                write_connected!(writer, connected, NESTED_INDENT);
-            }
-
-            if let Some(ref connect) = connect {
-                write_connected!(writer, connect, NESTED_INDENT);
-            }
-        }
-        Ok(())
     }
 
     fn write_taker_matches(

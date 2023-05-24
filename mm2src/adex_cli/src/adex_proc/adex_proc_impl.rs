@@ -2,8 +2,8 @@ use log::{error, info, warn};
 
 use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
                            CancelOrderRequest, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
-                           OrderStatusRequest, OrderStatusResponse, OrderbookRequest, OrderbookResponse,
-                           SellBuyRequest, SellBuyResponse, Status};
+                           MyOrdersResponse, OrderStatusRequest, OrderStatusResponse, OrderbookRequest,
+                           OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
 use mm2_rpc_data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
@@ -273,6 +273,24 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .await
         {
             Ok(Ok(ok)) => self.response_handler.on_order_status(&ok),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => Err(()),
+        }
+    }
+
+    pub async fn my_orders(&self) -> Result<(), ()> {
+        info!("Getting my orders");
+        let request = Command::<Dummy>::builder()
+            .userpass(self.config.rpc_password())
+            .method(Method::MyOrders)
+            .build()?;
+
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<MyOrdersResponse>, Json>(request)
+            .await
+        {
+            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_my_orders(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
             _ => Err(()),
         }

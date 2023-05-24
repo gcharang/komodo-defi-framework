@@ -32,6 +32,7 @@ pub(crate) enum Method {
     CancelAllOrders,
     OrderStatus,
     BestOrders,
+    MyOrders,
 }
 
 #[derive(Serialize, Clone, Copy, Display)]
