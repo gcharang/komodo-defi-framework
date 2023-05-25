@@ -95,18 +95,16 @@ pub struct UtxoMergeParams {
     max_merge_at_once: usize,
 }
 
-pub async fn get_tx_fee(coin: &UtxoCoinFields) -> UtxoRpcResult<ActualTxFee> {
+pub async fn get_tx_fee_per_kb(coin: &UtxoCoinFields) -> UtxoRpcResult<u64> {
     let conf = &coin.conf;
     match &coin.tx_fee {
         TxFee::Dynamic(method) => {
-            let fee = coin
-                .rpc_client
+            coin.rpc_client
                 .estimate_fee_sat(coin.decimals, method, &conf.estimate_fee_mode, conf.estimate_fee_blocks)
                 .compat()
-                .await?;
-            Ok(ActualTxFee::Dynamic(fee))
+                .await
         },
-        TxFee::FixedPerKb(satoshis) => Ok(ActualTxFee::FixedPerKb(*satoshis)),
+        TxFee::FixedPerKb(satoshis) => Ok(*satoshis),
     }
 }
 
@@ -596,23 +594,15 @@ pub async fn get_htlc_spend_fee<T: UtxoCommonOps>(
     tx_size: u64,
     stage: &FeeApproxStage,
 ) -> UtxoRpcResult<u64> {
-    let coin_fee = coin.get_tx_fee().await?;
-    let mut fee = match coin_fee {
-        // atomic swap payment spend transaction is slightly more than 300 bytes in average as of now
-        ActualTxFee::Dynamic(fee_per_kb) => {
-            let fee_per_kb = increase_dynamic_fee_by_stage(&coin, fee_per_kb, stage);
-            (fee_per_kb * tx_size) / KILO_BYTE
-        },
-        // return satoshis here as swap spend transaction size is always less than 1 kb
-        ActualTxFee::FixedPerKb(satoshis) => {
-            let tx_size_kb = if tx_size % KILO_BYTE == 0 {
-                tx_size / KILO_BYTE
-            } else {
-                tx_size / KILO_BYTE + 1
-            };
-            satoshis * tx_size_kb
-        },
-    };
+    let mut fee_per_kb = coin.get_tx_fee_per_kb().await?;
+    if coin.as_ref().tx_fee.is_dynamic() {
+        fee_per_kb = increase_dynamic_fee_by_stage(&coin, fee_per_kb, stage);
+    }
+    drop_mutability!(fee_per_kb);
+
+    // Todo: revise this and maybe avoid type casting also we can refactor this to multiple lines
+    // Todo: should ceil or round be used here? round up to the nearest satoshi
+    let mut fee = ((fee_per_kb * tx_size) as f64 / KILO_BYTE).ceil() as u64;
     if coin.as_ref().conf.force_min_relay_fee {
         let relay_fee = coin.as_ref().rpc_client.get_relay_fee().compat().await?;
         let relay_fee_sat = sat_from_big_decimal(&relay_fee, coin.as_ref().decimals)?;
@@ -757,7 +747,7 @@ pub struct UtxoTxBuilder<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> {
     /// The available inputs that *can* be included in the resulting tx
     available_inputs: Vec<UnspentInfo>,
     fee_policy: FeePolicy,
-    fee: Option<ActualTxFee>,
+    fee: Option<TxFeeType>,
     gas_fee: Option<u64>,
     tx: TransactionInputSigner,
     change: u64,
@@ -826,7 +816,7 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
         self
     }
 
-    pub fn with_fee(mut self, fee: ActualTxFee) -> Self {
+    pub fn with_fee(mut self, fee: TxFeeType) -> Self {
         self.fee = Some(fee);
         self
     }
@@ -843,24 +833,16 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
     fn update_fee_and_check_completeness(
         &mut self,
         from_addr_format: &UtxoAddressFormat,
-        actual_tx_fee: &ActualTxFee,
+        actual_tx_fee: &TxFeeType,
     ) -> bool {
         self.tx_fee = match &actual_tx_fee {
-            ActualTxFee::Dynamic(f) => {
-                let transaction = UtxoTx::from(self.tx.clone());
-                let v_size = tx_size_in_v_bytes(from_addr_format, &transaction);
-                (f * v_size as u64) / KILO_BYTE
-            },
-            ActualTxFee::FixedPerKb(f) => {
+            // Todo: maybe refactor to a function
+            TxFeeType::PerKb(f) => {
                 let transaction = UtxoTx::from(self.tx.clone());
                 let v_size = tx_size_in_v_bytes(from_addr_format, &transaction) as u64;
-                let v_size_kb = if v_size % KILO_BYTE == 0 {
-                    v_size / KILO_BYTE
-                } else {
-                    v_size / KILO_BYTE + 1
-                };
-                f * v_size_kb
+                ((f * v_size) as f64 / KILO_BYTE).ceil() as u64
             },
+            TxFeeType::Fixed(f) => *f,
         };
 
         match self.fee_policy {
@@ -870,9 +852,11 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
                     self.change = self.sum_inputs - outputs_plus_fee;
                     if self.change > self.dust() {
                         // there will be change output
-                        if let ActualTxFee::Dynamic(ref f) = actual_tx_fee {
-                            self.tx_fee += (f * P2PKH_OUTPUT_LEN) / KILO_BYTE;
-                            outputs_plus_fee += (f * P2PKH_OUTPUT_LEN) / KILO_BYTE;
+                        // Todo: recheck this and the other one similar to it, if Dynamic is kept as a variant, ther can be a simpler way to extract the inner value
+                        if let TxFeeType::PerKb(ref f) = actual_tx_fee {
+                            // Todo: revise these lines too
+                            self.tx_fee += ((f * P2PKH_OUTPUT_LEN) as f64 / KILO_BYTE).ceil() as u64;
+                            outputs_plus_fee += ((f * P2PKH_OUTPUT_LEN) as f64 / KILO_BYTE).ceil() as u64;
                         }
                     }
                     if let Some(min_relay) = self.min_relay_fee {
@@ -891,8 +875,10 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
                 if self.sum_inputs >= self.sum_outputs_value {
                     self.change = self.sum_inputs - self.sum_outputs_value;
                     if self.change > self.dust() {
-                        if let ActualTxFee::Dynamic(ref f) = actual_tx_fee {
-                            self.tx_fee += (f * P2PKH_OUTPUT_LEN) / KILO_BYTE;
+                        // Todo: this should be for fixed per kb fee too
+                        if let TxFeeType::PerKb(ref f) = actual_tx_fee {
+                            // Todo: revise this too, maybe make a common function to all these conversions
+                            self.tx_fee += (((f * P2PKH_OUTPUT_LEN) as f64) / KILO_BYTE).ceil() as u64;
                         }
                     }
                     if let Some(min_relay) = self.min_relay_fee {
@@ -929,7 +915,11 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
 
         let actual_tx_fee = match self.fee {
             Some(fee) => fee,
-            None => coin.get_tx_fee().await?,
+            None => {
+                // Todo: rename per kb to per vbyte
+                let fee_per_kb = coin.get_tx_fee_per_kb().await?;
+                TxFeeType::PerKb(fee_per_kb)
+            },
         };
 
         true_or!(!self.tx.outputs.is_empty(), GenerateTxError::EmptyOutputs);
@@ -3334,11 +3324,7 @@ pub fn get_trade_fee<T: UtxoCommonOps>(coin: T) -> Box<dyn Future<Item = TradeFe
     let ticker = coin.as_ref().conf.ticker.clone();
     let decimals = coin.as_ref().decimals;
     let fut = async move {
-        let fee = try_s!(coin.get_tx_fee().await);
-        let amount = match fee {
-            ActualTxFee::Dynamic(f) => f,
-            ActualTxFee::FixedPerKb(f) => f,
-        };
+        let amount = try_s!(coin.get_tx_fee_per_kb().await);
         Ok(TradeFee {
             coin: ticker,
             amount: big_decimal_from_sat(amount as i64, decimals).into(),
@@ -3348,6 +3334,7 @@ pub fn get_trade_fee<T: UtxoCommonOps>(coin: T) -> Box<dyn Future<Item = TradeFe
     Box::new(fut.boxed().compat())
 }
 
+// Todo: check this doc comment and others
 /// To ensure the `get_sender_trade_fee(x) <= get_sender_trade_fee(y)` condition is satisfied for any `x < y`,
 /// we should include a `change` output into the result fee. Imagine this case:
 /// Let `sum_inputs = 11000` and `total_tx_fee: { 200, if there is no the change output; 230, if there is the change output }`.
@@ -3372,77 +3359,57 @@ where
     T: UtxoCommonOps + GetUtxoListOps,
 {
     let decimals = coin.as_ref().decimals;
-    let tx_fee = coin.get_tx_fee().await?;
     // [`FeePolicy::DeductFromOutput`] is used if the value is [`TradePreimageValue::UpperBound`] only
     let is_amount_upper_bound = matches!(fee_policy, FeePolicy::DeductFromOutput(_));
     let my_address = coin.as_ref().derivation_method.single_addr_or_err()?;
 
-    match tx_fee {
-        // if it's a dynamic fee, we should generate a swap transaction to get an actual trade fee
-        ActualTxFee::Dynamic(fee) => {
-            // take into account that the dynamic tx fee may increase during the swap
-            let dynamic_fee = coin.increase_dynamic_fee_by_stage(fee, stage);
-
-            let outputs_count = outputs.len();
-            let (unspents, _recently_sent_txs) = coin.get_unspent_ordered_list(my_address).await?;
-
-            let actual_tx_fee = ActualTxFee::Dynamic(dynamic_fee);
-
-            let mut tx_builder = UtxoTxBuilder::new(coin)
-                .add_available_inputs(unspents)
-                .add_outputs(outputs)
-                .with_fee_policy(fee_policy)
-                .with_fee(actual_tx_fee);
-            if let Some(gas) = gas_fee {
-                tx_builder = tx_builder.with_gas_fee(gas);
-            }
-            let (tx, data) = tx_builder.build().await.mm_err(|e| {
-                TradePreimageError::from_generate_tx_error(e, ticker.to_owned(), decimals, is_amount_upper_bound)
-            })?;
-
-            let total_fee = if tx.outputs.len() == outputs_count {
-                // take into account the change output
-                data.fee_amount + (dynamic_fee * P2PKH_OUTPUT_LEN) / KILO_BYTE
-            } else {
-                // the change output is included already
-                data.fee_amount
-            };
-
-            Ok(big_decimal_from_sat(total_fee as i64, decimals))
-        },
-        ActualTxFee::FixedPerKb(fee) => {
-            let outputs_count = outputs.len();
-            let (unspents, _recently_sent_txs) = coin.get_unspent_ordered_list(my_address).await?;
-
-            let mut tx_builder = UtxoTxBuilder::new(coin)
-                .add_available_inputs(unspents)
-                .add_outputs(outputs)
-                .with_fee_policy(fee_policy)
-                .with_fee(tx_fee);
-            if let Some(gas) = gas_fee {
-                tx_builder = tx_builder.with_gas_fee(gas);
-            }
-            let (tx, data) = tx_builder.build().await.mm_err(|e| {
-                TradePreimageError::from_generate_tx_error(e, ticker.to_string(), decimals, is_amount_upper_bound)
-            })?;
-
-            let total_fee = if tx.outputs.len() == outputs_count {
-                // take into account the change output if tx_size_kb(tx with change) > tx_size_kb(tx without change)
-                let tx = UtxoTx::from(tx);
-                let tx_bytes = serialize(&tx);
-                if tx_bytes.len() as u64 % KILO_BYTE + P2PKH_OUTPUT_LEN > KILO_BYTE {
-                    data.fee_amount + fee
-                } else {
-                    data.fee_amount
-                }
-            } else {
-                // the change output is included already
-                data.fee_amount
-            };
-
-            Ok(big_decimal_from_sat(total_fee as i64, decimals))
-        },
+    // Todo: refactor this to a function if possible
+    let mut tx_fee_per_kb = coin.get_tx_fee_per_kb().await?;
+    if coin.as_ref().tx_fee.is_dynamic() {
+        tx_fee_per_kb = coin.increase_dynamic_fee_by_stage(tx_fee_per_kb, stage);
     }
+    drop_mutability!(tx_fee_per_kb);
+
+    let outputs_count = outputs.len();
+    let (unspents, _recently_sent_txs) = coin.get_unspent_ordered_list(my_address).await?;
+
+    let mut tx_builder = UtxoTxBuilder::new(coin)
+        .add_available_inputs(unspents)
+        .add_outputs(outputs)
+        .with_fee_policy(fee_policy)
+        .with_fee(TxFeeType::PerKb(tx_fee_per_kb));
+    if let Some(gas) = gas_fee {
+        tx_builder = tx_builder.with_gas_fee(gas);
+    }
+    let (tx, data) = tx_builder.build().await.mm_err(|e| {
+        TradePreimageError::from_generate_tx_error(e, ticker.to_owned(), decimals, is_amount_upper_bound)
+    })?;
+
+    // todo: Revise this, important
+    let total_fee = if tx.outputs.len() == outputs_count {
+        // Todo: find a way to combine both cases and remove this
+        if coin.as_ref().tx_fee.is_dynamic() {
+            // take into account the change output
+            // Todo: after making a common function change this too
+            data.fee_amount + ((tx_fee_per_kb * P2PKH_OUTPUT_LEN) as f64 / KILO_BYTE) as u64
+        } else {
+            // take into account the change output if tx_size_kb(tx with change) > tx_size_kb(tx without change)
+            let tx = UtxoTx::from(tx);
+            // Todo: should be serialize with flags
+            let tx_bytes = serialize(&tx);
+            // Todo: check this, also, shouldn't we use vbytes here and in other places?? for segwit
+            if tx_bytes.len() as u64 % KILO_BYTE as u64 + P2PKH_OUTPUT_LEN > KILO_BYTE as u64 {
+                data.fee_amount + tx_fee_per_kb
+            } else {
+                data.fee_amount
+            }
+        }
+    } else {
+        // the change output is included already
+        data.fee_amount
+    };
+
+    Ok(big_decimal_from_sat(total_fee as i64, decimals))
 }
 
 /// Maker or Taker should pay fee only for sending his payment.

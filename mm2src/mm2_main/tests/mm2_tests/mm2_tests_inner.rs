@@ -1002,7 +1002,8 @@ fn test_withdraw_and_send() {
         "MORTY",
         "RJTYiYeJ8eVvJ53n2YbrVmxWNNMVZjDGLh",
         &enable_res,
-        "-0.00101",
+        // Todo: calculate transaction size inside withdraw_and_send
+        "-0.00100245",
         0.001,
     );
     // dev chain gas price is 0 so ETH expected balance change doesn't include the fee

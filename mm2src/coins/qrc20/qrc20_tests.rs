@@ -1,5 +1,6 @@
 use super::*;
 use crate::utxo::rpc_clients::UnspentInfo;
+use crate::utxo::KILO_BYTE;
 use crate::{TxFeeDetails, WaitForHTLCTxSpendArgs};
 use chain::OutPoint;
 use common::{block_on, wait_until_sec, DEX_FEE_ADDR_RAW_PUBKEY};
@@ -52,8 +53,8 @@ pub fn qrc20_coin_for_test(priv_key: [u8; 32], fallback_swap: Option<&str>) -> (
     (ctx, coin)
 }
 
-fn check_tx_fee(coin: &Qrc20Coin, expected_tx_fee: ActualTxFee) {
-    let actual_tx_fee = block_on(coin.get_tx_fee()).unwrap();
+fn check_tx_fee(coin: &Qrc20Coin, expected_tx_fee: u64) {
+    let actual_tx_fee = block_on(coin.get_tx_fee_per_kb()).unwrap();
     assert_eq!(actual_tx_fee, expected_tx_fee);
 }
 
@@ -123,13 +124,14 @@ fn test_withdraw_impl_fee_details() {
         memo: None,
     };
     let tx_details = coin.withdraw(withdraw_req).wait().unwrap();
+    let tx_size_kb = tx_details.tx_hex.into_vec().len() as f64 / KILO_BYTE;
+    let fee_per_kb = block_on(coin.get_tx_fee_per_kb()).unwrap() as f64;
+    let expected_miner_fee_sats = fee_per_kb * tx_size_kb;
+    let expected_miner_fee = big_decimal_from_sat(expected_miner_fee_sats as i64, coin.utxo.decimals);
 
     let expected: Qrc20FeeDetails = json::from_value(json!({
         "coin": "QTUM",
-        // 1000 from satoshi,
-        // where decimals = 8,
-        //       1000 is fixed fee
-        "miner_fee": "0.00001",
+        "miner_fee": expected_miner_fee,
         "gas_limit": 2_500_000,
         "gas_price": 40,
         // (gas_limit * gas_price) from satoshi in Qtum
@@ -743,7 +745,7 @@ fn test_get_trade_fee() {
     ];
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
     // check if the coin's tx fee is expected
-    check_tx_fee(&coin, ActualTxFee::FixedPerKb(EXPECTED_TX_FEE as u64));
+    check_tx_fee(&coin, EXPECTED_TX_FEE as u64);
 
     let actual_trade_fee = coin.get_trade_fee().wait().unwrap();
     let expected_trade_fee_amount = big_decimal_from_sat(
@@ -770,7 +772,7 @@ fn test_sender_trade_preimage_zero_allowance() {
     ];
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
     // check if the coin's tx fee is expected
-    check_tx_fee(&coin, ActualTxFee::FixedPerKb(EXPECTED_TX_FEE as u64));
+    check_tx_fee(&coin, EXPECTED_TX_FEE as u64);
 
     let allowance = block_on(coin.allowance(coin.swap_contract_address)).expect("!allowance");
     assert_eq!(allowance, 0.into());
@@ -806,7 +808,7 @@ fn test_sender_trade_preimage_with_allowance() {
     ];
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
     // check if the coin's tx fee is expected
-    check_tx_fee(&coin, ActualTxFee::FixedPerKb(EXPECTED_TX_FEE as u64));
+    check_tx_fee(&coin, EXPECTED_TX_FEE as u64);
 
     let allowance = block_on(coin.allowance(coin.swap_contract_address)).expect("!allowance");
     assert_eq!(allowance, 300_000_000.into());
@@ -914,7 +916,7 @@ fn test_receiver_trade_preimage() {
     ];
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
     // check if the coin's tx fee is expected
-    check_tx_fee(&coin, ActualTxFee::FixedPerKb(EXPECTED_TX_FEE as u64));
+    check_tx_fee(&coin, EXPECTED_TX_FEE as u64);
 
     let actual = coin
         .get_receiver_trade_fee(FeeApproxStage::WithoutApprox)
@@ -941,7 +943,7 @@ fn test_taker_fee_tx_fee() {
     ];
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
     // check if the coin's tx fee is expected
-    check_tx_fee(&coin, ActualTxFee::FixedPerKb(EXPECTED_TX_FEE as u64));
+    check_tx_fee(&coin, EXPECTED_TX_FEE as u64);
     let expected_balance = CoinBalance {
         spendable: BigDecimal::from(5u32),
         unspendable: BigDecimal::from(0u32),

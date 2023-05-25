@@ -8,8 +8,8 @@ use crate::utxo::utxo_builder::{UtxoCoinBuildError, UtxoCoinBuilder, UtxoCoinBui
                                 UtxoFieldsWithIguanaSecretBuilder};
 use crate::utxo::utxo_common::{addresses_from_script, big_decimal_from_sat, big_decimal_from_sat_unsigned,
                                payment_script};
-use crate::utxo::{sat_from_big_decimal, utxo_common, ActualTxFee, AdditionalTxData, AddrFromStrError, Address,
-                  BroadcastTxErr, FeePolicy, GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList,
+use crate::utxo::{sat_from_big_decimal, utxo_common, AdditionalTxData, AddrFromStrError, Address, BroadcastTxErr,
+                  FeePolicy, GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList,
                   RecentlySpentOutPointsGuard, UtxoActivationParams, UtxoAddressFormat, UtxoArc, UtxoCoinFields,
                   UtxoCommonOps, UtxoFeeDetails, UtxoRpcMode, UtxoTxBroadcastOps, UtxoTxGenerationOps,
                   VerboseTransactionFrom};
@@ -347,13 +347,10 @@ impl ZCoin {
         Ok(unspents)
     }
 
+    // Todo: this can be probably refactored too
     async fn get_one_kbyte_tx_fee(&self) -> UtxoRpcResult<BigDecimal> {
-        let fee = self.get_tx_fee().await?;
-        match fee {
-            ActualTxFee::Dynamic(fee) | ActualTxFee::FixedPerKb(fee) => {
-                Ok(big_decimal_from_sat_unsigned(fee, self.decimals()))
-            },
-        }
+        let fee = self.get_tx_fee_per_kb().await?;
+        Ok(big_decimal_from_sat_unsigned(fee, self.decimals()))
     }
 
     /// Generates a tx sending outputs from our address
@@ -1683,7 +1680,7 @@ impl MmCoin for ZCoin {
 
 #[async_trait]
 impl UtxoTxGenerationOps for ZCoin {
-    async fn get_tx_fee(&self) -> UtxoRpcResult<ActualTxFee> { utxo_common::get_tx_fee(&self.utxo_arc).await }
+    async fn get_tx_fee_per_kb(&self) -> UtxoRpcResult<u64> { utxo_common::get_tx_fee_per_kb(&self.utxo_arc).await }
 
     async fn calc_interest_if_required(
         &self,

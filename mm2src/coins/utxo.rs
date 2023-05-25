@@ -116,7 +116,7 @@ pub mod utxo_common_tests;
 #[cfg(test)] pub mod utxo_tests;
 #[cfg(target_arch = "wasm32")] pub mod utxo_wasm_tests;
 
-const KILO_BYTE: u64 = 1000;
+pub(crate) const KILO_BYTE: f64 = 1000.;
 /// https://bitcoin.stackexchange.com/a/77192
 const MAX_DER_SIGNATURE_LEN: usize = 72;
 const COMPRESSED_PUBKEY_LEN: usize = 33;
@@ -268,14 +268,17 @@ pub enum TxFee {
     FixedPerKb(u64),
 }
 
-/// The actual "runtime" fee that is received from RPC in case of dynamic calculation
+impl TxFee {
+    pub fn is_dynamic(&self) -> bool { matches!(self, TxFee::Dynamic(_)) }
+}
+
+/// The fee type to be used for transactions
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ActualTxFee {
-    /// fee amount per Kbyte received from coin RPC
-    Dynamic(u64),
-    /// Use specified amount per each 1 kb of transaction and also per each output less than amount.
-    /// Used by DOGE, but more coins might support it too.
-    FixedPerKb(u64),
+pub enum TxFeeType {
+    /// Fee per kb whether it is dynamic (received from RPC) or fixed
+    PerKb(u64),
+    /// Use specified fixed amount for the whole transaction that is not dependent on transaction size
+    Fixed(u64),
 }
 
 /// Fee policy applied on transaction creation
@@ -545,6 +548,7 @@ pub struct UtxoCoinConf {
     /// if set to true MM2 will check whether calculated fee is lower than relay fee and use
     /// relay fee amount instead of calculated
     /// https://github.com/KomodoPlatform/atomicDEX-API/issues/617
+    // Todo: use this in withdraw and fee calculations (min relay fee should be used??)
     pub force_min_relay_fee: bool,
     /// Block count for median time past calculation
     pub mtp_block_count: NonZeroU64,
@@ -823,7 +827,7 @@ pub trait UtxoTxBroadcastOps {
 #[async_trait]
 #[cfg_attr(test, mockable)]
 pub trait UtxoTxGenerationOps {
-    async fn get_tx_fee(&self) -> UtxoRpcResult<ActualTxFee>;
+    async fn get_tx_fee_per_kb(&self) -> UtxoRpcResult<u64>;
 
     /// Calculates interest if the coin is KMD
     /// Adds the value to existing output to my_script_pub or creates additional interest output

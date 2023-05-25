@@ -1,6 +1,6 @@
 use crate::rpc_command::init_withdraw::{WithdrawInProgressStatus, WithdrawTaskHandle};
 use crate::utxo::utxo_common::{big_decimal_from_sat, UtxoTxBuilder};
-use crate::utxo::{output_script, sat_from_big_decimal, ActualTxFee, Address, FeePolicy, GetUtxoListOps, PrivKeyPolicy,
+use crate::utxo::{output_script, sat_from_big_decimal, Address, FeePolicy, GetUtxoListOps, PrivKeyPolicy, TxFeeType,
                   UtxoAddressFormat, UtxoCoinFields, UtxoCommonOps, UtxoFeeDetails, UtxoTx, UTXO_LOCK};
 use crate::{CoinWithDerivationMethod, GetWithdrawSenderAddress, MarketCoinOps, TransactionDetails, WithdrawError,
             WithdrawFee, WithdrawRequest, WithdrawResult};
@@ -158,14 +158,15 @@ where
             .add_outputs(outputs)
             .with_fee_policy(fee_policy);
 
+        // Todo: maybe return the transaction size in the response to check if the fee is calculated correctly??? or just check the unit tests
         match req.fee {
             Some(WithdrawFee::UtxoFixed { ref amount }) => {
                 let fixed = sat_from_big_decimal(amount, decimals)?;
-                tx_builder = tx_builder.with_fee(ActualTxFee::FixedPerKb(fixed));
+                tx_builder = tx_builder.with_fee(TxFeeType::Fixed(fixed));
             },
             Some(WithdrawFee::UtxoPerKbyte { ref amount }) => {
-                let dynamic = sat_from_big_decimal(amount, decimals)?;
-                tx_builder = tx_builder.with_fee(ActualTxFee::Dynamic(dynamic));
+                let per_kb = sat_from_big_decimal(amount, decimals)?;
+                tx_builder = tx_builder.with_fee(TxFeeType::PerKb(per_kb));
             },
             Some(ref fee_policy) => {
                 let error = format!(

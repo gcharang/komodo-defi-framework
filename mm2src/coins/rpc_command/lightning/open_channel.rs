@@ -4,7 +4,7 @@ use crate::lightning::ln_p2p::{connect_to_ln_node, ConnectionError};
 use crate::lightning::ln_serialization::NodeAddress;
 use crate::lightning::ln_storage::LightningStorage;
 use crate::utxo::utxo_common::UtxoTxBuilder;
-use crate::utxo::{sat_from_big_decimal, FeePolicy, GetUtxoListOps, UtxoTxGenerationOps};
+use crate::utxo::{sat_from_big_decimal, FeePolicy, GetUtxoListOps, TxFeeType, UtxoTxGenerationOps};
 use crate::{lp_coinfind_or_err, BalanceError, CoinFindError, GenerateTxError, MmCoinEnum, NumConversError,
             UnexpectedDerivationMethod, UtxoRpcError};
 use chain::TransactionOutput;
@@ -133,6 +133,7 @@ pub struct OpenChannelResponse {
 }
 
 /// Opens a channel on the lightning network.
+// Todo: should fixed fee be used for lightning channel opening too?
 pub async fn open_channel(ctx: MmArc, req: OpenChannelRequest) -> OpenChannelResult<OpenChannelResponse> {
     let ln_coin = match lp_coinfind_or_err(&ctx, &req.coin).await? {
         MmCoinEnum::LightningCoin(c) => c,
@@ -171,10 +172,10 @@ pub async fn open_channel(ctx: MmArc, req: OpenChannelRequest) -> OpenChannelRes
         .with_fee_policy(fee_policy);
 
     let fee = platform_coin
-        .get_tx_fee()
+        .get_tx_fee_per_kb()
         .await
         .map_err(|e| OpenChannelError::RpcError(e.to_string()))?;
-    tx_builder = tx_builder.with_fee(fee);
+    tx_builder = tx_builder.with_fee(TxFeeType::PerKb(fee));
 
     let (unsigned, _) = tx_builder.build().await?;
 

@@ -214,7 +214,7 @@ fn test_generate_transaction() {
 
     let outputs = vec![TransactionOutput {
         script_pubkey: vec![].into(),
-        value: 98001,
+        value: 98781,
     }];
 
     let builder = UtxoTxBuilder::new(&coin)
@@ -225,7 +225,8 @@ fn test_generate_transaction() {
     // so no extra outputs should appear in generated transaction
     assert_eq!(generated.0.outputs.len(), 1);
 
-    assert_eq!(generated.1.fee_amount, 1000);
+    // Todo: add transaction size to output to check that the fee is valid
+    assert_eq!(generated.1.fee_amount, 220);
     assert_eq!(generated.1.unused_change, Some(999));
     assert_eq!(generated.1.received_by_me, 0);
     assert_eq!(generated.1.spent_by_me, 100000);
@@ -250,11 +251,11 @@ fn test_generate_transaction() {
     let generated = block_on(builder.build()).unwrap();
     assert_eq!(generated.0.outputs.len(), 1);
 
-    assert_eq!(generated.1.fee_amount, 1000);
+    assert_eq!(generated.1.fee_amount, 211);
     assert_eq!(generated.1.unused_change, None);
-    assert_eq!(generated.1.received_by_me, 99000);
+    assert_eq!(generated.1.received_by_me, 99789);
     assert_eq!(generated.1.spent_by_me, 100000);
-    assert_eq!(generated.0.outputs[0].value, 99000);
+    assert_eq!(generated.0.outputs[0].value, 99789);
 
     let unspents = vec![UnspentInfo {
         value: 100000,
@@ -1134,7 +1135,7 @@ fn test_generate_transaction_relay_fee_is_used_when_dynamic_fee_is_lower() {
     let builder = UtxoTxBuilder::new(&coin)
         .add_available_inputs(unspents)
         .add_outputs(outputs)
-        .with_fee(ActualTxFee::Dynamic(100));
+        .with_fee(TxFeeType::PerKb(100));
 
     let generated = block_on(builder.build()).unwrap();
     assert_eq!(generated.0.outputs.len(), 1);
@@ -1177,7 +1178,7 @@ fn test_generate_transaction_relay_fee_is_used_when_dynamic_fee_is_lower_and_ded
         .add_available_inputs(unspents)
         .add_outputs(outputs)
         .with_fee_policy(FeePolicy::DeductFromOutput(0))
-        .with_fee(ActualTxFee::Dynamic(100));
+        .with_fee(TxFeeType::PerKb(100));
 
     let generated = block_on(tx_builder.build()).unwrap();
     assert_eq!(generated.0.outputs.len(), 1);
@@ -1224,7 +1225,7 @@ fn test_generate_tx_fee_is_correct_when_dynamic_fee_is_larger_than_relay() {
     let builder = UtxoTxBuilder::new(&coin)
         .add_available_inputs(unspents)
         .add_outputs(outputs)
-        .with_fee(ActualTxFee::Dynamic(1000));
+        .with_fee(TxFeeType::PerKb(1000));
 
     let generated = block_on(builder.build()).unwrap();
 
