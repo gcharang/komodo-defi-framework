@@ -22,6 +22,5 @@ ser_error_derive = { path = "../derives/ser_error_derive", optional=true }
 uuid = { version = "1.2.2", features = ["fast-rng", "serde", "v4"] }
 
 [features]
-default = ["rpc_data"]
-rpc_facilities = ["rpc_data", "dep:gstuff", "dep:http", "dep:mm2_err_handle", "dep:ser_error", "dep:ser_error_derive"]
-rpc_data = []
+default = []
+rpc_facilities = ["dep:futures", "dep:gstuff", "dep:http", "dep:mm2_err_handle", "dep:ser_error", "dep:ser_error_derive"]
