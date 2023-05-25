@@ -18,7 +18,7 @@ const DEFAULT_OPTION_PLACEHOLDER: &str = "Tap enter to skip";
 const RPC_PORT_MIN: u16 = 1024;
 const RPC_PORT_MAX: u16 = 49151;
 
-pub fn init_mm2_cfg(cfg_file: &str) -> Result<(), ()> {
+pub(crate) fn init_mm2_cfg(cfg_file: &str) -> Result<(), ()> {
     let mut mm2_cfg = Mm2Cfg::new();
     info!("Start collecting mm2_cfg into: {cfg_file}");
     mm2_cfg.inquire()?;

@@ -5,7 +5,7 @@ use mm2_net::native_http::slurp_post_json;
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
-pub trait Transport {
+pub(crate) trait Transport {
     async fn send<ReqT, OkT, ErrT>(&self, req: ReqT) -> Result<Result<OkT, ErrT>, ()>
     where
         ReqT: Serialize + Send + Sync,

@@ -5,7 +5,7 @@ use std::io::Write;
 use std::ops::Deref;
 use std::path::Path;
 
-pub fn rewrite_data_file<T>(data: T, file: &str) -> Result<(), ()>
+pub(crate) fn rewrite_data_file<T>(data: T, file: &str) -> Result<(), ()>
 where
     T: Deref<Target = [u8]>,
 {
@@ -24,7 +24,7 @@ where
     Ok(())
 }
 
-pub fn rewrite_json_file<T>(value: &T, file: &str) -> Result<(), ()>
+pub(crate) fn rewrite_json_file<T>(value: &T, file: &str) -> Result<(), ()>
 where
     T: Serialize,
 {
@@ -34,7 +34,7 @@ where
     rewrite_data_file(data, file)
 }
 
-pub fn read_json_file<T>(file: &Path) -> Result<T, ()>
+pub(crate) fn read_json_file<T>(file: &Path) -> Result<T, ()>
 where
     T: for<'a> Deserialize<'a>,
 {

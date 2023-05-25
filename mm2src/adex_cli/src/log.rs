@@ -1,7 +1,7 @@
 use log::LevelFilter;
 use std::io::Write;
 
-pub fn init_logging() {
+pub(crate) fn init_logging() {
     let mut builder = env_logger::builder();
     let level = std::env::var("RUST_LOG")
         .map(|s| s.parse().expect("Failed to parse RUST_LOG"))

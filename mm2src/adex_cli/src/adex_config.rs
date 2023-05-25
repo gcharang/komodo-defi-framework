@@ -23,12 +23,12 @@ const PRICE_PRECISION: PricePrecision = (PRICE_PRECISION_MIN, PRICE_PRECISION_MA
 pub(crate) type PricePrecision = (usize, usize);
 pub(crate) type VolumePrecision = (usize, usize);
 
-pub fn get_config() {
+pub(crate) fn get_config() {
     let Ok(adex_cfg) = AdexConfigImpl::from_config_path() else { return; };
     info!("{}", adex_cfg)
 }
 
-pub fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
+pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
     let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|()| AdexConfigImpl::default());
     let mut is_changes_happened = false;
     if set_password {

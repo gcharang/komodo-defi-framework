@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use super::init_activation_scheme::get_activation_scheme_path;
 use crate::helpers::read_json_file;
 
-pub struct ActivationScheme {
+pub(crate) struct ActivationScheme {
     scheme: HashMap<String, Json>,
 }
 
