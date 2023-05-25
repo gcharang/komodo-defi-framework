@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use log::{error, info};
 use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
@@ -9,24 +10,25 @@ use std::io::Write;
 
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
+use crate::error_anyhow;
 use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
 
 pub(crate) trait ResponseHandler {
-    fn print_response(&self, response: Json) -> Result<(), ()>;
-    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<(), ()>;
+    fn print_response(&self, response: Json) -> Result<()>;
+    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<()>;
     fn on_orderbook_response<Cfg: AdexConfig + 'static>(
         &self,
         orderbook: OrderbookResponse,
         config: &Cfg,
         otderbook_config: OrderbookConfig,
-    ) -> Result<(), ()>;
-    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<(), ()>;
-    fn on_version_response(&self, response: &MmVersionResponse) -> Result<(), ()>;
-    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<(), ()>;
-    fn on_balance_response(&self, response: &BalanceResponse) -> Result<(), ()>;
-    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
-    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
+    ) -> Result<()>;
+    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
+    fn on_version_response(&self, response: &MmVersionResponse) -> Result<()>;
+    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()>;
+    fn on_balance_response(&self, response: &BalanceResponse) -> Result<()>;
+    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
+    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -34,10 +36,10 @@ pub(crate) struct ResponseHandlerImpl<'a> {
 }
 
 impl ResponseHandler for ResponseHandlerImpl<'_> {
-    fn print_response(&self, result: Json) -> Result<(), ()> {
+    fn print_response(&self, result: Json) -> Result<()> {
         let object = result
             .as_object()
-            .ok_or_else(|| error!("Failed to cast result as object"))?;
+            .ok_or_else(|| error_anyhow!("Failed to cast result as object"))?;
 
         object
             .iter()
@@ -46,7 +48,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<(), ()> {
+    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<()> {
         info!("{response:?}");
         Ok(())
     }
@@ -56,7 +58,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         orderbook: OrderbookResponse,
         config: &Cfg,
         otderbook_config: OrderbookConfig,
-    ) -> Result<(), ()> {
+    ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
 
         let base_vol_head = "Volume: ".to_string() + &orderbook.base;
@@ -122,7 +124,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<(), ()> {
+    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "{:8} {}", "Ticker", "Address");
         for row in &enabled.result {
@@ -131,14 +133,14 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_version_response(&self, response: &MmVersionResponse) -> Result<(), ()> {
+    fn on_version_response(&self, response: &MmVersionResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "Version: {}", response.result);
         writeln_safe_io!(writer, "Datetime: {}", response.datetime);
         Ok(())
     }
 
-    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<(), ()> {
+    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(
             writer,
@@ -160,7 +162,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_balance_response(&self, response: &BalanceResponse) -> Result<(), ()> {
+    fn on_balance_response(&self, response: &BalanceResponse) -> Result<()> {
         writeln_safe_io!(
             self.writer.borrow_mut(),
             "coin: {}\nbalance: {}\nunspendable: {}\naddress: {}",
@@ -172,17 +174,17 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
+    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Order uuid: {}", response.request.uuid);
         Ok(())
     }
 
-    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
+    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Buy order uuid: {}", response.request.uuid);
         Ok(())
     }
 
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Service stopped: {}", response.result);
         Ok(())
     }

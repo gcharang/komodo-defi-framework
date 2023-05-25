@@ -1,3 +1,4 @@
+use anyhow::{anyhow, bail, Result};
 use directories::ProjectDirs;
 use inquire::Password;
 use log::{error, info, warn};
@@ -7,6 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::helpers::rewrite_json_file;
+use crate::logging::{error_anyhow, warn_bail};
 
 const PROJECT_QUALIFIER: &str = "com";
 const PROJECT_COMPANY: &str = "komodoplatform";
@@ -29,7 +31,7 @@ pub(crate) fn get_config() {
 }
 
 pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
-    let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|()| AdexConfigImpl::default());
+    let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|_| AdexConfigImpl::default());
     let mut is_changes_happened = false;
     if set_password {
         let rpc_password = Password::new("Enter RPC API password:")
@@ -38,7 +40,7 @@ pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
                 is_changes_happened = true;
                 value
             })
-            .map_err(|error| error!("Failed to get rpc_api_password: {error}"))
+            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))
             .ok();
         adex_cfg.set_rpc_password(rpc_password);
     }
@@ -102,66 +104,61 @@ impl AdexConfigImpl {
     }
 
     #[cfg(not(test))]
-    pub fn read_config() -> Result<AdexConfigImpl, ()> {
-        let config = AdexConfigImpl::from_config_path().map_err(|_| error!("Failed to get adex_config"))?;
+    pub fn read_config() -> Result<AdexConfigImpl> {
+        let config = AdexConfigImpl::from_config_path()?;
         match config {
             config @ AdexConfigImpl {
                 rpc_password: Some(_),
                 rpc_uri: Some(_),
             } => Ok(config),
-            _ => {
-                warn!("Failed to process, adex_config is not fully set");
-                Err(())
-            },
+            _ => warn_bail!("Failed to process, adex_config is not fully set"),
         }
     }
 
     fn is_set(&self) -> bool { self.rpc_uri.is_some() && self.rpc_password.is_some() }
 
-    pub fn get_config_dir() -> Result<PathBuf, ()> {
+    pub fn get_config_dir() -> Result<PathBuf> {
         let project_dirs = ProjectDirs::from(PROJECT_QUALIFIER, PROJECT_COMPANY, PROJECT_APP)
-            .ok_or_else(|| error!("Failed to get project_dirs"))?;
+            .ok_or_else(|| error_anyhow!("Failed to get project_dirs"))?;
         let config_path: PathBuf = project_dirs.config_dir().into();
         fs::create_dir_all(&config_path)
-            .map_err(|error| error!("Failed to create config_dir: {config_path:?}, error: {error}"))?;
+            .map_err(|error| error_anyhow!("Failed to create config_dir: {config_path:?}, error: {error}"))?;
         Ok(config_path)
     }
 
-    fn get_config_path() -> Result<PathBuf, ()> {
+    fn get_config_path() -> Result<PathBuf> {
         let mut config_path = Self::get_config_dir()?;
         config_path.push(ADEX_CFG);
         Ok(config_path)
     }
 
-    fn from_config_path() -> Result<AdexConfigImpl, ()> {
+    fn from_config_path() -> Result<AdexConfigImpl> {
         let config_path = Self::get_config_path()?;
 
         if !config_path.exists() {
-            warn!("Config is not set");
-            return Err(());
+            warn_bail!("Config is not set")
         }
         Self::read_from(&config_path)
     }
 
-    fn write_to_config_path(&self) -> Result<(), ()> {
+    fn write_to_config_path(&self) -> Result<()> {
         let config_path = Self::get_config_path()?;
         self.write_to(&config_path)
     }
 
-    fn read_from(cfg_path: &Path) -> Result<AdexConfigImpl, ()> {
+    fn read_from(cfg_path: &Path) -> Result<AdexConfigImpl> {
         let adex_path_str = cfg_path.to_str().unwrap_or("Undefined");
-        let adex_cfg_file = fs::File::open(cfg_path).map_err(|error| {
-            error!("Failed to open: {adex_path_str}, error: {error}");
-        })?;
+        let adex_cfg_file = fs::File::open(cfg_path)
+            .map_err(|error| error_anyhow!("Failed to open: {adex_path_str}, error: {error}"))?;
 
         serde_json::from_reader(adex_cfg_file)
-            .map_err(|error| error!("Failed to read adex_cfg to read from: {adex_path_str}, error: {error}"))
+            .map_err(|error| error_anyhow!("Failed to read adex_cfg to read from: {adex_path_str}, error: {error}"))
     }
 
-    fn write_to(&self, cfg_path: &Path) -> Result<(), ()> {
+    fn write_to(&self, cfg_path: &Path) -> Result<()> {
         let adex_path_str = cfg_path
             .to_str()
-            .ok_or_else(|| error!("Failed to get cfg_path as str"))?;
+            .ok_or_else(|| error_anyhow!("Failed to get cfg_path as str"))?;
         rewrite_json_file(self, adex_path_str)
     }
 

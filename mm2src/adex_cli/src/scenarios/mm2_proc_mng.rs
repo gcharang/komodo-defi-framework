@@ -1,6 +1,9 @@
+use anyhow::{anyhow, Result};
 use common::log::{error, info};
 use std::env;
 use std::path::PathBuf;
+
+use crate::error_anyhow;
 
 #[cfg(not(target_os = "macos"))]
 use sysinfo::{PidExt, ProcessExt, System, SystemExt};
@@ -73,10 +76,8 @@ fn find_proc_by_name(pname: &'_ str) -> Vec<u32> {
         .collect()
 }
 
-fn get_mm2_binary_path() -> Result<PathBuf, ()> {
-    let mut dir = env::current_exe().map_err(|error| {
-        error!("Failed to get current binary dir: {error}");
-    })?;
+fn get_mm2_binary_path() -> Result<PathBuf> {
+    let mut dir = env::current_exe().map_err(|error| error_anyhow!("Failed to get current binary dir: {error}"))?;
     dir.pop();
     dir.push(MM2_BINARY);
     Ok(dir)

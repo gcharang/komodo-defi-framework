@@ -1,3 +1,4 @@
+use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use common::serde_derive::Serialize;
 use mm2_number::bigdecimal::ParseBigDecimalError;
@@ -99,7 +100,7 @@ impl Cli {
         args: impl Iterator<Item = String>,
         config: &Cfg,
         printer: &P,
-    ) -> Result<(), ()> {
+    ) -> Result<()> {
         let transport = SlurpTransport::new(config.rpc_uri());
 
         let proc = AdexProc {

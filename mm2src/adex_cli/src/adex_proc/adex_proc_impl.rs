@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use log::{error, info, warn};
 use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
                             OrderbookRequest, OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
@@ -9,6 +10,7 @@ use super::OrderbookConfig;
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
 use crate::transport::Transport;
+use crate::{error_bail, warn_bail};
 
 pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, C: AdexConfig + ?Sized> {
     pub transport: &'trp T,
@@ -17,13 +19,12 @@ pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, 
 }
 
 impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
-    pub async fn enable(&self, asset: &str) -> Result<(), ()> {
+    pub async fn enable(&self, asset: &str) -> Result<()> {
         info!("Enabling asset: {asset}");
 
         let activation_scheme = get_activation_scheme()?;
         let Some(activation_method) = activation_scheme.get_activation_method(asset) else {
-            warn!("Asset is not known: {asset}");
-            return Err(());
+            warn_bail!("Asset is not known: {asset}")
         };
 
         let command = Command::builder()
@@ -34,14 +35,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         match self.transport.send::<_, CoinInitResponse, Json>(command).await {
             Ok(Ok(ref ok)) => self.response_handler.on_enable_response(ok),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => {
-                error!("Failed to enable asset: {asset}, error: {err:?}");
-                Err(())
-            },
+            Err(err) => error_bail!("Failed to enable asset: {asset}, error: {err:?}"),
         }
     }
 
-    pub async fn get_balance(&self, asset: &str) -> Result<(), ()> {
+    pub async fn get_balance(&self, asset: &str) -> Result<()> {
         info!("Getting balance, coin: {asset} ...");
         let command = Command::builder()
             .method(Method::GetBalance)
@@ -52,14 +50,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         match self.transport.send::<_, BalanceResponse, Json>(command).await {
             Ok(Ok(balance_response)) => self.response_handler.on_balance_response(&balance_response),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => {
-                error!("Failed to get balance: {err:?}");
-                Err(())
-            },
+            Err(err) => error_bail!("Failed to get balance: {err:?}"),
         }
     }
 
-    pub async fn get_enabled(&self) -> Result<(), ()> {
+    pub async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
 
         let command = Command::<i32>::builder()
@@ -74,14 +69,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_get_enabled_response(&ok),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => {
-                error!("Failed to get enabled coins: {:?}", err);
-                Err(())
-            },
+            Err(err) => error_bail!("Failed to get enabled coins: {:?}", err),
         }
     }
 
-    pub async fn get_orderbook(&self, base: &str, rel: &str, orderbook_config: OrderbookConfig) -> Result<(), ()> {
+    pub async fn get_orderbook(&self, base: &str, rel: &str, orderbook_config: OrderbookConfig) -> Result<()> {
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
 
         let command = Command::builder()
@@ -98,14 +90,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .response_handler
                 .on_orderbook_response(ok, self.config, orderbook_config),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => {
-                error!("Failed to get orderbook: {err:?}");
-                Err(())
-            },
+            Err(err) => error_bail!("Failed to get orderbook: {err:?}"),
         }
     }
 
-    pub async fn sell(&self, order: SellBuyRequest) -> Result<(), ()> {
+    pub async fn sell(&self, order: SellBuyRequest) -> Result<()> {
         info!(
             "Selling: {} {} for: {} {} at the price of {} {} per {}",
             order.volume,
@@ -130,14 +119,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_sell_response(&ok),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => {
-                error!("Failed to sell: {err:?}");
-                Err(())
-            },
+            Err(err) => error_bail!("Failed to sell: {err:?}"),
         }
     }
 
-    pub async fn buy(&self, order: SellBuyRequest) -> Result<(), ()> {
+    pub async fn buy(&self, order: SellBuyRequest) -> Result<()> {
         info!(
             "Buying: {} {} with: {} {} at the price of {} {} per {}",
             order.volume,
@@ -162,14 +148,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_buy_response(&ok),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => {
-                error!("Failed to buy: {err:?}");
-                Err(())
-            },
+            Err(err) => error_bail!("Failed to buy: {err:?}"),
         }
     }
 
-    pub async fn send_stop(&self) -> Result<(), ()> {
+    pub async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command");
         let stop_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password())
@@ -178,15 +161,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self.transport.send::<_, Mm2RpcResult<Status>, Json>(stop_command).await {
             Ok(Ok(ok)) => self.response_handler.on_stop_response(&ok),
-            Ok(Err(error)) => {
-                error!("Failed to stop through the API: {error}");
-                Err(())
-            },
-            _ => Err(()),
+            Ok(Err(error)) => error_bail!("Failed to stop through the API: {error}"),
+            _ => bail!(""),
         }
     }
 
-    pub async fn get_version(self) -> Result<(), ()> {
+    pub async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version");
         let version_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password())
@@ -195,11 +175,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self.transport.send::<_, MmVersionResponse, Json>(version_command).await {
             Ok(Ok(ok)) => self.response_handler.on_version_response(&ok),
-            Ok(Err(error)) => {
-                error!("Failed get version through the API: {error}");
-                Err(())
-            },
-            _ => Err(()),
+            Ok(Err(error)) => error_bail!("Failed get version through the API: {error}"),
+            _ => bail!(""),
         }
     }
 }
