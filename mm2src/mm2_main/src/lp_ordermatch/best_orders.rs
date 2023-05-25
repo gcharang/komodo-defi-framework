@@ -9,7 +9,7 @@ use http::{Response, StatusCode};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber};
-use mm2_rpc_data::legacy::OrderConfirmationsSettings;
+use mm2_rpc::data::legacy::OrderConfirmationsSettings;
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
 use std::collections::{HashMap, HashSet};

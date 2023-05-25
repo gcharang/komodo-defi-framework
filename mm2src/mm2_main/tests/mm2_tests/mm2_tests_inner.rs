@@ -8,7 +8,7 @@ use http::{HeaderMap, StatusCode};
 use mm2_main::mm2::lp_ordermatch::MIN_ORDER_KEEP_ALIVE_INTERVAL;
 use mm2_metrics::{MetricType, MetricsJson};
 use mm2_number::{BigDecimal, BigRational, Fraction, MmNumber};
-use mm2_rpc_data::legacy::{MmVersionResponse, OrderbookResponse};
+use mm2_rpc::data::legacy::{MmVersionResponse, OrderbookResponse};
 use mm2_test_helpers::electrums::*;
 use mm2_test_helpers::for_tests::{btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
                                   check_recent_swaps, enable_eth_coin, enable_qrc20, eth_jst_testnet_conf,

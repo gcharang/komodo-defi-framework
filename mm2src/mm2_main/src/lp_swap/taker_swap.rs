@@ -29,7 +29,7 @@ use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, MmNumber};
-use mm2_rpc_data::legacy::{MatchBy, OrderConfirmationsSettings, TakerAction};
+use mm2_rpc::data::legacy::{MatchBy, OrderConfirmationsSettings, TakerAction};
 use parking_lot::Mutex as PaMutex;
 use primitives::hash::H264;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json, H264 as H264Json};

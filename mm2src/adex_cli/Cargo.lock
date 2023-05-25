@@ -28,7 +28,7 @@ dependencies = [
  "log 0.4.17",
  "mm2_net",
  "mm2_number",
- "mm2_rpc_data",
+ "mm2_rpc",
  "passwords",
  "rpc",
  "serde",
@@ -1810,7 +1810,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "derive_more",
- "futures 0.3.28",
  "gstuff",
  "http 0.2.9",
  "mm2_err_handle",
@@ -1818,19 +1817,6 @@ dependencies = [
  "rpc",
  "ser_error",
  "ser_error_derive",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
-name = "mm2_rpc_data"
-version = "0.1.0"
-dependencies = [
- "common",
- "derive_more",
- "mm2_number",
- "rpc",
  "serde",
  "serde_json",
  "uuid",

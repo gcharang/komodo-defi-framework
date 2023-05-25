@@ -46,8 +46,8 @@ use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, 
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
-use mm2_rpc_data::legacy::{MatchBy, Mm2RpcResult, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry,
-                           SellBuyRequest, SellBuyResponse, TakerAction, TakerRequestForRpc};
+use mm2_rpc::data::legacy::{MatchBy, Mm2RpcResult, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry,
+                            SellBuyRequest, SellBuyResponse, TakerAction, TakerRequestForRpc};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
                         save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,

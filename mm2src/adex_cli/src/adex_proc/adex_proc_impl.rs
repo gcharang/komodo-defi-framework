@@ -1,6 +1,6 @@
 use log::{error, info, warn};
-use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
-                           OrderbookRequest, OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
+use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
+                            OrderbookRequest, OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
 use serde_json::{json, Value as Json};
 
 use super::command::{Command, Dummy, Method};

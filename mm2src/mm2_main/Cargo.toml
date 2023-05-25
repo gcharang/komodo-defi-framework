@@ -62,8 +62,7 @@ mm2-libp2p = { path = "../mm2_libp2p" }
 mm2_metrics = { path = "../mm2_metrics" }
 mm2_net = { path = "../mm2_net" }
 mm2_number = { path = "../mm2_number" }
-mm2_rpc = { path = "../mm2_rpc" }
-mm2_rpc_data = { path = "../mm2_rpc_data" }
+mm2_rpc = { path = "../mm2_rpc", features = ["rpc_facilities"]}
 num-traits = "0.2"
 parity-util-mem = "0.11"
 parking_lot = { version = "0.12.0", features = ["nightly"] }

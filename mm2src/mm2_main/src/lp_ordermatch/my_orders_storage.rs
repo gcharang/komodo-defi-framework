@@ -355,7 +355,7 @@ mod wasm_impl {
                                                         MyHistoryOrdersTable};
     use crate::mm2::lp_ordermatch::OrdermatchContext;
     use common::log::warn;
-    use mm2_rpc_data::legacy::TakerAction;
+    use mm2_rpc::data::legacy::TakerAction;
     use num_traits::ToPrimitive;
     use std::sync::Arc;
 
@@ -701,7 +701,7 @@ mod tests {
     use itertools::Itertools;
     use mm2_core::mm_ctx::MmCtxBuilder;
     use mm2_db::indexed_db::TableSignature;
-    use mm2_rpc_data::legacy::{MatchBy, OrderType, TakerAction};
+    use mm2_rpc::data::legacy::{MatchBy, OrderType, TakerAction};
     use std::collections::HashMap;
     use wasm_bindgen_test::*;
 

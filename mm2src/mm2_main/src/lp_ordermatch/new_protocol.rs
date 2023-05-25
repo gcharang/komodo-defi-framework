@@ -1,7 +1,7 @@
 use common::now_sec;
 use compact_uuid::CompactUuid;
 use mm2_number::{BigRational, MmNumber};
-use mm2_rpc_data::legacy::{MatchBy as SuperMatchBy, OrderConfirmationsSettings, TakerAction};
+use mm2_rpc::data::legacy::{MatchBy as SuperMatchBy, OrderConfirmationsSettings, TakerAction};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 

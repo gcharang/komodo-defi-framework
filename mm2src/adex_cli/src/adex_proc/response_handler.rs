@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use log::{error, info};
-use mm2_rpc_data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
-                           OrderbookResponse, SellBuyResponse, Status};
+use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
+                            OrderbookResponse, SellBuyResponse, Status};
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -204,7 +204,7 @@ impl<'a> SimpleCliTable<'a> {
 
 mod orderbook {
     use mm2_number::bigdecimal::ToPrimitive;
-    use mm2_rpc_data::legacy::AggregatedOrderbookEntry;
+    use mm2_rpc::data::legacy::AggregatedOrderbookEntry;
     use std::cmp::Ordering;
     use std::fmt::{Display, Formatter};
 

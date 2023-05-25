@@ -2,7 +2,7 @@ use crate::generate_utxo_coin_with_random_privkey;
 use crate::integration_tests_common::enable_native;
 use common::block_on;
 use mm2_number::BigDecimal;
-use mm2_rpc_data::legacy::OrderbookResponse;
+use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::for_tests::{mm_dump, MarketMakerIt};
 use mm2_test_helpers::structs::{BestOrdersResponse, BestOrdersV2Response, BuyOrSellRpcResult, MyOrdersRpcResult,
                                 OrderbookDepthResponse, RpcV2Response, SetPriceResponse};
