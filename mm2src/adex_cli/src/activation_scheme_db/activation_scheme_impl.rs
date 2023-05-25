@@ -1,5 +1,5 @@
 use log::{debug, error, warn};
-use serde_json::{json, Value as Json};
+use serde_json::Value as Json;
 use std::collections::HashMap;
 
 use super::init_activation_scheme::get_activation_scheme_path;
@@ -16,37 +16,27 @@ impl ActivationScheme {
         }
     }
 
-    pub fn get_activation_method(&self, coin: &str) -> Option<Json> {
-        let Some(Json::Object(object)) = self.scheme.get(coin) else { return None };
-        let mut copy = json!({});
-        for (k, v) in object.iter() {
-            // WORKAROUND: serde_json::Value does not support removing key
-            if *k == "userpass" {
-                continue;
-            }
-            copy[k] = v.clone();
-        }
-        Some(copy)
-    }
+    pub fn get_activation_method(&self, coin: &str) -> Option<Json> { self.scheme.get(coin).cloned() }
 
     fn init(&mut self) -> Result<(), ()> {
         let mut results: Vec<Json> = Self::load_json_file()?;
-        self.scheme = results.iter_mut().map(Self::get_coin_pair).collect();
+        self.scheme = results.iter_mut().filter_map(Self::get_coin_pair).collect();
         Ok(())
     }
 
-    fn get_coin_pair(element: &mut Json) -> (String, Json) {
-        let presence = element.to_string();
-        let Ok(result) = Self::get_coin_pair_impl(element) else {
-            warn!("Failed to process: {presence}");
-            return ("".to_string(), Json::Null)
-        };
-        result
+    fn get_coin_pair(element: &mut Json) -> Option<(String, Json)> {
+        Self::get_coin_pair_impl(element)
+            .map_err(|_| warn!("Failed to get coin pair from: {}", element.to_string()))
+            .ok()
     }
 
     fn get_coin_pair_impl(element: &mut Json) -> Result<(String, Json), ()> {
-        let command = element.get_mut("command").ok_or(())?.take();
         let coin = element.get("coin").ok_or(())?.as_str().ok_or(())?.to_string();
+        let mut command = element.get_mut("command").ok_or(())?.take();
+        command
+            .as_object_mut()
+            .ok_or_else(|| error!("Failed to get coin pair, command is not object"))?
+            .remove("userpass");
         Ok((coin, command))
     }
 

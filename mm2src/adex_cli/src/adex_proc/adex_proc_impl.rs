@@ -21,13 +21,13 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Enabling asset: {asset}");
 
         let activation_scheme = get_activation_scheme()?;
-        let Some(activate_specific_settings) = activation_scheme.get_activation_method(asset) else {
+        let Some(activation_method) = activation_scheme.get_activation_method(asset) else {
             warn!("Asset is not known: {asset}");
             return Err(());
         };
 
         let command = Command::builder()
-            .flatten_data(activate_specific_settings.clone())
+            .flatten_data(activation_method)
             .userpass(self.config.rpc_password())
             .build();
 
