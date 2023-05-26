@@ -1,6 +1,6 @@
 use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryFilters,
-                         NftTxHistoryStorageOps, RemoveNftResult};
+use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTokenAddrId,
+                         NftTxHistoryFilters, NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
 use derive_more::Display;
@@ -233,11 +233,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         todo!()
     }
 
-    async fn update_tx_details_json_by_hash(
-        &self,
-        _chain: &Chain,
-        _tx: NftTransferHistory,
-    ) -> MmResult<(), Self::Error> {
+    async fn update_tx_meta_by_hash(&self, _chain: &Chain, _tx: NftTransferHistory) -> MmResult<(), Self::Error> {
         todo!()
     }
 
@@ -252,4 +248,6 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
     ) -> MmResult<(), Self::Error> {
         todo!()
     }
+
+    async fn get_txs_with_empty_meta(&self, _chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> { todo!() }
 }
