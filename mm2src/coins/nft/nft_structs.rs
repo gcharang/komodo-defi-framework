@@ -131,16 +131,6 @@ pub(crate) struct UriMeta {
     animation_url: Option<String>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct UriMeta {
-    pub(crate) image: Option<String>,
-    #[serde(rename(deserialize = "name"))]
-    pub(crate) token_name: Option<String>,
-    description: Option<String>,
-    attributes: Option<Json>,
-    animation_url: Option<String>,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Nft {
     pub(crate) chain: Chain,
@@ -313,12 +303,6 @@ impl fmt::Display for TransferStatus {
             TransferStatus::Send => write!(f, "Send"),
         }
     }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub(crate) enum TransferStatus {
-    Receive,
-    Send,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

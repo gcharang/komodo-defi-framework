@@ -1,5 +1,4 @@
 use crate::eth::GetEthAddressError;
-use crate::nft::GetInfoFromUriError;
 use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 use crate::GetMyAddressError;
 use common::HttpStatusCode;
@@ -32,7 +31,6 @@ pub enum GetNftInfoError {
         token_address: String,
         token_id: String,
     },
-    AddressError(String),
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
 }
@@ -100,8 +98,7 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
-            | GetNftInfoError::DbError(_)
-            | GetNftInfoError::AddressError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

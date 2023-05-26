@@ -1,7 +1,6 @@
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::{MmError, MmResult};
 use url::Url;
-use std::str::FromStr;
 
 pub(crate) mod nft_errors;
 pub(crate) mod nft_structs;
@@ -17,10 +16,8 @@ use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_structs::{TransferStatus, UriMeta};
 use crate::nft_storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::APPLICATION_JSON;
-use ethereum_types::Address;
 use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
-use mm2_net::transport::SlurpError;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
 use std::cmp::Ordering;
@@ -293,27 +290,15 @@ async fn get_moralis_nft_transfers(
 
     // The cursor returned in the previous response (used for getting the next page).
     let mut cursor = String::new();
-    let wallet_address = my_address.wallet_address;loop {
+    let wallet_address = my_address.wallet_address;
+    loop {
         let uri = format!("{}{}", uri_without_cursor, cursor);
         let response = send_request_to_uri(uri.as_str()).await?;
         if let Some(transfer_list) = response["result"].as_array() {
             for transfer in transfer_list {
                 let transfer_wrapper: NftTransferHistoryWrapper = serde_json::from_str(&transfer.to_string())?;
-                let status = if my_address.wallet_address.to_lowercase() == transfer_wrapper.to_address {
-                    TransferStatus::Receive
-                } else {
-                    TransferStatus::Send
-                };
                 let status = get_tx_status(&wallet_address, &transfer_wrapper.to_address);
-                    let req = NftMetadataReq {
-                        token_address: Address::from_str(&transfer_wrapper.token_address)
-                            .map_to_mm(|e| GetNftInfoError::AddressError(e.to_string()))?,
-                        token_id: transfer_wrapper.token_id.clone(),
-                        chain,
-                        url: req.url.clone(),
-                    };
-                    let nft_meta = get_nft_metadata(ctx.clone(), req).await?;
-                    lettransfer_history = NftTransferHistory {
+                let transfer_history = NftTransferHistory {
                     chain: *chain,
                     block_number: *transfer_wrapper.block_number,
                     block_timestamp: transfer_wrapper.block_timestamp,
@@ -329,9 +314,7 @@ async fn get_moralis_nft_transfers(
                     collection_name: None,
                     image: None,
                     token_name: None,
-                    collection_name: nft_meta.collection_name,
-                        image: nft_meta.uri_meta.image,
-                        token_name: nft_meta.uri_meta.token_name,from_address: transfer_wrapper.from_address,
+                    from_address: transfer_wrapper.from_address,
                     to_address: transfer_wrapper.to_address,
                     status,
                     amount: transfer_wrapper.amount.0,
@@ -413,7 +396,6 @@ pub async fn withdraw_nft(ctx: MmArc, req: WithdrawNftReq) -> WithdrawNftResult 
     }
 }
 
-
 #[cfg(not(target_arch = "wasm32"))]
 async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
     use http::header::HeaderValue;
@@ -465,6 +447,28 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
     Ok(response)
 }
 
+async fn try_get_uri_meta(token_uri: &Option<String>) -> MmResult<UriMeta, GetNftInfoError> {
+    match token_uri {
+        Some(token_uri) => {
+            if let Ok(response_meta) = send_request_to_uri(token_uri).await {
+                let uri_meta_res: UriMeta = serde_json::from_str(&response_meta.to_string())?;
+                Ok(uri_meta_res)
+            } else {
+                Ok(UriMeta::default())
+            }
+        },
+        None => Ok(UriMeta::default()),
+    }
+}
+
+fn get_tx_status(my_wallet: &str, to_address: &str) -> TransferStatus {
+    // if my_wallet == from_address && my_wallet == to_address it is incoming tx, so we can check just to_address.
+    if my_wallet.to_lowercase() == to_address.to_lowercase() {
+        TransferStatus::Receive
+    } else {
+        TransferStatus::Send
+    }
+}
 
 /// `update_nft_list` function gets nft transfers from NFT HISTORY table, iterates through them
 /// and updates NFT LIST table info.
@@ -536,23 +540,16 @@ where
                 if let Some(mut nft_db) = nft_db {
                     match nft_db.amount.cmp(&tx.amount) {
                         Ordering::Equal => {
-                            if let Some(nft) = storage
-                                .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
-                                .await?
-                            {
-                                storage
-                                    .update_txs_meta_by_token_addr_id(
-                                        chain,
-                                        nft.token_address,
-                                        nft.token_id,
-                                        nft.collection_name,
-                                        nft.uri_meta.image,
-                                        nft.uri_meta.token_name,
-                                    )
-                                    .await?;
-                            } else {
-                                continue;
-                            };
+                            storage
+                                .update_txs_meta_by_token_addr_id(
+                                    chain,
+                                    nft_db.token_address,
+                                    nft_db.token_id,
+                                    nft_db.collection_name,
+                                    nft_db.uri_meta.image,
+                                    nft_db.uri_meta.token_name,
+                                )
+                                .await?;
                             storage
                                 .remove_nft_from_list(chain, tx.token_address, tx.token_id, tx.block_number)
                                 .await?;
@@ -560,7 +557,19 @@ where
                         Ordering::Greater => {
                             nft_db.amount -= tx.amount;
                             drop_mutability!(nft_db);
-                            storage.update_nft_amount(chain, nft_db, tx.block_number).await?;
+                            storage
+                                .update_nft_amount(chain, nft_db.clone(), tx.block_number)
+                                .await?;
+                            storage
+                                .update_txs_meta_by_token_addr_id(
+                                    chain,
+                                    nft_db.token_address,
+                                    nft_db.token_id,
+                                    nft_db.collection_name,
+                                    nft_db.uri_meta.image,
+                                    nft_db.uri_meta.token_name,
+                                )
+                                .await?;
                         },
                         Ordering::Less => {
                             return MmError::err(UpdateNftError::InsufficientAmountInCache {
@@ -732,27 +741,4 @@ where
             .await?;
     }
     Ok(())
-}
-
-async fn try_get_uri_meta(token_uri: &Option<String>) -> MmResult<UriMeta, GetNftInfoError> {
-    match token_uri {
-        Some(token_uri) => {
-            if let Ok(response_meta) = send_request_to_uri(token_uri).await {
-                let uri_meta_res: UriMeta = serde_json::from_str(&response_meta.to_string())?;
-                Ok(uri_meta_res)
-            } else {
-                Ok(UriMeta::default())
-            }
-        },
-        None => Ok(UriMeta::default()),
-    }
-}
-
-fn get_tx_status(my_wallet: &str, to_address: &str) -> TransferStatus {
-    // if my_wallet == from_address && my_wallet == to_address it is incoming tx, so we can check just to_address.
-    if my_wallet.to_lowercase() == to_address.to_lowercase() {
-        TransferStatus::Receive
-    } else {
-        TransferStatus::Send
-    }
 }
