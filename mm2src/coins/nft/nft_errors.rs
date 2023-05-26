@@ -13,8 +13,6 @@ use web3::Error;
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum GetNftInfoError {
-    /// `http::Error` can appear on an HTTP request [`http::Builder::build`] building.
-    #[from_stringify("http::Error")]
     #[display(fmt = "Invalid request: {}", _0)]
     InvalidRequest(String),
     #[display(fmt = "Transport: {}", _0)]
@@ -34,6 +32,7 @@ pub enum GetNftInfoError {
         token_address: String,
         token_id: String,
     },
+    AddressError(String),
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
 }
@@ -101,7 +100,8 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
-            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::DbError(_)
+            | GetNftInfoError::AddressError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -185,6 +185,32 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::InsufficientAmountInCache { .. }
             | UpdateNftError::InvalidBlockOrder { .. }
             | UpdateNftError::LastScannedBlockNotFound { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
+pub(crate) enum GetInfoFromUriError {
+    /// `http::Error` can appear on an HTTP request [`http::Builder::build`] building.
+    #[from_stringify("http::Error")]
+    #[display(fmt = "Invalid request: {}", _0)]
+    InvalidRequest(String),
+    #[display(fmt = "Transport: {}", _0)]
+    Transport(String),
+    #[from_stringify("serde_json::Error")]
+    #[display(fmt = "Invalid response: {}", _0)]
+    InvalidResponse(String),
+    #[display(fmt = "Internal: {}", _0)]
+    Internal(String),
+}
+
+impl From<SlurpError> for GetInfoFromUriError {
+    fn from(e: SlurpError) -> Self {
+        let error_str = e.to_string();
+        match e {
+            SlurpError::ErrorDeserializing { .. } => GetInfoFromUriError::InvalidResponse(error_str),
+            SlurpError::Transport { .. } | SlurpError::Timeout { .. } => GetInfoFromUriError::Transport(error_str),
+            SlurpError::Internal(_) | SlurpError::InvalidRequest(_) => GetInfoFromUriError::Internal(error_str),
         }
     }
 }

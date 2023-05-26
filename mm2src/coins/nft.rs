@@ -1,13 +1,14 @@
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::{MmError, MmResult};
 use url::Url;
+use std::str::FromStr;
 
 pub(crate) mod nft_errors;
 pub(crate) mod nft_structs;
 #[cfg(any(test, target_arch = "wasm32"))] mod nft_tests;
 
 use crate::{get_my_address, MyAddressReq, WithdrawError};
-use nft_errors::{GetNftInfoError, UpdateNftError};
+use nft_errors::{GetInfoFromUriError, GetNftInfoError, UpdateNftError};
 use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory,
                   NftTransferHistoryWrapper, NftTransfersReq, NftWrapper, NftsTransferHistoryList,
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
@@ -16,7 +17,7 @@ use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_structs::{TransferStatus, UriMeta};
 use crate::nft_storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::APPLICATION_JSON;
-use enum_from::EnumFromStringify;
+use ethereum_types::Address;
 use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::SlurpError;
@@ -257,7 +258,6 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
             }
         }
     }
-
     drop_mutability!(res_list);
     Ok(res_list)
 }
@@ -293,7 +293,7 @@ async fn get_moralis_nft_transfers(
 
     // The cursor returned in the previous response (used for getting the next page).
     let mut cursor = String::new();
-    loop {
+    let wallet_address = my_address.wallet_address;loop {
         let uri = format!("{}{}", uri_without_cursor, cursor);
         let response = send_request_to_uri(uri.as_str()).await?;
         if let Some(transfer_list) = response["result"].as_array() {
@@ -304,7 +304,16 @@ async fn get_moralis_nft_transfers(
                 } else {
                     TransferStatus::Send
                 };
-                let transfer_history = NftTransferHistory {
+                let status = get_tx_status(&wallet_address, &transfer_wrapper.to_address);
+                    let req = NftMetadataReq {
+                        token_address: Address::from_str(&transfer_wrapper.token_address)
+                            .map_to_mm(|e| GetNftInfoError::AddressError(e.to_string()))?,
+                        token_id: transfer_wrapper.token_id.clone(),
+                        chain,
+                        url: req.url.clone(),
+                    };
+                    let nft_meta = get_nft_metadata(ctx.clone(), req).await?;
+                    lettransfer_history = NftTransferHistory {
                     chain: *chain,
                     block_number: *transfer_wrapper.block_number,
                     block_timestamp: transfer_wrapper.block_timestamp,
@@ -320,7 +329,9 @@ async fn get_moralis_nft_transfers(
                     collection_name: None,
                     image: None,
                     token_name: None,
-                    from_address: transfer_wrapper.from_address,
+                    collection_name: nft_meta.collection_name,
+                        image: nft_meta.uri_meta.image,
+                        token_name: nft_meta.uri_meta.token_name,from_address: transfer_wrapper.from_address,
                     to_address: transfer_wrapper.to_address,
                     status,
                     amount: transfer_wrapper.amount.0,
@@ -341,7 +352,6 @@ async fn get_moralis_nft_transfers(
             }
         }
     }
-
     drop_mutability!(res_list);
     Ok(res_list)
 }
@@ -403,31 +413,6 @@ pub async fn withdraw_nft(ctx: MmArc, req: WithdrawNftReq) -> WithdrawNftResult 
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
-enum GetInfoFromUriError {
-    /// `http::Error` can appear on an HTTP request [`http::Builder::build`] building.
-    #[from_stringify("http::Error")]
-    #[display(fmt = "Invalid request: {}", _0)]
-    InvalidRequest(String),
-    #[display(fmt = "Transport: {}", _0)]
-    Transport(String),
-    #[from_stringify("serde_json::Error")]
-    #[display(fmt = "Invalid response: {}", _0)]
-    InvalidResponse(String),
-    #[display(fmt = "Internal: {}", _0)]
-    Internal(String),
-}
-
-impl From<SlurpError> for GetInfoFromUriError {
-    fn from(e: SlurpError) -> Self {
-        let error_str = e.to_string();
-        match e {
-            SlurpError::ErrorDeserializing { .. } => GetInfoFromUriError::InvalidResponse(error_str),
-            SlurpError::Transport { .. } | SlurpError::Timeout { .. } => GetInfoFromUriError::Transport(error_str),
-            SlurpError::Internal(_) | SlurpError::InvalidRequest(_) => GetInfoFromUriError::Internal(error_str),
-        }
-    }
-}
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
@@ -480,19 +465,6 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
     Ok(response)
 }
 
-async fn try_get_uri_meta(token_uri: &Option<String>) -> MmResult<UriMeta, GetNftInfoError> {
-    match token_uri {
-        Some(token_uri) => {
-            if let Ok(response_meta) = send_request_to_uri(token_uri).await {
-                let uri_meta_res: UriMeta = serde_json::from_str(&response_meta.to_string())?;
-                Ok(uri_meta_res)
-            } else {
-                Ok(UriMeta::default())
-            }
-        },
-        None => Ok(UriMeta::default()),
-    }
-}
 
 /// `update_nft_list` function gets nft transfers from NFT HISTORY table, iterates through them
 /// and updates NFT LIST table info.
@@ -760,4 +732,27 @@ where
             .await?;
     }
     Ok(())
+}
+
+async fn try_get_uri_meta(token_uri: &Option<String>) -> MmResult<UriMeta, GetNftInfoError> {
+    match token_uri {
+        Some(token_uri) => {
+            if let Ok(response_meta) = send_request_to_uri(token_uri).await {
+                let uri_meta_res: UriMeta = serde_json::from_str(&response_meta.to_string())?;
+                Ok(uri_meta_res)
+            } else {
+                Ok(UriMeta::default())
+            }
+        },
+        None => Ok(UriMeta::default()),
+    }
+}
+
+fn get_tx_status(my_wallet: &str, to_address: &str) -> TransferStatus {
+    // if my_wallet == from_address && my_wallet == to_address it is incoming tx, so we can check just to_address.
+    if my_wallet.to_lowercase() == to_address.to_lowercase() {
+        TransferStatus::Receive
+    } else {
+        TransferStatus::Send
+    }
 }
