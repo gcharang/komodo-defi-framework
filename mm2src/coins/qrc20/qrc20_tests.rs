@@ -125,6 +125,18 @@ fn test_withdraw_impl_fee_details() {
     };
     let tx_details = coin.withdraw(withdraw_req).wait().unwrap();
     let tx_size_kb = tx_details.tx_hex.into_vec().len() as f64 / KILO_BYTE;
+    // In transaction size calculations we assume the script sig size is (2 + MAX_DER_SIGNATURE_LEN + COMPRESSED_PUBKEY_LEN) or 107 bytes
+    // when in reality signatures can vary by 1 or 2 bytes because of possible zero padding of r and s values of the signature.
+    // This is why we test for a range of values here instead of a single value. The value we use in fees calculation is the
+    // highest possible value of 107 to ensure we don't underestimate the fee.
+    assert!(
+        (0.297..=0.299).contains(&tx_size_kb),
+        "Tx size in KB {} is not within the range [{}, {}]",
+        tx_size_kb,
+        0.297,
+        0.299
+    );
+    let tx_size_kb = 0.299;
     let fee_per_kb = block_on(coin.get_tx_fee_per_kb()).unwrap() as f64;
     let expected_miner_fee_sats = fee_per_kb * tx_size_kb;
     let expected_miner_fee = big_decimal_from_sat(expected_miner_fee_sats as i64, coin.utxo.decimals);
