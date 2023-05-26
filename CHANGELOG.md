@@ -1,5 +1,11 @@
 ## v1.0.4-beta - 2023-05-12
 
+**Enhancements/Fixes:**
+- New `adex-cli` commands were provided: enable, get-enabled, orderbook, sell, buy [#1768](https://github.com/KomodoPlatform/atomicDEX-API/pull/1768)
+
+
+## v1.0.4-beta - 2023-05-12
+
 **Features:**
 - NFT integration [#900](https://github.com/KomodoPlatform/atomicDEX-API/issues/900)
   - Proxy support was added [#1775](https://github.com/KomodoPlatform/atomicDEX-API/pull/1775)
