@@ -21,7 +21,7 @@ use crate::utxo::spv::SimplePaymentVerification;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::utxo_block_header_storage::{BlockHeaderStorage, SqliteBlockHeadersStorage};
 use crate::utxo::utxo_builder::{UtxoArcBuilder, UtxoCoinBuilder, UtxoCoinBuilderCommonOps};
-use crate::utxo::utxo_common::UtxoTxBuilder;
+use crate::utxo::utxo_common::{tx_size_in_v_bytes, UtxoTxBuilder};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::utxo_common_tests::TEST_COIN_DECIMALS;
 use crate::utxo::utxo_common_tests::{self, utxo_coin_fields_for_test, utxo_coin_from_fields, TEST_COIN_NAME};
@@ -2685,7 +2685,9 @@ fn firo_lelantus_tx_details() {
 
 #[test]
 fn test_generate_tx_doge_fee() {
-    // A tx below 1kb is always 0,01 doge fee per kb.
+    // Choose a tx fee per kb equal to minimum relay fee to test that the minimum relay fee is used when transaction is below 1kb
+    const TXFEE_PER_KB: u64 = 100_000;
+
     let config = json!({
         "coin": "DOGE",
         "name": "dogecoin",
@@ -2694,7 +2696,13 @@ fn test_generate_tx_doge_fee() {
         "pubtype": 30,
         "p2shtype": 22,
         "wiftype": 158,
-        "txfee": 1000000,
+        // The minimum relay fee for doge was changed from 1000000 sats to 100000 sats since the below issues were resolved
+        // The transaction size is below 1 kb so the fee should be 0.001 doge (100000 sats)
+        // https://github.com/KomodoPlatform/atomicDEX-API/issues/829
+        // https://github.com/KomodoPlatform/atomicDEX-API/pull/830
+        // https://github.com/KomodoPlatform/atomicDEX-API/commit/faf944ea721bd87816b9b3b1cdf02d4bf3f4c6ea
+        // https://github.com/dogecoin/dogecoin/discussions/2347
+        "txfee": TXFEE_PER_KB,
         "force_min_relay_fee": true,
         "mm2": 1,
         "required_confirmations": 2,
@@ -2717,6 +2725,9 @@ fn test_generate_tx_doge_fee() {
     ))
     .unwrap();
 
+    let min_relay_fee = block_on(doge.as_ref().rpc_client.get_relay_fee().compat()).unwrap();
+    let min_relay_fee_sat = sat_from_big_decimal(&min_relay_fee, doge.as_ref().decimals).unwrap();
+
     let unspents = vec![UnspentInfo {
         outpoint: Default::default(),
         value: 1000000000000,
@@ -2729,8 +2740,12 @@ fn test_generate_tx_doge_fee() {
     let builder = UtxoTxBuilder::new(&doge)
         .add_available_inputs(unspents)
         .add_outputs(outputs);
-    let (_, data) = block_on(builder.build()).unwrap();
-    let expected_fee = 1000000;
+    let (input_signer, data) = block_on(builder.build()).unwrap();
+    let transaction = UtxoTx::from(input_signer);
+    let v_size = tx_size_in_v_bytes(&UtxoAddressFormat::Standard, &transaction) as u64;
+    assert!(v_size < KILO_BYTE as u64);
+    // The fee should be min_relay_fee_sat because the tx size is below 1 kb
+    let expected_fee = min_relay_fee_sat;
     assert_eq!(expected_fee, data.fee_amount);
 
     let unspents = vec![UnspentInfo {
@@ -2738,6 +2753,7 @@ fn test_generate_tx_doge_fee() {
         value: 1000000000000,
         height: None,
     }];
+    // We use 40 outputs to make sure the tx size is above 1kb, so the fee should depend on the tx size and > min_relay_fee
     let outputs = vec![
         TransactionOutput {
             value: 100000000,
@@ -2749,28 +2765,12 @@ fn test_generate_tx_doge_fee() {
     let builder = UtxoTxBuilder::new(&doge)
         .add_available_inputs(unspents)
         .add_outputs(outputs);
-    let (_, data) = block_on(builder.build()).unwrap();
-    let expected_fee = 2000000;
-    assert_eq!(expected_fee, data.fee_amount);
-
-    let unspents = vec![UnspentInfo {
-        outpoint: Default::default(),
-        value: 1000000000000,
-        height: None,
-    }];
-    let outputs = vec![
-        TransactionOutput {
-            value: 100000000,
-            script_pubkey: vec![0; 26].into(),
-        };
-        60
-    ];
-
-    let builder = UtxoTxBuilder::new(&doge)
-        .add_available_inputs(unspents)
-        .add_outputs(outputs);
-    let (_, data) = block_on(builder.build()).unwrap();
-    let expected_fee = 3000000;
+    let (input_signer, data) = block_on(builder.build()).unwrap();
+    let transaction = UtxoTx::from(input_signer);
+    let v_size = tx_size_in_v_bytes(&UtxoAddressFormat::Standard, &transaction) as u64;
+    assert!(v_size > KILO_BYTE as u64);
+    // Todo: change this and similar calculations after implementing a common function
+    let expected_fee = ((TXFEE_PER_KB * v_size) as f64 / KILO_BYTE).ceil() as u64;
     assert_eq!(expected_fee, data.fee_amount);
 }
 

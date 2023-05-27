@@ -366,6 +366,7 @@ impl ZCoin {
         let z_output_sat: u64 = z_outputs.iter().fold(0, |cur, out| cur + u64::from(out.amount));
         let total_output_sat = t_output_sat + z_output_sat;
         let total_output = big_decimal_from_sat_unsigned(total_output_sat, self.utxo_arc.decimals);
+        // Todo: fee should be fixed here too? check other functions similar to gen_tx
         let total_required = &total_output + &tx_fee;
 
         let spendable_notes = self.spendable_notes_ordered().await?;
