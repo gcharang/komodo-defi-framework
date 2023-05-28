@@ -149,9 +149,9 @@ fn nft_history_table_builder_preimage<'a>(
     let mut sql_builder = SqlQuery::select_from(conn, table_name)?;
     if let Some(filters) = filters {
         if filters.send && !filters.receive {
-            sql_builder.sql_builder().and_where_eq("status", "Send");
+            sql_builder.sql_builder().and_where_eq("status", "'Send'");
         } else if filters.receive && !filters.send {
-            sql_builder.sql_builder().and_where_eq("status", "Receive");
+            sql_builder.sql_builder().and_where_eq("status", "'Receive'");
         }
 
         if filters.from_date.is_some() && filters.to_date.is_some() {
