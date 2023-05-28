@@ -1,5 +1,5 @@
 use crate::nft::nft_structs::{Chain, Nft, NftList, NftTokenAddrId, NftTransferHistory, NftTxHistoryFilters,
-                              NftsTransferHistoryList};
+                              NftsTransferHistoryList, TxMeta};
 use async_trait::async_trait;
 use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
@@ -129,15 +129,7 @@ pub trait NftTxHistoryStorageOps {
 
     async fn update_tx_meta_by_hash(&self, chain: &Chain, tx: NftTransferHistory) -> MmResult<(), Self::Error>;
 
-    async fn update_txs_meta_by_token_addr_id(
-        &self,
-        chain: &Chain,
-        token_address: String,
-        token_id: BigDecimal,
-        collection_name: Option<String>,
-        image: Option<String>,
-        token_name: Option<String>,
-    ) -> MmResult<(), Self::Error>;
+    async fn update_txs_meta_by_token_addr_id(&self, chain: &Chain, tx_meta: TxMeta) -> MmResult<(), Self::Error>;
 
     async fn get_txs_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error>;
 }

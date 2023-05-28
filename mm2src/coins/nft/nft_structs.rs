@@ -25,6 +25,13 @@ pub struct NftMetadataReq {
     pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) chain: Chain,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RefreshMetadataReq {
+    pub(crate) token_address: Address,
+    pub(crate) token_id: BigDecimal,
+    pub(crate) chain: Chain,
     pub(crate) url: Url,
 }
 
@@ -92,7 +99,7 @@ pub(crate) enum ParseContractTypeError {
     UnsupportedContractType,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub(crate) enum ContractType {
     Erc1155,
@@ -277,7 +284,7 @@ pub(crate) enum ParseTransferStatusError {
     UnsupportedTransferStatus,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Copy, Serialize)]
 pub(crate) enum TransferStatus {
     Receive,
     Send,
@@ -382,4 +389,14 @@ pub struct UpdateNftReq {
 pub struct NftTokenAddrId {
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct TxMeta {
+    pub(crate) token_address: String,
+    pub(crate) token_id: BigDecimal,
+    pub(crate) collection_name: Option<String>,
+    pub(crate) image: Option<String>,
+    pub(crate) token_name: Option<String>,
 }

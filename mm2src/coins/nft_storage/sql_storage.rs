@@ -1,5 +1,5 @@
 use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTokenAddrId, NftTransferHistory,
-                              NftTxHistoryFilters, NftsTransferHistoryList};
+                              NftTxHistoryFilters, NftsTransferHistoryList, TxMeta};
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps,
                          RemoveNftResult};
 use async_trait::async_trait;
@@ -856,21 +856,15 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn update_txs_meta_by_token_addr_id(
-        &self,
-        chain: &Chain,
-        token_address: String,
-        token_id: BigDecimal,
-        collection_name: Option<String>,
-        image: Option<String>,
-        token_name: Option<String>,
-    ) -> MmResult<(), Self::Error> {
+    async fn update_txs_meta_by_token_addr_id(&self, chain: &Chain, tx_meta: TxMeta) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
-        let txs = selfi.get_txs_by_token_addr_id(chain, token_address, token_id).await?;
+        let txs = selfi
+            .get_txs_by_token_addr_id(chain, tx_meta.token_address, tx_meta.token_id)
+            .await?;
         for mut tx in txs.into_iter() {
-            tx.collection_name = collection_name.clone();
-            tx.image = image.clone();
-            tx.token_name = token_name.clone();
+            tx.collection_name = tx_meta.collection_name.clone();
+            tx.image = tx_meta.image.clone();
+            tx.token_name = tx_meta.token_name.clone();
             drop_mutability!(tx);
             selfi.update_tx_meta_by_hash(chain, tx).await?;
         }

@@ -1,4 +1,4 @@
-use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList};
+use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList, TxMeta};
 use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTokenAddrId,
                          NftTxHistoryFilters, NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
@@ -237,15 +237,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         todo!()
     }
 
-    async fn update_txs_meta_by_token_addr_id(
-        &self,
-        _chain: &Chain,
-        _token_address: String,
-        _token_id: BigDecimal,
-        _collection_name: Option<String>,
-        _image: Option<String>,
-        _token_name: Option<String>,
-    ) -> MmResult<(), Self::Error> {
+    async fn update_txs_meta_by_token_addr_id(&self, _chain: &Chain, _tx_meta: TxMeta) -> MmResult<(), Self::Error> {
         todo!()
     }
 
