@@ -1,31 +1,37 @@
+mod formatters;
 mod orderbook;
-mod smart_fraction_fmt;
 
 use chrono::{TimeZone, Utc};
-use cli_table::{format::{Border, Separator},
-                Table, WithTitle};
 use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
 use itertools::Itertools;
 use log::{error, info};
-use mm2_number::bigdecimal::ToPrimitive;
-use mm2_number::BigRational;
+use mm2_number::bigdecimal::{FromPrimitive, ToPrimitive};
+use mm2_number::{BigDecimal, BigRational};
 use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
-                           HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
-                           Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderConfirmationsSettings,
-                           OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
-                           TakerOrderForRpc};
+                           HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
+                           MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse, MyOrdersResponse,
+                           OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse, SellBuyResponse,
+                           Status, TakerAction, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
 use mm2_rpc_data::version2::BestOrdersV2Response;
+use rpc::v1::types::H256 as H256Json;
+use serde_json::ser::CharEscape::Tab;
 use serde_json::Value as Json;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::DerefMut;
+use std::str::FromStr;
+use std::string::ToString;
 use uuid::Uuid;
+
+use term_table::row::Row;
+use term_table::table_cell::TableCell;
+use term_table::{Table as TermTable, TableStyle};
 
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
-use crate::adex_proc::response_handler::smart_fraction_fmt::SmartFractionFmt;
+use crate::adex_proc::response_handler::formatters::smart_fraction_fmt::SmartFractionFmt;
 
 const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
@@ -68,8 +74,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
 
         object
             .iter()
-            .map(SimpleCliTable::from_pair)
-            .for_each(|value| writeln_safe_io!(writer, "{}: {:?}", value.key, value.value));
+            .for_each(|value| writeln_safe_io!(writer, "{}: {:?}", value.0, value.1));
         Ok(())
     }
 
@@ -248,9 +253,9 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
     fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<(), ()> {
         let mut writer = self.writer.borrow_mut();
         if show_orig_tickets {
-            write_field!(writer, "Original tickers", "", 0);
+            writeln_field!(writer, "Original tickers", "", 0);
             for (coin, ticker) in best_orders.original_tickers {
-                write_field!(writer, coin, ticker.iter().join(","), 8);
+                writeln_field!(writer, coin, ticker.iter().join(","), 8);
             }
             return Ok(());
         }
@@ -312,25 +317,8 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
     fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<(), ()> {
         let mut writer = self.writer.borrow_mut();
         let writer: &mut dyn Write = writer.deref_mut();
-
-        if my_orders.taker_orders.is_empty() {
-            write_field!(writer, "Taker orders", "empty", COMMON_INDENT);
-        } else {
-            write_field!(writer, "Taker orders", "", COMMON_INDENT);
-            for taker_order in my_orders.taker_orders.values() {
-                self.print_taker_order(writer, taker_order)?
-            }
-        }
-
-        if my_orders.maker_orders.is_empty() {
-            write_field!(writer, "Maker orders", "empty", COMMON_INDENT);
-        } else {
-            write_field!(writer, "Maker orders", "", COMMON_INDENT);
-            for maker_order in my_orders.maker_orders.values() {
-                self.print_maker_order(writer, maker_order)?
-            }
-        }
-
+        writeln_safe_io!(writer, "{}", Self::format_taker_orders_table(&my_orders.taker_orders)?);
+        writeln_safe_io!(writer, "{}", Self::format_maker_orders_table(&my_orders.maker_orders)?);
         Ok(())
     }
 }
@@ -338,27 +326,27 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
 impl ResponseHandlerImpl<'_> {
     fn print_maker_order(&self, writer: &mut dyn Write, maker_status: &MakerOrderForMyOrdersRpc) -> Result<(), ()> {
         let order = &maker_status.order;
-        write_field!(writer, "base", order.base, COMMON_INDENT);
-        write_field!(writer, "rel", order.rel, COMMON_INDENT);
-        write_field!(writer, "price", format_ratio(&order.price_rat)?, COMMON_INDENT);
-        write_field!(writer, "uuid", order.uuid, COMMON_INDENT);
-        write_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
+        writeln_field!(writer, "base", order.base, COMMON_INDENT);
+        writeln_field!(writer, "rel", order.rel, COMMON_INDENT);
+        writeln_field!(writer, "price", format_ratio(&order.price_rat, 2, 5)?, COMMON_INDENT);
+        writeln_field!(writer, "uuid", order.uuid, COMMON_INDENT);
+        writeln_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
         if let Some(updated_at) = order.updated_at {
-            write_field!(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
+            writeln_field!(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
         }
-        write_field!(
+        writeln_field!(
             writer,
             "max_base_vol",
-            format_ratio(&order.max_base_vol_rat)?,
+            format_ratio(&order.max_base_vol_rat, 2, 5)?,
             COMMON_INDENT
         );
-        write_field!(
+        writeln_field!(
             writer,
             "min_base_vol",
-            format_ratio(&order.min_base_vol_rat)?,
+            format_ratio(&order.min_base_vol_rat, 2, 5)?,
             COMMON_INDENT
         );
-        write_field!(
+        writeln_field!(
             writer,
             "swaps",
             if order.started_swaps.is_empty() {
@@ -370,7 +358,7 @@ impl ResponseHandlerImpl<'_> {
         );
 
         if let Some(ref conf_settings) = order.conf_settings {
-            write_field!(
+            writeln_field!(
                 writer,
                 "conf_settings",
                 format_confirmation_settings(conf_settings),
@@ -378,19 +366,24 @@ impl ResponseHandlerImpl<'_> {
             );
         }
         if let Some(ref changes_history) = order.changes_history {
-            write_field!(
+            writeln_field!(
                 writer,
                 "changes_history",
                 changes_history
                     .iter()
-                    .map(|val| format_historical_order(val).unwrap_or_else(|_| "error".into()))
+                    .map(|val| format_historical_changes(val, ", ").unwrap_or_else(|_| "error".into()))
                     .join(", "),
                 COMMON_INDENT
             );
         }
 
-        write_field!(writer, "cancellable", maker_status.cancellable, COMMON_INDENT);
-        write_field!(writer, "available_amount", maker_status.available_amount, COMMON_INDENT);
+        writeln_field!(writer, "cancellable", maker_status.cancellable, COMMON_INDENT);
+        writeln_field!(
+            writer,
+            "available_amount",
+            format_ratio(&maker_status.available_amount, 2, 5)?,
+            COMMON_INDENT
+        );
 
         Self::write_maker_matches(writer, &order.matches)?;
         writeln_safe_io!(writer, "");
@@ -399,58 +392,258 @@ impl ResponseHandlerImpl<'_> {
 
     fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<(), ()> {
         if matches.is_empty() {
-            write_field!(writer, "matches", "empty", COMMON_INDENT);
+            //    write_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
         }
-        write_field!(writer, "matches", "", COMMON_INDENT);
-        for (uid, m) in matches {
-            let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
-            write_field!(writer, "uuid", uid, NESTED_INDENT);
-            write_field!(writer, "req.uuid", req.uuid, NESTED_INDENT);
-            write_base_rel!(writer, req, NESTED_INDENT);
-            write_field!(writer, "req.match_by", format_match_by(&req.match_by), NESTED_INDENT);
-            write_field!(writer, "req.action", req.action, NESTED_INDENT);
-            write_confirmation_settings!(writer, req, NESTED_INDENT);
-            write_field!(
-                writer,
-                "req.(sender, dest)",
-                format!("{},{}", req.sender_pubkey, req.dest_pub_key),
-                NESTED_INDENT
-            );
-            Self::write_maker_reserved_for_rpc(writer, reserved);
-
-            if let Some(ref connected) = connected {
-                write_connected!(writer, connected, NESTED_INDENT);
-            }
-
-            if let Some(ref connect) = connect {
-                write_connected!(writer, connect, NESTED_INDENT);
-            }
+        //write_field!(writer, "matches", "", COMMON_INDENT);
+        for (uuid, m) in matches {
+            Self::write_maker_match(writer, uuid, m)?
         }
         Ok(())
     }
 
+    fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMatchForRpc) -> Result<(), ()> {
+        let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
+        writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
+        writeln_field!(writer, "req.uuid", req.uuid, NESTED_INDENT);
+        write_base_rel!(writer, req, NESTED_INDENT);
+        writeln_field!(
+            writer,
+            "req.match_by",
+            format_match_by(&req.match_by, ", "),
+            NESTED_INDENT
+        );
+        writeln_field!(writer, "req.action", req.action, NESTED_INDENT);
+        write_confirmation_settings!(writer, req, NESTED_INDENT);
+        writeln_field!(
+            writer,
+            "req.(sender, dest)",
+            format!("{},{}", req.sender_pubkey, req.dest_pub_key),
+            NESTED_INDENT
+        );
+        Self::write_maker_reserved_for_rpc(writer, reserved);
+
+        if let Some(ref connected) = connected {
+            write_connected!(writer, connected, NESTED_INDENT);
+        }
+
+        if let Some(ref connect) = connect {
+            write_connected!(writer, connect, NESTED_INDENT);
+        }
+
+        write_field!(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
+        Ok(())
+    }
+
+    fn taker_order_header_row() -> Row<'static> {
+        Row::new(vec![
+            TableCell::new("action\nbase(vol),rel(vol)"),
+            TableCell::new("uuid, sender, dest"),
+            TableCell::new("type,created_at\nconfirmation"),
+            TableCell::new("match_by"),
+            TableCell::new("base,rel\norderbook ticker"),
+            TableCell::new("cancellable"),
+        ])
+    }
+
+    fn taker_order_row(taker_order: &TakerOrderForRpc) -> Result<Vec<Row>, ()> {
+        let req = &taker_order.request;
+        let mut rows = vec![Row::new(vec![
+            TableCell::new(format!(
+                "{}\n{}({}),{}({})",
+                req.action,
+                req.base,
+                format_ratio(&req.base_amount, 2, 5)?,
+                req.rel,
+                format_ratio(&req.rel_amount, 2, 5)?
+            )),
+            TableCell::new(format!("{}\n{}\n{}", req.uuid, req.sender_pubkey, req.dest_pub_key)),
+            TableCell::new(format!(
+                "{}\n{}\n{}",
+                taker_order.order_type,
+                format_datetime(taker_order.created_at)?,
+                req.conf_settings
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), |val| format_confirmation_settings(val)),
+            )),
+            TableCell::new(format_match_by(&req.match_by, "\n")),
+            TableCell::new(format!(
+                "{}\n{}",
+                taker_order
+                    .base_orderbook_ticker
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), String::clone),
+                taker_order
+                    .rel_orderbook_ticker
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), String::clone)
+            )),
+            TableCell::new(taker_order.cancellable),
+        ])];
+
+        if taker_order.matches.is_empty() {
+            return Ok(rows);
+        }
+        rows.push(Row::new(vec![TableCell::new_with_col_span("matches", 6)]));
+        for (uuid, m) in taker_order.matches.iter() {
+            let mut matches_str = Vec::new();
+            let mut buf: Box<dyn Write> = Box::new(&mut matches_str);
+            Self::write_taker_match(buf.as_mut(), uuid, m)?;
+            drop(buf);
+            rows.push(Row::new(vec![TableCell::new_with_col_span(
+                String::from_utf8(matches_str).unwrap(),
+                6,
+            )]));
+        }
+
+        Ok(rows)
+    }
+
+    fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersRpc>) -> Result<String, ()> {
+        let mut buff = Vec::new();
+        let mut writer: Box<dyn Write> = Box::new(&mut buff);
+
+        if maker_orders.is_empty() {
+            writeln_field!(writer, "Maker orders", "empty", COMMON_INDENT);
+        } else {
+            writeln_field!(writer, "Maker orders", "", COMMON_INDENT);
+            let mut table = TermTable::new();
+            table.style = TableStyle::thin();
+            table.add_row(ResponseHandlerImpl::maker_order_header_row());
+
+            for (_, maker_order) in maker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
+                for row in ResponseHandlerImpl::maker_order_row(maker_order)? {
+                    table.add_row(row);
+                }
+            }
+            write_safe_io!(writer, "{}", table.render());
+        }
+        drop(writer);
+        let result = String::from_utf8(buff).map_err(|error| error!("Failed to format maker orders table: {error}"));
+        result
+    }
+
+    fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> Result<String, ()> {
+        let mut buff = Vec::new();
+        let mut writer: Box<dyn Write> = Box::new(&mut buff);
+
+        if taker_orders.is_empty() {
+            writeln_field!(writer, "Taker orders", "empty", COMMON_INDENT);
+        } else {
+            writeln_field!(writer, "Taker orders", "", COMMON_INDENT);
+            let mut table = TermTable::new();
+            table.style = TableStyle::thin();
+            table.add_row(ResponseHandlerImpl::taker_order_header_row());
+            for (_, taker_order) in taker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
+                for row in ResponseHandlerImpl::taker_order_row(taker_order)? {
+                    table.add_row(row);
+                }
+            }
+            write_safe_io!(writer, "{}", table.render());
+        }
+        drop(writer);
+        let result = String::from_utf8(buff).map_err(|error| error!("Failed to format maker orders table: {error}"));
+        result
+    }
+
+    fn maker_order_header_row() -> Row<'static> {
+        Row::new(vec![
+            TableCell::new("base,rel"),
+            TableCell::new("price"),
+            TableCell::new("uuid"),
+            TableCell::new("created at,\nupdated at"),
+            TableCell::new("min base vol,\nmax base vol"),
+            TableCell::new("cancellable"),
+            TableCell::new("available\namount"),
+            TableCell::new("swaps"),
+            TableCell::new("conf_settings"),
+            TableCell::new("history changes"),
+        ])
+    }
+
+    fn maker_order_row(maker_order: &MakerOrderForMyOrdersRpc) -> Result<Vec<Row>, ()> {
+        let order = &maker_order.order;
+        let mut rows = vec![Row::new(vec![
+            TableCell::new(format!("{},{}", order.base, order.rel)),
+            TableCell::new(format_ratio(&order.price_rat, 2, 5)?),
+            TableCell::new(order.uuid),
+            TableCell::new(format!(
+                "{},\n{}",
+                format_datetime(order.created_at)?,
+                order.updated_at.map_or("".to_string(), |value| format_datetime(value)
+                    .unwrap_or("error".to_string()))
+            )),
+            TableCell::new(format!(
+                "{},\n{}",
+                format_ratio(&order.min_base_vol_rat, 2, 5)?,
+                format_ratio(&order.max_base_vol_rat, 2, 5)?
+            )),
+            TableCell::new(maker_order.cancellable),
+            TableCell::new(format_ratio(&maker_order.available_amount, 2, 5)?),
+            TableCell::new(if order.started_swaps.is_empty() {
+                "empty".to_string()
+            } else {
+                format!("{}", order.started_swaps.iter().join(",\n"))
+            }),
+            TableCell::new(
+                order
+                    .conf_settings
+                    .map_or_else(|| "none".to_string(), |value| format_confirmation_settings(&value)),
+            ),
+            TableCell::new(order.changes_history.as_ref().map_or_else(
+                || "none".to_string(),
+                |val| {
+                    val.iter()
+                        .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".into()))
+                        .join(",\n")
+                },
+            )),
+        ])];
+
+        if order.matches.is_empty() {
+            return Ok(rows);
+        }
+        rows.push(Row::new(vec![TableCell::new_with_col_span("matches", 10)]));
+        for (uuid, m) in &order.matches {
+            let mut matches_str = Vec::new();
+            let mut bbox: Box<dyn Write> = Box::new(&mut matches_str);
+            Self::write_maker_match(bbox.as_mut(), &uuid, &m).unwrap();
+            drop(bbox);
+            rows.push(Row::new(vec![TableCell::new_with_col_span(
+                String::from_utf8(matches_str).unwrap(),
+                10,
+            )]));
+        }
+        Ok(rows)
+    }
+
     fn print_taker_order(&self, writer: &mut dyn Write, taker_status: &TakerOrderForRpc) -> Result<(), ()> {
         let req = &taker_status.request;
-        write_field!(writer, "uuid", req.uuid, COMMON_INDENT);
+
+        writeln_field!(writer, "uuid", req.uuid, COMMON_INDENT);
         write_base_rel!(writer, req, COMMON_INDENT);
-        write_field!(writer, "req.action", req.action, COMMON_INDENT);
-        write_field!(
+        writeln_field!(writer, "req.action", req.action, COMMON_INDENT);
+        writeln_field!(
             writer,
             "req.(sender, dest)",
             format!("{}, {}", req.sender_pubkey, req.dest_pub_key),
             COMMON_INDENT
         );
-        write_field!(writer, "req.match_by", format_match_by(&req.match_by), COMMON_INDENT);
+        writeln_field!(
+            writer,
+            "req.match_by",
+            format_match_by(&req.match_by, "\n"),
+            COMMON_INDENT
+        );
         write_confirmation_settings!(writer, req, COMMON_INDENT);
-        write_field!(
+        writeln_field!(
             writer,
             "created_at",
             format_datetime(taker_status.created_at)?,
             COMMON_INDENT
         );
-        write_field!(writer, "order_type", taker_status.order_type, COMMON_INDENT);
-        write_field!(writer, "cancellable", taker_status.cancellable, COMMON_INDENT);
+        writeln_field!(writer, "order_type", taker_status.order_type, COMMON_INDENT);
+        writeln_field!(writer, "cancellable", taker_status.cancellable, COMMON_INDENT);
         write_field_option!(
             writer,
             "base_ob_ticker",
@@ -464,38 +657,42 @@ impl ResponseHandlerImpl<'_> {
             COMMON_INDENT
         );
         Self::write_taker_matches(writer, &taker_status.matches)?;
-        writeln_safe_io!(writer, "");
         Ok(())
     }
 
     fn write_taker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, TakerMatchForRpc>) -> Result<(), ()> {
         if matches.is_empty() {
-            write_field!(writer, "matches", "empty", COMMON_INDENT);
+            //writeln_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
         }
-        write_field!(writer, "matches", "", COMMON_INDENT);
+        writeln_field!(writer, "matches", "", COMMON_INDENT);
         for (uuid, m) in matches {
-            let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
-            write_field!(writer, "uuid", uuid, NESTED_INDENT);
-            Self::write_maker_reserved_for_rpc(writer, reserved);
-            write_field!(writer, "last_updated", m.last_updated, NESTED_INDENT);
-            write_connected!(writer, connect, NESTED_INDENT);
-            if let Some(ref connected) = connected {
-                write_connected!(writer, connected, NESTED_INDENT);
-            }
+            Self::write_taker_match(writer, uuid, m)?;
+        }
+        Ok(())
+    }
+
+    fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<(), ()> {
+        let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
+        writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
+        Self::write_maker_reserved_for_rpc(writer, reserved);
+        writeln_field!(writer, "last_updated", m.last_updated, NESTED_INDENT);
+        write_connected!(writer, connect, NESTED_INDENT);
+        if let Some(ref connected) = connected {
+            write_connected!(writer, connected, NESTED_INDENT);
         }
         Ok(())
     }
 
     fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) {
         write_base_rel!(writer, reserved, NESTED_INDENT);
-        write_field!(
+        writeln_field!(
             writer,
             "reserved.(taker, maker)",
             format!("{},{}", reserved.taker_order_uuid, reserved.maker_order_uuid),
             NESTED_INDENT
         );
-        write_field!(
+        writeln_field!(
             writer,
             "reserved.(sender, dest)",
             format!("{},{}", reserved.sender_pubkey, reserved.dest_pub_key),
@@ -507,11 +704,19 @@ impl ResponseHandlerImpl<'_> {
 
 mod macros {
     #[macro_export]
-    macro_rules! write_field {
+    macro_rules! writeln_field {
         ($writer:ident, $name:expr, $value:expr, $width:expr) => {
             writeln_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width);
         };
     }
+
+    #[macro_export]
+    macro_rules! write_field {
+        ($writer:ident, $name:expr, $value:expr, $width:expr) => {
+            write_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width);
+        };
+    }
+
     #[macro_export]
     macro_rules! write_field_option {
         ($writer:ident, $name:expr, $value:expr, $width:expr) => {
@@ -526,9 +731,9 @@ mod macros {
         ($writer:ident, $host:ident, $width:ident) => {
             if $host.conf_settings.is_some() {
                 let output = format_confirmation_settings($host.conf_settings.as_ref().unwrap());
-                write_field!(
+                writeln_field!(
                     $writer,
-                    concat!(stringify!($host), "conf_settings"),
+                    concat!(stringify!($host), ".conf_settings"),
                     output,
                     $width
                 );
@@ -539,7 +744,7 @@ mod macros {
     #[macro_export]
     macro_rules! write_base_rel {
         ($writer:ident, $host:expr, $width:ident) => {
-            write_field!(
+            writeln_field!(
                 $writer,
                 concat!(stringify!($host), ".(base,rel)"),
                 format!(
@@ -554,13 +759,13 @@ mod macros {
     #[macro_export]
     macro_rules! write_connected {
         ($writer:ident, $connected:expr, $width:ident) => {
-            write_field!(
+            writeln_field!(
                 $writer,
                 concat!(stringify!($connected), ".(taker,maker)"),
                 format!("{},{}", $connected.taker_order_uuid, $connected.maker_order_uuid),
                 $width
             );
-            write_field!(
+            writeln_field!(
                 $writer,
                 concat!(stringify!($connected), ".(sender, dest)"),
                 format!("{},{}", $connected.sender_pubkey, $connected.dest_pub_key),
@@ -569,31 +774,17 @@ mod macros {
         };
     }
 
-    pub use {write_base_rel, write_confirmation_settings, write_connected, write_field};
+    pub use {write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
 }
 
 use crate::write_field_option;
-use macros::{write_base_rel, write_confirmation_settings, write_connected, write_field};
+use macros::{write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
 
-struct SimpleCliTable<'a> {
-    key: &'a String,
-    value: &'a Json,
-}
-
-impl<'a> SimpleCliTable<'a> {
-    fn from_pair(pair: (&'a String, &'a Json)) -> Self {
-        SimpleCliTable {
-            key: pair.0,
-            value: pair.1,
-        }
-    }
-}
-
-fn format_match_by(match_by: &MatchBy) -> String {
+fn format_match_by(match_by: &MatchBy, delimiter: &str) -> String {
     match match_by {
         MatchBy::Any => "Any".to_string(),
-        MatchBy::Orders(orders) => orders.iter().join(", "),
-        MatchBy::Pubkeys(pubkeys) => pubkeys.iter().join(", "),
+        MatchBy::Orders(orders) => orders.iter().sorted().join(delimiter),
+        MatchBy::Pubkeys(pubkeys) => pubkeys.iter().sorted().join(delimiter),
     }
 }
 
@@ -609,29 +800,39 @@ fn format_datetime(datetime: u64) -> Result<String, ()> {
         .timestamp_opt((datetime / 1000) as i64, 0)
         .single()
         .ok_or_else(|| error!("Failed to get datetime formatted datetime"))?;
-    Ok(format!("{}", datetime))
+    Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
 }
 
-fn format_ratio(rational: &BigRational) -> Result<f64, ()> {
-    rational.to_f64().ok_or_else(|| error!("Failed to convert price_rat"))
+fn format_ratio<T: ToPrimitive>(rational: &T, min_fract: usize, max_fract: usize) -> Result<String, ()> {
+    Ok(SmartFractionFmt::new(
+        min_fract,
+        max_fract,
+        rational.to_f64().ok_or_else(|| error!("Failed to convert price_rat"))?,
+    )
+    .map_err(|_| error!("Failed to create smart_fraction_fmt"))?
+    .to_string())
 }
 
-fn format_historical_order(historical_order: &HistoricalOrder) -> Result<String, ()> {
-    let mut result = String::new();
-    if let Some(ref max_base_vol) = historical_order.max_base_vol {
-        result += &format!("max_base_vol: {}, ", format_ratio(max_base_vol)?)
-    }
+fn format_historical_changes(historical_order: &HistoricalOrder, delimiter: &str) -> Result<String, ()> {
+    let mut result = vec![];
+
     if let Some(ref min_base_vol) = historical_order.min_base_vol {
-        result += &format!("min_base_vol: {}, ", format_ratio(min_base_vol)?)
+        result.push(format!("min_base_vol: {}", format_ratio(min_base_vol, 2, 5)?,))
+    }
+    if let Some(ref max_base_vol) = historical_order.max_base_vol {
+        result.push(format!("max_base_vol: {}", format_ratio(max_base_vol, 2, 5)?,))
     }
     if let Some(ref price) = historical_order.price {
-        result += &format!("price: {}, ", format_ratio(price)?);
+        result.push(format!("price: {}", format_ratio(price, 2, 5)?));
     }
     if let Some(updated_at) = historical_order.updated_at {
-        result += &format!("updated_at: {}", format_datetime(updated_at)?);
+        result.push(format!("updated_at: {}", format_datetime(updated_at)?));
     }
     if let Some(ref conf_settings) = historical_order.conf_settings {
-        result += &format!("conf_settings: {}", format_confirmation_settings(conf_settings));
+        result.push(format!(
+            "conf_settings: {}",
+            format_confirmation_settings(conf_settings),
+        ));
     }
-    Ok(result)
+    Ok(result.join(delimiter))
 }

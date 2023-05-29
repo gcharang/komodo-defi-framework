@@ -215,6 +215,23 @@ async fn test_order_status() {
     assert_eq!(TAKER_STATUS_OUTPUT, result);
 }
 
+#[tokio::test]
+async fn test_my_orders() {
+    tokio::spawn(fake_mm2_server(7793, "src/tests/my_orders.http"));
+    tokio::time::sleep(Duration::from_micros(100)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7793");
+    let args = vec!["adex-cli", "my-orders"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(MY_ORDERS_OUTPUT, result);
+}
+
 async fn fake_mm2_server(port: u16, response_path: &'static str) {
     let server = TcpListener::bind(("0.0.0.0", port))
         .await
@@ -301,13 +318,14 @@ required_confirmations: 3
 requires_notarization: No
 ";
 
+// TODO: last updated should not be 0, check it
 const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-bebb-5df8ff74b8e0
       req.(base,rel): MORTY(0.01), RICK(0.01000001)
           req.action: Buy
   req.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d, 0000000000000000000000000000000000000000000000000000000000000000
         req.match_by: Any
-    reqconf_settings: 111,true:555,true
-          created_at: 2023-05-11 19:28:46 UTC
+   req.conf_settings: 111,true:555,true
+          created_at: 23-05-11 19:28:46
           order_type: GoodTillCancelled
          cancellable: false
              matches: 
@@ -315,8 +333,48 @@ const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-beb
        reserved.(base,rel): MORTY(0.01), RICK(0.0099999999)
    reserved.(taker, maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000
-     reservedconf_settings: 1,false:1,false
+    reserved.conf_settings: 1,false:1,false
               last_updated: 0
      connect.(taker,maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5
+";
+
+const MY_ORDERS_OUTPUT: &str = "        Taker orders: 
+┌──────────────────────────┬──────────────────────────────────────────────────────────────────┬──────────────────────────┬──────────────────────────┬──────────────────────────┬───────────────────────────┐
+│ action                   │ uuid, sender, dest                                               │ type,created_at          │ match_by                 │ base,rel                 │ cancellable               │
+│ base(vol),rel(vol)       │                                                                  │ confirmation             │                          │ orderbook ticker         │                           │
+├──────────────────────────┼──────────────────────────────────────────────────────────────────┼──────────────────────────┼──────────────────────────┼──────────────────────────┼───────────────────────────┤
+│ Buy                      │ 2739152a-3f87-4f6d-a199-3659aa1e864f                             │ GoodTillCancelled        │ Any                      │ none                     │ true                      │
+│ MORTY(0.10),RICK(0.09)   │ 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d │ 23-05-29 12:18:52        │                          │ none                     │                           │
+│                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
+├──────────────────────────┼──────────────────────────────────────────────────────────────────┼──────────────────────────┼──────────────────────────┼──────────────────────────┼───────────────────────────┤
+│ Buy                      │ ce90f89f-8074-4e9f-8649-7f7689c56fa9                             │ GoodTillCancelled        │ Any                      │ none                     │ false                     │
+│ MORTY(0.10),RICK(0.11)   │ 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d │ 23-05-29 12:19:10        │                          │ none                     │                           │
+│                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
+├──────────────────────────┴──────────────────────────────────────────────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────┴───────────────────────────┤
+│ matches                                                                                                                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                       uuid: 09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                                                         │
+│        reserved.(base,rel): MORTY(0.1), RICK(0.099999999)                                                                                                                                                │
+│    reserved.(taker, maker): ce90f89f-8074-4e9f-8649-7f7689c56fa9,09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                    │
+│    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
+│     reserved.conf_settings: 1,false:1,false                                                                                                                                                              │
+│               last_updated: 0                                                                                                                                                                            │
+│      connect.(taker,maker): ce90f89f-8074-4e9f-8649-7f7689c56fa9,09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                    │
+│     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5                                            │
+│                                                                                                                                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+        Maker orders: 
+┌────────────┬───────┬──────────────────────────────────────┬────────────────────┬───────────────┬─────────────┬───────────┬───────┬─────────────────┬─────────────────┐
+│ base,rel   │ price │ uuid                                 │ created at,        │ min base vol, │ cancellable │ available │ swaps │ conf_settings   │ history changes │
+│            │       │                                      │ updated at         │ max base vol  │             │ amount    │       │                 │                 │
+├────────────┼───────┼──────────────────────────────────────┼────────────────────┼───────────────┼─────────────┼───────────┼───────┼─────────────────┼─────────────────┤
+│ RICK,MORTY │ 1.11  │ 28315c31-4fd7-4847-9873-352924252fbe │ 23-05-29 12:17:46, │ 0.000100,     │ true        │ 0.09      │ empty │ 1,false:1,false │ none            │
+│            │       │                                      │ 23-05-29 12:17:46  │ 0.09          │             │           │       │                 │                 │
+├────────────┼───────┼──────────────────────────────────────┼────────────────────┼───────────────┼─────────────┼───────────┼───────┼─────────────────┼─────────────────┤
+│ RICK,MORTY │ 1.11  │ 7f097435-f482-415b-9bdf-6780f4be4828 │ 23-05-29 12:17:49, │ 0.000100,     │ true        │ 0.09      │ empty │ 1,false:1,false │ none            │
+│            │       │                                      │ 23-05-29 12:17:49  │ 0.09          │             │           │       │                 │                 │
+└────────────┴───────┴──────────────────────────────────────┴────────────────────┴───────────────┴─────────────┴───────────┴───────┴─────────────────┴─────────────────┘
+
 ";

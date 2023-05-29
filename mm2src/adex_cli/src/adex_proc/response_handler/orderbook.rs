@@ -3,7 +3,7 @@ use mm2_rpc_data::legacy::AggregatedOrderbookEntry;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-use super::{format_confirmation_settings, smart_fraction_fmt::SmartFractionFmt, OrderbookConfig};
+use super::{format_confirmation_settings, formatters::smart_fraction_fmt::SmartFractionFmt, OrderbookConfig};
 use crate::adex_config::{PricePrecision, VolumePrecision};
 
 pub fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {

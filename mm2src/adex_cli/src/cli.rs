@@ -83,6 +83,7 @@ enum Command {
         #[command(flatten)]
         delegate: BestOrderSubcommand,
     },
+    #[command(about = "Get my orders")]
     MyOrders,
 }
 #[derive(Args)]
