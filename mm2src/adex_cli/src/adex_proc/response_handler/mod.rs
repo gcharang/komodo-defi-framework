@@ -5,28 +5,24 @@ use chrono::{TimeZone, Utc};
 use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
 use itertools::Itertools;
 use log::{error, info};
-use mm2_number::bigdecimal::{FromPrimitive, ToPrimitive};
-use mm2_number::{BigDecimal, BigRational};
+use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
-                           HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
-                           MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse, MyOrdersResponse,
-                           OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse, SellBuyResponse,
-                           Status, TakerAction, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
+                           HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
+                           Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderConfirmationsSettings,
+                           OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
+                           TakerOrderForRpc};
 use mm2_rpc_data::version2::BestOrdersV2Response;
-use rpc::v1::types::H256 as H256Json;
-use serde_json::ser::CharEscape::Tab;
 use serde_json::Value as Json;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::DerefMut;
-use std::str::FromStr;
 use std::string::ToString;
 use uuid::Uuid;
 
 use term_table::row::Row;
-use term_table::table_cell::TableCell;
+use term_table::table_cell::{Alignment, TableCell};
 use term_table::{Table as TermTable, TableStyle};
 
 use super::OrderbookConfig;
@@ -260,56 +256,44 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
             return Ok(());
         }
 
-        macro_rules! fract {
-            ($field:expr) => {
-                SmartFractionFmt::new(2, 5, $field.rational.to_f64().unwrap())
-                    .unwrap()
-                    .to_string()
-            };
+        let mut term_table = TermTable::with_rows(vec![Row::new(vec![
+            TableCell::new(""),
+            TableCell::new("Price"),
+            TableCell::new("Uuid"),
+            TableCell::new("Base vol(min:max)"),
+            TableCell::new("Rel vol(min:max)"),
+            TableCell::new("Address"),
+            TableCell::new("Confirmation"),
+        ])]);
+        term_table.style = TableStyle::thin();
+        term_table.separate_rows = true;
+        for (coin, data) in best_orders.orders.iter().sorted_by_key(|p| p.0) {
+            term_table.add_row(Row::new(vec![TableCell::new_with_alignment(coin, 7, Alignment::Left)]));
+            for order in data.iter().sorted_by_key(|o| o.uuid) {
+                term_table.add_row(Row::new(vec![
+                    TableCell::new(if order.is_mine { "*" } else { "" }),
+                    TableCell::new(format_ratio(&order.price.rational, 2, 5)?),
+                    TableCell::new(order.uuid),
+                    TableCell::new(format!(
+                        "{}:{}",
+                        format_ratio(&order.base_min_volume.rational, 2, 5)?,
+                        format_ratio(&order.base_max_volume.rational, 2, 5)?
+                    )),
+                    TableCell::new(format!(
+                        "{}:{}",
+                        format_ratio(&order.rel_min_volume.rational, 2, 5)?,
+                        format_ratio(&order.rel_max_volume.rational, 2, 5)?
+                    )),
+                    TableCell::new(&order.address),
+                    TableCell::new(
+                        &order
+                            .conf_settings
+                            .map_or_else(|| "none".to_string(), |value| format_confirmation_settings(&value)),
+                    ),
+                ]));
+            }
         }
-
-        #[derive(Table)]
-        struct BestOrdersRow {
-            #[table(title = "")]
-            is_mine: &'static str,
-            #[table(title = "Price")]
-            price: String,
-            #[table(title = "Base Vol.")]
-            base_vol: String,
-            #[table(title = "Rel Vol.")]
-            rel_vol: String,
-            #[table(title = "Uuid")]
-            uuid: Uuid,
-            #[table(title = "Address")]
-            address: String,
-            #[table(title = "Confirmation")]
-            conf_settings: String,
-        }
-        for (coin, mut data) in best_orders.orders {
-            writeln_safe_io!(writer, "{}: ", coin);
-            let rows: Vec<BestOrdersRow> = data
-                .iter_mut()
-                .map(|value| BestOrdersRow {
-                    is_mine: if value.is_mine { "*" } else { "" },
-                    price: fract!(value.price),
-                    uuid: value.uuid,
-                    address: value.address.to_string(),
-                    base_vol: format!("{}:{}", fract!(value.base_min_volume), fract!(value.base_max_volume)),
-                    rel_vol: format!("{}:{}", fract!(value.rel_min_volume), fract!(value.rel_max_volume)),
-                    conf_settings: value
-                        .conf_settings
-                        .map_or("".to_string(), |conf| format_confirmation_settings(&conf)),
-                })
-                .collect();
-
-            let table = rows
-                .with_title()
-                .separator(Separator::builder().build())
-                .border(Border::builder().build())
-                .display()
-                .unwrap();
-            writeln_safe_io!(writer, "{}", table);
-        }
+        write_safe_io!(writer, "{}", term_table.render());
 
         Ok(())
     }

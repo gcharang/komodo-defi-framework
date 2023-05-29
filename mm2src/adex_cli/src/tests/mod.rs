@@ -1,13 +1,8 @@
-use mm2_number::{BigDecimal, BigRational};
-use mm2_rpc_data::legacy::{HistoricalOrder, MakerMatchForRpc, OrderConfirmationsSettings};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use uuid::Uuid;
 
 use crate::activation_scheme_db::{get_activation_scheme, init_activation_scheme};
 use crate::adex_config::AdexConfigImpl;
@@ -175,28 +170,6 @@ async fn test_buy_morty_for_rick() {
     assert_eq!("4685e133-dfb3-4b31-8d4c-0ffa79933c8e\n", result);
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct MakerOrderForRpcc {
-    pub base: String,
-    pub rel: String,
-    pub price: BigDecimal,
-    pub price_rat: BigRational,
-    pub max_base_vol: BigDecimal,
-    pub max_base_vol_rat: BigRational,
-    pub min_base_vol: BigDecimal,
-    pub min_base_vol_rat: BigRational,
-    pub created_at: u64,
-    pub updated_at: Option<u64>,
-    pub matches: HashMap<Uuid, MakerMatchForRpc>,
-    pub started_swaps: Vec<Uuid>,
-    pub uuid: Uuid,
-    pub conf_settings: Option<OrderConfirmationsSettings>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub changes_history: Option<Vec<HistoricalOrder>>,
-    pub base_orderbook_ticker: Option<String>,
-    pub rel_orderbook_ticker: Option<String>,
-}
-
 #[tokio::test]
 async fn test_order_status() {
     tokio::spawn(fake_mm2_server(7792, "src/tests/taker_status.http"));
@@ -230,6 +203,23 @@ async fn test_my_orders() {
         .unwrap();
     let result = String::from_utf8(buffer).unwrap();
     assert_eq!(MY_ORDERS_OUTPUT, result);
+}
+
+#[tokio::test]
+async fn test_best_orders() {
+    tokio::spawn(fake_mm2_server(7794, "src/tests/best_orders.http"));
+    tokio::time::sleep(Duration::from_micros(100)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7794");
+    let args = vec!["adex-cli", "best-orders", "--number", "2", "RICK", "buy"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(BEST_ORDERS_OUTPUT, result);
 }
 
 async fn fake_mm2_server(port: u16, response_path: &'static str) {
@@ -297,7 +287,8 @@ const RICK_AND_MORTY_ORDERBOOK_WITH_PUBLICS: &str = r"     Volume: RICK Price: M
              0.22 1.00000000    022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846 
 ";
 
-const ENABLED_COINS: &str = r"Ticker   Address
+const ENABLED_COINS: &str = "\
+Ticker   Address
 MORTY    RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
 RICK     RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
 KMD      RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
@@ -377,4 +368,24 @@ const MY_ORDERS_OUTPUT: &str = "        Taker orders:
 │            │       │                                      │ 23-05-29 12:17:49  │ 0.09          │             │           │       │                 │                 │
 └────────────┴───────┴──────────────────────────────────────┴────────────────────┴───────────────┴─────────────┴───────────┴───────┴─────────────────┴─────────────────┘
 
+";
+
+const BEST_ORDERS_OUTPUT:&str = "\
+┌──┬────────┬──────────────────────────────────────┬────────────────────┬────────────────────┬────────────────────────────────────┬─────────────────┐
+│  │ Price  │ Uuid                                 │ Base vol(min:max)  │ Rel vol(min:max)   │ Address                            │ Confirmation    │
+├──┴────────┴──────────────────────────────────────┴────────────────────┴────────────────────┴────────────────────────────────────┴─────────────────┤
+│ KMD                                                                                                                                               │
+├──┬────────┬──────────────────────────────────────┬────────────────────┬────────────────────┬────────────────────────────────────┬─────────────────┤
+│  │ 0.0050 │ 7c643319-52ea-4323-b0d2-1c448cfc007d │ 0.02:9730.65       │ 0.00010:48.65      │ REbPB4qfrB2D5KAnJJK1RTC1CLGa8hVEcM │ 1,false:2,true  │
+├──┴────────┴──────────────────────────────────────┴────────────────────┴────────────────────┴────────────────────────────────────┴─────────────────┤
+│ MORTY                                                                                                                                             │
+├──┬────────┬──────────────────────────────────────┬────────────────────┬────────────────────┬────────────────────────────────────┬─────────────────┤
+│  │ 1.00   │ 2af2d0f3-35e8-4098-8362-99ec9867b9ac │ 0.000100:363783.58 │ 0.000100:363783.58 │ RB8yufv3YTfdzYnwz5paNnnDynGJG6WsqD │ 1,false:1,false │
+├──┼────────┼──────────────────────────────────────┼────────────────────┼────────────────────┼────────────────────────────────────┼─────────────────┤
+│  │ 0.99   │ e52246a2-f9b2-4145-9aa6-53b96bfabe9f │ 0.00010:2.00       │ 0.000100:1.99      │ RMaprYNUp8ErJ9ZAKcxMfpC4ioVycYCCCc │ 1,false:1,false │
+├──┴────────┴──────────────────────────────────────┴────────────────────┴────────────────────┴────────────────────────────────────┴─────────────────┤
+│ ZOMBIE                                                                                                                                            │
+├──┬────────┬──────────────────────────────────────┬────────────────────┬────────────────────┬────────────────────────────────────┬─────────────────┤
+│  │ 1.00   │ 2536e0d8-0a8b-4393-913b-d74543733e5e │ 0.000100:0.23      │ 0.000100:0.23      │ Shielded                           │ 1,false:1,false │
+└──┴────────┴──────────────────────────────────────┴────────────────────┴────────────────────┴────────────────────────────────────┴─────────────────┘
 ";

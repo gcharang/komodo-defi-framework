@@ -1,2 +1,2 @@
 pub mod smart_fraction_fmt;
-mod test_formatters;
+#[cfg(test)] mod test_formatters;
