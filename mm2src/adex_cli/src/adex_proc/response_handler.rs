@@ -152,12 +152,8 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
             response.required_confirmations,
             if response.requires_notarization { "Yes" } else { "No" }
         );
-        if response.mature_confirmations.is_some() {
-            writeln_safe_io!(
-                writer,
-                "mature_confirmations: {}",
-                response.mature_confirmations.unwrap()
-            );
+        if let Some(mature_confirmations) = response.mature_confirmations {
+            writeln_safe_io!(writer, "mature_confirmations: {}", mature_confirmations);
         }
         Ok(())
     }
