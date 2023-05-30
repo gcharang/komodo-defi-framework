@@ -266,7 +266,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
             TableCell::new("Confirmation"),
         ])]);
         term_table.style = TableStyle::thin();
-        term_table.separate_rows = true;
+        term_table.separate_rows = false;
         for (coin, data) in best_orders.orders.iter().sorted_by_key(|p| p.0) {
             term_table.add_row(Row::new(vec![TableCell::new_with_alignment(coin, 7, Alignment::Left)]));
             for order in data.iter().sorted_by_key(|o| o.uuid) {
@@ -493,6 +493,7 @@ impl ResponseHandlerImpl<'_> {
             writeln_field!(writer, "Maker orders", "", COMMON_INDENT);
             let mut table = TermTable::new();
             table.style = TableStyle::thin();
+            table.separate_rows = false;
             table.add_row(ResponseHandlerImpl::maker_order_header_row());
 
             for (_, maker_order) in maker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
@@ -517,6 +518,7 @@ impl ResponseHandlerImpl<'_> {
             writeln_field!(writer, "Taker orders", "", COMMON_INDENT);
             let mut table = TermTable::new();
             table.style = TableStyle::thin();
+            table.separate_rows = false;
             table.add_row(ResponseHandlerImpl::taker_order_header_row());
             for (_, taker_order) in taker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
                 for row in ResponseHandlerImpl::taker_order_row(taker_order)? {

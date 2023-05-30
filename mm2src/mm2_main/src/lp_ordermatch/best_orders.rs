@@ -306,6 +306,7 @@ pub async fn best_orders_rpc_v2(
         .await
         .mm_err(|e| BestOrdersRpcError::P2PError(format!("{:?}", e)))?;
     let mut orders = HashMap::new();
+
     if let Some((p2p_response, peer_id)) = best_orders_res {
         let my_pubsecp = get_my_pubk_from_ctx(&ctx)?;
         let orderbook = ordermatch_ctx.orderbook.lock();
