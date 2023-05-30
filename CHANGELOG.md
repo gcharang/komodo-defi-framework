@@ -1,4 +1,12 @@
-## v1.0.4-beta - 2023-05-12
+## v1.0.5-beta - ${release-date}
+
+**Features:**
+
+**Enhancements/Fixes:**
+- Remove deprecated dependency `wasm-timer` from mm2 tree [#1836](https://github.com/KomodoPlatform/atomicDEX-API/pull/1836)
+- UriMeta to get info from token uri, status and metadata in nft tx history were added [#1823](https://github.com/KomodoPlatform/atomicDEX-API/pull/1823)
+
+## v1.0.4-beta - 2023-05-23
 
 **Enhancements/Fixes:**
 - New `adex-cli` commands were provided: enable, get-enabled, orderbook, sell, buy [#1768](https://github.com/KomodoPlatform/atomicDEX-API/pull/1768)
@@ -23,6 +31,7 @@
 - Detect a chain reorganization, if it occurs, redownload and revalidate the new best chain headers for SPV  [#1728](https://github.com/KomodoPlatform/atomicDEX-API/pull/1728)
 - Fix moralis request in wasm target, add moralis tests [#1817](https://github.com/KomodoPlatform/atomicDEX-API/pull/1817)
 - PoSV support for UTXO coins was added in [#1815](https://github.com/KomodoPlatform/atomicDEX-API/pull/1815)
+- Use a new testnet for ETH tests, reduce the amount of ETH and ERC20 tokens exchanged, use fixed addresses instead of one-time use random addresses, fix some existing bugs (https://github.com/KomodoPlatform/atomicDEX-API/pull/1828)
 
 
 ## v1.0.3-beta - 2023-04-28
