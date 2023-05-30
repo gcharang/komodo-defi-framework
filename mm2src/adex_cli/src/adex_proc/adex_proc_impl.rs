@@ -29,7 +29,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         let command = Command::builder()
             .flatten_data(activation_method)
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .build();
 
         match self.transport.send::<_, CoinInitResponse, Json>(command).await {
@@ -44,7 +44,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::builder()
             .method(Method::GetBalance)
             .flatten_data(json!({ "coin": asset }))
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .build();
 
         match self.transport.send::<_, BalanceResponse, Json>(command).await {
@@ -59,7 +59,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         let command = Command::<i32>::builder()
             .method(Method::GetEnabledCoins)
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .build();
 
         match self
@@ -77,7 +77,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
 
         let command = Command::builder()
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .method(Method::GetOrderbook)
             .flatten_data(OrderbookRequest {
                 base: base.into(),
@@ -107,7 +107,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         );
 
         let command = Command::builder()
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .method(Method::Sell)
             .flatten_data(order)
             .build();
@@ -136,7 +136,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         );
 
         let command = Command::builder()
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .method(Method::Buy)
             .flatten_data(order)
             .build();
@@ -155,7 +155,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command");
         let stop_command = Command::<Dummy>::builder()
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .method(Method::Stop)
             .build();
 
@@ -169,7 +169,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version");
         let version_command = Command::<Dummy>::builder()
-            .userpass(self.config.rpc_password())
+            .userpass(self.config.rpc_password()?)
             .method(Method::Version)
             .build();
 

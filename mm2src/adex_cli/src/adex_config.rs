@@ -57,8 +57,8 @@ pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
 }
 
 pub(crate) trait AdexConfig {
-    fn rpc_password(&self) -> String;
-    fn rpc_uri(&self) -> String;
+    fn rpc_password(&self) -> Result<String>;
+    fn rpc_uri(&self) -> Result<String>;
     fn orderbook_price_precision(&self) -> &PricePrecision;
     fn orderbook_volume_precision(&self) -> &VolumePrecision;
 }
@@ -72,8 +72,18 @@ pub(crate) struct AdexConfigImpl {
 }
 
 impl AdexConfig for AdexConfigImpl {
-    fn rpc_password(&self) -> String { self.rpc_password.as_ref().expect("No rpc_password in config").clone() }
-    fn rpc_uri(&self) -> String { self.rpc_uri.as_ref().expect("No rpc_uri in config").clone() }
+    fn rpc_password(&self) -> Result<String> {
+        self.rpc_password
+            .as_ref()
+            .map(String::clone)
+            .ok_or_else(|| error_anyhow!("Failed to get rpc_password"))
+    }
+    fn rpc_uri(&self) -> Result<String> {
+        self.rpc_uri
+            .as_ref()
+            .map(String::clone)
+            .ok_or_else(|| error_anyhow!("No rpc_uri in config"))
+    }
     fn orderbook_price_precision(&self) -> &PricePrecision { &PRICE_PRECISION }
     fn orderbook_volume_precision(&self) -> &VolumePrecision { &VOLUME_PRECISION }
 }

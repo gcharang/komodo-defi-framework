@@ -1811,6 +1811,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "derive_more",
+ "futures 0.3.28",
  "gstuff",
  "http 0.2.9",
  "mm2_err_handle",

@@ -1076,7 +1076,6 @@ dependencies = [
  "mm2_metrics",
  "mm2_net",
  "mm2_number",
- "mm2_rpc",
  "mm2_test_helpers",
  "mocktopus",
  "num-traits",
