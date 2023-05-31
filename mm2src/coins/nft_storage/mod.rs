@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
 #[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
-#[cfg(target_arch = "wasm32")] pub mod wasm_storage;
+#[cfg(target_arch = "wasm32")] pub mod wasm;
 
 #[derive(Debug)]
 pub enum RemoveNftResult {
@@ -152,7 +152,7 @@ impl<'a> NftStorageBuilder<'a> {
     #[inline]
     pub fn build(self) -> MmResult<impl NftListStorageOps + NftTxHistoryStorageOps, CreateNftStorageError> {
         #[cfg(target_arch = "wasm32")]
-        return wasm_storage::IndexedDbNftStorage::new(self.ctx);
+        return wasm::wasm_storage::IndexedDbNftStorage::new(self.ctx);
         #[cfg(not(target_arch = "wasm32"))]
         sql_storage::SqliteNftStorage::new(self.ctx)
     }

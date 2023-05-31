@@ -1,95 +1,19 @@
-use crate::nft::nft_structs::{Chain, Nft, NftList, NftTransferHistory, NftsTransferHistoryList, TxMeta};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTokenAddrId,
-                         NftTxHistoryFilters, NftTxHistoryStorageOps, RemoveNftResult};
+use crate::nft::nft_structs::{Chain, ContractType, Nft, NftList, NftTransferHistory, NftsTransferHistoryList,
+                              TransferStatus, TxMeta};
+use crate::nft_storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
+use crate::nft_storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
+use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddrId, NftTxHistoryFilters,
+                         NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
-use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
-pub use mm2_db::indexed_db::InitDbResult;
-use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbLocked, DbTransactionError, IndexedDb, IndexedDbBuilder,
-                         InitDbError, SharedDb};
+use mm2_db::indexed_db::{BeBigUint, DbUpgrader, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::map_mm_error::MapMmError;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::prelude::MmResult;
 use mm2_number::BigDecimal;
+use serde_json::Value as Json;
 use std::num::NonZeroUsize;
-
-const DB_NAME: &str = "nft_cache";
-const DB_VERSION: u32 = 1;
-
-pub type WasmNftCacheResult<T> = MmResult<T, WasmNftCacheError>;
-pub type NftCacheIDBLocked<'a> = DbLocked<'a, NftCacheIDB>;
-
-impl NftStorageError for WasmNftCacheError {}
-
-#[derive(Debug, Display)]
-pub enum WasmNftCacheError {
-    ErrorSerializing(String),
-    ErrorDeserializing(String),
-    ErrorSaving(String),
-    ErrorLoading(String),
-    ErrorClearing(String),
-    NotSupported(String),
-    InternalError(String),
-}
-
-impl From<InitDbError> for WasmNftCacheError {
-    fn from(e: InitDbError) -> Self {
-        match &e {
-            InitDbError::NotSupported(_) => WasmNftCacheError::NotSupported(e.to_string()),
-            InitDbError::EmptyTableList
-            | InitDbError::DbIsOpenAlready { .. }
-            | InitDbError::InvalidVersion(_)
-            | InitDbError::OpeningError(_)
-            | InitDbError::TypeMismatch { .. }
-            | InitDbError::UnexpectedState(_)
-            | InitDbError::UpgradingError { .. } => WasmNftCacheError::InternalError(e.to_string()),
-        }
-    }
-}
-
-impl From<DbTransactionError> for WasmNftCacheError {
-    fn from(e: DbTransactionError) -> Self {
-        match e {
-            DbTransactionError::ErrorSerializingItem(_) => WasmNftCacheError::ErrorSerializing(e.to_string()),
-            DbTransactionError::ErrorDeserializingItem(_) => WasmNftCacheError::ErrorDeserializing(e.to_string()),
-            DbTransactionError::ErrorUploadingItem(_) => WasmNftCacheError::ErrorSaving(e.to_string()),
-            DbTransactionError::ErrorGettingItems(_) | DbTransactionError::ErrorCountingItems(_) => {
-                WasmNftCacheError::ErrorLoading(e.to_string())
-            },
-            DbTransactionError::ErrorDeletingItems(_) => WasmNftCacheError::ErrorClearing(e.to_string()),
-            DbTransactionError::NoSuchTable { .. }
-            | DbTransactionError::ErrorCreatingTransaction(_)
-            | DbTransactionError::ErrorOpeningTable { .. }
-            | DbTransactionError::ErrorSerializingIndex { .. }
-            | DbTransactionError::UnexpectedState(_)
-            | DbTransactionError::TransactionAborted
-            | DbTransactionError::MultipleItemsByUniqueIndex { .. }
-            | DbTransactionError::NoSuchIndex { .. }
-            | DbTransactionError::InvalidIndex { .. } => WasmNftCacheError::InternalError(e.to_string()),
-        }
-    }
-}
-
-pub struct NftCacheIDB {
-    inner: IndexedDb,
-}
-
-#[async_trait]
-impl DbInstance for NftCacheIDB {
-    fn db_name() -> &'static str { DB_NAME }
-
-    async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
-        // todo add tables for each chain
-        let inner = IndexedDbBuilder::new(db_id).with_version(DB_VERSION).build().await?;
-        Ok(NftCacheIDB { inner })
-    }
-}
-
-#[allow(dead_code)]
-impl NftCacheIDB {
-    fn get_inner(&self) -> &IndexedDb { &self.inner }
-}
 
 #[derive(Clone)]
 pub struct IndexedDbNftStorage {
@@ -242,4 +166,70 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
     }
 
     async fn get_txs_with_empty_meta(&self, _chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> { todo!() }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct NftListTable {
+    token_address: String,
+    token_id: BeBigUint,
+    chain: String,
+    amount: BeBigUint,
+    block_number: u32,
+    contract_type: ContractType,
+    details_json: Json,
+}
+
+impl NftListTable {
+    pub const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
+}
+
+impl TableSignature for NftListTable {
+    fn table_name() -> &'static str { "nft_list_cache_table" }
+
+    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        if let (0, 1) = (old_version, new_version) {
+            let table = upgrader.create_table(Self::table_name())?;
+            table.create_multi_index(
+                Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
+                &["chain", "token_address", "token_id"],
+                true,
+            )?;
+            table.create_index("chain", false)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct NftTxHistoryTable {
+    transaction_hash: String,
+    chain: String,
+    block_number: u32,
+    block_timestamp: String,
+    contract_type: ContractType,
+    token_address: String,
+    token_id: BeBigUint,
+    status: TransferStatus,
+    amount: BeBigUint,
+    collection_name: String,
+    image: String,
+    token_name: String,
+    details_json: Json,
+}
+
+impl NftTxHistoryTable {
+    pub const CHAIN_TX_HASH_INDEX: &str = "chain_tx_hash_index";
+}
+
+impl TableSignature for NftTxHistoryTable {
+    fn table_name() -> &'static str { "nft_tx_history_cache_table" }
+
+    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        if let (0, 1) = (old_version, new_version) {
+            let table = upgrader.create_table(Self::table_name())?;
+            table.create_multi_index(Self::CHAIN_TX_HASH_INDEX, &["chain", "transaction_hash"], true)?;
+            table.create_index("chain", false)?;
+        }
+        Ok(())
+    }
 }

@@ -100,7 +100,7 @@ cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked, SharedDb};
     use tx_history_storage::wasm::{clear_tx_history, load_tx_history, save_tx_history, TxHistoryDb};
     pub type TxHistoryDbLocked<'a> = DbLocked<'a, TxHistoryDb>;
-    use nft_storage::wasm_storage::NftCacheIDB;
+    use nft_storage::wasm::nft_idb::NftCacheIDB;
 }
 
 // using custom copy of try_fus as futures crate was renamed to futures01
