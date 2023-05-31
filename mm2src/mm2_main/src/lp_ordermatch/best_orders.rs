@@ -240,8 +240,8 @@ pub async fn best_orders_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>,
                 let conf_settings = p2p_response.conf_infos.get(&order.uuid);
                 let is_mine = is_my_order(&orderbook.my_p2p_pubkeys, &my_pubsecp, &order.pubkey);
                 let entry = match req.action {
-                    BestOrdersAction::Buy => order.as_rpc_best_orders_buy(address, conf_settings, is_mine),
-                    BestOrdersAction::Sell => order.as_rpc_best_orders_sell(address, conf_settings, is_mine),
+                    BestOrdersAction::Buy => order.as_rpc_best_orders_buy(address, conf_settings, is_mine)?,
+                    BestOrdersAction::Sell => order.as_rpc_best_orders_sell(address, conf_settings, is_mine)?,
                 };
                 if let Some(original_tickers) = ordermatch_ctx.original_tickers.get(&coin) {
                     for ticker in original_tickers {
