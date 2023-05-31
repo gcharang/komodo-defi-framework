@@ -62,49 +62,37 @@ enum Command {
     #[command(about = "Lists activated assets")]
     GetEnabled,
     #[command(about = "Gets orderbook")]
-    Orderbook {
-        #[command(flatten)]
-        orderbook_args: OrderbookCliArgs,
-    },
-    Sell {
-        #[command(flatten)]
-        order_args: SellOrderCli,
-    },
-    Buy {
-        #[command(flatten)]
-        order_args: BuyOrderCli,
-    },
+    Orderbook(OrderbookArgs),
+    Sell(SellOrderArgs),
+    Buy(BuyOrderArgs),
     #[command(subcommand, about = "To cancel one or a group of orders")]
     Cancel(CancelSubcommand),
     OrderStatus {
         uuid: Uuid,
     },
-    BestOrders {
-        #[command(flatten)]
-        delegate: BestOrderSubcommand,
-    },
+    BestOrders(BestOrderArgs),
     #[command(about = "Get my orders")]
     MyOrders,
 }
 #[derive(Args)]
-struct BestOrderSubcommand {
+struct BestOrderArgs {
     #[arg(help = "Whether to buy or sell the selected coin")]
     coin: String,
-    #[arg(help = "The ticker of the coin to get best orders")]
-    action: ActionCli,
-    #[command(flatten)]
-    delegate: BestOrdersByCli,
+    #[arg(value_enum, help = "The ticker of the coin to get best orders")]
+    action: OrderActionArg,
     #[arg(
         long,
         help = "Tickers included in response when orderbook_ticker is configured for the queried coin in coins file",
         default_value = "false"
     )]
     show_orig_tickets: bool,
+    #[command(flatten)]
+    delegate: BestOrdersByArg,
 }
 
 #[derive(Args)]
 #[group(required = true, multiple = false)]
-struct BestOrdersByCli {
+struct BestOrdersByArg {
     #[arg(long, group = "best-orders", value_parser=parse_mm_number, help="The returned results will show the best prices for trades that can fill the requested volume")]
     volume: Option<MmNumber>,
     #[arg(
@@ -171,7 +159,7 @@ impl Cli {
             Command::Enable { asset } => proc.enable(asset).await?,
             Command::Balance { asset } => proc.get_balance(asset).await?,
             Command::GetEnabled => proc.get_enabled().await?,
-            Command::Orderbook { ref orderbook_args } => {
+            Command::Orderbook(ref orderbook_args) => {
                 proc.get_orderbook(
                     &orderbook_args.base,
                     &orderbook_args.rel,
@@ -179,12 +167,8 @@ impl Cli {
                 )
                 .await?
             },
-            Command::Sell {
-                order_args: SellOrderCli { order_cli },
-            } => proc.sell(SellBuyRequest::from(order_cli)).await?,
-            Command::Buy {
-                order_args: BuyOrderCli { order_cli },
-            } => proc.buy(SellBuyRequest::from(order_cli)).await?,
+            Command::Sell(SellOrderArgs { order_cli }) => proc.sell(SellBuyRequest::from(order_cli)).await?,
+            Command::Buy(BuyOrderArgs { order_cli }) => proc.buy(SellBuyRequest::from(order_cli)).await?,
             Command::Cancel(CancelSubcommand::Order { uuid }) => proc.cancel_order(uuid).await?,
             Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
             Command::Cancel(CancelSubcommand::ByPair { base, rel }) => {
@@ -192,15 +176,12 @@ impl Cli {
             },
             Command::Cancel(CancelSubcommand::ByCoin { ticker }) => proc.cancel_by_coin(take(ticker)).await?,
             Command::OrderStatus { uuid } => proc.order_status(uuid).await?,
-            Command::BestOrders {
-                delegate:
-                    BestOrderSubcommand {
-                        delegate,
-                        coin,
-                        action,
-                        show_orig_tickets,
-                    },
-            } => {
+            Command::BestOrders(BestOrderArgs {
+                delegate,
+                coin,
+                action,
+                show_orig_tickets,
+            }) => {
                 proc.best_orders(
                     BestOrdersRequestV2 {
                         coin: take(coin),
@@ -219,20 +200,20 @@ impl Cli {
 
 #[derive(Args)]
 #[command(about = "Puts a selling coins request")]
-struct SellOrderCli {
+struct SellOrderArgs {
     #[command(flatten)]
-    order_cli: OrderCli,
+    order_cli: OrderArgs,
 }
 
 #[derive(Args)]
 #[command(about = "Puts a buying coins request")]
-struct BuyOrderCli {
+struct BuyOrderArgs {
     #[command(flatten)]
-    order_cli: OrderCli,
+    order_cli: OrderArgs,
 }
 
 #[derive(Args, Serialize, Debug)]
-struct OrderbookCliArgs {
+struct OrderbookArgs {
     #[arg(help = "Base currency of a pair")]
     base: String,
     #[arg(help = "Related currency, also can be called \"quote currency\" according to exchange terms")]
@@ -257,8 +238,8 @@ struct OrderbookCliArgs {
     conf_settings: bool,
 }
 
-impl From<&OrderbookCliArgs> for OrderbookConfig {
-    fn from(value: &OrderbookCliArgs) -> Self {
+impl From<&OrderbookArgs> for OrderbookConfig {
+    fn from(value: &OrderbookArgs) -> Self {
         OrderbookConfig {
             uuids: value.uuids,
             min_volume: value.min_volume,
@@ -274,7 +255,7 @@ impl From<&OrderbookCliArgs> for OrderbookConfig {
 }
 
 #[derive(Args, Serialize, Debug)]
-struct OrderCli {
+struct OrderArgs {
     #[arg(help = "Base currency of a pair")]
     pub base: String,
     #[arg(help = "Related currency")]
@@ -337,7 +318,7 @@ enum OrderTypeCli {
 }
 
 #[derive(Copy, Clone, ValueEnum)]
-enum ActionCli {
+enum OrderActionArg {
     Buy,
     Sell,
 }
@@ -374,8 +355,8 @@ impl From<OrderTypeCli> for OrderType {
     }
 }
 
-impl From<&mut OrderCli> for SellBuyRequest {
-    fn from(value: &mut OrderCli) -> Self {
+impl From<&mut OrderArgs> for SellBuyRequest {
+    fn from(value: &mut OrderArgs) -> Self {
         let match_by = if !value.match_uuids.is_empty() {
             MatchBy::Orders(HashSet::from_iter(value.match_uuids.drain(..)))
         } else if !value.match_publics.is_empty() {
@@ -407,8 +388,8 @@ impl From<&mut OrderCli> for SellBuyRequest {
     }
 }
 
-impl From<&mut BestOrdersByCli> for RequestBestOrdersBy {
-    fn from(value: &mut BestOrdersByCli) -> Self {
+impl From<&mut BestOrdersByArg> for RequestBestOrdersBy {
+    fn from(value: &mut BestOrdersByArg) -> Self {
         if let Some(number) = value.number {
             RequestBestOrdersBy::Number(number)
         } else if let Some(ref mut volume) = value.volume {
@@ -419,11 +400,11 @@ impl From<&mut BestOrdersByCli> for RequestBestOrdersBy {
     }
 }
 
-impl From<&mut ActionCli> for BestOrdersAction {
-    fn from(value: &mut ActionCli) -> Self {
+impl From<&mut OrderActionArg> for BestOrdersAction {
+    fn from(value: &mut OrderActionArg) -> Self {
         match value {
-            ActionCli::Buy => BestOrdersAction::Buy,
-            ActionCli::Sell => BestOrdersAction::Sell,
+            OrderActionArg::Buy => BestOrdersAction::Buy,
+            OrderActionArg::Sell => BestOrdersAction::Sell,
         }
     }
 }
