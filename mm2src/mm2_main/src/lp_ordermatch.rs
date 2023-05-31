@@ -3878,7 +3878,7 @@ impl<'a> From<&'a TakerMatch> for TakerMatchForRpc {
             reserved: (&taker_match.reserved).into(),
             connect: (&taker_match.connect).into(),
             connected: taker_match.connected.as_ref().map(|connected| connected.into()),
-            last_updated: 0,
+            last_updated: taker_match.last_updated,
         }
     }
 }
