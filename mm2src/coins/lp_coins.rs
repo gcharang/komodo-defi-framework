@@ -288,11 +288,11 @@ use utxo::{BlockchainNetwork, GenerateTxError, UtxoFeeDetails, UtxoTx};
 pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 
-pub mod nft_storage;
+pub(crate) mod nft_storage;
+use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod z_coin;
 
-use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 #[cfg(not(target_arch = "wasm32"))] use z_coin::ZCoin;
 
 pub type TransactionFut = Box<dyn Future<Item = TransactionEnum, Error = TransactionErr> + Send>;
