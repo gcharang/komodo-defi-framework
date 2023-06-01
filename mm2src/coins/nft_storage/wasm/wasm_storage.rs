@@ -12,7 +12,7 @@ use mm2_err_handle::map_mm_error::MapMmError;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::prelude::MmResult;
 use mm2_number::BigDecimal;
-use serde_json::Value as Json;
+use serde_json::{self as json, Value as Json};
 use std::num::NonZeroUsize;
 
 #[derive(Clone)]
@@ -38,9 +38,9 @@ impl IndexedDbNftStorage {
 impl NftListStorageOps for IndexedDbNftStorage {
     type Error = WasmNftCacheError;
 
-    async fn init(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
+    async fn init(&self, _chain: &Chain) -> MmResult<(), Self::Error> { Ok(()) }
 
-    async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { todo!() }
+    async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { Ok(true) }
 
     async fn get_nft_list(
         &self,
@@ -107,9 +107,9 @@ impl NftListStorageOps for IndexedDbNftStorage {
 impl NftTxHistoryStorageOps for IndexedDbNftStorage {
     type Error = WasmNftCacheError;
 
-    async fn init(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
+    async fn init(&self, _chain: &Chain) -> MmResult<(), Self::Error> { Ok(()) }
 
-    async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { todo!() }
+    async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { Ok(true) }
 
     async fn get_tx_history(
         &self,
@@ -200,6 +200,11 @@ impl TableSignature for NftListTable {
     }
 }
 
+#[allow(dead_code)]
+fn nft_details_from_item(item: NftListTable) -> WasmNftCacheResult<Nft> {
+    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct NftTxHistoryTable {
     transaction_hash: String,
@@ -229,6 +234,29 @@ impl TableSignature for NftTxHistoryTable {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_multi_index(Self::CHAIN_TX_HASH_INDEX, &["chain", "transaction_hash"], true)?;
             table.create_index("chain", false)?;
+        }
+        Ok(())
+    }
+}
+
+#[allow(dead_code)]
+fn tx_details_from_item(item: NftTxHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
+    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct LastScannedBlockTable {
+    chain: String,
+    last_scanned_block: u32,
+}
+
+impl TableSignature for LastScannedBlockTable {
+    fn table_name() -> &'static str { "last_scanned_block_table" }
+
+    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        if let (0, 1) = (old_version, new_version) {
+            let table = upgrader.create_table(Self::table_name())?;
+            table.create_index("chain", true)?;
         }
         Ok(())
     }
