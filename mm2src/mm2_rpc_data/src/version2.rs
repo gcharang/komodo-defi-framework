@@ -53,6 +53,7 @@ pub struct BestOrdersRequestV2 {
     pub coin: String,
     pub action: BestOrdersAction,
     pub request_by: RequestBestOrdersBy,
+    pub exclude_my: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

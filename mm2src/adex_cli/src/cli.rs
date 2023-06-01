@@ -86,6 +86,8 @@ struct BestOrderArgs {
         default_value = "false"
     )]
     show_orig_tickets: bool,
+    #[arg(long, help = "Excludes orders that is mine", default_value = "false")]
+    exclude_my: bool,
     #[command(flatten)]
     delegate: BestOrdersByArg,
 }
@@ -181,12 +183,14 @@ impl Cli {
                 coin,
                 action,
                 show_orig_tickets,
+                exclude_my,
             }) => {
                 proc.best_orders(
                     BestOrdersRequestV2 {
                         coin: take(coin),
                         action: action.into(),
                         request_by: delegate.into(),
+                        exclude_my: Some(*exclude_my),
                     },
                     *show_orig_tickets,
                 )
