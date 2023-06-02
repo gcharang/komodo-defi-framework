@@ -660,11 +660,12 @@ impl EthCoinImpl {
     }
 
     /// The id used to differentiate payments on Etomic swap smart contract
-    fn etomic_swap_id(&self, time_lock: u32, secret_hash: &[u8]) -> Vec<u8> {
+    fn etomic_swap_id(&self, time_lock: u32, secret_hash: &[u8], sender: H160) -> Vec<u8> {
         let mut input = vec![];
-        input.extend_from_slice(&time_lock.to_le_bytes());
         input.extend_from_slice(secret_hash);
-        sha256(&input).to_vec()
+        input.extend_from_slice(&u64::from(time_lock).to_be_bytes());
+        input.extend_from_slice(sender.as_bytes());
+        keccak256(&input).to_vec()
     }
 
     /// Gets `SenderRefunded` events from etomic swap smart contract since `from_block`
@@ -1146,7 +1147,11 @@ impl SwapOps for EthCoin {
         &self,
         if_my_payment_sent_args: CheckIfMyPaymentSentArgs,
     ) -> Box<dyn Future<Item = Option<TransactionEnum>, Error = String> + Send> {
-        let id = self.etomic_swap_id(if_my_payment_sent_args.time_lock, if_my_payment_sent_args.secret_hash);
+        let id = self.etomic_swap_id(
+            if_my_payment_sent_args.time_lock,
+            if_my_payment_sent_args.secret_hash,
+            self.my_address,
+        );
         let swap_contract_address = try_fus!(if_my_payment_sent_args.swap_contract_address.try_to_address());
         let selfi = self.clone();
         let from_block = if_my_payment_sent_args.search_from_block;
@@ -1479,7 +1484,7 @@ impl WatcherOps for EthCoin {
         let receiver = try_f!(addr_from_raw_pubkey(&input.maker_pub).map_to_mm(ValidatePaymentError::InvalidParameter));
 
         let selfi = self.clone();
-        let swap_id = selfi.etomic_swap_id(input.time_lock, &input.secret_hash);
+        let swap_id = selfi.etomic_swap_id(input.time_lock, &input.secret_hash, sender);
         let secret_hash = if input.secret_hash.len() == 32 {
             ripemd160(&input.secret_hash).to_vec()
         } else {
@@ -3011,7 +3016,7 @@ impl EthCoin {
     fn send_hash_time_locked_payment(&self, args: SendPaymentArgs<'_>) -> EthTxFut {
         let receiver_addr = try_tx_fus!(addr_from_raw_pubkey(args.other_pubkey));
         let swap_contract_address = try_tx_fus!(args.swap_contract_address.try_to_address());
-        let id = self.etomic_swap_id(args.time_lock, args.secret_hash);
+        let id = self.etomic_swap_id(args.time_lock, args.secret_hash, self.my_address);
         let trade_amount = try_tx_fus!(wei_from_big_decimal(&args.amount, self.decimals));
 
         let time_lock = U256::from(args.time_lock);
@@ -3874,7 +3879,7 @@ impl EthCoin {
         let sender = try_f!(addr_from_raw_pubkey(&input.other_pub).map_to_mm(ValidatePaymentError::InvalidParameter));
 
         let selfi = self.clone();
-        let swap_id = selfi.etomic_swap_id(input.time_lock, &input.secret_hash);
+        let swap_id = selfi.etomic_swap_id(input.time_lock, &input.secret_hash, sender);
         let decimals = self.decimals;
         let secret_hash = if input.secret_hash.len() == 32 {
             ripemd160(&input.secret_hash).to_vec()

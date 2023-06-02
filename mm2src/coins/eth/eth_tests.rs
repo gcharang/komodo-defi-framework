@@ -271,7 +271,7 @@ fn send_and_refund_erc20_payment() {
     log!("{:?}", payment);
     block_on(Timer::sleep(5.));
 
-    let swap_id = coin.etomic_swap_id(time_lock, secret_hash);
+    let swap_id = coin.etomic_swap_id(time_lock, secret_hash, coin.my_address);
     let status = block_on(
         coin.payment_status(
             Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
@@ -365,7 +365,7 @@ fn send_and_refund_eth_payment() {
     log!("{:?}", payment);
     block_on(Timer::sleep(5.));
 
-    let swap_id = coin.etomic_swap_id(time_lock, secret_hash);
+    let swap_id = coin.etomic_swap_id(time_lock, secret_hash, coin.my_address);
     let status = block_on(
         coin.payment_status(
             Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
