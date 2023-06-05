@@ -53,12 +53,27 @@ impl NftListStorageOps for IndexedDbNftStorage {
         todo!()
     }
 
-    async fn add_nfts_to_list<I>(&self, _chain: &Chain, _nfts: I, _last_scanned_block: u64) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send,
     {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+        for nft in nfts {
+            let nft_item = NftListTable::from_nft(&nft)?;
+            nft_table.add_item(&nft_item).await?;
+        }
+        let last_scanned_block = LastScannedBlockTable {
+            chain: chain.to_string(),
+            last_scanned_block,
+        };
+        last_scanned_block_table
+            .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
+            .await?;
+        Ok(())
     }
 
     async fn get_nft(
@@ -178,7 +193,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .with_value(chain.to_string())?
             .with_value(&transaction_hash)?;
         if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
-            Ok(Some(nft_tx_from_item(item)?))
+            Ok(Some(tx_details_from_item(item)?))
         } else {
             return Ok(None);
         }
@@ -209,7 +224,6 @@ pub(crate) struct NftListTable {
 impl NftListTable {
     const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 
-    #[allow(dead_code)]
     fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
         let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
         Ok(NftListTable {
@@ -295,11 +309,6 @@ impl TableSignature for NftTxHistoryTable {
     }
 }
 
-#[allow(dead_code)]
-fn tx_details_from_item(item: NftTxHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
-    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct LastScannedBlockTable {
     chain: String,
@@ -322,7 +331,7 @@ fn nft_details_from_item(item: NftListTable) -> WasmNftCacheResult<Nft> {
     json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
 }
 
-fn nft_tx_from_item(item: NftTxHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
+fn tx_details_from_item(item: NftTxHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
     json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
 }
 
