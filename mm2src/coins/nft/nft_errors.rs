@@ -1,5 +1,5 @@
 use crate::eth::GetEthAddressError;
-use crate::nft_storage::{CreateNftStorageError, NftStorageError};
+use crate::nft::storage::{CreateNftStorageError, NftStorageError};
 use crate::GetMyAddressError;
 use common::HttpStatusCode;
 use derive_more::Display;

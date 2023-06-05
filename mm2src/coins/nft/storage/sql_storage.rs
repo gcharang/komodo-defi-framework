@@ -1,7 +1,7 @@
 use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTokenAddrId, NftTransferHistory,
                               NftTxHistoryFilters, NftsTransferHistoryList, TxMeta};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps,
-                         RemoveNftResult};
+use crate::nft::storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps,
+                          RemoveNftResult};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};

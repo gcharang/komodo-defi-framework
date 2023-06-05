@@ -4,6 +4,8 @@ use url::Url;
 
 pub(crate) mod nft_errors;
 pub(crate) mod nft_structs;
+pub(crate) mod storage;
+
 #[cfg(any(test, target_arch = "wasm32"))] mod nft_tests;
 
 use crate::{get_my_address, MyAddressReq, WithdrawError};
@@ -14,7 +16,7 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftList, NftListReq, N
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_structs::{RefreshMetadataReq, TransferStatus, TxMeta, UriMeta};
-use crate::nft_storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
+use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::APPLICATION_JSON;
 use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
@@ -152,6 +154,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
 }
 
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
+    let storage = NftStorageBuilder::new(&ctx).build()?;
     let moralis_meta = get_moralis_metadata(
         format!("{:#02x}", req.token_address),
         req.token_id.clone(),
@@ -159,7 +162,6 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         &req.url,
     )
     .await?;
-    let storage = NftStorageBuilder::new(&ctx).build()?;
     let req = NftMetadataReq {
         token_address: req.token_address,
         token_id: req.token_id,

@@ -1,4 +1,4 @@
-use crate::nft_storage::NftStorageError;
+use crate::nft::storage::NftStorageError;
 use mm2_db::indexed_db::{DbTransactionError, InitDbError};
 use mm2_err_handle::prelude::*;
 

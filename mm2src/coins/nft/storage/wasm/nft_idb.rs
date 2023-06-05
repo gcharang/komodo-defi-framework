@@ -1,4 +1,4 @@
-use crate::nft_storage::wasm::wasm_storage::{NftListTable, NftTxHistoryTable};
+use crate::nft::storage::wasm::wasm_storage::{NftListTable, NftTxHistoryTable};
 use async_trait::async_trait;
 use mm2_db::indexed_db::InitDbResult;
 use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbLocked, IndexedDb, IndexedDbBuilder};

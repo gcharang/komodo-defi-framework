@@ -1,9 +1,9 @@
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftList, NftTransferHistory, NftsTransferHistoryList,
                               TransferStatus, TxMeta};
-use crate::nft_storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
-use crate::nft_storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddrId, NftTxHistoryFilters,
-                         NftTxHistoryStorageOps, RemoveNftResult};
+use crate::nft::storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
+use crate::nft::storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
+use crate::nft::storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddrId, NftTxHistoryFilters,
+                          NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
