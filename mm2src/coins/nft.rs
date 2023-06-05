@@ -256,7 +256,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
 async fn get_moralis_nft_transfers(
     ctx: &MmArc,
     chain: &Chain,
-    from_block: Option<u32>,
+    from_block: Option<u64>,
     url: &Url,
 ) -> MmResult<Vec<NftTransferHistory>, GetNftInfoError> {
     let mut res_list = Vec::new();
@@ -470,7 +470,7 @@ async fn update_nft_list<T: NftListStorageOps + NftTxHistoryStorageOps>(
     ctx: MmArc,
     storage: &T,
     chain: &Chain,
-    scan_from_block: u32,
+    scan_from_block: u64,
     url: &Url,
 ) -> MmResult<(), UpdateNftError> {
     let txs = storage.get_txs_from_block(chain, scan_from_block).await?;
@@ -543,7 +543,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     nft.block_number = tx.block_number;
     drop_mutability!(nft);
     storage
-        .add_nfts_to_list(chain, vec![nft.clone()], tx.block_number as u32)
+        .add_nfts_to_list(chain, vec![nft.clone()], tx.block_number)
         .await?;
     let tx_meta = TxMeta {
         token_address: nft.token_address,
@@ -660,9 +660,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             possible_spam: moralis_meta.possible_spam,
             uri_meta,
         };
-        storage
-            .add_nfts_to_list(chain, [nft.clone()], tx.block_number as u32)
-            .await?;
+        storage.add_nfts_to_list(chain, [nft.clone()], tx.block_number).await?;
         let tx_meta = TxMeta {
             token_address: nft.token_address,
             token_id: nft.token_id,

@@ -29,5 +29,5 @@ impl DbInstance for NftCacheIDB {
 
 #[allow(dead_code)]
 impl NftCacheIDB {
-    fn get_inner(&self) -> &IndexedDb { &self.inner }
+    pub(crate) fn get_inner(&self) -> &IndexedDb { &self.inner }
 }

@@ -312,7 +312,7 @@ impl fmt::Display for TransferStatus {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftTransferHistory {
     pub(crate) chain: Chain,
     pub(crate) block_number: u64,

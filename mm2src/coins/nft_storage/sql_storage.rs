@@ -344,14 +344,14 @@ where
     Ok(sql)
 }
 
-fn block_number_from_row(row: &Row<'_>) -> Result<u32, SqlError> { row.get(0) }
+fn block_number_from_row(row: &Row<'_>) -> Result<i64, SqlError> { row.get::<_, i64>(0) }
 
 fn nft_amount_from_row(row: &Row<'_>) -> Result<String, SqlError> { row.get(0) }
 
 fn get_txs_from_block_builder<'a>(
     conn: &'a Connection,
     chain: &'a Chain,
-    from_block: u32,
+    from_block: u64,
 ) -> MmResult<SqlQuery<'a>, SqlError> {
     let table_name = nft_tx_history_table_name(chain);
     validate_table_name(table_name.as_str())?;
@@ -478,7 +478,7 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u32) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send,
@@ -585,17 +585,20 @@ impl NftListStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error> {
+    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
         let sql = select_last_block_number_sql(chain, nft_list_table_name)?;
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
             query_single_row(&conn, &sql, NO_PARAMS, block_number_from_row).map_to_mm(SqlError::from)
         })
-        .await
+        .await?
+        .map(|b| b.try_into())
+        .transpose()
+        .map_to_mm(|e| SqlError::FromSqlConversionFailure(2, Type::Integer, Box::new(e)))
     }
 
-    async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error> {
+    async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
         let sql = select_last_scanned_block_sql()?;
         let params = [chain.to_ticker()];
         let selfi = self.clone();
@@ -603,7 +606,10 @@ impl NftListStorageOps for SqliteNftStorage {
             let conn = selfi.0.lock().unwrap();
             query_single_row(&conn, &sql, params, block_number_from_row).map_to_mm(SqlError::from)
         })
-        .await
+        .await?
+        .map(|b| b.try_into())
+        .transpose()
+        .map_to_mm(|e| SqlError::FromSqlConversionFailure(2, Type::Integer, Box::new(e)))
     }
 
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error> {
@@ -753,20 +759,23 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u32>, Self::Error> {
+    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
         let sql = select_last_block_number_sql(chain, nft_tx_history_table_name)?;
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
             query_single_row(&conn, &sql, NO_PARAMS, block_number_from_row).map_to_mm(SqlError::from)
         })
-        .await
+        .await?
+        .map(|b| b.try_into())
+        .transpose()
+        .map_to_mm(|e| SqlError::FromSqlConversionFailure(2, Type::Integer, Box::new(e)))
     }
 
     async fn get_txs_from_block(
         &self,
         chain: &Chain,
-        from_block: u32,
+        from_block: u64,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
         let selfi = self.clone();
         let chain = *chain;
