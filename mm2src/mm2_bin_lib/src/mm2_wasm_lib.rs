@@ -17,8 +17,9 @@ use common::log::{register_callback, LogLevel, WasmCallback};
 use common::{console_err, console_info, deserialize_from_js, executor, serialize_to_js, set_panic_hook};
 use enum_primitive_derive::Primitive;
 use mm2_main::mm2::LpMainParams;
+use mm2_rpc::data::legacy::MmVersionResponse;
+use mm2_rpc::legacy::MmVersionResponse;
 use mm2_rpc::wasm_rpc::WasmRpcResponse;
-use mm2_rpc_data::legacy::MmVersionResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 

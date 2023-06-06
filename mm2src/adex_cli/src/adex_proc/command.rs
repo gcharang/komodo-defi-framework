@@ -1,6 +1,6 @@
 use derive_more::Display;
 use log::error;
-use mm2_rpc_data::version2::{MmRpcRequest, MmRpcVersion};
+use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 use serde::Serialize;
 
 #[derive(Serialize, Clone)]

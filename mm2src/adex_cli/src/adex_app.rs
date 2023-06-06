@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::env;
 use std::io::Write;
 
@@ -10,7 +11,7 @@ pub(crate) struct AdexApp {
 }
 
 impl AdexApp {
-    pub fn new() -> Result<AdexApp, ()> {
+    pub fn new() -> Result<AdexApp> {
         let config = AdexConfigImpl::read_config()?;
         Ok(AdexApp { config })
     }

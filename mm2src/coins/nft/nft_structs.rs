@@ -1,21 +1,25 @@
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
+use ethereum_types::Address;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
+use serde_json::Value as Json;
+use std::fmt;
 use std::str::FromStr;
+use url::Url;
 
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
-    pub(crate) url: String,
+    pub(crate) url: Url,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct NftMetadataReq {
-    pub(crate) token_address: String,
+    pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) chain: Chain,
-    pub(crate) url: String,
+    pub(crate) url: Url,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -28,10 +32,20 @@ pub(crate) enum Chain {
     Polygon,
 }
 
+impl fmt::Display for Chain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            Chain::Avalanche => write!(f, "AVALANCHE"),
+            Chain::Bsc => write!(f, "BSC"),
+            Chain::Eth => write!(f, "ETH"),
+            Chain::Fantom => write!(f, "FANTOM"),
+            Chain::Polygon => write!(f, "POLYGON"),
+        }
+    }
+}
+
 pub(crate) trait ConvertChain {
     fn to_ticker(&self) -> String;
-
-    fn to_ticker_chain(&self) -> (String, String);
 }
 
 impl ConvertChain for Chain {
@@ -42,16 +56,6 @@ impl ConvertChain for Chain {
             Chain::Eth => "ETH".to_owned(),
             Chain::Fantom => "FTM".to_owned(),
             Chain::Polygon => "MATIC".to_owned(),
-        }
-    }
-
-    fn to_ticker_chain(&self) -> (String, String) {
-        match self {
-            Chain::Avalanche => ("AVAX".to_owned(), "avalanche".to_owned()),
-            Chain::Bsc => ("BNB".to_owned(), "bsc".to_owned()),
-            Chain::Eth => ("ETH".to_owned(), "eth".to_owned()),
-            Chain::Fantom => ("FTM".to_owned(), "fantom".to_owned()),
-            Chain::Polygon => ("MATIC".to_owned(), "polygon".to_owned()),
         }
     }
 }
@@ -81,6 +85,16 @@ impl FromStr for ContractType {
     }
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub(crate) struct UriMeta {
+    pub(crate) image: Option<String>,
+    #[serde(rename(deserialize = "name"))]
+    pub(crate) token_name: Option<String>,
+    description: Option<String>,
+    attributes: Option<Json>,
+    animation_url: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Nft {
     pub(crate) chain: Chain,
@@ -92,7 +106,7 @@ pub struct Nft {
     pub(crate) block_number_minted: u64,
     pub(crate) block_number: u64,
     pub(crate) contract_type: Option<ContractType>,
-    pub(crate) name: Option<String>,
+    pub(crate) collection_name: Option<String>,
     pub(crate) symbol: Option<String>,
     pub(crate) token_uri: Option<String>,
     pub(crate) metadata: Option<String>,
@@ -100,6 +114,7 @@ pub struct Nft {
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
     pub(crate) possible_spam: Option<bool>,
+    pub(crate) uri_meta: UriMeta,
 }
 
 /// This structure is for deserializing NFT json to struct.
@@ -175,7 +190,7 @@ pub struct WithdrawErc721 {
 
 #[derive(Clone, Deserialize)]
 pub struct WithdrawNftReq {
-    pub(crate) url: String,
+    pub(crate) url: Url,
     pub(crate) withdraw_type: WithdrawNftType,
 }
 
@@ -217,7 +232,13 @@ pub struct TransactionNftDetails {
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
-    pub(crate) url: String,
+    pub(crate) url: Url,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub(crate) enum TransferStatus {
+    Receive,
+    Send,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,8 +256,12 @@ pub(crate) struct NftTransferHistory {
     pub(crate) transaction_type: String,
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
+    pub(crate) collection_name: Option<String>,
+    pub(crate) image: Option<String>,
+    pub(crate) token_name: Option<String>,
     pub(crate) from_address: String,
     pub(crate) to_address: String,
+    pub(crate) status: TransferStatus,
     pub(crate) amount: BigDecimal,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,

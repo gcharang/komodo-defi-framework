@@ -1,6 +1,6 @@
 use common::block_on;
 use mm2_number::BigDecimal;
-use mm2_rpc_data::legacy::OrderbookResponse;
+use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::for_tests::{enable_tendermint, enable_tendermint_without_balance, iris_testnet_conf, my_balance,
                                   orderbook, orderbook_v2, set_price, usdc_ibc_iris_testnet_conf, MarketMakerIt,
                                   Mm2TestConf};

@@ -67,9 +67,8 @@ mm2_git = { path = "../mm2_git" }
 mm2_io = { path = "../mm2_io" }
 mm2_metrics = { path = "../mm2_metrics" }
 mm2_net = { path = "../mm2_net" }
-mm2_number = { path = "../mm2_number" }
+mm2_number = { path = "../mm2_number"}
 mm2_rpc = { path = "../mm2_rpc" }
-mm2_rpc_data = { path = "../mm2_rpc_data" }
 mocktopus = "0.8.0"
 num-traits = "0.2"
 parking_lot = { version = "0.12.0", features = ["nightly"] }
@@ -97,6 +96,7 @@ utxo_signer = { path = "utxo_signer" }
 # using the same version as cosmrs
 tendermint-rpc = { version = "=0.23.7", default-features = false }
 tiny-bip39 = "0.8.0"
+url = { version = "2.2.2", features = ["serde"] }
 uuid = { version = "1.2.2", features = ["fast-rng", "serde", "v4"] }
 # One of web3 dependencies is the old `tokio-uds 0.1.7` which fails cross-compiling to ARM.
 # We don't need the default web3 features at all since we added our own web3 transport using shared HYPER instance.
@@ -117,7 +117,7 @@ js-sys = { version = "0.3.27" }
 mm2_db = { path = "../mm2_db" }
 mm2_metamask = { path = "../mm2_metamask" }
 mm2_test_helpers = { path = "../mm2_test_helpers" }
-wasm-bindgen = { version = "0.2.50", features = ["nightly"] }
+wasm-bindgen = "0.2.86"
 wasm-bindgen-futures = { version = "0.4.1" }
 wasm-bindgen-test = { version = "0.3.2" }
 web-sys = { version = "0.3.55", features = ["console", "Headers", "Request", "RequestInit", "RequestMode", "Response", "Window"] }
@@ -151,7 +151,6 @@ winapi = "0.3"
 
 [dev-dependencies]
 mm2_test_helpers = { path = "../mm2_test_helpers" }
-wasm-timer = "0.2.4"
 
 [build-dependencies]
 prost-build = { version = "0.10.4", default-features = false }

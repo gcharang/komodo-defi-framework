@@ -29,6 +29,7 @@ use coins::{coin_conf, find_pair, lp_coinfind, BalanceTradeFeeUpdatedHandler, Co
 use common::executor::{simple_map::AbortableSimpleMap, AbortSettings, AbortableSystem, AbortedError, SpawnAbortable,
                        SpawnFuture, Timer};
 use common::log::{error, warn, LogOnError};
+use common::now_sec_i64;
 use common::time_cache::TimeCache;
 use common::{bits256, log, new_uuid, now_ms, now_sec};
 use crypto::privkey::SerializableSecp256k1Keypair;
@@ -45,13 +46,13 @@ use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, 
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
 use mm2_number::{BigDecimal, BigRational, MmNumber};
-use mm2_rpc_data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
-                           HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
-                           MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MyOrdersResponse,
-                           OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest, OrderStatusResponse,
-                           OrderType, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, Status, TakerAction,
-                           TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
-use mm2_rpc_data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
+use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
+                            HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
+                            MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MyOrdersResponse,
+                            OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest, OrderStatusResponse,
+                            OrderType, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, Status, TakerAction,
+                            TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
+use mm2_rpc::data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
                         save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,
@@ -4002,7 +4003,7 @@ impl OrderbookP2PItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: self.age_sec()?,
+            age: now_sec_i64(),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4067,7 +4068,7 @@ impl OrderbookP2PItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: self.age_sec()?,
+            age: now_sec_i64(),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4228,7 +4229,7 @@ impl OrderbookItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: self.age_sec()?,
+            age: now_sec_i64(),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4263,7 +4264,7 @@ impl OrderbookItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: self.age_sec()?,
+            age: now_sec_i64(),
             uuid: self.uuid,
             is_mine,
             base_max_volume,

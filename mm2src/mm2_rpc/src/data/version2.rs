@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::legacy::OrderConfirmationsSettings;
+use super::legacy::OrderConfirmationsSettings;
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

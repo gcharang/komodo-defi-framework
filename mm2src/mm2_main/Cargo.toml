@@ -62,8 +62,7 @@ mm2-libp2p = { path = "../mm2_libp2p" }
 mm2_metrics = { path = "../mm2_metrics" }
 mm2_net = { path = "../mm2_net" }
 mm2_number = { path = "../mm2_number" }
-mm2_rpc = { path = "../mm2_rpc" }
-mm2_rpc_data = { path = "../mm2_rpc_data" }
+mm2_rpc = { path = "../mm2_rpc", features = ["rpc_facilities"]}
 num-traits = "0.2"
 parity-util-mem = "0.11"
 parking_lot = { version = "0.12.0", features = ["nightly"] }
@@ -91,14 +90,14 @@ sp-trie = { version = "6.0", default-features = false }
 trie-db = { version = "0.23.1", default-features = false }
 trie-root = "0.16.0"
 uuid = { version = "1.2.2", features = ["fast-rng", "serde", "v4"] }
-wasm-timer = "0.2.4"
+instant = { version = "0.1.12" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 instant = { version = "0.1.12", features = ["wasm-bindgen"] }
 js-sys = { version = "0.3.27" }
 mm2_db = { path = "../mm2_db" }
 mm2_test_helpers = { path = "../mm2_test_helpers" }
-wasm-bindgen = { version = "=0.2.78", features = ["nightly"] }
+wasm-bindgen = "0.2.86"
 wasm-bindgen-futures = { version = "0.4.1" }
 wasm-bindgen-test = { version = "0.3.1" }
 web-sys = { version = "0.3.55", features = ["console"] }

@@ -1,5 +1,5 @@
 use mm2_number::bigdecimal::ToPrimitive;
-use mm2_rpc_data::legacy::AggregatedOrderbookEntry;
+use mm2_rpc::data::legacy::AggregatedOrderbookEntry;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 

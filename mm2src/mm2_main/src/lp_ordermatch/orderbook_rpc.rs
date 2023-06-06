@@ -9,8 +9,8 @@ use http::{Response, StatusCode};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber, MmNumberMultiRepr};
-use mm2_rpc_data::legacy::{AggregatedOrderbookEntry, OrderbookRequest, OrderbookResponse, RpcOrderbookEntry};
-use mm2_rpc_data::version2::RpcOrderbookEntryV2;
+use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookRequest, OrderbookResponse, RpcOrderbookEntry};
+use mm2_rpc::data::version2::RpcOrderbookEntryV2;
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
 

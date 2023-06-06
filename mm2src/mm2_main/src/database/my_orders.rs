@@ -5,7 +5,7 @@ use db_common::sqlite::offset_by_uuid;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
-use mm2_rpc_data::legacy::TakerAction;
+use mm2_rpc::data::legacy::TakerAction;
 use std::convert::TryInto;
 use std::string::ParseError;
 use uuid::Uuid;

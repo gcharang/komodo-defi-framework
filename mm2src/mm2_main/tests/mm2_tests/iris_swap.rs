@@ -2,7 +2,7 @@ use crate::integration_tests_common::enable_electrum;
 use common::executor::Timer;
 use common::{block_on, log};
 use mm2_number::BigDecimal;
-use mm2_rpc_data::legacy::OrderbookResponse;
+use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::for_tests::{check_my_swap_status, check_recent_swaps, check_stats_swap_status, enable_eth_coin,
                                   enable_tendermint, iris_nimda_testnet_conf, iris_testnet_conf, rick_conf, tbnb_conf,
                                   usdc_ibc_iris_testnet_conf, MarketMakerIt, MAKER_ERROR_EVENTS, MAKER_SUCCESS_EVENTS,
@@ -12,7 +12,7 @@ use std::convert::TryFrom;
 use std::env;
 
 // https://academy.binance.com/en/articles/connecting-metamask-to-binance-smart-chain
-const TBNB_URLS: &[&str] = &["https://data-seed-prebsc-1-s3.binance.org:8545/"];
+const TBNB_URLS: &[&str] = &["https://data-seed-prebsc-1-s1.binance.org:8545/"];
 // https://testnet.bscscan.com/address/0xb1ad803ea4f57401639c123000c75f5b66e4d123
 const TBNB_SWAP_CONTRACT: &str = "0xB1Ad803ea4F57401639c123000C75F5B66E4D123";
 

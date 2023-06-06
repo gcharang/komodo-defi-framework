@@ -1,10 +1,11 @@
 use common::{HttpStatusCode, SerializationError};
 use http::{Response, StatusCode};
 use mm2_err_handle::prelude::*;
-use mm2_rpc_data::version2::MmRpcVersion;
 use serde::Serialize;
 use serde_json as json;
 use serde_json::Value as Json;
+
+use super::data::version2::MmRpcVersion;
 
 pub struct MmRpcBuilder<T: Serialize, E: SerMmErrorType> {
     version: MmRpcVersion,

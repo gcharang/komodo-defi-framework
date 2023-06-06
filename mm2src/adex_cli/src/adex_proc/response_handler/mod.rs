@@ -1,17 +1,18 @@
 mod formatters;
 mod orderbook;
 
+use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
 use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
-use mm2_rpc_data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
-                           HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
-                           Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderConfirmationsSettings,
-                           OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
-                           TakerOrderForRpc};
-use mm2_rpc_data::version2::BestOrdersV2Response;
+use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
+                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
+                            Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderConfirmationsSettings,
+                            OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
+                            TakerOrderForRpc};
+use mm2_rpc::data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -28,31 +29,32 @@ use term_table::{Table as TermTable, TableStyle};
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
 use crate::adex_proc::response_handler::formatters::smart_fraction_fmt::SmartFractionFmt;
+use crate::error_anyhow;
 
 const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
 
 pub(crate) trait ResponseHandler {
-    fn print_response(&self, response: Json) -> Result<(), ()>;
-    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<(), ()>;
+    fn print_response(&self, response: Json) -> Result<()>;
+    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<()>;
     fn on_orderbook_response<Cfg: AdexConfig + 'static>(
         &self,
         orderbook: OrderbookResponse,
         config: &Cfg,
         otderbook_config: OrderbookConfig,
-    ) -> Result<(), ()>;
-    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<(), ()>;
-    fn on_version_response(&self, response: &MmVersionResponse) -> Result<(), ()>;
-    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<(), ()>;
-    fn on_balance_response(&self, response: &BalanceResponse) -> Result<(), ()>;
-    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
-    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()>;
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
-    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()>;
-    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<(), ()>;
-    fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()>;
-    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<(), ()>;
-    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<(), ()>;
+    ) -> Result<()>;
+    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
+    fn on_version_response(&self, response: &MmVersionResponse) -> Result<()>;
+    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()>;
+    fn on_balance_response(&self, response: &BalanceResponse) -> Result<()>;
+    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
+    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()>;
+    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<()>;
+    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<()>;
+    fn on_order_status(&self, response: &OrderStatusResponse) -> Result<()>;
+    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()>;
+    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -60,13 +62,12 @@ pub(crate) struct ResponseHandlerImpl<'a> {
 }
 
 impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
-    fn print_response(&self, result: Json) -> Result<(), ()> {
+    fn print_response(&self, result: Json) -> Result<()> {
         let mut binding = self.writer.borrow_mut();
         let writer = binding.deref_mut();
-
         let object = result
             .as_object()
-            .ok_or_else(|| error!("Failed to cast result as object"))?;
+            .ok_or_else(|| error_anyhow!("Failed to cast result as object"))?;
 
         object
             .iter()
@@ -74,7 +75,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<(), ()> {
+    fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<()> {
         info!("{response:?}");
         Ok(())
     }
@@ -84,7 +85,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         orderbook: OrderbookResponse,
         config: &Cfg,
         otderbook_config: OrderbookConfig,
-    ) -> Result<(), ()> {
+    ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
 
         let base_vol_head = "Volume: ".to_string() + &orderbook.base;
@@ -150,7 +151,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<(), ()> {
+    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "{:8} {}", "Ticker", "Address");
         for row in &enabled.result {
@@ -159,14 +160,14 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_version_response(&self, response: &MmVersionResponse) -> Result<(), ()> {
+    fn on_version_response(&self, response: &MmVersionResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "Version: {}", response.result);
         writeln_safe_io!(writer, "Datetime: {}", response.datetime);
         Ok(())
     }
 
-    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<(), ()> {
+    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(
             writer,
@@ -184,7 +185,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_balance_response(&self, response: &BalanceResponse) -> Result<(), ()> {
+    fn on_balance_response(&self, response: &BalanceResponse) -> Result<()> {
         writeln_safe_io!(
             self.writer.borrow_mut(),
             "coin: {}\nbalance: {}\nunspendable: {}\naddress: {}",
@@ -196,31 +197,29 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
-        writeln_safe_io!(self.writer.borrow_mut(), "Order uuid: {}", response.request.uuid);
-        Ok(())
-    }
-
-    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<(), ()> {
+    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "{}", response.request.uuid);
         Ok(())
     }
 
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
-        match response.result {
-            Status::Success => writeln_safe_io!(self.writer.borrow_mut(), "Service stopped"),
-        }
+    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()> {
+        writeln_safe_io!(self.writer.borrow_mut(), "{}", response.request.uuid);
         Ok(())
     }
 
-    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<(), ()> {
+    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()> {
+        writeln_safe_io!(self.writer.borrow_mut(), "Service stopped: {}", response.result);
+        Ok(())
+    }
+
+    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<()> {
         match response.result {
             Status::Success => writeln_safe_io!(self.writer.borrow_mut(), "Order cancelled"),
         }
         Ok(())
     }
 
-    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<(), ()> {
+    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<()> {
         let cancelled = &response.result.cancelled;
         let mut writer = self.writer.borrow_mut();
         if cancelled.is_empty() {
@@ -236,17 +235,16 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_order_status(&self, response: &OrderStatusResponse) -> Result<(), ()> {
+    fn on_order_status(&self, response: &OrderStatusResponse) -> Result<()> {
         let mut binding = self.writer.borrow_mut();
         let mut writer: &mut dyn Write = binding.deref_mut();
         match response {
-            OrderStatusResponse::Maker(maker_status) => self.print_maker_order(writer, maker_status)?,
-            OrderStatusResponse::Taker(taker_status) => self.print_taker_order(&mut writer, taker_status)?,
+            OrderStatusResponse::Maker(maker_status) => self.print_maker_order(writer, maker_status),
+            OrderStatusResponse::Taker(taker_status) => self.print_taker_order(&mut writer, taker_status),
         }
-        Ok(())
     }
 
-    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<(), ()> {
+    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         if show_orig_tickets {
             writeln_field!(writer, "Original tickers", "", 0);
@@ -298,7 +296,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<(), ()> {
+    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         let writer: &mut dyn Write = writer.deref_mut();
         writeln_safe_io!(writer, "{}", Self::format_taker_orders_table(&my_orders.taker_orders)?);
@@ -308,7 +306,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
 }
 
 impl ResponseHandlerImpl<'_> {
-    fn print_maker_order(&self, writer: &mut dyn Write, maker_status: &MakerOrderForMyOrdersRpc) -> Result<(), ()> {
+    fn print_maker_order(&self, writer: &mut dyn Write, maker_status: &MakerOrderForMyOrdersRpc) -> Result<()> {
         let order = &maker_status.order;
         writeln_field!(writer, "base", order.base, COMMON_INDENT);
         writeln_field!(writer, "rel", order.rel, COMMON_INDENT);
@@ -336,7 +334,7 @@ impl ResponseHandlerImpl<'_> {
             if order.started_swaps.is_empty() {
                 "empty".to_string()
             } else {
-                format!("{}", order.started_swaps.iter().join(", "))
+                order.started_swaps.iter().join(", ")
             },
             COMMON_INDENT
         );
@@ -374,7 +372,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<(), ()> {
+    fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<()> {
         if matches.is_empty() {
             //    write_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
@@ -386,7 +384,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMatchForRpc) -> Result<(), ()> {
+    fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMatchForRpc) -> Result<()> {
         let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
         writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
         writeln_field!(writer, "req.uuid", req.uuid, NESTED_INDENT);
@@ -430,7 +428,7 @@ impl ResponseHandlerImpl<'_> {
         ])
     }
 
-    fn taker_order_row(taker_order: &TakerOrderForRpc) -> Result<Vec<Row>, ()> {
+    fn taker_order_row(taker_order: &TakerOrderForRpc) -> Result<Vec<Row>> {
         let req = &taker_order.request;
         let mut rows = vec![Row::new(vec![
             TableCell::new(format!(
@@ -448,7 +446,7 @@ impl ResponseHandlerImpl<'_> {
                 format_datetime(taker_order.created_at)?,
                 req.conf_settings
                     .as_ref()
-                    .map_or_else(|| "none".to_string(), |val| format_confirmation_settings(val)),
+                    .map_or_else(|| "none".to_string(), format_confirmation_settings),
             )),
             TableCell::new(format_match_by(&req.match_by, "\n")),
             TableCell::new(format!(
@@ -475,7 +473,8 @@ impl ResponseHandlerImpl<'_> {
             Self::write_taker_match(buf.as_mut(), uuid, m)?;
             drop(buf);
             rows.push(Row::new(vec![TableCell::new_with_col_span(
-                String::from_utf8(matches_str).unwrap(),
+                String::from_utf8(matches_str)
+                    .map_err(|err| error_anyhow!("Failed to get string from taker order matches_str: {err}"))?,
                 6,
             )]));
         }
@@ -483,7 +482,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(rows)
     }
 
-    fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersRpc>) -> Result<String, ()> {
+    fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersRpc>) -> Result<String> {
         let mut buff = Vec::new();
         let mut writer: Box<dyn Write> = Box::new(&mut buff);
 
@@ -504,11 +503,10 @@ impl ResponseHandlerImpl<'_> {
             write_safe_io!(writer, "{}", table.render());
         }
         drop(writer);
-        let result = String::from_utf8(buff).map_err(|error| error!("Failed to format maker orders table: {error}"));
-        result
+        String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format maker orders table: {error}"))
     }
 
-    fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> Result<String, ()> {
+    fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> Result<String> {
         let mut buff = Vec::new();
         let mut writer: Box<dyn Write> = Box::new(&mut buff);
 
@@ -528,8 +526,7 @@ impl ResponseHandlerImpl<'_> {
             write_safe_io!(writer, "{}", table.render());
         }
         drop(writer);
-        let result = String::from_utf8(buff).map_err(|error| error!("Failed to format maker orders table: {error}"));
-        result
+        String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format maker orders table: {error}"))
     }
 
     fn maker_order_header_row() -> Row<'static> {
@@ -547,7 +544,7 @@ impl ResponseHandlerImpl<'_> {
         ])
     }
 
-    fn maker_order_row(maker_order: &MakerOrderForMyOrdersRpc) -> Result<Vec<Row>, ()> {
+    fn maker_order_row(maker_order: &MakerOrderForMyOrdersRpc) -> Result<Vec<Row>> {
         let order = &maker_order.order;
         let mut rows = vec![Row::new(vec![
             TableCell::new(format!("{},{}", order.base, order.rel)),
@@ -556,8 +553,7 @@ impl ResponseHandlerImpl<'_> {
             TableCell::new(format!(
                 "{},\n{}",
                 format_datetime(order.created_at)?,
-                order.updated_at.map_or("".to_string(), |value| format_datetime(value)
-                    .unwrap_or("error".to_string()))
+                order.updated_at.map_or(Ok("".to_string()), format_datetime)?
             )),
             TableCell::new(format!(
                 "{},\n{}",
@@ -569,7 +565,7 @@ impl ResponseHandlerImpl<'_> {
             TableCell::new(if order.started_swaps.is_empty() {
                 "empty".to_string()
             } else {
-                format!("{}", order.started_swaps.iter().join(",\n"))
+                order.started_swaps.iter().join(",\n")
             }),
             TableCell::new(
                 order
@@ -593,7 +589,7 @@ impl ResponseHandlerImpl<'_> {
         for (uuid, m) in &order.matches {
             let mut matches_str = Vec::new();
             let mut bbox: Box<dyn Write> = Box::new(&mut matches_str);
-            Self::write_maker_match(bbox.as_mut(), &uuid, &m).unwrap();
+            Self::write_maker_match(bbox.as_mut(), uuid, m)?;
             drop(bbox);
             rows.push(Row::new(vec![TableCell::new_with_col_span(
                 String::from_utf8(matches_str).unwrap(),
@@ -603,7 +599,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(rows)
     }
 
-    fn print_taker_order(&self, writer: &mut dyn Write, taker_status: &TakerOrderForRpc) -> Result<(), ()> {
+    fn print_taker_order(&self, writer: &mut dyn Write, taker_status: &TakerOrderForRpc) -> Result<()> {
         let req = &taker_status.request;
 
         writeln_field!(writer, "uuid", req.uuid, COMMON_INDENT);
@@ -646,7 +642,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn write_taker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, TakerMatchForRpc>) -> Result<(), ()> {
+    fn write_taker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, TakerMatchForRpc>) -> Result<()> {
         if matches.is_empty() {
             //writeln_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
@@ -658,7 +654,7 @@ impl ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<(), ()> {
+    fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<()> {
         let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
         writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
         Self::write_maker_reserved_for_rpc(writer, reserved);
@@ -781,25 +777,27 @@ fn format_confirmation_settings(settings: &OrderConfirmationsSettings) -> String
     )
 }
 
-fn format_datetime(datetime: u64) -> Result<String, ()> {
+fn format_datetime(datetime: u64) -> Result<String> {
     let datetime = Utc
         .timestamp_opt((datetime / 1000) as i64, 0)
         .single()
-        .ok_or_else(|| error!("Failed to get datetime formatted datetime"))?;
+        .ok_or_else(|| error_anyhow!("Failed to get datetime formatted datetime"))?;
     Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
 }
 
-fn format_ratio<T: ToPrimitive>(rational: &T, min_fract: usize, max_fract: usize) -> Result<String, ()> {
+fn format_ratio<T: ToPrimitive>(rational: &T, min_fract: usize, max_fract: usize) -> Result<String> {
     Ok(SmartFractionFmt::new(
         min_fract,
         max_fract,
-        rational.to_f64().ok_or_else(|| error!("Failed to convert price_rat"))?,
+        rational
+            .to_f64()
+            .ok_or_else(|| error_anyhow!("Failed to convert price_rat"))?,
     )
-    .map_err(|_| error!("Failed to create smart_fraction_fmt"))?
+    .map_err(|_| error_anyhow!("Failed to create smart_fraction_fmt"))?
     .to_string())
 }
 
-fn format_historical_changes(historical_order: &HistoricalOrder, delimiter: &str) -> Result<String, ()> {
+fn format_historical_changes(historical_order: &HistoricalOrder, delimiter: &str) -> Result<String> {
     let mut result = vec![];
 
     if let Some(ref min_base_vol) = historical_order.min_base_vol {

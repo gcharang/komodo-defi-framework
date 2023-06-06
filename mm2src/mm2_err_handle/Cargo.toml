@@ -11,7 +11,6 @@ futures01 = { version = "0.1", package = "futures" }
 serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 derive_more = "0.99"
 itertools = "0.10"
-mm2_rpc_data = { path = "../mm2_rpc_data" }
 serde = { version = "1.0", features = ["derive"] }
 ser_error = { path = "../derives/ser_error" }
 ser_error_derive = { path = "../derives/ser_error_derive" }

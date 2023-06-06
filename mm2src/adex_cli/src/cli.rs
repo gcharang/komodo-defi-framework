@@ -1,10 +1,10 @@
+use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use common::serde_derive::Serialize;
 use mm2_number::bigdecimal::ParseBigDecimalError;
 use mm2_number::{BigDecimal, MmNumber};
-use mm2_rpc_data::legacy::{MatchBy, OrderType, SellBuyRequest};
-use mm2_rpc_data::version2::{BestOrdersAction, BestOrdersRequestV2, RequestBestOrdersBy};
-
+use mm2_rpc::data::legacy::{MatchBy, OrderType, SellBuyRequest};
+use mm2_rpc::data::version2::{BestOrdersAction, BestOrdersRequestV2, RequestBestOrdersBy};
 use rpc::v1::types::H256 as H256Json;
 use std::collections::HashSet;
 use std::mem::take;
@@ -130,8 +130,8 @@ impl Cli {
         args: impl Iterator<Item = String>,
         config: &Cfg,
         printer: &P,
-    ) -> Result<(), ()> {
-        let transport = SlurpTransport::new(config.rpc_uri());
+    ) -> Result<()> {
+        let transport = SlurpTransport::new(config.rpc_uri()?);
 
         let proc = AdexProc {
             transport: &transport,
