@@ -286,7 +286,6 @@ use utxo::UtxoActivationParams;
 use utxo::{BlockchainNetwork, GenerateTxError, UtxoFeeDetails, UtxoTx};
 
 pub mod nft;
-use crate::nft::storage::{CreateNftStorageError, NftStorageError};
 use nft::nft_errors::GetNftInfoError;
 
 #[cfg(not(target_arch = "wasm32"))] pub mod z_coin;
@@ -1930,25 +1929,6 @@ pub enum WithdrawError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
-}
-
-impl From<GetNftInfoError> for WithdrawError {
-    fn from(e: GetNftInfoError) -> Self { WithdrawError::GetNftInfoError(e) }
-}
-
-impl<T: NftStorageError> From<T> for WithdrawError {
-    fn from(err: T) -> Self {
-        let msg = format!("{:?}", err);
-        WithdrawError::DbError(msg)
-    }
-}
-
-impl From<CreateNftStorageError> for WithdrawError {
-    fn from(e: CreateNftStorageError) -> Self {
-        match e {
-            CreateNftStorageError::Internal(err) => WithdrawError::InternalError(err),
-        }
-    }
 }
 
 impl HttpStatusCode for WithdrawError {

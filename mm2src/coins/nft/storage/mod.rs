@@ -1,5 +1,6 @@
 use crate::nft::nft_structs::{Chain, Nft, NftList, NftTokenAddrId, NftTransferHistory, NftTxHistoryFilters,
                               NftsTransferHistoryList, TxMeta};
+use crate::WithdrawError;
 use async_trait::async_trait;
 use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
@@ -20,6 +21,13 @@ pub enum RemoveNftResult {
 }
 
 pub trait NftStorageError: std::fmt::Debug + NotMmError + NotEqual + Send {}
+
+impl<T: NftStorageError> From<T> for WithdrawError {
+    fn from(err: T) -> Self {
+        let msg = format!("{:?}", err);
+        WithdrawError::DbError(msg)
+    }
+}
 
 #[async_trait]
 pub trait NftListStorageOps {
@@ -138,6 +146,14 @@ pub trait NftTxHistoryStorageOps {
 #[derive(Debug, Deserialize, Display, Serialize)]
 pub enum CreateNftStorageError {
     Internal(String),
+}
+
+impl From<CreateNftStorageError> for WithdrawError {
+    fn from(e: CreateNftStorageError) -> Self {
+        match e {
+            CreateNftStorageError::Internal(err) => WithdrawError::InternalError(err),
+        }
+    }
 }
 
 /// `NftStorageBuilder` is used to create an instance that implements the `NftListStorageOps`
