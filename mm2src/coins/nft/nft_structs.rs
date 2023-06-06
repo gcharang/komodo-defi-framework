@@ -316,7 +316,7 @@ impl fmt::Display for TransferStatus {
 pub struct NftTransferHistory {
     pub(crate) chain: Chain,
     pub(crate) block_number: u64,
-    pub(crate) block_timestamp: String,
+    pub(crate) block_timestamp: u64,
     pub(crate) block_hash: String,
     /// Transaction hash in hexadecimal format
     pub(crate) transaction_hash: String,
@@ -375,8 +375,8 @@ pub struct NftTxHistoryFilters {
     pub(crate) receive: bool,
     #[serde(default)]
     pub(crate) send: bool,
-    pub(crate) from_date: Option<String>,
-    pub(crate) to_date: Option<String>,
+    pub(crate) from_date: Option<u64>,
+    pub(crate) to_date: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

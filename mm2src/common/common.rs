@@ -132,7 +132,8 @@ pub mod wio;
 #[cfg(target_arch = "wasm32")] pub use wasm::*;
 
 use backtrace::SymbolName;
-use chrono::Utc;
+use chrono::format::ParseError;
+use chrono::{DateTime, Utc};
 pub use futures::compat::Future01CompatExt;
 use futures01::{future, Future};
 use http::header::CONTENT_TYPE;
@@ -1013,4 +1014,9 @@ pub fn sha256_digest(path: &PathBuf) -> Result<String, std::io::Error> {
         format!("{:x}", hasher.finalize())
     };
     Ok(digest)
+}
+
+pub fn parse_rfc3339_to_timestamp(date_str: &str) -> Result<u64, ParseError> {
+    let date: DateTime<Utc> = date_str.parse()?;
+    Ok(date.timestamp() as u64)
 }

@@ -205,7 +205,7 @@ pub(crate) struct NftTxHistoryTable {
     transaction_hash: String,
     chain: String,
     block_number: u32,
-    block_timestamp: String,
+    block_timestamp: u64,
     contract_type: ContractType,
     token_address: String,
     token_id: BeBigUint,

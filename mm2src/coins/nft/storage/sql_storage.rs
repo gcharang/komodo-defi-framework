@@ -52,7 +52,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     transaction_hash VARCHAR(256) PRIMARY KEY,
     chain TEXT NOT NULL,
     block_number INTEGER NOT NULL,
-    block_timestamp TEXT NOT NULL,
+    block_timestamp INTEGER NOT NULL,
     contract_type TEXT NOT NULL,
     token_address VARCHAR(256) NOT NULL,
     token_id VARCHAR(256) NOT NULL,
@@ -156,10 +156,10 @@ fn nft_history_table_builder_preimage(
             sql_builder.and_where_eq("status", "'Receive'");
         }
         if let Some(date) = filters.from_date {
-            sql_builder.and_where(format!("block_timestamp >= '{}'", date));
+            sql_builder.and_where(format!("block_timestamp >= {}", date));
         }
         if let Some(date) = filters.to_date {
-            sql_builder.and_where(format!("block_timestamp <= '{}'", date));
+            sql_builder.and_where(format!("block_timestamp <= {}", date));
         }
     }
     drop_mutability!(sql_builder);
@@ -764,7 +764,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.transaction_hash),
                     Some(tx.chain.to_string()),
                     Some(tx.block_number.to_string()),
-                    Some(tx.block_timestamp),
+                    Some(tx.block_timestamp.to_string()),
                     Some(tx.contract_type.to_string()),
                     Some(tx.token_address),
                     Some(tx.token_id.to_string()),

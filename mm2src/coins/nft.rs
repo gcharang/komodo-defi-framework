@@ -17,7 +17,7 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftList, NftListReq, N
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_structs::{RefreshMetadataReq, TransferStatus, TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
-use common::APPLICATION_JSON;
+use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_number::BigDecimal;
@@ -294,10 +294,12 @@ async fn get_moralis_nft_transfers(
             for transfer in transfer_list {
                 let transfer_wrapper: NftTransferHistoryWrapper = serde_json::from_str(&transfer.to_string())?;
                 let status = get_tx_status(&wallet_address, &transfer_wrapper.to_address);
+                let block_timestamp = parse_rfc3339_to_timestamp(&transfer_wrapper.block_timestamp)
+                    .map_to_mm(|e| GetNftInfoError::ParseTimestampError(e.to_string()))?;
                 let transfer_history = NftTransferHistory {
                     chain: *chain,
                     block_number: *transfer_wrapper.block_number,
-                    block_timestamp: transfer_wrapper.block_timestamp,
+                    block_timestamp,
                     block_hash: transfer_wrapper.block_hash,
                     transaction_hash: transfer_wrapper.transaction_hash,
                     transaction_index: transfer_wrapper.transaction_index,
