@@ -1,9 +1,9 @@
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftList, NftTransferHistory, NftsTransferHistoryList,
                               TransferStatus, TxMeta};
-use crate::nft_storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
-use crate::nft_storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
-use crate::nft_storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddrId, NftTxHistoryFilters,
-                         NftTxHistoryStorageOps, RemoveNftResult};
+use crate::nft::storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
+use crate::nft::storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
+use crate::nft::storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddrId, NftTxHistoryFilters,
+                          NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
@@ -260,7 +260,7 @@ pub(crate) struct NftTxHistoryTable {
     transaction_hash: String,
     chain: String,
     block_number: u64,
-    block_timestamp: String,
+    block_timestamp: u64,
     contract_type: ContractType,
     token_address: String,
     token_id: String,
@@ -282,7 +282,7 @@ impl NftTxHistoryTable {
             transaction_hash: tx.transaction_hash.clone(),
             chain: tx.chain.to_string(),
             block_number: tx.block_number,
-            block_timestamp: tx.block_timestamp.clone(),
+            block_timestamp: tx.block_timestamp,
             contract_type: tx.contract_type,
             token_address: tx.token_address.clone(),
             token_id: tx.token_id.to_string(),

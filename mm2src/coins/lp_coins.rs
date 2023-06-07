@@ -100,7 +100,7 @@ cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked, SharedDb};
     use tx_history_storage::wasm::{clear_tx_history, load_tx_history, save_tx_history, TxHistoryDb};
     pub type TxHistoryDbLocked<'a> = DbLocked<'a, TxHistoryDb>;
-    use nft_storage::wasm::nft_idb::NftCacheIDB;
+    use nft::storage::wasm::nft_idb::NftCacheIDB;
 }
 
 // using custom copy of try_fus as futures crate was renamed to futures01
@@ -287,9 +287,6 @@ use utxo::{BlockchainNetwork, GenerateTxError, UtxoFeeDetails, UtxoTx};
 
 pub mod nft;
 use nft::nft_errors::GetNftInfoError;
-
-pub(crate) mod nft_storage;
-use crate::nft_storage::{CreateNftStorageError, NftStorageError};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod z_coin;
 
@@ -1932,25 +1929,6 @@ pub enum WithdrawError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
-}
-
-impl From<GetNftInfoError> for WithdrawError {
-    fn from(e: GetNftInfoError) -> Self { WithdrawError::GetNftInfoError(e) }
-}
-
-impl<T: NftStorageError> From<T> for WithdrawError {
-    fn from(err: T) -> Self {
-        let msg = format!("{:?}", err);
-        WithdrawError::DbError(msg)
-    }
-}
-
-impl From<CreateNftStorageError> for WithdrawError {
-    fn from(e: CreateNftStorageError) -> Self {
-        match e {
-            CreateNftStorageError::Internal(err) => WithdrawError::InternalError(err),
-        }
-    }
 }
 
 impl HttpStatusCode for WithdrawError {

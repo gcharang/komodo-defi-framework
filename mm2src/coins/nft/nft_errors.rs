@@ -1,6 +1,6 @@
 use crate::eth::GetEthAddressError;
-use crate::nft_storage::{CreateNftStorageError, NftStorageError};
-use crate::GetMyAddressError;
+use crate::nft::storage::{CreateNftStorageError, NftStorageError};
+use crate::{GetMyAddressError, WithdrawError};
 use common::HttpStatusCode;
 use derive_more::Display;
 use enum_from::EnumFromStringify;
@@ -33,6 +33,15 @@ pub enum GetNftInfoError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
+    #[display(
+        fmt = "Error parsing datetime to timestamp. Expected format 'YYYY-MM-DDTHH:MM:SS.sssZ', got: {}",
+        _0
+    )]
+    ParseTimestampError(String),
+}
+
+impl From<GetNftInfoError> for WithdrawError {
+    fn from(e: GetNftInfoError) -> Self { WithdrawError::GetNftInfoError(e) }
 }
 
 impl From<SlurpError> for GetNftInfoError {
@@ -98,7 +107,8 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
-            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::DbError(_)
+            | GetNftInfoError::ParseTimestampError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
