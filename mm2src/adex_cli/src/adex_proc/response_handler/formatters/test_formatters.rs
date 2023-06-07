@@ -1,7 +1,7 @@
 use mm2_number::bigdecimal::FromPrimitive;
 use mm2_number::{BigDecimal, BigRational};
-use mm2_rpc_data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
-                           MakerReservedForRpc, MatchBy, OrderConfirmationsSettings, TakerAction, TakerRequestForRpc};
+use mm2_rpc::data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
+                            MakerReservedForRpc, MatchBy, OrderConfirmationsSettings, TakerAction, TakerRequestForRpc};
 use rpc::v1::types::H256 as H256Json;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;

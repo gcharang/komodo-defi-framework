@@ -324,6 +324,8 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         ])]);
         term_table.style = TableStyle::empty();
         term_table.separate_rows = false;
+        term_table.has_bottom_boarder = false;
+        term_table.has_top_boarder = false;
         orderbook_depth.drain(..).for_each(|data| {
             term_table.add_row(Row::new(vec![
                 TableCell::new_with_alignment_and_padding(
@@ -338,7 +340,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         });
         let mut writer = self.writer.borrow_mut();
         let writer: &mut dyn Write = writer.deref_mut();
-        write_safe_io!(writer, "{}", term_table.render());
+        write_safe_io!(writer, "{}", term_table.render().replace("\0", ""));
         Ok(())
     }
 }

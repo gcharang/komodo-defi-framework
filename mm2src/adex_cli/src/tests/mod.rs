@@ -222,6 +222,23 @@ async fn test_best_orders() {
     assert_eq!(BEST_ORDERS_OUTPUT, result);
 }
 
+#[tokio::test]
+async fn test_orderbook_depth() {
+    tokio::spawn(fake_mm2_server(7795, "src/tests/orderbook_depth.http"));
+    tokio::time::sleep(Duration::from_micros(100)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7795");
+    let args = vec!["adex-cli", "orderbook-depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(ORDERBOOK_DEPTH_OUTPUT, result);
+}
+
 async fn fake_mm2_server(port: u16, response_path: &'static str) {
     let server = TcpListener::bind(("0.0.0.0", port))
         .await
@@ -309,7 +326,6 @@ required_confirmations: 3
 requires_notarization: No
 ";
 
-// TODO: last updated should not be 0, check it
 const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-bebb-5df8ff74b8e0
       req.(base,rel): MORTY(0.01), RICK(0.01000001)
           req.action: Buy
@@ -375,4 +391,10 @@ const BEST_ORDERS_OUTPUT:&str = "\
 │ ZOMBIE                                                                                                                                            │
 │  │ 1.00   │ 2536e0d8-0a8b-4393-913b-d74543733e5e │ 0.000100:0.23      │ 0.000100:0.23      │ Shielded                           │ 1,false:1,false │
 └──┴────────┴──────────────────────────────────────┴────────────────────┴────────────────────┴────────────────────────────────────┴─────────────────┘
+";
+
+const ORDERBOOK_DEPTH_OUTPUT: &str = "             Bids Asks 
+    BTC/KMD: 5    1    
+    BTC/ETH: 0    1    
+ RICK/MORTY: 5    5    
 ";
