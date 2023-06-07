@@ -8,10 +8,10 @@ use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
-                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerReservedForRpc, MatchBy,
-                            Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderConfirmationsSettings,
-                            OrderStatusResponse, OrderbookResponse, SellBuyResponse, Status, TakerMatchForRpc,
-                            TakerOrderForRpc};
+                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
+                            MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse, MyOrdersResponse,
+                            OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse, PairWithDepth,
+                            SellBuyResponse, Status, TakerMatchForRpc, TakerOrderForRpc};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
 use std::cell::RefCell;
@@ -55,6 +55,8 @@ pub(crate) trait ResponseHandler {
     fn on_order_status(&self, response: &OrderStatusResponse) -> Result<()>;
     fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()>;
     fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()>;
+    fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()>;
+    fn on_orderbook_depth(&self, orderbook_depth: Vec<PairWithDepth>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -239,7 +241,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         let mut binding = self.writer.borrow_mut();
         let mut writer: &mut dyn Write = binding.deref_mut();
         match response {
-            OrderStatusResponse::Maker(maker_status) => self.print_maker_order(writer, maker_status),
+            OrderStatusResponse::Maker(maker_status) => Self::write_maker_order_for_my_orders(writer, maker_status),
             OrderStatusResponse::Taker(taker_status) => self.print_taker_order(&mut writer, taker_status),
         }
     }
@@ -303,16 +305,69 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         writeln_safe_io!(writer, "{}", Self::format_maker_orders_table(&my_orders.maker_orders)?);
         Ok(())
     }
+
+    fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer: &mut dyn Write = writer.deref_mut();
+        writeln_field!(writer, "Maker order", "", 0);
+        Self::write_maker_order(writer, &order)?;
+        Self::write_maker_matches(writer, &order.matches)?;
+        writeln_safe_io!(writer, "");
+        Ok(())
+    }
+
+    fn on_orderbook_depth(&self, mut orderbook_depth: Vec<PairWithDepth>) -> Result<()> {
+        let mut term_table = TermTable::with_rows(vec![Row::new(vec![
+            TableCell::new(""),
+            TableCell::new_with_alignment_and_padding("Bids", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Asks", 1, Alignment::Left, false),
+        ])]);
+        term_table.style = TableStyle::empty();
+        term_table.separate_rows = false;
+        orderbook_depth.drain(..).for_each(|data| {
+            term_table.add_row(Row::new(vec![
+                TableCell::new_with_alignment_and_padding(
+                    format!("{}/{}:", data.pair.0, data.pair.1),
+                    1,
+                    Alignment::Right,
+                    false,
+                ),
+                TableCell::new_with_alignment_and_padding(data.depth.bids, 1, Alignment::Left, false),
+                TableCell::new_with_alignment_and_padding(data.depth.asks, 1, Alignment::Left, false),
+            ]))
+        });
+        let mut writer = self.writer.borrow_mut();
+        let writer: &mut dyn Write = writer.deref_mut();
+        write_safe_io!(writer, "{}", term_table.render());
+        Ok(())
+    }
 }
 
 impl ResponseHandlerImpl<'_> {
-    fn print_maker_order(&self, writer: &mut dyn Write, maker_status: &MakerOrderForMyOrdersRpc) -> Result<()> {
+    fn write_maker_order_for_my_orders(writer: &mut dyn Write, maker_status: &MakerOrderForMyOrdersRpc) -> Result<()> {
         let order = &maker_status.order;
+        Self::write_maker_order(writer, order)?;
+
+        writeln_field!(writer, "cancellable", maker_status.cancellable, COMMON_INDENT);
+        writeln_field!(
+            writer,
+            "available_amount",
+            format_ratio(&maker_status.available_amount, 2, 5)?,
+            COMMON_INDENT
+        );
+
+        Self::write_maker_matches(writer, &order.matches)?;
+        writeln_safe_io!(writer, "");
+        Ok(())
+    }
+
+    fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc) -> Result<()> {
         writeln_field!(writer, "base", order.base, COMMON_INDENT);
         writeln_field!(writer, "rel", order.rel, COMMON_INDENT);
         writeln_field!(writer, "price", format_ratio(&order.price_rat, 2, 5)?, COMMON_INDENT);
         writeln_field!(writer, "uuid", order.uuid, COMMON_INDENT);
         writeln_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
+
         if let Some(updated_at) = order.updated_at {
             writeln_field!(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
         }
@@ -358,17 +413,6 @@ impl ResponseHandlerImpl<'_> {
                 COMMON_INDENT
             );
         }
-
-        writeln_field!(writer, "cancellable", maker_status.cancellable, COMMON_INDENT);
-        writeln_field!(
-            writer,
-            "available_amount",
-            format_ratio(&maker_status.available_amount, 2, 5)?,
-            COMMON_INDENT
-        );
-
-        Self::write_maker_matches(writer, &order.matches)?;
-        writeln_safe_io!(writer, "");
         Ok(())
     }
 

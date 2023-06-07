@@ -415,3 +415,40 @@ pub struct MyOrdersResponse {
     pub maker_orders: HashMap<Uuid, MakerOrderForMyOrdersRpc>,
     pub taker_orders: HashMap<Uuid, TakerOrderForRpc>,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct SetPriceReq {
+    pub base: String,
+    pub rel: String,
+    pub price: MmNumber,
+    #[serde(default)]
+    pub max: bool,
+    #[serde(default)]
+    pub volume: MmNumber,
+    pub min_volume: Option<MmNumber>,
+    #[serde(default = "get_true")]
+    pub cancel_previous: bool,
+    pub base_confs: Option<u64>,
+    pub base_nota: Option<bool>,
+    pub rel_confs: Option<u64>,
+    pub rel_nota: Option<bool>,
+    #[serde(default = "get_true")]
+    pub save_in_history: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrderbookDepthRequest {
+    pub pairs: Vec<(String, String)>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PairWithDepth {
+    pub pair: (String, String),
+    pub depth: PairDepth,
+}
+
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
+pub struct PairDepth {
+    pub asks: usize,
+    pub bids: usize,
+}

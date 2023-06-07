@@ -1,9 +1,11 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Error, Result};
+use itertools::Itertools;
 use log::{error, info, warn};
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
-                            CancelOrderRequest, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
-                            MyOrdersResponse, OrderStatusRequest, OrderStatusResponse, OrderbookRequest,
-                            OrderbookResponse, SellBuyRequest, SellBuyResponse, Status};
+                            CancelOrderRequest, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
+                            MmVersionResponse, MyOrdersResponse, OrderStatusRequest, OrderStatusResponse,
+                            OrderbookDepthRequest, OrderbookRequest, OrderbookResponse, PairWithDepth, SellBuyRequest,
+                            SellBuyResponse, SetPriceReq, Status};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
@@ -34,7 +36,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::builder()
             .flatten_data(activation_method)
             .userpass(self.config.rpc_password()?)
-            .build();
+            .build()
+            .map_err(Error::from)?;
 
         match self.transport.send::<_, CoinInitResponse, Json>(command).await {
             Ok(Ok(ref ok)) => self.response_handler.on_enable_response(ok),
@@ -49,7 +52,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .method(Method::GetBalance)
             .flatten_data(json!({ "coin": asset }))
             .userpass(self.config.rpc_password()?)
-            .build();
+            .build()?;
 
         match self.transport.send::<_, BalanceResponse, Json>(command).await {
             Ok(Ok(balance_response)) => self.response_handler.on_balance_response(&balance_response),
@@ -64,7 +67,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::<i32>::builder()
             .method(Method::GetEnabledCoins)
             .userpass(self.config.rpc_password()?)
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -87,7 +90,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 base: base.into(),
                 rel: rel.into(),
             })
-            .build();
+            .build()?;
 
         match self.transport.send::<_, OrderbookResponse, Json>(command).await {
             Ok(Ok(ok)) => self
@@ -114,7 +117,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::Sell)
             .flatten_data(order)
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -143,7 +146,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::Buy)
             .flatten_data(order)
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -161,8 +164,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let stop_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Stop)
-            .build();
-
+            .build()?;
         match self.transport.send::<_, Mm2RpcResult<Status>, Json>(stop_command).await {
             Ok(Ok(ok)) => self.response_handler.on_stop_response(&ok),
             Ok(Err(error)) => error_bail!("Failed to stop through the API: {error}"),
@@ -175,7 +177,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let version_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Version)
-            .build();
+            .build()?;
 
         match self.transport.send::<_, MmVersionResponse, Json>(version_command).await {
             Ok(Ok(ok)) => self.response_handler.on_version_response(&ok),
@@ -190,7 +192,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelOrder)
             .flatten_data(CancelOrderRequest { uuid: *order_id })
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -223,7 +225,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelAllOrders)
             .flatten_data(CancelAllOrdersRequest { cancel_by })
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -242,7 +244,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderStatus)
             .flatten_data(OrderStatusRequest { uuid: *uuid })
-            .build();
+            .build()?;
         match self
             .transport
             .send::<_, OrderStatusResponse, Json>(order_status_command)
@@ -259,7 +261,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let request = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::MyOrders)
-            .build();
+            .build()?;
 
         match self
             .transport
@@ -281,7 +283,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::BestOrders)
             .flatten_data(best_orders_request)
-            .build_v2();
+            .build_v2()?;
 
         match self
             .transport
@@ -300,6 +302,55 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             })) => {
                 error_bail!("Got error: {:?}", error)
             },
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => bail!(""),
+        }
+    }
+
+    pub async fn set_price(&self, set_price_request: SetPriceReq) -> Result<()> {
+        info!(
+            "Setting price for pair: {} {}",
+            set_price_request.base, set_price_request.rel
+        );
+        let set_price_command = Command::builder()
+            .userpass(self.config.rpc_password()?)
+            .method(Method::SetPrice)
+            .flatten_data(set_price_request)
+            .build()?;
+
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<MakerOrderForRpc>, Json>(set_price_command)
+            .await
+        {
+            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_set_price(result),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => bail!(""),
+        }
+    }
+
+    pub async fn orderbook_depth(&self, orderbook_depth_request: OrderbookDepthRequest) -> Result<()> {
+        info!(
+            "Getting orderbook depth for pairs: {}",
+            orderbook_depth_request
+                .pairs
+                .iter()
+                .map(|pair| format!("{}/{}", pair.0, pair.1))
+                .join(", ")
+        );
+
+        let set_price_command = Command::builder()
+            .userpass(self.config.rpc_password()?)
+            .method(Method::OrderbookDepth)
+            .flatten_data(orderbook_depth_request)
+            .build()?;
+
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<Vec<PairWithDepth>>, Json>(set_price_command)
+            .await
+        {
+            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orderbook_depth(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
             _ => bail!(""),
         }

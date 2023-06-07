@@ -1,7 +1,10 @@
+use anyhow::{anyhow, Result};
 use derive_more::Display;
 use log::error;
 use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 use serde::Serialize;
+
+use crate::error_anyhow;
 
 #[derive(Serialize, Clone)]
 pub(crate) struct Command<T>
@@ -32,7 +35,10 @@ pub(crate) enum Method {
     CancelAllOrders,
     OrderStatus,
     BestOrders,
+    #[serde(rename = "setprice")]
+    SetPrice,
     MyOrders,
+    OrderbookDepth,
 }
 
 #[derive(Serialize, Clone, Copy, Display)]
@@ -78,33 +84,33 @@ where
         self
     }
 
-    pub(crate) fn build(&mut self) -> Result<Command<T>, ()> {
+    pub(crate) fn build(&mut self) -> Result<Command<T>> {
         Ok(Command {
             userpass: self
                 .userpass
                 .take()
-                .ok_or_else(|| error!("Build command failed, no userpass"))?,
+                .ok_or_else(|| error_anyhow!("Build command failed, no userpass"))?,
             method: self.method.take(),
             flatten_data: self.flatten_data.take(),
         })
     }
 
-    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<Method, T>, ()> {
+    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<Method, T>> {
         let mm2_rpc_request = MmRpcRequest {
             mmrpc: MmRpcVersion::V2,
             userpass: Some(
                 self.userpass
                     .take()
-                    .ok_or_else(|| error!("Build command failed, no userpass"))?,
+                    .ok_or_else(|| error_anyhow!("Build command failed, no userpass"))?,
             ),
             method: self
                 .method
                 .take()
-                .ok_or_else(|| error!("Failed to get method, not set"))?,
+                .ok_or_else(|| error_anyhow!("Failed to get method, not set"))?,
             params: self
                 .flatten_data
                 .take()
-                .ok_or_else(|| error!("Failed to get flatten_data, not set"))?,
+                .ok_or_else(|| error_anyhow!("Failed to get flatten_data, not set"))?,
             id: None,
         };
 

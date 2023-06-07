@@ -6,7 +6,7 @@ use crate::mm2::lp_swap::SavedSwap;
 use crate::mm2::{lp_ordermatch::{cancel_order, create_maker_order,
                                  lp_bot::{SimpleCoinMarketMakerCfg, SimpleMakerBotRegistry, TradingBotContext,
                                           TradingBotState},
-                                 update_maker_order, MakerOrder, MakerOrderUpdateReq, OrdermatchContext, SetPriceReq},
+                                 update_maker_order, MakerOrder, MakerOrderUpdateReq, OrdermatchContext},
                  lp_swap::{latest_swaps_for_pair, LatestSwapsErr}};
 use coins::lp_price::{fetch_price_tickers, Provider, RateInfos};
 use coins::{lp_coinfind, GetNonZeroBalance};
@@ -17,7 +17,7 @@ use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::MmNumber;
-use mm2_rpc::data::legacy::{CancelBy, CancelOrderRequest};
+use mm2_rpc::data::legacy::{CancelBy, CancelOrderRequest, SetPriceReq};
 use serde_json::Value as Json;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

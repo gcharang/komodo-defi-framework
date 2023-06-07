@@ -37,6 +37,7 @@ dependencies = [
  "serde_json",
  "sysinfo",
  "term-table",
+ "thiserror",
  "tiny-bip39",
  "tokio",
  "uuid",

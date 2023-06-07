@@ -50,8 +50,8 @@ use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, Can
                             HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
                             MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MyOrdersResponse,
                             OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest, OrderStatusResponse,
-                            OrderType, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, Status, TakerAction,
-                            TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
+                            OrderType, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, SetPriceReq, Status,
+                            TakerAction, TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
 use mm2_rpc::data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
@@ -4402,26 +4402,6 @@ impl AgeSec for OrderbookP2PItem {}
 impl AgeSec for OrderbookItem {}
 
 fn get_true() -> bool { true }
-
-#[derive(Deserialize)]
-pub struct SetPriceReq {
-    base: String,
-    rel: String,
-    price: MmNumber,
-    #[serde(default)]
-    max: bool,
-    #[serde(default)]
-    volume: MmNumber,
-    min_volume: Option<MmNumber>,
-    #[serde(default = "get_true")]
-    cancel_previous: bool,
-    base_confs: Option<u64>,
-    base_nota: Option<bool>,
-    rel_confs: Option<u64>,
-    rel_nota: Option<bool>,
-    #[serde(default = "get_true")]
-    save_in_history: bool,
-}
 
 #[derive(Deserialize)]
 pub struct MakerOrderUpdateReq {
