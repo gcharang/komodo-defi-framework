@@ -7,18 +7,13 @@ use super::init_activation_scheme::get_activation_scheme_path;
 use crate::helpers::read_json_file;
 use crate::logging::{error_anyhow, error_bail};
 
+#[derive(Default)]
 pub(crate) struct ActivationScheme {
     scheme: HashMap<String, Json>,
 }
 
 impl ActivationScheme {
-    fn new() -> Self {
-        Self {
-            scheme: HashMap::<String, Json>::new(),
-        }
-    }
-
-    pub fn get_activation_method(&self, coin: &str) -> Option<Json> { self.scheme.get(coin).cloned() }
+    pub fn get_activation_method(&self, coin: &str) -> Option<&Json> { self.scheme.get(coin) }
 
     fn init(&mut self) -> Result<()> {
         let mut results: Vec<Json> = Self::load_json_file()?;
@@ -64,7 +59,7 @@ impl ActivationScheme {
 }
 
 pub(crate) fn get_activation_scheme() -> Result<ActivationScheme> {
-    let mut activation_scheme = ActivationScheme::new();
+    let mut activation_scheme = ActivationScheme::default();
     activation_scheme.init()?;
     Ok(activation_scheme)
 }
