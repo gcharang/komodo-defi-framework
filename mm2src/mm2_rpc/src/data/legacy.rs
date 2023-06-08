@@ -452,3 +452,50 @@ pub struct PairDepth {
     pub asks: usize,
     pub bids: usize,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrdersHistoryRequest {
+    pub order_type: Option<String>,
+    pub initial_action: Option<String>,
+    pub base: Option<String>,
+    pub rel: Option<String>,
+    pub from_price: Option<MmNumber>,
+    pub to_price: Option<MmNumber>,
+    pub from_volume: Option<MmNumber>,
+    pub to_volume: Option<MmNumber>,
+    pub from_timestamp: Option<u64>,
+    pub to_timestamp: Option<u64>,
+    pub was_taker: Option<bool>,
+    pub status: Option<String>,
+    #[serde(default)]
+    pub include_details: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OrdersHistoryResponse {
+    pub orders: Vec<FilteringOrder>,
+    pub details: Vec<OrderForRpc>,
+    pub found_records: usize,
+    pub warnings: Vec<UuidParseError>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FilteringOrder {
+    pub uuid: String,
+    pub order_type: String,
+    pub initial_action: String,
+    pub base: String,
+    pub rel: String,
+    pub price: f64,
+    pub volume: f64,
+    pub created_at: i64,
+    pub last_updated: i64,
+    pub was_taker: i8,
+    pub status: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct UuidParseError {
+    pub uuid: String,
+    pub warning: String,
+}

@@ -7,11 +7,12 @@ use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
 use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
-use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
-                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
-                            MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse, MyOrdersResponse,
-                            OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse, PairWithDepth,
-                            SellBuyResponse, Status, TakerMatchForRpc, TakerOrderForRpc};
+use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, FilteringOrder,
+                            GetEnabledResponse, HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
+                            MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse,
+                            MyOrdersResponse, OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse,
+                            OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status, TakerMatchForRpc,
+                            TakerOrderForRpc};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
 use std::cell::RefCell;
@@ -57,6 +58,7 @@ pub(crate) trait ResponseHandler {
     fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()>;
     fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()>;
     fn on_orderbook_depth(&self, orderbook_depth: Vec<PairWithDepth>) -> Result<()>;
+    fn on_orders_history(&self, order_history: OrdersHistoryResponse, is_detailed: bool) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -343,6 +345,34 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         write_safe_io!(writer, "{}", term_table.render().replace("\0", ""));
         Ok(())
     }
+
+    fn on_orders_history(&self, order_history: OrdersHistoryResponse, is_detailed: bool) -> Result<()> {
+        let mut fo_table = term_table_blank();
+        fo_table.add_row(Self::filtering_order_header_row());
+
+        for order in order_history.orders {
+            fo_table.add_row(Self::filtering_order_row(&order)?);
+        }
+
+        let mut writer = self.writer.borrow_mut();
+        let writer: &mut dyn Write = writer.deref_mut();
+        writeln_safe_io!(writer, "{}", fo_table.render());
+        if is_detailed {
+            let mut detailed_table = term_table_blank();
+            detailed_table.add_row()
+        }
+
+        Ok(())
+    }
+}
+
+fn term_table_blank() -> TermTable<'static> {
+    let mut term_table = TermTable::new();
+    term_table.style = TableStyle::thin();
+    term_table.separate_rows = false;
+    term_table.has_bottom_boarder = false;
+    term_table.has_top_boarder = false;
+    term_table
 }
 
 impl ResponseHandlerImpl<'_> {
@@ -420,10 +450,8 @@ impl ResponseHandlerImpl<'_> {
 
     fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<()> {
         if matches.is_empty() {
-            //    write_field!(writer, "matches", "empty", COMMON_INDENT);
             return Ok(());
         }
-        //write_field!(writer, "matches", "", COMMON_INDENT);
         for (uuid, m) in matches {
             Self::write_maker_match(writer, uuid, m)?
         }
@@ -461,6 +489,83 @@ impl ResponseHandlerImpl<'_> {
 
         write_field!(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
         Ok(())
+    }
+
+    fn maker_order_header_row() -> Row<'static> {
+        Row::new(vec![
+            TableCell::new("base,rel"),
+            TableCell::new("price"),
+            TableCell::new("uuid"),
+            TableCell::new("created at,\nupdated at"),
+            TableCell::new("min base vol,\nmax base vol"),
+            TableCell::new("swaps"),
+            TableCell::new("conf_settings"),
+            TableCell::new("history changes"),
+            TableCell::new("ob ticker base,\nrel"),
+        ])
+    }
+
+    fn maker_order_row(order: &MakerOrderForRpc) -> Result<Vec<Row>> {
+        let mut rows = vec![Row::new(vec![
+            TableCell::new(format!("{},{}", order.base, order.rel)),
+            TableCell::new(format_ratio(&order.price_rat, 2, 5)?),
+            TableCell::new(order.uuid),
+            TableCell::new(format!(
+                "{},\n{}",
+                format_datetime(order.created_at)?,
+                order.updated_at.map_or(Ok("".to_string()), format_datetime)?
+            )),
+            TableCell::new(format!(
+                "{},\n{}",
+                format_ratio(&order.min_base_vol_rat, 2, 5)?,
+                format_ratio(&order.max_base_vol_rat, 2, 5)?
+            )),
+            TableCell::new(if order.started_swaps.is_empty() {
+                "empty".to_string()
+            } else {
+                order.started_swaps.iter().join(",\n")
+            }),
+            TableCell::new(
+                order
+                    .conf_settings
+                    .map_or_else(|| "none".to_string(), |value| format_confirmation_settings(&value)),
+            ),
+            TableCell::new(order.changes_history.as_ref().map_or_else(
+                || "none".to_string(),
+                |val| {
+                    val.iter()
+                        .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".into()))
+                        .join(",\n")
+                },
+            )),
+            TableCell::new(format!(
+                "{}\n{}",
+                order
+                    .base_orderbook_ticker
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), String::clone),
+                order
+                    .rel_orderbook_ticker
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), String::clone)
+            )),
+        ])];
+
+        if order.matches.is_empty() {
+            return Ok(rows);
+        }
+        rows.push(Row::new(vec![TableCell::new_with_col_span("matches", 10)]));
+        for (uuid, m) in &order.matches {
+            let mut matches_str = Vec::new();
+            let mut bbox: Box<dyn Write> = Box::new(&mut matches_str);
+            Self::write_maker_match(bbox.as_mut(), uuid, m)?;
+            drop(bbox);
+            rows.push(Row::new(vec![TableCell::new_with_col_span(
+                String::from_utf8(matches_str).unwrap(),
+                10,
+            )]));
+        }
+        Ok(rows)
     }
 
     fn taker_order_header_row() -> Row<'static> {
@@ -539,10 +644,10 @@ impl ResponseHandlerImpl<'_> {
             let mut table = TermTable::new();
             table.style = TableStyle::thin();
             table.separate_rows = false;
-            table.add_row(ResponseHandlerImpl::maker_order_header_row());
+            table.add_row(ResponseHandlerImpl::maker_order_for_my_orders_header_row());
 
             for (_, maker_order) in maker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
-                for row in ResponseHandlerImpl::maker_order_row(maker_order)? {
+                for row in ResponseHandlerImpl::maker_order_for_my_orders_row(maker_order)? {
                     table.add_row(row);
                 }
             }
@@ -575,7 +680,7 @@ impl ResponseHandlerImpl<'_> {
         String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format maker orders table: {error}"))
     }
 
-    fn maker_order_header_row() -> Row<'static> {
+    fn maker_order_for_my_orders_header_row() -> Row<'static> {
         Row::new(vec![
             TableCell::new("base,rel"),
             TableCell::new("price"),
@@ -590,7 +695,7 @@ impl ResponseHandlerImpl<'_> {
         ])
     }
 
-    fn maker_order_row(maker_order: &MakerOrderForMyOrdersRpc) -> Result<Vec<Row>> {
+    fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Result<Vec<Row>> {
         let order = &maker_order.order;
         let mut rows = vec![Row::new(vec![
             TableCell::new(format!("{},{}", order.base, order.rel)),
@@ -728,6 +833,48 @@ impl ResponseHandlerImpl<'_> {
         );
         write_confirmation_settings!(writer, reserved, NESTED_INDENT);
     }
+
+    fn filtering_order_header_row() -> Row<'static> {
+        Row::new(vec![
+            TableCell::new_with_alignment_and_padding("uuid", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Type", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Action", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Base", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Rel", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Volume", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Price", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Status", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Created", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Updated", 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding("Was taker", 1, Alignment::Left, false),
+        ])
+    }
+
+    fn filtering_order_row(order: &FilteringOrder) -> Result<Row<'static>> {
+        Ok(Row::new(vec![
+            TableCell::new_with_alignment_and_padding(&order.uuid, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(&order.order_type, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(&order.initial_action, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(&order.base, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(&order.rel, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(format_f64(order.volume, 2, 5)?, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(format_f64(order.price, 2, 5)?, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(&order.status, 1, Alignment::Left, false),
+            TableCell::new_with_alignment_and_padding(
+                format_datetime(order.created_at as u64)?,
+                1,
+                Alignment::Left,
+                false,
+            ),
+            TableCell::new_with_alignment_and_padding(
+                format_datetime(order.last_updated as u64)?,
+                1,
+                Alignment::Left,
+                false,
+            ),
+            TableCell::new_with_alignment_and_padding(order.was_taker != 0, 1, Alignment::Left, false),
+        ]))
+    }
 }
 
 mod macros {
@@ -831,16 +978,20 @@ fn format_datetime(datetime: u64) -> Result<String> {
     Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
 }
 
-fn format_ratio<T: ToPrimitive>(rational: &T, min_fract: usize, max_fract: usize) -> Result<String> {
-    Ok(SmartFractionFmt::new(
-        min_fract,
-        max_fract,
+fn format_ratio<T: ToPrimitive + Debug>(rational: &T, min_fract: usize, max_fract: usize) -> Result<String> {
+    format_f64(
         rational
             .to_f64()
-            .ok_or_else(|| error_anyhow!("Failed to convert price_rat"))?,
+            .ok_or_else(|| error_anyhow!("Failed to cast rational to f64: {rational:?}"))?,
+        min_fract,
+        max_fract,
     )
-    .map_err(|_| error_anyhow!("Failed to create smart_fraction_fmt"))?
-    .to_string())
+}
+
+fn format_f64(rational: f64, min_fract: usize, max_fract: usize) -> Result<String> {
+    Ok(SmartFractionFmt::new(min_fract, max_fract, rational)
+        .map_err(|_| error_anyhow!("Failed to create smart_fraction_fmt"))?
+        .to_string())
 }
 
 fn format_historical_changes(historical_order: &HistoricalOrder, delimiter: &str) -> Result<String> {

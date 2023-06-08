@@ -47,11 +47,12 @@ use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, 
 use mm2_metrics::mm_gauge;
 use mm2_number::{BigDecimal, BigRational, MmNumber};
 use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
-                            HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
-                            MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MyOrdersResponse,
-                            OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest, OrderStatusResponse,
-                            OrderType, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, SetPriceReq, Status,
-                            TakerAction, TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc};
+                            FilteringOrder, HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc,
+                            MakerOrderForMyOrdersRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult,
+                            MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest,
+                            OrderStatusResponse, OrderType, OrdersHistoryRequest, OrdersHistoryResponse,
+                            RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, SetPriceReq, Status, TakerAction,
+                            TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc, UuidParseError};
 use mm2_rpc::data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
@@ -4799,24 +4800,6 @@ pub enum TakerOrderCancellationReason {
     Cancelled,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct MyOrdersFilter {
-    pub order_type: Option<String>,
-    pub initial_action: Option<String>,
-    pub base: Option<String>,
-    pub rel: Option<String>,
-    pub from_price: Option<MmNumber>,
-    pub to_price: Option<MmNumber>,
-    pub from_volume: Option<MmNumber>,
-    pub to_volume: Option<MmNumber>,
-    pub from_timestamp: Option<u64>,
-    pub to_timestamp: Option<u64>,
-    pub was_taker: Option<bool>,
-    pub status: Option<String>,
-    #[serde(default)]
-    pub include_details: bool,
-}
-
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", content = "order")]
 pub enum Order {
@@ -4842,12 +4825,6 @@ impl<'a> From<&'a Order> for OrderForRpc {
     }
 }
 
-#[derive(Serialize)]
-struct UuidParseError {
-    uuid: String,
-    warning: String,
-}
-
 #[derive(Debug, Default)]
 pub struct RecentOrdersSelectResult {
     /// Orders matching the query
@@ -4858,26 +4835,11 @@ pub struct RecentOrdersSelectResult {
     pub skipped: usize,
 }
 
-#[derive(Debug, Serialize)]
-pub struct FilteringOrder {
-    pub uuid: String,
-    pub order_type: String,
-    pub initial_action: String,
-    pub base: String,
-    pub rel: String,
-    pub price: f64,
-    pub volume: f64,
-    pub created_at: i64,
-    pub last_updated: i64,
-    pub was_taker: i8,
-    pub status: String,
-}
-
 /// Returns *all* uuids of swaps, which match the selected filter.
 pub async fn orders_history_by_filter(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
     let storage = MyOrdersStorage::new(ctx.clone());
 
-    let filter: MyOrdersFilter = try_s!(json::from_value(req));
+    let filter: OrdersHistoryRequest = try_s!(json::from_value(req));
     let db_result = try_s!(storage.select_orders_by_filter(&filter, None).await);
 
     let mut warnings = vec![];
@@ -4927,15 +4889,13 @@ pub async fn orders_history_by_filter(ctx: MmArc, req: Json) -> Result<Response<
 
     let details: Vec<_> = rpc_orders.iter().map(OrderForRpc::from).collect();
 
-    let json = json!({
-    "result": {
-        "orders": db_result.orders,
-        "details": details,
-        "found_records": db_result.total_count,
-        "warnings": warnings,
-    }});
-
-    let res = try_s!(json::to_vec(&json));
+    let response = Mm2RpcResult::new(OrdersHistoryResponse {
+        orders: db_result.orders,
+        details,
+        found_records: db_result.total_count,
+        warnings,
+    });
+    let res = try_s!(json::to_vec(&response));
 
     Ok(try_s!(Response::builder().body(res)))
 }

@@ -69,6 +69,8 @@ enum Command {
     BestOrders(BestOrderArgs),
     #[command(about = "Get my orders")]
     MyOrders,
+    #[command(about = "Returns all orders whether active or inactive that match the selected filters")]
+    OrdersHistory(OrdersHistoryArgs),
 }
 
 #[derive(Parser)]
@@ -138,6 +140,7 @@ impl Cli {
             Command::MyOrders => proc.my_orders().await?,
             Command::SetPrice(set_price_args) => proc.set_price(set_price_args.into()).await?,
             Command::OrderbookDepth(orderbook_depth_args) => proc.orderbook_depth(orderbook_depth_args.into()).await?,
+            Command::OrdersHistory(orders_history_args) => proc.orders_history(orders_history_args.into()).await?,
         }
         Ok(())
     }

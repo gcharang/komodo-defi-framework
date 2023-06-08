@@ -312,10 +312,10 @@ KMD      RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
 ETH      0x224050fb7EB13Fa0D342F5b245f1237bAB531650
 ";
 
-const RICK_BALANCE: &str = r"coin: RICK
-balance: 0.5767226
+const RICK_BALANCE: &str = r"       coin: RICK
+    balance: 0.5767226
 unspendable: 0
-address: RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
+    address: RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
 ";
 
 const ENABLE_OUTPUT: &str = r"coin: ETH

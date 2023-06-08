@@ -39,6 +39,8 @@ pub(crate) enum Method {
     SetPrice,
     MyOrders,
     OrderbookDepth,
+    #[serde(rename = "orders_history_by_filter")]
+    OrdersHistory,
 }
 
 #[derive(Serialize, Clone, Copy, Display)]

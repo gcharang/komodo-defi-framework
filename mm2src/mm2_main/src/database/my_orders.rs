@@ -5,12 +5,12 @@ use db_common::sqlite::offset_by_uuid;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
-use mm2_rpc::data::legacy::TakerAction;
+use mm2_rpc::data::legacy::{FilteringOrder, OrdersHistoryRequest, TakerAction};
 use std::convert::TryInto;
 use std::string::ParseError;
 use uuid::Uuid;
 
-use crate::mm2::lp_ordermatch::{FilteringOrder, MakerOrder, MyOrdersFilter, RecentOrdersSelectResult, TakerOrder};
+use crate::mm2::lp_ordermatch::{MakerOrder, RecentOrdersSelectResult, TakerOrder};
 
 const MY_ORDERS_TABLE: &str = "my_orders";
 
@@ -116,7 +116,7 @@ pub fn update_order_status(ctx: &MmArc, uuid: Uuid, status: String) -> SqlResult
 }
 
 /// Adds where clauses determined by MyOrdersFilter
-fn apply_my_orders_filter(builder: &mut SqlBuilder, params: &mut Vec<(&str, String)>, filter: &MyOrdersFilter) {
+fn apply_my_orders_filter(builder: &mut SqlBuilder, params: &mut Vec<(&str, String)>, filter: &OrdersHistoryRequest) {
     if let Some(order_type) = &filter.order_type {
         builder.and_where("type = :order_type");
         params.push((":order_type", order_type.clone()));
@@ -198,7 +198,7 @@ impl From<ParseError> for SelectRecentOrdersUuidsErr {
 
 pub fn select_orders_by_filter(
     conn: &Connection,
-    filter: &MyOrdersFilter,
+    filter: &OrdersHistoryRequest,
     paging_options: Option<&PagingOptions>,
 ) -> SqlResult<RecentOrdersSelectResult, SelectRecentOrdersUuidsErr> {
     let mut query_builder = SqlBuilder::select_from(MY_ORDERS_TABLE);

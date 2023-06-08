@@ -4,8 +4,8 @@ use log::{error, info, warn};
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
                             CancelOrderRequest, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
                             MmVersionResponse, MyOrdersResponse, OrderStatusRequest, OrderStatusResponse,
-                            OrderbookDepthRequest, OrderbookRequest, OrderbookResponse, PairWithDepth, SellBuyRequest,
-                            SellBuyResponse, SetPriceReq, Status};
+                            OrderbookDepthRequest, OrderbookRequest, OrderbookResponse, OrdersHistoryRequest,
+                            OrdersHistoryResponse, PairWithDepth, SellBuyRequest, SellBuyResponse, SetPriceReq, Status};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
@@ -258,14 +258,14 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn my_orders(&self) -> Result<()> {
         info!("Getting my orders");
-        let request = Command::<Dummy>::builder()
+        let command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::MyOrders)
             .build()?;
 
         match self
             .transport
-            .send::<_, Mm2RpcResult<MyOrdersResponse>, Json>(request)
+            .send::<_, Mm2RpcResult<MyOrdersResponse>, Json>(command)
             .await
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_my_orders(result),
@@ -279,7 +279,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             "Getting best orders: {} {}",
             best_orders_request.action, best_orders_request.coin
         );
-        let best_orders_command = Command::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::BestOrders)
             .flatten_data(best_orders_request)
@@ -287,7 +287,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self
             .transport
-            .send::<_, MmRpcResponseV2<BestOrdersV2Response>, Json>(best_orders_command)
+            .send::<_, MmRpcResponseV2<BestOrdersV2Response>, Json>(command)
             .await
         {
             Ok(Ok(MmRpcResponseV2 {
@@ -312,7 +312,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             "Setting price for pair: {} {}",
             set_price_request.base, set_price_request.rel
         );
-        let set_price_command = Command::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::SetPrice)
             .flatten_data(set_price_request)
@@ -320,7 +320,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self
             .transport
-            .send::<_, Mm2RpcResult<MakerOrderForRpc>, Json>(set_price_command)
+            .send::<_, Mm2RpcResult<MakerOrderForRpc>, Json>(command)
             .await
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_set_price(result),
@@ -339,7 +339,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .join(", ")
         );
 
-        let set_price_command = Command::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderbookDepth)
             .flatten_data(orderbook_depth_request)
@@ -347,10 +347,29 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self
             .transport
-            .send::<_, Mm2RpcResult<Vec<PairWithDepth>>, Json>(set_price_command)
+            .send::<_, Mm2RpcResult<Vec<PairWithDepth>>, Json>(command)
             .await
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orderbook_depth(result),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => bail!(""),
+        }
+    }
+
+    pub async fn orders_history(&self, orders_history_request: OrdersHistoryRequest) -> Result<()> {
+        info!("Getting order history");
+        let is_detailed = orders_history_request.include_details;
+        let command = Command::builder()
+            .userpass(self.config.rpc_password()?)
+            .method(Method::OrdersHistory)
+            .flatten_data(orders_history_request)
+            .build()?;
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<OrdersHistoryResponse>, Json>(command)
+            .await
+        {
+            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orders_history(result, is_detailed),
             Ok(Err(error)) => self.response_handler.print_response(error),
             _ => bail!(""),
         }
