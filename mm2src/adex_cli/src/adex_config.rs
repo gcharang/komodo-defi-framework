@@ -93,13 +93,8 @@ impl Display for AdexConfigImpl {
         if !self.is_set() {
             return writeln!(f, "adex configuration is not set");
         }
-        if let Some(rpc_api_uri) = &self.rpc_uri {
-            writeln!(f, "mm2 RPC URL: {}", rpc_api_uri)?
-        };
-
-        if self.rpc_password.is_some() {
-            writeln!(f, "mm2 RPC password: *************")?
-        }
+        writeln!(f, "mm2 RPC URL: {}", self.rpc_uri.expect("Expected rpc_uri is set"))?;
+        writeln!(f, "mm2 RPC password: *************")?;
         Ok(())
     }
 }
