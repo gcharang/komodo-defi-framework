@@ -18,6 +18,8 @@ pub enum WasmNftCacheError {
     ErrorClearing(String),
     NotSupported(String),
     InternalError(String),
+    GetLastNftBlockError(String),
+    GetLastScannedBlockError(String),
 }
 
 impl From<InitDbError> for WasmNftCacheError {

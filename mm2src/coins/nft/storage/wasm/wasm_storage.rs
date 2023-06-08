@@ -7,13 +7,13 @@ use crate::nft::storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddr
 use crate::CoinsContext;
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
-use mm2_db::indexed_db::{BeBigUint, DbUpgrader, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
+use mm2_db::indexed_db::{DbUpgrader, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::map_mm_error::MapMmError;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::prelude::MmResult;
-use mm2_number::num_bigint::ToBigInt;
 use mm2_number::BigDecimal;
 use serde_json::{self as json, Value as Json};
+use std::cmp::Ordering;
 use std::num::NonZeroUsize;
 
 #[derive(Clone)]
@@ -29,9 +29,43 @@ impl IndexedDbNftStorage {
         })
     }
 
-    #[allow(dead_code)]
     async fn lock_db(&self) -> WasmNftCacheResult<NftCacheIDBLocked<'_>> {
         self.db.get_or_initialize().await.mm_err(WasmNftCacheError::from)
+    }
+
+    fn take_nft_according_to_paging_opts(
+        mut nfts: Vec<Nft>,
+        max: bool,
+        limit: usize,
+        page_number: Option<NonZeroUsize>,
+    ) -> WasmNftCacheResult<NftList> {
+        let total_count = nfts.len();
+        nfts.sort_by(compare_nft_block_numbers);
+
+        let (offset, limit) = if max {
+            (0, total_count)
+        } else {
+            match page_number {
+                Some(page) => ((page.get() - 1) * limit, limit),
+                None => (0, limit),
+            }
+        };
+        Ok(NftList {
+            nfts: nfts.into_iter().skip(offset).take(limit).collect(),
+            skipped: offset,
+            total: total_count,
+        })
+    }
+
+    #[allow(dead_code)]
+    fn take_txs_according_to_filters<I>(
+        txs: I,
+        _filters: Option<NftTxHistoryFilters>,
+    ) -> WasmNftCacheResult<Vec<NftTransferHistory>>
+    where
+        I: Iterator<Item = NftTxHistoryTable>,
+    {
+        txs.filter(|_tx| todo!()).map(tx_details_from_item).collect()
     }
 }
 
@@ -45,12 +79,23 @@ impl NftListStorageOps for IndexedDbNftStorage {
 
     async fn get_nft_list(
         &self,
-        _chains: Vec<Chain>,
-        _max: bool,
-        _limit: usize,
-        _page_number: Option<NonZeroUsize>,
+        chains: Vec<Chain>,
+        max: bool,
+        limit: usize,
+        page_number: Option<NonZeroUsize>,
     ) -> MmResult<NftList, Self::Error> {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftListTable>().await?;
+        let mut nfts = Vec::new();
+        for chain in chains {
+            let items = table.get_items("chain", chain.to_string()).await?;
+            for (_item_id, item) in items.into_iter() {
+                let nft_detail = nft_details_from_item(item)?;
+                nfts.push(nft_detail);
+            }
+        }
+        Self::take_nft_according_to_paging_opts(nfts, max, limit, page_number)
     }
 
     async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
@@ -98,35 +143,154 @@ impl NftListStorageOps for IndexedDbNftStorage {
 
     async fn remove_nft_from_list(
         &self,
-        _chain: &Chain,
-        _token_address: String,
-        _token_id: BigDecimal,
-        _scanned_block: u64,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
+        scanned_block: u64,
     ) -> MmResult<RemoveNftResult, Self::Error> {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&token_address)?
+            .with_value(token_id.to_string())?;
+        let last_scanned_block = LastScannedBlockTable {
+            chain: chain.to_string(),
+            last_scanned_block: scanned_block,
+        };
+
+        let nft_removed = nft_table.delete_item_by_unique_multi_index(index_keys).await?.is_some();
+        last_scanned_block_table
+            .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
+            .await?;
+        if nft_removed {
+            Ok(RemoveNftResult::NftRemoved)
+        } else {
+            Ok(RemoveNftResult::NftDidNotExist)
+        }
     }
 
     async fn get_nft_amount(
         &self,
-        _chain: &Chain,
-        _token_address: String,
-        _token_id: BigDecimal,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
     ) -> MmResult<Option<String>, Self::Error> {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftListTable>().await?;
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&token_address)?
+            .with_value(token_id.to_string())?;
+        if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
+            Ok(Some(nft_details_from_item(item)?.amount.to_string()))
+        } else {
+            return Ok(None);
+        }
     }
 
-    async fn refresh_nft_metadata(&self, _chain: &Chain, _nft: Nft) -> MmResult<(), Self::Error> { todo!() }
+    async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftListTable>().await?;
 
-    async fn get_last_block_number(&self, _chain: &Chain) -> MmResult<Option<u64>, Self::Error> { todo!() }
-
-    async fn get_last_scanned_block(&self, _chain: &Chain) -> MmResult<Option<u64>, Self::Error> { todo!() }
-
-    async fn update_nft_amount(&self, _chain: &Chain, _nft: Nft, _scanned_block: u64) -> MmResult<(), Self::Error> {
-        todo!()
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&nft.token_address)?
+            .with_value(nft.token_id.to_string())?;
+        let nft_item = NftListTable::from_nft(&nft)?;
+        table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+        Ok(())
     }
 
-    async fn update_nft_amount_and_block_number(&self, _chain: &Chain, _nft: Nft) -> MmResult<(), Self::Error> {
-        todo!()
+    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftListTable>().await?;
+        let maybe_item = table
+            .cursor_builder()
+            .only("chain", chain.to_string())
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .bound("block_number", 0u64, u64::MAX)
+            .reverse()
+            .open_cursor(NftListTable::CHAIN_BLOCK_NUMBER_INDEX)
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .next()
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
+        Ok(maybe_item.map(|(_, item)| item.block_number))
+    }
+
+    async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<LastScannedBlockTable>().await?;
+        let maybe_item = table
+            .cursor_builder()
+            .only("chain", chain.to_string())
+            .map_err(|e| WasmNftCacheError::GetLastScannedBlockError(e.to_string()))?
+            .bound("last_scanned_block", 0u64, u64::MAX)
+            .reverse()
+            .open_cursor("chain")
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastScannedBlockError(e.to_string()))?
+            .next()
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastScannedBlockError(e.to_string()))?;
+        Ok(maybe_item.map(|(_, item)| item.last_scanned_block))
+    }
+
+    async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&nft.token_address)?
+            .with_value(nft.token_id.to_string())?;
+        let nft_item = NftListTable::from_nft(&nft)?;
+        nft_table
+            .replace_item_by_unique_multi_index(index_keys, &nft_item)
+            .await?;
+        let last_scanned_block = LastScannedBlockTable {
+            chain: chain.to_string(),
+            last_scanned_block: scanned_block,
+        };
+        last_scanned_block_table
+            .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
+            .await?;
+        Ok(())
+    }
+
+    async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&nft.token_address)?
+            .with_value(nft.token_id.to_string())?;
+        let nft_item = NftListTable::from_nft(&nft)?;
+        nft_table
+            .replace_item_by_unique_multi_index(index_keys, &nft_item)
+            .await?;
+        let last_scanned_block = LastScannedBlockTable {
+            chain: chain.to_string(),
+            last_scanned_block: nft.block_number,
+        };
+        last_scanned_block_table
+            .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
+            .await?;
+        Ok(())
     }
 }
 
@@ -174,11 +338,23 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
 
     async fn get_txs_by_token_addr_id(
         &self,
-        _chain: &Chain,
-        _token_address: String,
-        _token_id: BigDecimal,
+        chain: &Chain,
+        token_address: String,
+        token_id: BigDecimal,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        let index_keys = MultiIndex::new(NftTxHistoryTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&token_address)?
+            .with_value(token_id.to_string())?;
+        table
+            .get_items_by_multi_index(index_keys)
+            .await?
+            .into_iter()
+            .map(|(_item_id, item)| tx_details_from_item(item))
+            .collect()
     }
 
     async fn get_tx_by_tx_hash(
@@ -222,6 +398,8 @@ pub(crate) struct NftListTable {
 }
 
 impl NftListTable {
+    const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
+
     const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 
     fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
@@ -244,6 +422,7 @@ impl TableSignature for NftListTable {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
         if let (0, 1) = (old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
+            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
             table.create_multi_index(
                 Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
                 &["chain", "token_address", "token_id"],
@@ -273,6 +452,8 @@ pub(crate) struct NftTxHistoryTable {
 }
 
 impl NftTxHistoryTable {
+    const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
+
     const CHAIN_TX_HASH_INDEX: &str = "chain_tx_hash_index";
 
     #[allow(dead_code)]
@@ -302,6 +483,11 @@ impl TableSignature for NftTxHistoryTable {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
         if let (0, 1) = (old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
+            table.create_multi_index(
+                Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
+                &["chain", "token_address", "token_id"],
+                false,
+            )?;
             table.create_multi_index(Self::CHAIN_TX_HASH_INDEX, &["chain", "transaction_hash"], true)?;
             table.create_index("chain", false)?;
         }
@@ -335,10 +521,26 @@ fn tx_details_from_item(item: NftTxHistoryTable) -> WasmNftCacheResult<NftTransf
     json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
 }
 
-#[allow(dead_code)]
-fn bigdecimal_to_bebiguint(decimal: &BigDecimal) -> Option<BeBigUint> {
-    // First convert BigDecimal to BigUint
-    let biguint = decimal.to_bigint()?.to_biguint()?;
-    // Then convert BigUint to BeBigUint
-    Some(BeBigUint::from(biguint))
+fn compare_nft_block_numbers(a: &Nft, b: &Nft) -> Ordering {
+    let a = BlockNumber::new(a.block_number);
+    let b = BlockNumber::new(b.block_number);
+    compare_nfts(a, b)
+}
+
+struct BlockNumber {
+    block_number: u64,
+}
+
+impl BlockNumber {
+    fn new(block_number: u64) -> BlockNumber { BlockNumber { block_number } }
+}
+
+fn compare_nfts(a: BlockNumber, b: BlockNumber) -> Ordering {
+    if a.block_number == 0 {
+        Ordering::Less
+    } else if b.block_number == 0 {
+        Ordering::Greater
+    } else {
+        b.block_number.cmp(&a.block_number)
+    }
 }
