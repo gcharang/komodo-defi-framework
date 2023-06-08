@@ -8,7 +8,7 @@ use http::{HeaderMap, StatusCode};
 use mm2_main::mm2::lp_ordermatch::MIN_ORDER_KEEP_ALIVE_INTERVAL;
 use mm2_metrics::{MetricType, MetricsJson};
 use mm2_number::{BigDecimal, BigRational, Fraction, MmNumber};
-use mm2_rpc::data::legacy::{MmVersionResponse, OrderbookResponse};
+use mm2_rpc::data::legacy::{CoinInitResponse, MmVersionResponse, OrderbookResponse};
 use mm2_test_helpers::electrums::*;
 use mm2_test_helpers::for_tests::{btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
                                   check_recent_swaps, enable_eth_coin, enable_qrc20, eth_jst_testnet_conf,
@@ -899,7 +899,7 @@ fn withdraw_and_send(
     mm: &MarketMakerIt,
     coin: &str,
     to: &str,
-    enable_res: &HashMap<&'static str, EnableElectrumResponse>,
+    enable_res: &HashMap<&'static str, CoinInitResponse>,
     expected_bal_change: &str,
     amount: f64,
 ) {
@@ -1166,8 +1166,8 @@ fn test_tbtc_withdraw_to_cashaddresses_should_fail() {
     );
     log!("enable_coins (alice): {:?}", electrum);
 
-    let electrum_response: EnableElectrumResponse =
-        json::from_str(&electrum.1).expect("Expected 'EnableElectrumResponse'");
+    let electrum_response: CoinInitResponse =
+        json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
     let mut enable_res = HashMap::new();
     enable_res.insert("tBTC", electrum_response);
 
@@ -3842,8 +3842,8 @@ fn test_validateaddress_segwit() {
     );
     log!("enable_coins (alice): {:?}", electrum);
 
-    let electrum_response: EnableElectrumResponse =
-        json::from_str(&electrum.1).expect("Expected 'EnableElectrumResponse'");
+    let electrum_response: CoinInitResponse =
+        json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
     let mut enable_res = HashMap::new();
     enable_res.insert("tBTC", electrum_response);
 

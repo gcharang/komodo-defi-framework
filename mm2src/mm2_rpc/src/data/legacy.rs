@@ -222,7 +222,7 @@ impl OrderConfirmationsSettings {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CoinInitResponse {
     pub result: String,
     pub address: String,

@@ -14,6 +14,7 @@ use lazy_static::lazy_static;
 use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
 use mm2_metrics::{MetricType, MetricsJson};
 use mm2_number::BigDecimal;
+use mm2_rpc::data::legacy::BalanceResponse;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{self as json, json, Value as Json};
@@ -2410,7 +2411,7 @@ pub async fn send_raw_transaction(mm: &MarketMakerIt, coin: &str, tx: &str) -> J
     json::from_str(&request.1).unwrap()
 }
 
-pub async fn my_balance(mm: &MarketMakerIt, coin: &str) -> MyBalanceResponse {
+pub async fn my_balance(mm: &MarketMakerIt, coin: &str) -> BalanceResponse {
     let request = mm
         .rpc(&json!({
             "userpass": mm.userpass,

@@ -4491,6 +4491,7 @@ dependencies = [
  "mm2_metrics",
  "mm2_net",
  "mm2_number",
+ "mm2_rpc",
  "rand 0.7.3",
  "regex",
  "rpc",
