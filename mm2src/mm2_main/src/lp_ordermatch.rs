@@ -3819,7 +3819,7 @@ pub async fn lp_auto_buy(
         order.p2p_keypair(),
     );
 
-    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(SellBuyResponse {
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(SellBuyResponse {
         request: (&order.request).into(),
         order_type: order.order_type,
         min_volume: order.min_volume.clone().into(),
