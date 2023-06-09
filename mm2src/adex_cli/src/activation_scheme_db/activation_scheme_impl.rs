@@ -16,14 +16,19 @@ impl ActivationScheme {
     pub fn get_activation_method(&self, coin: &str) -> Option<&Json> { self.scheme.get(coin) }
 
     fn init(&mut self) -> Result<()> {
-        let mut results: Vec<Json> = Self::load_json_file()?;
-        self.scheme = results.iter_mut().filter_map(Self::get_coin_pair).collect();
+        let mut scheme_source: Vec<Json> = Self::load_json_file()?;
+        self.scheme = scheme_source
+            .iter_mut()
+            .filter_map(Self::get_coin_activation_command)
+            .collect();
         Ok(())
     }
 
-    fn get_coin_pair(element: &mut Json) -> Option<(String, Json)> { Self::get_coin_pair_impl(element).ok() }
+    fn get_coin_activation_command(element: &mut Json) -> Option<(String, Json)> {
+        Self::get_coin_activation_command_impl(element).ok()
+    }
 
-    fn get_coin_pair_impl(element: &mut Json) -> Result<(String, Json)> {
+    fn get_coin_activation_command_impl(element: &mut Json) -> Result<(String, Json)> {
         let coin = element
             .get_mut("coin")
             .ok_or_else(|| error_anyhow!("Failed to get coin pair, no coin value"))?
