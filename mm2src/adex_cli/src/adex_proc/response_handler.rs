@@ -206,8 +206,8 @@ mod orderbook {
     use std::cmp::Ordering;
     use std::fmt::{Display, Formatter};
 
-    use super::super::{smart_fraction_fmt::SmartFractionFmt, OrderbookConfig};
-    use crate::adex_config::{PricePrecision, VolumePrecision};
+    use super::super::{smart_fraction_fmt::{SmarFractPrecision, SmartFractionFmt},
+                       OrderbookConfig};
 
     pub fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
         let cmp = left.entry.price.cmp(&right.entry.price).reverse();
@@ -300,8 +300,8 @@ mod orderbook {
 
         pub(crate) fn from_orderbook_entry(
             entry: &AggregatedOrderbookEntry,
-            vol_prec: &VolumePrecision,
-            price_prec: &PricePrecision,
+            vol_prec: &SmarFractPrecision,
+            price_prec: &SmarFractPrecision,
             config: &'a OrderbookConfig,
         ) -> Self {
             AskBidRow {

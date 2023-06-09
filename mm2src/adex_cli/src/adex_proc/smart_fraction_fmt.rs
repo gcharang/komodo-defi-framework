@@ -92,3 +92,5 @@ fn test_smart_fraction_fmt() {
     let num = SmartFractionFmt::new(2, 2, 0.101110000001).unwrap();
     assert_eq!(num.to_string(), "0.10");
 }
+
+pub(crate) type SmarFractPrecision = (usize, usize);
