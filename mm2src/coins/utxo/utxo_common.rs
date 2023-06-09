@@ -916,7 +916,6 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
         let actual_tx_fee = match self.fee {
             Some(fee) => fee,
             None => {
-                // Todo: rename per kb to per vbyte
                 let fee_per_kb = coin.get_tx_fee_per_kb().await?;
                 TxFeeType::PerKb(fee_per_kb)
             },

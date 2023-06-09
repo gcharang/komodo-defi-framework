@@ -548,7 +548,6 @@ pub struct UtxoCoinConf {
     /// if set to true MM2 will check whether calculated fee is lower than relay fee and use
     /// relay fee amount instead of calculated
     /// https://github.com/KomodoPlatform/atomicDEX-API/issues/617
-    // Todo: use this in withdraw and fee calculations (min relay fee should be used??)
     pub force_min_relay_fee: bool,
     /// Block count for median time past calculation
     pub mtp_block_count: NonZeroU64,

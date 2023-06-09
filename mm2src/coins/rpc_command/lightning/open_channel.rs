@@ -133,7 +133,6 @@ pub struct OpenChannelResponse {
 }
 
 /// Opens a channel on the lightning network.
-// Todo: should fixed fee be used for lightning channel opening too?
 pub async fn open_channel(ctx: MmArc, req: OpenChannelRequest) -> OpenChannelResult<OpenChannelResponse> {
     let ln_coin = match lp_coinfind_or_err(&ctx, &req.coin).await? {
         MmCoinEnum::LightningCoin(c) => c,

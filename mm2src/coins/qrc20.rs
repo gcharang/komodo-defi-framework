@@ -486,9 +486,7 @@ impl From<Qrc20AbiError> for UtxoRpcError {
 impl Qrc20Coin {
     /// `gas_fee` should be calculated by: gas_limit * gas_price * (count of contract calls),
     /// or should be sum of gas fee of all contract calls.
-    // Todo: this gets per KB and adds it to gas fee, is this right?
     pub async fn get_qrc20_tx_fee(&self, gas_fee: u64) -> Result<u64, String> {
-        // Todo: can this be refactored to one line?
         let amount = try_s!(self.get_tx_fee_per_kb().await);
         Ok(amount + gas_fee)
     }
@@ -1321,7 +1319,6 @@ impl MmCoin for Qrc20Coin {
     fn history_sync_status(&self) -> HistorySyncState { utxo_common::history_sync_status(&self.utxo) }
 
     /// This method is called to check our QTUM balance.
-    // Todo: this and other methods get fee per KB, right?
     fn get_trade_fee(&self) -> Box<dyn Future<Item = TradeFee, Error = String> + Send> {
         // `erc20Payment` may require two `approve` contract calls in worst case,
         let gas_fee = (2 * QRC20_GAS_LIMIT_DEFAULT + QRC20_PAYMENT_GAS_LIMIT) * QRC20_GAS_PRICE_DEFAULT;
