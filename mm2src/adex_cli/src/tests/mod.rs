@@ -14,7 +14,7 @@ const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;
 
 #[tokio::test]
 async fn test_get_version() {
-    tokio::spawn(fake_mm2_server(7784, "src/tests/version.http"));
+    tokio::spawn(fake_mm2_server(7784, "src/tests/http_mock_data/version.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
@@ -35,7 +35,7 @@ async fn test_get_version() {
 
 #[tokio::test]
 async fn test_get_orderbook() {
-    tokio::spawn(fake_mm2_server(7785, "src/tests/orderbook.http"));
+    tokio::spawn(fake_mm2_server(7785, "src/tests/http_mock_data/orderbook.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
@@ -53,7 +53,7 @@ async fn test_get_orderbook() {
 
 #[tokio::test]
 async fn test_get_orderbook_with_uuids() {
-    tokio::spawn(fake_mm2_server(7786, "src/tests/orderbook.http"));
+    tokio::spawn(fake_mm2_server(7786, "src/tests/http_mock_data/orderbook.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
@@ -71,7 +71,7 @@ async fn test_get_orderbook_with_uuids() {
 
 #[tokio::test]
 async fn test_get_orderbook_with_publics() {
-    tokio::spawn(fake_mm2_server(7787, "src/tests/orderbook.http"));
+    tokio::spawn(fake_mm2_server(7787, "src/tests/http_mock_data/orderbook.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
@@ -89,7 +89,7 @@ async fn test_get_orderbook_with_publics() {
 
 #[tokio::test]
 async fn test_get_enabled() {
-    tokio::spawn(fake_mm2_server(7788, "src/tests/get_enabled.http"));
+    tokio::spawn(fake_mm2_server(7788, "src/tests/http_mock_data/get_enabled.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
@@ -107,7 +107,7 @@ async fn test_get_enabled() {
 
 #[tokio::test]
 async fn test_get_balance() {
-    tokio::spawn(fake_mm2_server(7789, "src/tests/balance.http"));
+    tokio::spawn(fake_mm2_server(7789, "src/tests/http_mock_data/balance.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
@@ -125,7 +125,7 @@ async fn test_get_balance() {
 
 #[tokio::test]
 async fn test_enable() {
-    tokio::spawn(fake_mm2_server(7790, "src/tests/enable.http"));
+    tokio::spawn(fake_mm2_server(7790, "src/tests/http_mock_data/enable.http"));
     test_activation_scheme().await;
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
@@ -154,7 +154,7 @@ async fn test_activation_scheme() {
 
 #[tokio::test]
 async fn test_buy_morty_for_rick() {
-    tokio::spawn(fake_mm2_server(7791, "src/tests/buy.http"));
+    tokio::spawn(fake_mm2_server(7791, "src/tests/http_mock_data/buy.http"));
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
