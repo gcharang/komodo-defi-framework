@@ -30,30 +30,25 @@ pub(crate) fn get_config() {
     info!("{}", adex_cfg)
 }
 
-pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
+pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Result<()> {
+    assert!(set_password || rpc_api_uri.is_some());
     let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|_| AdexConfigImpl::default());
-    let mut is_changes_happened = false;
+
     if set_password {
         let rpc_password = Password::new("Enter RPC API password:")
             .prompt()
-            .map(|value| {
-                is_changes_happened = true;
-                value
-            })
-            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))
-            .ok();
+            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
         adex_cfg.set_rpc_password(rpc_password);
     }
-    if rpc_api_uri.is_some() {
+
+    if let Some(rpc_api_uri) = rpc_api_uri {
         adex_cfg.set_rpc_uri(rpc_api_uri);
-        is_changes_happened = true;
     }
 
-    if is_changes_happened && adex_cfg.write_to_config_path().is_ok() {
-        info!("Configuration has been set");
-    } else {
-        warn!("Nothing changed");
-    }
+    adex_cfg.write_to_config_path()?;
+    info!("Configuration has been set");
+
+    Ok(())
 }
 
 pub(crate) trait AdexConfig {
@@ -171,7 +166,7 @@ impl AdexConfigImpl {
         rewrite_json_file(self, adex_path_str)
     }
 
-    fn set_rpc_password(&mut self, rpc_password: Option<String>) { self.rpc_password = rpc_password; }
+    fn set_rpc_password(&mut self, rpc_password: String) { self.rpc_password.replace(rpc_password); }
 
-    fn set_rpc_uri(&mut self, rpc_uri: Option<String>) { self.rpc_uri = rpc_uri; }
+    fn set_rpc_uri(&mut self, rpc_uri: String) { self.rpc_uri.replace(rpc_uri); }
 }

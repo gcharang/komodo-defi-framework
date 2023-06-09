@@ -77,14 +77,18 @@ enum Command {
 #[derive(Subcommand)]
 enum ConfigSubcommand {
     #[command(about = "Sets komodo adex cli configuration")]
-    Set {
-        #[arg(long, help = "Set if you are going to set up a password")]
-        set_password: bool,
-        #[arg(long, name = "URI", help = "Adex RPC API Uri. http://localhost:7783")]
-        adex_uri: Option<String>,
-    },
+    Set(SetConfigArgs),
     #[command(about = "Gets komodo adex cli configuration")]
     Get,
+}
+
+#[derive(Args)]
+#[group(required = true, multiple = true)]
+struct SetConfigArgs {
+    #[arg(long, help = "Set if you are going to set up a password")]
+    set_password: bool,
+    #[arg(long, name = "URI", help = "Adex RPC API Uri. http://localhost:7783")]
+    adex_uri: Option<String>,
 }
 
 #[derive(Parser)]
@@ -123,8 +127,8 @@ impl Cli {
             Command::Kill => stop_process(),
             Command::Status => get_status(),
             Command::Stop => proc.send_stop().await?,
-            Command::Config(ConfigSubcommand::Set { set_password, adex_uri }) => {
-                set_config(*set_password, adex_uri.take())
+            Command::Config(ConfigSubcommand::Set(SetConfigArgs { set_password, adex_uri })) => {
+                set_config(*set_password, adex_uri.take())?
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Enable { asset } => proc.enable(asset).await?,
