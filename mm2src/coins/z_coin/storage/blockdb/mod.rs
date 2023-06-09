@@ -37,6 +37,13 @@ pub enum BlockDbError {
         height: u32,
     },
     #[cfg(target_arch = "wasm32")]
+    #[display(fmt = "Error deleting {ticker:?} block data from db: {err} - height {height}")]
+    RemoveFromStorageErr {
+        ticker: String,
+        err: String,
+        height: u32,
+    },
+    #[cfg(target_arch = "wasm32")]
     #[display(fmt = "Error getting {ticker} block height from storage: {err}")]
     BlockHeightNotFound {
         ticker: String,
@@ -76,6 +83,15 @@ impl BlockDbError {
         Self::GetFromStorageError {
             ticker: ticker.to_string(),
             err,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn remove_err(ticker: &str, err: String, height: u32) -> Self {
+        Self::RemoveFromStorageErr {
+            ticker: ticker.to_string(),
+            err,
+            height,
         }
     }
 

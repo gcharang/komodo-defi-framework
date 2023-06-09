@@ -7,7 +7,6 @@ use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, Indexe
 use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
 use mm2_err_handle::prelude::*;
 use num_traits::ToPrimitive;
-use std::convert::TryInto;
 use std::path::Path;
 use zcash_client_backend::data_api::BlockSource;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
@@ -156,10 +155,42 @@ impl BlockDbImpl {
             .await
             .map_err(|err| BlockDbError::add_err(&ticker, err.to_string(), height))?;
 
-        Ok(height.try_into().unwrap_or(0))
+        Ok(height as usize)
     }
 
-    pub async fn rewind_to_height(&self, _height: u32) -> Result<usize, BlockDbError> { todo!() }
+    pub async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self
+            .lock_db()
+            .await
+            .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), height))?;
+        let db_transaction = locked_db
+            .get_inner()
+            .transaction()
+            .await
+            .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), height))?;
+        let block_db = db_transaction
+            .table::<BlockDbTable>()
+            .await
+            .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), height))?;
+
+        let get_latest_block = self.get_latest_block().await?;
+        let height_to_remove_from = height + 1;
+        for i in height_to_remove_from..=get_latest_block {
+            let index_keys = MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
+                .with_value(&ticker)
+                .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?
+                .with_value(BeBigUint::from(height))
+                .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?;
+
+            block_db
+                .delete_item_by_unique_multi_index(index_keys)
+                .await
+                .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), i))?;
+        }
+
+        Ok((height_to_remove_from + get_latest_block) as usize)
+    }
 
     pub async fn with_blocks<F>(
         &self,
