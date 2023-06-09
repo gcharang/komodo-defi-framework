@@ -1166,8 +1166,7 @@ fn test_tbtc_withdraw_to_cashaddresses_should_fail() {
     );
     log!("enable_coins (alice): {:?}", electrum);
 
-    let electrum_response: CoinInitResponse =
-        json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
+    let electrum_response: CoinInitResponse = json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
     let mut enable_res = HashMap::new();
     enable_res.insert("tBTC", electrum_response);
 
@@ -3842,8 +3841,7 @@ fn test_validateaddress_segwit() {
     );
     log!("enable_coins (alice): {:?}", electrum);
 
-    let electrum_response: CoinInitResponse =
-        json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
+    let electrum_response: CoinInitResponse = json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
     let mut enable_res = HashMap::new();
     enable_res.insert("tBTC", electrum_response);
 
@@ -4901,7 +4899,7 @@ fn test_my_orders_after_matched() {
 fn test_sell_conf_settings() {
     let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
 
-    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), 
+    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address": ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
 
     let mm_bob = MarketMakerIt::start(
@@ -4971,7 +4969,7 @@ fn test_sell_conf_settings() {
 fn test_set_price_conf_settings() {
     let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
 
-    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), 
+    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address": ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
 
     let mm_bob = MarketMakerIt::start(
