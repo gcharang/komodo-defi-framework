@@ -284,7 +284,7 @@ pub(crate) enum ParseTransferStatusError {
     UnsupportedTransferStatus,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, Serialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Serialize)]
 pub(crate) enum TransferStatus {
     Receive,
     Send,
@@ -323,7 +323,7 @@ pub struct NftTransferHistory {
     pub(crate) transaction_index: u64,
     pub(crate) log_index: u64,
     pub(crate) value: BigDecimal,
-    pub(crate) contract_type: ContractType,
+    pub(crate) contract_type: Option<ContractType>,
     pub(crate) transaction_type: String,
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
@@ -349,7 +349,7 @@ pub(crate) struct NftTransferHistoryWrapper {
     pub(crate) transaction_index: u64,
     pub(crate) log_index: u64,
     pub(crate) value: SerdeStringWrap<BigDecimal>,
-    pub(crate) contract_type: SerdeStringWrap<ContractType>,
+    pub(crate) contract_type: Option<SerdeStringWrap<ContractType>>,
     pub(crate) transaction_type: String,
     pub(crate) token_address: String,
     pub(crate) token_id: SerdeStringWrap<BigDecimal>,

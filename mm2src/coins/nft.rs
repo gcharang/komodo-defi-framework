@@ -305,7 +305,7 @@ async fn get_moralis_nft_transfers(
                     transaction_index: transfer_wrapper.transaction_index,
                     log_index: transfer_wrapper.log_index,
                     value: transfer_wrapper.value.0,
-                    contract_type: transfer_wrapper.contract_type.0,
+                    contract_type: transfer_wrapper.contract_type.map(|v| v.0),
                     transaction_type: transfer_wrapper.transaction_type,
                     token_address: transfer_wrapper.token_address,
                     token_id: transfer_wrapper.token_id.0,
@@ -495,15 +495,23 @@ async fn handle_nft_tx<T: NftListStorageOps + NftTxHistoryStorageOps>(
     tx: NftTransferHistory,
     my_address: &str,
 ) -> MmResult<(), UpdateNftError> {
-    match (tx.status, tx.contract_type) {
-        (TransferStatus::Send, ContractType::Erc721) => handle_send_erc721(storage, chain, tx).await,
-        (TransferStatus::Receive, ContractType::Erc721) => {
-            handle_receive_erc721(storage, chain, tx, url, my_address).await
-        },
-        (TransferStatus::Send, ContractType::Erc1155) => handle_send_erc1155(storage, chain, tx).await,
-        (TransferStatus::Receive, ContractType::Erc1155) => {
-            handle_receive_erc1155(storage, chain, tx, url, my_address).await
-        },
+    if let Some(contract_type) = tx.contract_type {
+        match (tx.status, contract_type) {
+            (TransferStatus::Send, ContractType::Erc721) => handle_send_erc721(storage, chain, tx).await,
+            (TransferStatus::Receive, ContractType::Erc721) => {
+                handle_receive_erc721(storage, chain, tx, url, my_address).await
+            },
+            (TransferStatus::Send, ContractType::Erc1155) => handle_send_erc1155(storage, chain, tx).await,
+            (TransferStatus::Receive, ContractType::Erc1155) => {
+                handle_receive_erc1155(storage, chain, tx, url, my_address).await
+            },
+        }
+    } else if tx.status == TransferStatus::Send {
+        // if contract_type is None, we need to handle this token as erc721, because it is a custom standard like CRYPTO PUNKS
+        // which has almost the same behaviour as erc721 (1 owner can have 1 nft).
+        handle_send_erc721(storage, chain, tx).await
+    } else {
+        handle_receive_erc721(storage, chain, tx, url, my_address).await
     }
 }
 
