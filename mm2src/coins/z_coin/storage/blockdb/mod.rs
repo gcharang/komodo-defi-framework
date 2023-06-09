@@ -66,6 +66,7 @@ pub enum BlockDbError {
         ticker: String,
         err: String,
     },
+    ChainError(String),
 }
 
 impl BlockDbError {
