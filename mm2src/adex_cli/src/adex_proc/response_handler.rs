@@ -61,8 +61,8 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
 
-        let base_vol_head = "Volume: ".to_string() + &orderbook.base;
-        let rel_price_head = "Price: ".to_string() + &orderbook.rel;
+        let base_vol_head = format!("Volume: {}", orderbook.base);
+        let rel_price_head = format!("Price: {}", orderbook.rel);
         writeln_safe_io!(
             writer,
             "{}",
