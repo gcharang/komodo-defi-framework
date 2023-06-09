@@ -13,12 +13,29 @@ pub(crate) mod blockdb_idb_storage;
 use blockdb_idb_storage::BlockDbInner;
 #[cfg(target_arch = "wasm32")] use mm2_db::indexed_db::SharedDb;
 
+/// A wrapper for the db connection to the block cache database in native and browser.
+pub struct BlockDbImpl {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub db: Arc<Mutex<Connection>>,
+    #[cfg(target_arch = "wasm32")]
+    pub db: SharedDb<BlockDbInner>,
+    #[allow(unused)]
+    ticker: String,
+}
+
 #[allow(unused)]
 #[derive(Debug, Display)]
 pub enum BlockDbError {
     #[cfg(not(target_arch = "wasm32"))]
     SqliteError(SqliteClientError),
     CorruptedData(String),
+    #[cfg(target_arch = "wasm32")]
+    #[display(fmt = "Error inserting {ticker:?} block data to db: {err} - height {height}")]
+    AddToStorageErr {
+        ticker: String,
+        err: String,
+        height: u32,
+    },
     #[cfg(target_arch = "wasm32")]
     #[display(fmt = "Error getting {ticker} block height from storage: {err}")]
     BlockHeightNotFound {
@@ -45,6 +62,16 @@ pub enum BlockDbError {
 }
 
 impl BlockDbError {
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn add_err(ticker: &str, err: String, height: u32) -> Self {
+        Self::AddToStorageErr {
+            ticker: ticker.to_string(),
+            err,
+            height,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn get_err(ticker: &str, err: String) -> Self {
         Self::GetFromStorageError {
             ticker: ticker.to_string(),
@@ -60,6 +87,7 @@ impl BlockDbError {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn not_found(ticker: &str, err: String) -> Self {
         Self::BlockHeightNotFound {
             ticker: ticker.to_string(),
@@ -74,14 +102,4 @@ impl BlockDbError {
             err,
         }
     }
-}
-
-/// A wrapper for the db connection to the block cache database.
-pub struct BlockDbImpl {
-    #[cfg(not(target_arch = "wasm32"))]
-    pub db: Arc<Mutex<Connection>>,
-    #[cfg(target_arch = "wasm32")]
-    pub db: SharedDb<BlockDbInner>,
-    #[allow(unused)]
-    ticker: String,
 }
