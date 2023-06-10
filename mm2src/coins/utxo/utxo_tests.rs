@@ -867,11 +867,24 @@ fn test_withdraw_kmd_rewards_impl(
         fee: None,
         memo: None,
     };
+    let tx_details = coin.withdraw(withdraw_req).wait().unwrap();
+    let tx_size_kb = tx_details.tx_hex.len() as f64 / KILO_BYTE;
+    // In transaction size calculations we assume the script sig size is (2 + MAX_DER_SIGNATURE_LEN + COMPRESSED_PUBKEY_LEN) or 107 bytes
+    // when in reality signatures can vary by 1 or 2 bytes because of possible zero padding of r and s values of the signature.
+    // This is why we test for a range of values here instead of a single value. The value we use in fees calculation is the
+    // highest possible value of 107 to ensure we don't underestimate the fee.
+    assert!(
+        (0.243..=0.245).contains(&tx_size_kb),
+        "Tx size in KB {} is not within the range [{}, {}]",
+        tx_size_kb,
+        0.243,
+        0.245
+    );
+    let tx_size_kb = 0.245;
     let expected_fee = TxFeeDetails::Utxo(UtxoFeeDetails {
         coin: Some("KMD".into()),
-        amount: "0.00001".parse().unwrap(),
+        amount: big_decimal_from_sat((1000. * tx_size_kb) as i64, coin.as_ref().decimals),
     });
-    let tx_details = coin.withdraw(withdraw_req).wait().unwrap();
     assert_eq!(tx_details.fee_details, Some(expected_fee));
 
     let expected_rewards = expected_rewards.map(|amount| KmdRewardsDetails {
@@ -942,11 +955,24 @@ fn test_withdraw_rick_rewards_none() {
         fee: None,
         memo: None,
     };
+    let tx_details = coin.withdraw(withdraw_req).wait().unwrap();
+    let tx_size_kb = tx_details.tx_hex.len() as f64 / KILO_BYTE;
+    // In transaction size calculations we assume the script sig size is (2 + MAX_DER_SIGNATURE_LEN + COMPRESSED_PUBKEY_LEN) or 107 bytes
+    // when in reality signatures can vary by 1 or 2 bytes because of possible zero padding of r and s values of the signature.
+    // This is why we test for a range of values here instead of a single value. The value we use in fees calculation is the
+    // highest possible value of 107 to ensure we don't underestimate the fee.
+    assert!(
+        (0.243..=0.245).contains(&tx_size_kb),
+        "Tx size in KB {} is not within the range [{}, {}]",
+        tx_size_kb,
+        0.243,
+        0.245
+    );
+    let tx_size_kb = 0.245;
     let expected_fee = TxFeeDetails::Utxo(UtxoFeeDetails {
         coin: Some(TEST_COIN_NAME.into()),
-        amount: "0.00001".parse().unwrap(),
+        amount: big_decimal_from_sat((1000. * tx_size_kb) as i64, coin.as_ref().decimals),
     });
-    let tx_details = coin.withdraw(withdraw_req).wait().unwrap();
     assert_eq!(tx_details.fee_details, Some(expected_fee));
     assert_eq!(tx_details.kmd_rewards, None);
 }

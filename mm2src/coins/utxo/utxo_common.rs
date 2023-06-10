@@ -600,8 +600,6 @@ pub async fn get_htlc_spend_fee<T: UtxoCommonOps>(
     }
     drop_mutability!(fee_per_kb);
 
-    // Todo: revise this and maybe avoid type casting also we can refactor this to multiple lines
-    // Todo: should ceil or round be used here? round up to the nearest satoshi
     let mut fee = ((fee_per_kb * tx_size) as f64 / KILO_BYTE).ceil() as u64;
     if coin.as_ref().conf.force_min_relay_fee {
         let relay_fee = coin.as_ref().rpc_client.get_relay_fee().compat().await?;
@@ -836,7 +834,6 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
         actual_tx_fee: &TxFeeType,
     ) -> bool {
         self.tx_fee = match &actual_tx_fee {
-            // Todo: maybe refactor to a function
             TxFeeType::PerKb(f) => {
                 let transaction = UtxoTx::from(self.tx.clone());
                 let v_size = tx_size_in_v_bytes(from_addr_format, &transaction) as u64;
@@ -3333,7 +3330,6 @@ pub fn get_trade_fee<T: UtxoCommonOps>(coin: T) -> Box<dyn Future<Item = TradeFe
     Box::new(fut.boxed().compat())
 }
 
-// Todo: check this doc comment and others
 /// To ensure the `get_sender_trade_fee(x) <= get_sender_trade_fee(y)` condition is satisfied for any `x < y`,
 /// we should include a `change` output into the result fee. Imagine this case:
 /// Let `sum_inputs = 11000` and `total_tx_fee: { 200, if there is no the change output; 230, if there is the change output }`.
@@ -3362,7 +3358,6 @@ where
     let is_amount_upper_bound = matches!(fee_policy, FeePolicy::DeductFromOutput(_));
     let my_address = coin.as_ref().derivation_method.single_addr_or_err()?;
 
-    // Todo: refactor this to a function if possible
     let mut tx_fee_per_kb = coin.get_tx_fee_per_kb().await?;
     if coin.as_ref().tx_fee.is_dynamic() {
         tx_fee_per_kb = coin.increase_dynamic_fee_by_stage(tx_fee_per_kb, stage);
