@@ -174,3 +174,13 @@ impl<'a> NftStorageBuilder<'a> {
         sql_storage::SqliteNftStorage::new(self.ctx)
     }
 }
+
+fn get_offset_limit(max: bool, limit: usize, page_number: Option<NonZeroUsize>, total_count: usize) -> (usize, usize) {
+    if max {
+        return (0, total_count);
+    }
+    match page_number {
+        Some(page) => ((page.get() - 1) * limit, limit),
+        None => (0, limit),
+    }
+}

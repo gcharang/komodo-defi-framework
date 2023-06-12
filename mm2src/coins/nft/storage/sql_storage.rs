@@ -1,7 +1,7 @@
 use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTokenAddrId, NftTransferHistory,
                               NftTxHistoryFilters, NftsTransferHistoryList, TxMeta};
-use crate::nft::storage::{CreateNftStorageError, NftListStorageOps, NftStorageError, NftTxHistoryStorageOps,
-                          RemoveNftResult};
+use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftStorageError,
+                          NftTxHistoryStorageOps, RemoveNftResult};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
@@ -128,7 +128,7 @@ fn get_nft_tx_builder_preimage(
         .map(|chain| {
             let table_name = nft_tx_history_table_name(&chain);
             validate_table_name(&table_name)?;
-            let sql_builder = nft_history_table_builder_preimage(table_name.as_str(), filters.clone())?;
+            let sql_builder = nft_history_table_builder_preimage(table_name.as_str(), filters)?;
             let sql_string = sql_builder
                 .sql()
                 .map_err(|e| SqlError::ToSqlConversionFailure(e.into()))?
@@ -478,14 +478,7 @@ impl NftListStorageOps for SqliteNftStorage {
                 .query_row(NO_PARAMS, |row| row.get(0))?;
             let count_total = total.try_into().expect("count should not be failed");
 
-            let (offset, limit) = if max {
-                (0, count_total)
-            } else {
-                match page_number {
-                    Some(page) => ((page.get() - 1) * limit, limit),
-                    None => (0, limit),
-                }
-            };
+            let (offset, limit) = get_offset_limit(max, limit, page_number, count_total);
             let sql = finalize_nft_list_sql_builder(sql_builder, offset, limit)?;
             let nfts = conn
                 .prepare(&sql)?
@@ -730,14 +723,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                 .query_row(NO_PARAMS, |row| row.get(0))?;
             let count_total = total.try_into().expect("count should not be failed");
 
-            let (offset, limit) = if max {
-                (0, count_total)
-            } else {
-                match page_number {
-                    Some(page) => ((page.get() - 1) * limit, limit),
-                    None => (0, limit),
-                }
-            };
+            let (offset, limit) = get_offset_limit(max, limit, page_number, count_total);
             let sql = finalize_nft_history_sql_builder(sql_builder, offset, limit)?;
             let txs = conn
                 .prepare(&sql)?

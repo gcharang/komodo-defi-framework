@@ -284,7 +284,7 @@ pub(crate) enum ParseTransferStatusError {
     UnsupportedTransferStatus,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, Serialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Serialize)]
 pub(crate) enum TransferStatus {
     Receive,
     Send,
@@ -368,11 +368,10 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
-#[allow(dead_code)]
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub struct NftTxHistoryFilters {
     #[serde(default)]
-    pub(crate) receive: bool,
+    pub receive: bool,
     #[serde(default)]
     pub(crate) send: bool,
     pub(crate) from_date: Option<u64>,
@@ -385,13 +384,12 @@ pub struct UpdateNftReq {
     pub(crate) url: Url,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Eq, Hash, PartialEq)]
 pub struct NftTokenAddrId {
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TxMeta {
     pub(crate) token_address: String,

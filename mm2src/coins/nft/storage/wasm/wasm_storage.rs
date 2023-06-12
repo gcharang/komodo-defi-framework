@@ -2,8 +2,8 @@ use crate::nft::nft_structs::{Chain, ContractType, Nft, NftList, NftTransferHist
                               TransferStatus, TxMeta};
 use crate::nft::storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
 use crate::nft::storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
-use crate::nft::storage::{CreateNftStorageError, NftListStorageOps, NftTokenAddrId, NftTxHistoryFilters,
-                          NftTxHistoryStorageOps, RemoveNftResult};
+use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftTokenAddrId,
+                          NftTxHistoryFilters, NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
@@ -13,8 +13,9 @@ use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::prelude::MmResult;
 use mm2_number::BigDecimal;
 use serde_json::{self as json, Value as Json};
-use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct IndexedDbNftStorage {
@@ -40,16 +41,8 @@ impl IndexedDbNftStorage {
         page_number: Option<NonZeroUsize>,
     ) -> WasmNftCacheResult<NftList> {
         let total_count = nfts.len();
-        nfts.sort_by(compare_nft_block_numbers);
-
-        let (offset, limit) = if max {
-            (0, total_count)
-        } else {
-            match page_number {
-                Some(page) => ((page.get() - 1) * limit, limit),
-                None => (0, limit),
-            }
-        };
+        nfts.sort_by(|a, b| b.block_number.cmp(&a.block_number));
+        let (offset, limit) = get_offset_limit(max, limit, page_number, total_count);
         Ok(NftList {
             nfts: nfts.into_iter().skip(offset).take(limit).collect(),
             skipped: offset,
@@ -57,15 +50,47 @@ impl IndexedDbNftStorage {
         })
     }
 
-    #[allow(dead_code)]
+    fn take_txs_according_to_paging_opts(
+        mut txs: Vec<NftTransferHistory>,
+        max: bool,
+        limit: usize,
+        page_number: Option<NonZeroUsize>,
+    ) -> WasmNftCacheResult<NftsTransferHistoryList> {
+        let total_count = txs.len();
+        txs.sort_by(|a, b| b.block_timestamp.cmp(&a.block_timestamp));
+        let (offset, limit) = get_offset_limit(max, limit, page_number, total_count);
+        Ok(NftsTransferHistoryList {
+            transfer_history: txs.into_iter().skip(offset).take(limit).collect(),
+            skipped: offset,
+            total: total_count,
+        })
+    }
+
     fn take_txs_according_to_filters<I>(
         txs: I,
-        _filters: Option<NftTxHistoryFilters>,
+        filters: Option<NftTxHistoryFilters>,
     ) -> WasmNftCacheResult<Vec<NftTransferHistory>>
     where
         I: Iterator<Item = NftTxHistoryTable>,
     {
-        txs.filter(|_tx| todo!()).map(tx_details_from_item).collect()
+        let mut filtered_txs = Vec::new();
+
+        for tx_table in txs {
+            let tx = tx_details_from_item(tx_table)?;
+            if let Some(filters) = &filters {
+                let status_matches = (filters.receive && tx.status == TransferStatus::Receive)
+                    || (filters.send && tx.status == TransferStatus::Send);
+                let date_matches = filters.from_date.map_or(true, |from| tx.block_timestamp >= from)
+                    && filters.to_date.map_or(true, |to| tx.block_timestamp <= to);
+                if status_matches && date_matches {
+                    filtered_txs.push(tx);
+                }
+            } else {
+                filtered_txs.push(tx);
+            }
+        }
+        drop_mutability!(filtered_txs);
+        Ok(filtered_txs)
     }
 }
 
@@ -304,36 +329,90 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
 
     async fn get_tx_history(
         &self,
-        _chains: Vec<Chain>,
-        _max: bool,
-        _limit: usize,
-        _page_number: Option<NonZeroUsize>,
-        _filters: Option<NftTxHistoryFilters>,
+        chains: Vec<Chain>,
+        max: bool,
+        limit: usize,
+        page_number: Option<NonZeroUsize>,
+        filters: Option<NftTxHistoryFilters>,
     ) -> MmResult<NftsTransferHistoryList, Self::Error> {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        let mut txs = Vec::new();
+        for chain in chains {
+            let tx_tables = table
+                .get_items("chain", chain.to_string())
+                .await?
+                .into_iter()
+                .map(|(_item_id, tx)| tx);
+            let filtered = Self::take_txs_according_to_filters(tx_tables, filters)?;
+            txs.extend(filtered);
+        }
+        Self::take_txs_according_to_paging_opts(txs, max, limit, page_number)
     }
 
-    async fn add_txs_to_history<I>(&self, _chain: &Chain, _txs: I) -> MmResult<(), Self::Error>
+    async fn add_txs_to_history<I>(&self, _chain: &Chain, txs: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send,
     {
-        todo!()
-    }
-
-    async fn get_last_block_number(&self, _chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
-        let _table = db_transaction.table::<NftTxHistoryTable>().await?;
-        todo!()
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        for tx in txs {
+            let tx_item = NftTxHistoryTable::from_tx_history(&tx)?;
+            table.add_item(&tx_item).await?;
+        }
+        Ok(())
+    }
+
+    async fn get_last_block_number(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        let maybe_item = table
+            .cursor_builder()
+            .only("chain", chain.to_string())
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .bound("block_number", 0u64, u64::MAX)
+            .reverse()
+            .open_cursor("chain")
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .next()
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
+        Ok(maybe_item.map(|(_, item)| item.block_number))
     }
 
     async fn get_txs_from_block(
         &self,
-        _chain: &Chain,
-        _from_block: u64,
+        chain: &Chain,
+        from_block: u64,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
-        todo!()
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        let mut cursor = table
+            .cursor_builder()
+            .only("chain", chain.to_string())
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .bound("block_number", from_block, u64::MAX)
+            .open_cursor("chain")
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
+
+        let mut res = Vec::new();
+        while let Some((_item_id, item)) = cursor
+            .next()
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+        {
+            let tx = tx_details_from_item(item)?;
+            res.push(tx);
+        }
+        drop_mutability!(res);
+        Ok(res)
     }
 
     async fn get_txs_by_token_addr_id(
@@ -347,6 +426,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         let table = db_transaction.table::<NftTxHistoryTable>().await?;
         let index_keys = MultiIndex::new(NftTxHistoryTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
+            .with_value(&token_address)?
             .with_value(&token_address)?
             .with_value(token_id.to_string())?;
         table
@@ -375,15 +455,67 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         }
     }
 
-    async fn update_tx_meta_by_hash(&self, _chain: &Chain, _tx: NftTransferHistory) -> MmResult<(), Self::Error> {
-        todo!()
+    async fn update_tx_meta_by_hash(&self, chain: &Chain, tx: NftTransferHistory) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        let index_keys = MultiIndex::new(NftTxHistoryTable::CHAIN_TX_HASH_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&tx.transaction_hash)?;
+        let item = NftTxHistoryTable::from_tx_history(&tx)?;
+        table.replace_item_by_unique_multi_index(index_keys, &item).await?;
+        Ok(())
     }
 
-    async fn update_txs_meta_by_token_addr_id(&self, _chain: &Chain, _tx_meta: TxMeta) -> MmResult<(), Self::Error> {
-        todo!()
+    async fn update_txs_meta_by_token_addr_id(&self, chain: &Chain, tx_meta: TxMeta) -> MmResult<(), Self::Error> {
+        let txs: Vec<NftTransferHistory> = self
+            .get_txs_by_token_addr_id(chain, tx_meta.token_address, tx_meta.token_id)
+            .await?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        for mut tx in txs {
+            tx.collection_name = tx_meta.collection_name.clone();
+            tx.image = tx_meta.image.clone();
+            tx.token_name = tx_meta.token_name.clone();
+            drop_mutability!(tx);
+            let index_keys = MultiIndex::new(NftTxHistoryTable::CHAIN_TX_HASH_INDEX)
+                .with_value(chain.to_string())?
+                .with_value(&tx.transaction_hash)?;
+            let item = NftTxHistoryTable::from_tx_history(&tx)?;
+            table.replace_item_by_unique_multi_index(index_keys, &item).await?;
+        }
+        Ok(())
     }
 
-    async fn get_txs_with_empty_meta(&self, _chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> { todo!() }
+    async fn get_txs_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        let mut cursor = table
+            .cursor_builder()
+            .only("chain", chain.to_string())
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .open_cursor("chain")
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
+
+        let mut res = HashSet::new();
+        while let Some((_item_id, item)) = cursor
+            .next()
+            .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+        {
+            if item.collection_name.is_none() && item.image.is_none() && item.token_name.is_none() {
+                res.insert(NftTokenAddrId {
+                    token_address: item.token_address,
+                    token_id: BigDecimal::from_str(&item.token_id).map_err(WasmNftCacheError::ParseBigDecimalError)?,
+                });
+            }
+        }
+        drop_mutability!(res);
+        Ok(res.into_iter().collect())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -456,7 +588,6 @@ impl NftTxHistoryTable {
 
     const CHAIN_TX_HASH_INDEX: &str = "chain_tx_hash_index";
 
-    #[allow(dead_code)]
     fn from_tx_history(tx: &NftTransferHistory) -> WasmNftCacheResult<NftTxHistoryTable> {
         let details_json = json::to_value(tx).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
         Ok(NftTxHistoryTable {
@@ -519,28 +650,4 @@ fn nft_details_from_item(item: NftListTable) -> WasmNftCacheResult<Nft> {
 
 fn tx_details_from_item(item: NftTxHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
     json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
-}
-
-fn compare_nft_block_numbers(a: &Nft, b: &Nft) -> Ordering {
-    let a = BlockNumber::new(a.block_number);
-    let b = BlockNumber::new(b.block_number);
-    compare_nfts(a, b)
-}
-
-struct BlockNumber {
-    block_number: u64,
-}
-
-impl BlockNumber {
-    fn new(block_number: u64) -> BlockNumber { BlockNumber { block_number } }
-}
-
-fn compare_nfts(a: BlockNumber, b: BlockNumber) -> Ordering {
-    if a.block_number == 0 {
-        Ordering::Less
-    } else if b.block_number == 0 {
-        Ordering::Greater
-    } else {
-        b.block_number.cmp(&a.block_number)
-    }
 }
