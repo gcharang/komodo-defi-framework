@@ -102,13 +102,14 @@ impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
             GetNftInfoError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-            GetNftInfoError::InvalidResponse(_) => StatusCode::FAILED_DEPENDENCY,
+            GetNftInfoError::InvalidResponse(_) | GetNftInfoError::ParseTimestampError(_) => {
+                StatusCode::FAILED_DEPENDENCY
+            },
             GetNftInfoError::Transport(_)
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
-            | GetNftInfoError::DbError(_)
-            | GetNftInfoError::ParseTimestampError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -141,7 +142,7 @@ pub enum UpdateNftError {
         amount_history: String,
     },
     #[display(
-        fmt = "Last scanned nft block {} should be >= last block number in nft table {}",
+        fmt = "Last scanned nft block {} should be >= last block number {} in nft table",
         last_scanned_block,
         last_nft_block
     )]

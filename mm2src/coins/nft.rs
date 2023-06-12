@@ -85,70 +85,58 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
         let tx_history_initialized = NftTxHistoryStorageOps::is_initialized(&storage, chain).await?;
-        let list_initialized = NftListStorageOps::is_initialized(&storage, chain).await?;
 
-        if !tx_history_initialized {
-            NftTxHistoryStorageOps::init(&storage, chain).await?;
-            let nft_transfers = get_moralis_nft_transfers(&ctx, chain, None, &req.url).await?;
-            storage.add_txs_to_history(chain, nft_transfers).await?;
-        } else {
+        let from_block = if tx_history_initialized {
             let last_tx_block = NftTxHistoryStorageOps::get_last_block_number(&storage, chain).await?;
-            let nft_transfers = get_moralis_nft_transfers(&ctx, chain, last_tx_block.map(|b| b + 1), &req.url).await?;
-            storage.add_txs_to_history(chain, nft_transfers).await?;
-        }
-
-        if !list_initialized {
-            NftListStorageOps::init(&storage, chain).await?;
-            let nft_list = get_moralis_nft_list(&ctx, chain, &req.url).await?;
-            let last_scanned_block = NftTxHistoryStorageOps::get_last_block_number(&storage, chain)
-                .await?
-                .unwrap_or(0);
-            storage
-                .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
-                .await?;
-            // this will update only txs related to current nfts in wallet.
-            update_meta_in_txs(&storage, chain, nft_list).await?;
-            update_txs_with_empty_meta(&storage, chain, &req.url).await?;
+            last_tx_block.map(|b| b + 1)
         } else {
-            let last_scanned_block = storage.get_last_scanned_block(chain).await?;
-            let last_nft_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
+            NftTxHistoryStorageOps::init(&storage, chain).await?;
+            None
+        };
+        let nft_transfers = get_moralis_nft_transfers(&ctx, chain, from_block, &req.url).await?;
+        storage.add_txs_to_history(chain, nft_transfers).await?;
 
-            match (last_scanned_block, last_nft_block) {
-                // if both block numbers exist, last scanned block should be equal
-                // or higher than last block number from NFT LIST table.
-                (Some(scanned_block), Some(nft_block)) => {
-                    if scanned_block >= nft_block {
-                        update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
-                        update_txs_with_empty_meta(&storage, chain, &req.url).await?;
-                    } else {
-                        return MmError::err(UpdateNftError::InvalidBlockOrder {
-                            last_scanned_block: scanned_block.to_string(),
-                            last_nft_block: nft_block.to_string(),
-                        });
-                    }
-                },
-                // If the last scanned block value is absent, we cannot accurately update the NFT cache.
-                // This is because a situation may occur where the user doesn't transfer all ERC-1155 tokens,
-                // resulting in the block number of NFT remaining unchanged.
-                (None, Some(nft_block)) => {
-                    return MmError::err(UpdateNftError::LastScannedBlockNotFound {
-                        last_nft_block: nft_block.to_string(),
-                    });
-                },
-                // if there are no rows in NFT LIST table or in both tables there are no rows
-                // we can try to get all info from moralis.
-                (Some(_), None) => {
-                    let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
-                    update_meta_in_txs(&storage, chain, nfts).await?;
-                    update_txs_with_empty_meta(&storage, chain, &req.url).await?;
-                },
-                (None, None) => {
-                    let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
-                    update_meta_in_txs(&storage, chain, nfts).await?;
-                    update_txs_with_empty_meta(&storage, chain, &req.url).await?;
-                },
-            }
+        let nft_block = match NftListStorageOps::get_last_block_number(&storage, chain).await {
+            Ok(Some(block)) => block,
+            Ok(None) => {
+                // if there are no rows in NFT LIST table we can try to get all info from moralis.
+                let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
+                update_meta_in_txs(&storage, chain, nfts).await?;
+                update_txs_with_empty_meta(&storage, chain, &req.url).await?;
+                continue;
+            },
+            Err(_) => {
+                // if there is an error, then NFT LIST table doesnt exist, so we need to cache from mroalis.
+                NftListStorageOps::init(&storage, chain).await?;
+                let nft_list = get_moralis_nft_list(&ctx, chain, &req.url).await?;
+                let last_scanned_block = NftTxHistoryStorageOps::get_last_block_number(&storage, chain)
+                    .await?
+                    .unwrap_or(0);
+                storage
+                    .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
+                    .await?;
+                update_meta_in_txs(&storage, chain, nft_list).await?;
+                update_txs_with_empty_meta(&storage, chain, &req.url).await?;
+                continue;
+            },
+        };
+        let scanned_block =
+            storage
+                .get_last_scanned_block(chain)
+                .await?
+                .ok_or_else(|| UpdateNftError::LastScannedBlockNotFound {
+                    last_nft_block: nft_block.to_string(),
+                })?;
+        // if both block numbers exist, last scanned block should be equal
+        // or higher than last block number from NFT LIST table.
+        if scanned_block < nft_block {
+            return MmError::err(UpdateNftError::InvalidBlockOrder {
+                last_scanned_block: scanned_block.to_string(),
+                last_nft_block: nft_block.to_string(),
+            });
         }
+        update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
+        update_txs_with_empty_meta(&storage, chain, &req.url).await?;
     }
     Ok(())
 }
@@ -495,23 +483,15 @@ async fn handle_nft_tx<T: NftListStorageOps + NftTxHistoryStorageOps>(
     tx: NftTransferHistory,
     my_address: &str,
 ) -> MmResult<(), UpdateNftError> {
-    if let Some(contract_type) = tx.contract_type {
-        match (tx.status, contract_type) {
-            (TransferStatus::Send, ContractType::Erc721) => handle_send_erc721(storage, chain, tx).await,
-            (TransferStatus::Receive, ContractType::Erc721) => {
-                handle_receive_erc721(storage, chain, tx, url, my_address).await
-            },
-            (TransferStatus::Send, ContractType::Erc1155) => handle_send_erc1155(storage, chain, tx).await,
-            (TransferStatus::Receive, ContractType::Erc1155) => {
-                handle_receive_erc1155(storage, chain, tx, url, my_address).await
-            },
-        }
-    } else if tx.status == TransferStatus::Send {
-        // if contract_type is None, we need to handle this token as erc721, because it is a custom standard like CRYPTO PUNKS
-        // which has almost the same behaviour as erc721 (1 owner can have 1 nft).
-        handle_send_erc721(storage, chain, tx).await
-    } else {
-        handle_receive_erc721(storage, chain, tx, url, my_address).await
+    match (tx.status, tx.contract_type) {
+        (TransferStatus::Send, None | Some(ContractType::Erc721)) => handle_send_erc721(storage, chain, tx).await,
+        (TransferStatus::Receive, None | Some(ContractType::Erc721)) => {
+            handle_receive_erc721(storage, chain, tx, url, my_address).await
+        },
+        (TransferStatus::Send, Some(ContractType::Erc1155)) => handle_send_erc1155(storage, chain, tx).await,
+        (TransferStatus::Receive, Some(ContractType::Erc1155)) => {
+            handle_receive_erc1155(storage, chain, tx, url, my_address).await
+        },
     }
 }
 
@@ -725,6 +705,7 @@ async fn cache_nfts_from_moralis<T: NftListStorageOps + NftTxHistoryStorageOps>(
     Ok(nft_list)
 }
 
+/// `update_meta_in_txs` function updates only txs related to current nfts in wallet.
 async fn update_meta_in_txs<T>(storage: &T, chain: &Chain, nfts: Vec<Nft>) -> MmResult<(), UpdateNftError>
 where
     T: NftListStorageOps + NftTxHistoryStorageOps,
@@ -742,6 +723,7 @@ where
     Ok(())
 }
 
+/// `update_txs_with_empty_meta` function updates empty metadata in transfers.
 async fn update_txs_with_empty_meta<T>(storage: &T, chain: &Chain, url: &Url) -> MmResult<(), UpdateNftError>
 where
     T: NftListStorageOps + NftTxHistoryStorageOps,
