@@ -215,7 +215,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
                     token_hash: nft_wrapper.token_hash,
                     block_number_minted: *nft_wrapper.block_number_minted,
                     block_number: *nft_wrapper.block_number,
-                    contract_type: nft_wrapper.contract_type.map(|v| v.0),
+                    contract_type: nft_wrapper.contract_type.0,
                     collection_name: nft_wrapper.name,
                     symbol: nft_wrapper.symbol,
                     token_uri: nft_wrapper.token_uri,
@@ -293,7 +293,7 @@ async fn get_moralis_nft_transfers(
                     transaction_index: transfer_wrapper.transaction_index,
                     log_index: transfer_wrapper.log_index,
                     value: transfer_wrapper.value.0,
-                    contract_type: transfer_wrapper.contract_type.map(|v| v.0),
+                    contract_type: transfer_wrapper.contract_type.0,
                     transaction_type: transfer_wrapper.transaction_type,
                     token_address: transfer_wrapper.token_address,
                     token_id: transfer_wrapper.token_id.0,
@@ -358,7 +358,7 @@ async fn get_moralis_metadata(
         token_hash: nft_wrapper.token_hash,
         block_number_minted: *nft_wrapper.block_number_minted,
         block_number: *nft_wrapper.block_number,
-        contract_type: nft_wrapper.contract_type.map(|v| v.0),
+        contract_type: nft_wrapper.contract_type.0,
         collection_name: nft_wrapper.name,
         symbol: nft_wrapper.symbol,
         token_uri: nft_wrapper.token_uri,
@@ -484,12 +484,12 @@ async fn handle_nft_tx<T: NftListStorageOps + NftTxHistoryStorageOps>(
     my_address: &str,
 ) -> MmResult<(), UpdateNftError> {
     match (tx.status, tx.contract_type) {
-        (TransferStatus::Send, None | Some(ContractType::Erc721)) => handle_send_erc721(storage, chain, tx).await,
-        (TransferStatus::Receive, None | Some(ContractType::Erc721)) => {
+        (TransferStatus::Send, ContractType::Erc721) => handle_send_erc721(storage, chain, tx).await,
+        (TransferStatus::Receive, ContractType::Erc721) => {
             handle_receive_erc721(storage, chain, tx, url, my_address).await
         },
-        (TransferStatus::Send, Some(ContractType::Erc1155)) => handle_send_erc1155(storage, chain, tx).await,
-        (TransferStatus::Receive, Some(ContractType::Erc1155)) => {
+        (TransferStatus::Send, ContractType::Erc1155) => handle_send_erc1155(storage, chain, tx).await,
+        (TransferStatus::Receive, ContractType::Erc1155) => {
             handle_receive_erc1155(storage, chain, tx, url, my_address).await
         },
     }

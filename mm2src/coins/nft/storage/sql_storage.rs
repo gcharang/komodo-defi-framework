@@ -35,7 +35,7 @@ fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     chain TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
     block_number INTEGER NOT NULL,
-    contract_type TEXT,
+    contract_type TEXT NOT NULL,
     details_json TEXT,
     PRIMARY KEY (token_address, token_id)
         );",
@@ -53,7 +53,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     chain TEXT NOT NULL,
     block_number INTEGER NOT NULL,
     block_timestamp INTEGER NOT NULL,
-    contract_type TEXT,
+    contract_type TEXT NOT NULL,
     token_address VARCHAR(256) NOT NULL,
     token_id VARCHAR(256) NOT NULL,
     status TEXT NOT NULL,
@@ -520,7 +520,7 @@ impl NftListStorageOps for SqliteNftStorage {
                     Some(nft.chain.to_string()),
                     Some(nft.amount.to_string()),
                     Some(nft.block_number.to_string()),
-                    nft.contract_type.map(|ct| ct.to_string()),
+                    Some(nft.contract_type.to_string()),
                     Some(nft_json),
                 ];
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, params)?;
@@ -765,7 +765,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.chain.to_string()),
                     Some(tx.block_number.to_string()),
                     Some(tx.block_timestamp.to_string()),
-                    tx.contract_type.map(|ct| ct.to_string()),
+                    Some(tx.contract_type.to_string()),
                     Some(tx.token_address),
                     Some(tx.token_id.to_string()),
                     Some(tx.status.to_string()),
