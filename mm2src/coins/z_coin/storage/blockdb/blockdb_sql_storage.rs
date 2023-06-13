@@ -8,7 +8,6 @@ use mm2_err_handle::prelude::*;
 use protobuf::Message;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tokio::task::block_in_place;
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::data_api::BlockSource;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
@@ -151,6 +150,6 @@ impl BlockSource for BlockDbImpl {
     where
         F: FnMut(CompactBlock) -> Result<(), Self::Error>,
     {
-        block_in_place(|| block_on(self.with_blocks(from_height, limit, with_row)))
+        block_on(self.with_blocks(from_height, limit, with_row))
     }
 }

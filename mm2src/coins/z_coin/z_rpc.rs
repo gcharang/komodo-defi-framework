@@ -21,7 +21,7 @@ cfg_native!(
 
     use db_common::sqlite::rusqlite::Connection;
     use db_common::sqlite::{query_single_row, run_optimization_pragmas};
-    use common::async_blocking;
+    use common::{async_blocking, block_on};
     use common::executor::Timer;
     use common::log::{debug, error, info, LogOnError};
     use common::Future01CompatExt;
@@ -557,7 +557,7 @@ impl SaplingSyncLoopHandle {
         rpc: &mut (dyn ZRpcOps + Send),
     ) -> Result<(), MmError<UpdateBlocksCacheErr>> {
         let current_block = rpc.get_block_height().await?;
-        let current_block_in_db = block_in_place(|| self.blocks_db.get_latest_block())?;
+        let current_block_in_db = self.blocks_db.get_latest_block().await?;
         let wallet_db = self.wallet_db.clone();
         let extrema = block_in_place(|| {
             let conn = wallet_db.db.lock();
@@ -573,7 +573,7 @@ impl SaplingSyncLoopHandle {
         }
         if current_block >= from_block {
             rpc.scan_blocks(from_block, current_block, &mut |block: TonicCompactBlock| {
-                block_in_place(|| self.blocks_db.insert_block(block.height as u32, block.encode_to_vec()))
+                block_on(self.blocks_db.insert_block(block.height as u32, block.encode_to_vec()))
                     .map_err(|err| UpdateBlocksCacheErr::ZcashDBError(err.to_string()))?;
                 self.notify_blocks_cache_status(block.height, current_block);
                 Ok(())
@@ -605,13 +605,14 @@ impl SaplingSyncLoopHandle {
                         BlockHeight::from_u32(0)
                     };
                     wallet_ops.rewind_to_height(rewind_height)?;
-                    self.blocks_db.rewind_to_height(rewind_height.into())?;
+                    block_on(self.blocks_db.rewind_to_height(rewind_height.into()))?;
                 },
                 e => return MmError::err(BlockDbError::SqliteError(e)),
             }
         }
 
-        let current_block = BlockHeight::from_u32(self.blocks_db.get_latest_block()?);
+        let latest_block_height = block_on(self.blocks_db.get_latest_block())?;
+        let current_block = BlockHeight::from_u32(latest_block_height);
         loop {
             match wallet_ops.block_height_extrema()? {
                 Some((_, max_in_wallet)) => {
