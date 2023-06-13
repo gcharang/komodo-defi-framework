@@ -19,6 +19,58 @@ const DB_VERSION: u32 = 1;
 pub type BlockDbRes<T> = MmResult<T, BlockDbError>;
 pub type BlockDbInnerLocked<'a> = DbLocked<'a, BlockDbInner>;
 
+impl BlockDbError {
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn add_err(ticker: &str, err: String, height: u32) -> Self {
+        Self::AddToStorageErr {
+            ticker: ticker.to_string(),
+            err,
+            height,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn get_err(ticker: &str, err: String) -> Self {
+        Self::GetFromStorageError {
+            ticker: ticker.to_string(),
+            err,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn remove_err(ticker: &str, err: String, height: u32) -> Self {
+        Self::RemoveFromStorageErr {
+            ticker: ticker.to_string(),
+            err,
+            height,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn init_err(ticker: &str, err: String) -> Self {
+        Self::InitDbError {
+            ticker: ticker.to_string(),
+            err,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn not_found(ticker: &str, err: String) -> Self {
+        Self::BlockHeightNotFound {
+            ticker: ticker.to_string(),
+            err,
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn table_err(ticker: &str, err: String) -> Self {
+        Self::IdbTableError {
+            ticker: ticker.to_string(),
+            err,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockDbTable {
     height: u32,
@@ -38,6 +90,7 @@ impl TableSignature for BlockDbTable {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_multi_index(Self::TICKER_HEIGHT_INDEX, &["ticker", "height"], true)?;
             table.create_index("ticker", false)?;
+            table.create_index("height", false)?;
         }
         Ok(())
     }
@@ -67,7 +120,7 @@ impl BlockDbInner {
 }
 
 impl BlockDbImpl {
-    pub async fn new(ctx: MmArc, ticker: String, _path: impl AsRef<Path>) -> Result<Self, BlockDbError> {
+    pub async fn new(ctx: MmArc, ticker: String, _path: Option<impl AsRef<Path>>) -> Result<Self, BlockDbError> {
         Ok(Self {
             db: ConstructibleDb::new(&ctx).into_shared(),
             ticker,
@@ -100,7 +153,7 @@ impl BlockDbImpl {
             .cursor_builder()
             .only("ticker", ticker.clone())
             .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?
-            .bound("height", BeBigUint::from(0u32), BeBigUint::from(u32::MAX))
+            .bound("height", 0u32, u32::MAX)
             .reverse()
             .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
             .await
@@ -140,8 +193,8 @@ impl BlockDbImpl {
             .await
             .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?;
 
-        block_db
-            .replace_item_by_unique_multi_index(
+        Ok(block_db
+            .add_item_or_ignore_by_unique_multi_index(
                 MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
                     .with_value(&ticker)
                     .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?
@@ -154,9 +207,8 @@ impl BlockDbImpl {
                 },
             )
             .await
-            .map_err(|err| BlockDbError::add_err(&ticker, err.to_string(), height))?;
-
-        Ok(height as usize)
+            .map_err(|err| BlockDbError::add_err(&ticker, err.to_string(), height))?
+            .item_id() as usize)
     }
 
     pub async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {

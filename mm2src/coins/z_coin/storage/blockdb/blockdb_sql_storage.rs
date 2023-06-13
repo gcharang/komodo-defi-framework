@@ -1,5 +1,6 @@
 use crate::z_coin::storage::{BlockDbError, BlockDbImpl};
 
+use common::block_on;
 use db_common::sqlite::rusqlite::{params, Connection};
 use db_common::sqlite::{query_single_row, run_optimization_pragmas};
 use mm2_core::mm_ctx::MmArc;
@@ -7,6 +8,7 @@ use mm2_err_handle::prelude::*;
 use protobuf::Message;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tokio::task::block_in_place;
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::data_api::BlockSource;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
@@ -19,20 +21,19 @@ struct CompactBlockRow {
     data: Vec<u8>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl From<SqliteClientError> for BlockDbError {
     fn from(value: SqliteClientError) -> Self { Self::SqliteError(value) }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl From<ChainError<NoteId>> for BlockDbError {
     fn from(value: ChainError<NoteId>) -> Self { Self::SqliteError(SqliteClientError::from(value)) }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl BlockDbImpl {
-    pub async fn new(_ctx: MmArc, ticker: String, path: impl AsRef<Path>) -> MmResult<Self, BlockDbError> {
-        let conn = Connection::open(path).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
+    #[cfg(all(not(test)))]
+    pub async fn new(_ctx: MmArc, ticker: String, path: Option<impl AsRef<Path>>) -> MmResult<Self, BlockDbError> {
+        let conn =
+            Connection::open(path.unwrap()).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
         run_optimization_pragmas(&conn).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS compactblocks (
@@ -49,7 +50,28 @@ impl BlockDbImpl {
         })
     }
 
-    pub(crate) fn get_latest_block(&self) -> Result<u32, ZcashClientError> {
+    #[cfg(all(test))]
+    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: Option<impl AsRef<Path>>) -> Result<Self, BlockDbError> {
+        let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let conn = ctx.sqlite_connection.clone_or(conn);
+        let clone_db = conn.clone();
+        let clone_db = clone_db.lock().unwrap();
+        run_optimization_pragmas(&clone_db).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
+        clone_db
+            .execute(
+                "CREATE TABLE IF NOT EXISTS compactblocks (
+            height INTEGER PRIMARY KEY,
+            data BLOB NOT NULL
+        )",
+                [],
+            )
+            .map_to_mm(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
+            .unwrap();
+
+        Ok(BlockDbImpl { db: conn, ticker })
+    }
+
+    pub(crate) async fn get_latest_block(&self) -> Result<u32, ZcashClientError> {
         Ok(query_single_row(
             &self.db.lock().unwrap(),
             "SELECT height FROM compactblocks ORDER BY height DESC LIMIT 1",
@@ -59,7 +81,7 @@ impl BlockDbImpl {
         .unwrap_or(0))
     }
 
-    pub(crate) fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, BlockDbError> {
+    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, BlockDbError> {
         self.db
             .lock()
             .unwrap()
@@ -69,7 +91,7 @@ impl BlockDbImpl {
             .map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
     }
 
-    pub(crate) fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
+    pub(crate) async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
         self.db
             .lock()
             .unwrap()
@@ -77,7 +99,7 @@ impl BlockDbImpl {
             .map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
     }
 
-    fn with_blocks<F>(
+    async fn with_blocks<F>(
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
@@ -122,7 +144,6 @@ impl BlockDbImpl {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl BlockSource for BlockDbImpl {
     type Error = SqliteClientError;
 
@@ -130,6 +151,6 @@ impl BlockSource for BlockDbImpl {
     where
         F: FnMut(CompactBlock) -> Result<(), Self::Error>,
     {
-        self.with_blocks(from_height, limit, with_row)
+        block_in_place(|| block_on(self.with_blocks(from_height, limit, with_row)))
     }
 }
