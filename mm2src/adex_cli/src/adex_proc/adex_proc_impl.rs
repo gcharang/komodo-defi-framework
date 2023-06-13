@@ -15,6 +15,7 @@ use super::response_handler::ResponseHandler;
 use super::OrderbookConfig;
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
+use crate::cli_args::OrdersHistorySettings;
 use crate::transport::Transport;
 use crate::{error_bail, warn_bail};
 
@@ -356,20 +357,24 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn orders_history(&self, orders_history_request: OrdersHistoryRequest) -> Result<()> {
-        info!("Getting order history");
-        let is_detailed = orders_history_request.include_details;
+    pub async fn orders_history(
+        &self,
+        orders_history_request: OrdersHistoryRequest,
+        settings: OrdersHistorySettings,
+    ) -> Result<()> {
+        info!("Getting order history ...");
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrdersHistory)
             .flatten_data(orders_history_request)
             .build()?;
+
         match self
             .transport
             .send::<_, Mm2RpcResult<OrdersHistoryResponse>, Json>(command)
             .await
         {
-            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orders_history(result, is_detailed),
+            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orders_history(result, settings),
             Ok(Err(error)) => self.response_handler.print_response(error),
             _ => bail!(""),
         }

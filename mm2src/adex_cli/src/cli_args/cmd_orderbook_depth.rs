@@ -30,7 +30,7 @@ impl FromStr for BaseRel {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let split = s
-            .split_once("/")
+            .split_once('/')
             .ok_or_else(|| anyhow!("Failed to get base_rel from: {s}"))?;
 
         Ok(BaseRel(split.0.to_string(), split.1.to_string()))

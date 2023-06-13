@@ -428,9 +428,13 @@ pub struct SetPriceReq {
     pub min_volume: Option<MmNumber>,
     #[serde(default = "get_true")]
     pub cancel_previous: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub base_confs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub base_nota: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rel_confs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rel_nota: Option<bool>,
     #[serde(default = "get_true")]
     pub save_in_history: bool,
@@ -455,19 +459,30 @@ pub struct PairDepth {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrdersHistoryRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub order_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rel: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_price: Option<MmNumber>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_price: Option<MmNumber>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_volume: Option<MmNumber>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_volume: Option<MmNumber>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_timestamp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_timestamp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub was_taker: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
-    #[serde(default)]
     pub include_details: bool,
 }
 

@@ -10,9 +10,9 @@ use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, FilteringOrder,
                             GetEnabledResponse, HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
                             MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse,
-                            MyOrdersResponse, OrderConfirmationsSettings, OrderStatusResponse, OrderbookResponse,
-                            OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status, TakerMatchForRpc,
-                            TakerOrderForRpc};
+                            MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusResponse,
+                            OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status,
+                            TakerMatchForRpc, TakerOrderForRpc, UuidParseError};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
 use std::cell::RefCell;
@@ -58,7 +58,7 @@ pub(crate) trait ResponseHandler {
     fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()>;
     fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()>;
     fn on_orderbook_depth(&self, orderbook_depth: Vec<PairWithDepth>) -> Result<()>;
-    fn on_orders_history(&self, order_history: OrdersHistoryResponse, is_detailed: bool) -> Result<()>;
+    fn on_orders_history(&self, order_history: OrdersHistoryResponse, settings: OrdersHistorySettings) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -342,36 +342,75 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         });
         let mut writer = self.writer.borrow_mut();
         let writer: &mut dyn Write = writer.deref_mut();
-        write_safe_io!(writer, "{}", term_table.render().replace("\0", ""));
+        write_safe_io!(writer, "{}", term_table.render().replace('\0', ""));
         Ok(())
     }
 
-    fn on_orders_history(&self, order_history: OrdersHistoryResponse, is_detailed: bool) -> Result<()> {
-        let mut fo_table = term_table_blank();
-        fo_table.add_row(Self::filtering_order_header_row());
-
-        for order in order_history.orders {
-            fo_table.add_row(Self::filtering_order_row(&order)?);
-        }
-
+    fn on_orders_history(
+        &self,
+        mut order_history: OrdersHistoryResponse,
+        settings: OrdersHistorySettings,
+    ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         let writer: &mut dyn Write = writer.deref_mut();
-        writeln_safe_io!(writer, "{}", fo_table.render());
-        if is_detailed {
-            let mut detailed_table = term_table_blank();
-            detailed_table.add_row()
+
+        macro_rules! write_result {
+            ($rows: ident, $header_fn: ident, $legend: literal) => {
+                if $rows.is_empty() {
+                    writeln_safe_io!(writer, concat!($legend, " not found"));
+                } else {
+                    let mut table = term_table_blank(TableStyle::thin(), false, true, true);
+                    table.add_row(Self::$header_fn());
+                    table.add_row(Row::new(vec![TableCell::new("")]));
+                    table.rows.extend($rows.drain(..));
+                    writeln_safe_io!(writer, concat!($legend, "\n{}"), table.render())
+                }
+            };
+        }
+        if settings.common {
+            let orders = order_history.orders.drain(..);
+            let mut rows: Vec<Row> = orders.map(Self::filtering_order_row).try_collect()?;
+            write_result!(rows, filtering_order_header_row, "Orders history:");
+        }
+
+        let mut maker_rows = vec![];
+        let mut taker_rows = vec![];
+
+        if settings.makers_detailed || settings.takers_detailed {
+            for order in order_history.details.drain(..) {
+                match order {
+                    OrderForRpc::Maker(order) => Self::maker_order_rows(&order)?
+                        .drain(..)
+                        .for_each(|row| maker_rows.push(row)),
+                    OrderForRpc::Taker(order) => Self::taker_order_rows(&order)?
+                        .drain(..)
+                        .for_each(|row| taker_rows.push(row)),
+                }
+            }
+        }
+
+        if settings.takers_detailed {
+            write_result!(taker_rows, taker_order_header_row, "Taker orders history detailed:");
+        }
+        if settings.makers_detailed {
+            write_result!(maker_rows, maker_order_header_row, "Maker orders history detailed:");
+        }
+        if settings.warnings {
+            let warnings = order_history.warnings.drain(..);
+            let mut rows: Vec<Row> = warnings.map(Self::uuid_parse_error_row).collect();
+            write_result!(rows, uuid_parse_error_header_row, "Uuid parse errors:");
         }
 
         Ok(())
     }
 }
 
-fn term_table_blank() -> TermTable<'static> {
+fn term_table_blank(style: TableStyle, sep_row: bool, bottom_border: bool, top_border: bool) -> TermTable<'static> {
     let mut term_table = TermTable::new();
-    term_table.style = TableStyle::thin();
-    term_table.separate_rows = false;
-    term_table.has_bottom_boarder = false;
-    term_table.has_top_boarder = false;
+    term_table.style = style;
+    term_table.separate_rows = sep_row;
+    term_table.has_bottom_boarder = bottom_border;
+    term_table.has_top_boarder = top_border;
     term_table
 }
 
@@ -501,11 +540,11 @@ impl ResponseHandlerImpl<'_> {
             TableCell::new("swaps"),
             TableCell::new("conf_settings"),
             TableCell::new("history changes"),
-            TableCell::new("ob ticker base,\nrel"),
+            TableCell::new("orderbook ticker\nbase, rel"),
         ])
     }
 
-    fn maker_order_row(order: &MakerOrderForRpc) -> Result<Vec<Row>> {
+    fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
         let mut rows = vec![Row::new(vec![
             TableCell::new(format!("{},{}", order.base, order.rel)),
             TableCell::new(format_ratio(&order.price_rat, 2, 5)?),
@@ -579,7 +618,7 @@ impl ResponseHandlerImpl<'_> {
         ])
     }
 
-    fn taker_order_row(taker_order: &TakerOrderForRpc) -> Result<Vec<Row>> {
+    fn taker_order_rows(taker_order: &TakerOrderForRpc) -> Result<Vec<Row<'static>>> {
         let req = &taker_order.request;
         let mut rows = vec![Row::new(vec![
             TableCell::new(format!(
@@ -670,7 +709,7 @@ impl ResponseHandlerImpl<'_> {
             table.separate_rows = false;
             table.add_row(ResponseHandlerImpl::taker_order_header_row());
             for (_, taker_order) in taker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
-                for row in ResponseHandlerImpl::taker_order_row(taker_order)? {
+                for row in ResponseHandlerImpl::taker_order_rows(taker_order)? {
                     table.add_row(row);
                 }
             }
@@ -850,7 +889,7 @@ impl ResponseHandlerImpl<'_> {
         ])
     }
 
-    fn filtering_order_row(order: &FilteringOrder) -> Result<Row<'static>> {
+    fn filtering_order_row(order: FilteringOrder) -> Result<Row<'static>> {
         Ok(Row::new(vec![
             TableCell::new_with_alignment_and_padding(&order.uuid, 1, Alignment::Left, false),
             TableCell::new_with_alignment_and_padding(&order.order_type, 1, Alignment::Left, false),
@@ -874,6 +913,15 @@ impl ResponseHandlerImpl<'_> {
             ),
             TableCell::new_with_alignment_and_padding(order.was_taker != 0, 1, Alignment::Left, false),
         ]))
+    }
+
+    fn uuid_parse_error_header_row() -> Row<'static> { Row::new(vec![TableCell::new("uuid"), TableCell::new("error")]) }
+
+    fn uuid_parse_error_row(uuid_parse_error: UuidParseError) -> Row<'static> {
+        Row::new(vec![
+            TableCell::new(uuid_parse_error.uuid),
+            TableCell::new(uuid_parse_error.warning),
+        ])
     }
 }
 
@@ -952,6 +1000,7 @@ mod macros {
     pub use {write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
 }
 
+use crate::cli_args::OrdersHistorySettings;
 use crate::write_field_option;
 use macros::{write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
 

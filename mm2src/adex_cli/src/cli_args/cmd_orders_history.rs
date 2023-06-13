@@ -69,12 +69,8 @@ pub struct OrdersHistoryArgs {
     was_taker: bool,
     #[arg(long, value_enum, help = "Return only orders that match the status")]
     status: Option<StatusFilter>,
-    #[arg(
-        long = "detailed",
-        default_value_t = false,
-        help = "Include complete order details in response"
-    )]
-    include_details: bool,
+    #[command(flatten)]
+    settings: OrdersHistorySettings,
 }
 
 impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
@@ -92,9 +88,34 @@ impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
             to_timestamp: value.to_dt.map(|dt| dt.timestamp() as u64),
             was_taker: Some(value.was_taker),
             status: value.status.as_ref().map(StatusFilter::to_string),
-            include_details: value.include_details,
+            include_details: value.settings.takers_detailed || value.settings.makers_detailed,
         }
     }
+}
+
+#[derive(Args, Copy, Clone)]
+#[group(required = true, multiple = true)]
+pub(crate) struct OrdersHistorySettings {
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Whether to show taker orders detailed history"
+    )]
+    pub takers_detailed: bool,
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Whether to show maker orders detailed history"
+    )]
+    pub makers_detailed: bool,
+    #[arg(long, default_value_t = false, help = "Whether to show warnings")]
+    pub warnings: bool,
+    #[arg(long, default_value_t = false, help = "Whether to show common history data")]
+    pub common: bool,
+}
+
+impl From<&mut OrdersHistoryArgs> for OrdersHistorySettings {
+    fn from(value: &mut OrdersHistoryArgs) -> Self { value.settings }
 }
 
 fn parse_datetime(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
