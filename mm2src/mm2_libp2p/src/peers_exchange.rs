@@ -1,12 +1,13 @@
 use crate::request_response::Codec;
 use crate::NetworkInfo;
 use futures::StreamExt;
-use libp2p::swarm::NetworkBehaviour;
+use libp2p::request_response::{Behaviour as RequestResponse, Config as RequestResponseConfig,
+                               Event as RequestResponseEvent, Message as RequestResponseMessage};
+use libp2p::swarm::{NetworkBehaviour, ToSwarm};
 use libp2p::{multiaddr::{Multiaddr, Protocol},
-             request_response::{ProtocolName, ProtocolSupport, RequestResponse, RequestResponseConfig,
-                                RequestResponseEvent, RequestResponseMessage},
-             swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
-             NetworkBehaviour, PeerId};
+             request_response::ProtocolSupport,
+             swarm::PollParameters,
+             PeerId};
 use log::{error, info, warn};
 use rand::seq::SliceRandom;
 use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
@@ -24,10 +25,10 @@ pub enum PeersExchangeProtocol {
     Version1,
 }
 
-impl ProtocolName for PeersExchangeProtocol {
-    fn protocol_name(&self) -> &[u8] {
+impl AsRef<str> for PeersExchangeProtocol {
+    fn as_ref(&self) -> &str {
         match self {
-            PeersExchangeProtocol::Version1 => b"/peers-exchange/1",
+            PeersExchangeProtocol::Version1 => "/peers-exchange/1",
         }
     }
 }
@@ -80,7 +81,7 @@ pub struct PeersExchange {
     #[behaviour(ignore)]
     reserved_peers: Vec<PeerId>,
     #[behaviour(ignore)]
-    events: VecDeque<NetworkBehaviourAction<(), <Self as NetworkBehaviour>::ConnectionHandler>>,
+    events: VecDeque<ToSwarm<(), <Self as NetworkBehaviour>::ConnectionHandler>>,
     #[behaviour(ignore)]
     maintain_peers_interval: Interval,
     #[behaviour(ignore)]
@@ -279,7 +280,7 @@ impl PeersExchange {
         &mut self,
         cx: &mut Context,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<(), <Self as NetworkBehaviour>::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<(), <Self as NetworkBehaviour>::ConnectionHandler>> {
         while let Poll::Ready(Some(())) = self.maintain_peers_interval.poll_next_unpin(cx) {
             self.maintain_known_peers();
         }
@@ -292,8 +293,8 @@ impl PeersExchange {
     }
 }
 
-impl NetworkBehaviourEventProcess<RequestResponseEvent<PeersExchangeRequest, PeersExchangeResponse>> for PeersExchange {
-    fn inject_event(&mut self, event: RequestResponseEvent<PeersExchangeRequest, PeersExchangeResponse>) {
+impl From<RequestResponseEvent<PeersExchangeRequest, PeersExchangeResponse>> for PeersExchange {
+    fn from(&mut self, event: RequestResponseEvent<PeersExchangeRequest, PeersExchangeResponse>) {
         match event {
             RequestResponseEvent::Message { message, peer } => match message {
                 RequestResponseMessage::Request { request, channel, .. } => match request {

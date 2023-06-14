@@ -28,6 +28,6 @@ impl SpawnFuture for SwarmRuntime {
     }
 }
 
-impl libp2p::core::Executor for SwarmRuntime {
+impl libp2p::swarm::Executor for SwarmRuntime {
     fn exec(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) { self.inner.spawn_boxed(Box::new(future)) }
 }

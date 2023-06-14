@@ -1,7 +1,5 @@
-use libp2p::swarm::NetworkBehaviour;
-use libp2p::{ping::{Ping, PingConfig, PingEvent},
-             swarm::{CloseConnection, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
-             NetworkBehaviour};
+use libp2p::ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent};
+use libp2p::swarm::{CloseConnection, NetworkBehaviour, PollParameters, ToSwarm as NetworkBehaviourAction};
 use log::error;
 use std::{collections::VecDeque,
           num::NonZeroU32,
@@ -21,8 +19,8 @@ pub struct AdexPing {
     events: VecDeque<NetworkBehaviourAction<Void, <Self as NetworkBehaviour>::ConnectionHandler>>,
 }
 
-impl NetworkBehaviourEventProcess<PingEvent> for AdexPing {
-    fn inject_event(&mut self, event: PingEvent) {
+impl From<PingEvent> for AdexPing {
+    fn from(&mut self, event: PingEvent) {
         if let Err(e) = event.result {
             error!("Ping error {}. Disconnecting peer {}", e, event.peer);
             self.events.push_back(NetworkBehaviourAction::CloseConnection {

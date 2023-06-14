@@ -21,7 +21,6 @@ use libp2p::{core::{Multiaddr, Transport},
              multiaddr::Protocol,
              noise,
              request_response::ResponseChannel,
-             swarm::NetworkBehaviourEventProcess,
              PeerId};
 use libp2p::{NetworkBehaviour, Swarm};
 use libp2p_floodsub::{Floodsub, FloodsubEvent, Topic as FloodsubTopic};
@@ -425,12 +424,12 @@ impl AtomicDexBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<GossipsubEvent> for AtomicDexBehaviour {
-    fn inject_event(&mut self, event: GossipsubEvent) { self.notify_on_adex_event(event.into()); }
+impl From<GossipsubEvent> for AtomicDexBehaviour {
+    fn from(&mut self, event: GossipsubEvent) { self.notify_on_adex_event(event.into()); }
 }
 
-impl NetworkBehaviourEventProcess<FloodsubEvent> for AtomicDexBehaviour {
-    fn inject_event(&mut self, event: FloodsubEvent) {
+impl From<FloodsubEvent> for AtomicDexBehaviour {
+    fn from(&mut self, event: FloodsubEvent) {
         // do not process peer announce on 7777 temporary
         if self.netid != NETID_7777 {
             if let FloodsubEvent::Message(message) = &event {
@@ -449,16 +448,16 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for AtomicDexBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<Void> for AtomicDexBehaviour {
-    fn inject_event(&mut self, _event: Void) {}
+impl From<Void> for AtomicDexBehaviour {
+    fn from(&mut self, _event: Void) {}
 }
 
-impl NetworkBehaviourEventProcess<()> for AtomicDexBehaviour {
-    fn inject_event(&mut self, _event: ()) {}
+impl From<()> for AtomicDexBehaviour {
+    fn from(&mut self, _event: ()) {}
 }
 
-impl NetworkBehaviourEventProcess<RequestResponseBehaviourEvent> for AtomicDexBehaviour {
-    fn inject_event(&mut self, event: RequestResponseBehaviourEvent) {
+impl From<RequestResponseBehaviourEvent> for AtomicDexBehaviour {
+    fn from(&mut self, event: RequestResponseBehaviourEvent) {
         match event {
             RequestResponseBehaviourEvent::InboundRequest {
                 peer_id,
