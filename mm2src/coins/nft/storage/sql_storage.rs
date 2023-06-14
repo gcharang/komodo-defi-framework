@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
 use db_common::sqlite::rusqlite::types::{FromSqlError, Type};
-use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row, NO_PARAMS};
+use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
 use mm2_core::mm_ctx::MmArc;
@@ -35,7 +35,7 @@ fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     chain TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
     block_number INTEGER NOT NULL,
-    contract_type TEXT,
+    contract_type TEXT NOT NULL,
     details_json TEXT,
     PRIMARY KEY (token_address, token_id)
         );",
@@ -432,8 +432,8 @@ impl NftListStorageOps for SqliteNftStorage {
         let sql_nft_list = create_nft_list_table_sql(chain)?;
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            conn.execute(&sql_nft_list, NO_PARAMS).map(|_| ())?;
-            conn.execute(&create_scanned_nft_blocks_sql()?, NO_PARAMS).map(|_| ())?;
+            conn.execute(&sql_nft_list, []).map(|_| ())?;
+            conn.execute(&create_scanned_nft_blocks_sql()?, []).map(|_| ())?;
             Ok(())
         })
         .await
@@ -475,14 +475,14 @@ impl NftListStorageOps for SqliteNftStorage {
                 .map_err(|e| SqlError::ToSqlConversionFailure(e.into()))?;
             let total: isize = conn
                 .prepare(&total_count_builder_sql)?
-                .query_row(NO_PARAMS, |row| row.get(0))?;
+                .query_row([], |row| row.get(0))?;
             let count_total = total.try_into().expect("count should not be failed");
 
             let (offset, limit) = get_offset_limit(max, limit, page_number, count_total);
             let sql = finalize_nft_list_sql_builder(sql_builder, offset, limit)?;
             let nfts = conn
                 .prepare(&sql)?
-                .query_map(NO_PARAMS, nft_from_row)?
+                .query_map([], nft_from_row)?
                 .collect::<Result<Vec<_>, _>>()?;
             let result = NftList {
                 nfts,
@@ -513,10 +513,10 @@ impl NftListStorageOps for SqliteNftStorage {
                     Some(nft.chain.to_string()),
                     Some(nft.amount.to_string()),
                     Some(nft.block_number.to_string()),
-                    nft.contract_type.map(|ct| ct.to_string()),
+                    Some(nft.contract_type.to_string()),
                     Some(nft_json),
                 ];
-                sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, &params)?;
+                sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, params)?;
             }
             let scanned_block_params = [chain.to_ticker(), last_scanned_block.to_string()];
             sql_transaction.execute(&upsert_last_scanned_block_sql()?, scanned_block_params)?;
@@ -556,14 +556,14 @@ impl NftListStorageOps for SqliteNftStorage {
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
-            let rows_num = sql_transaction.execute(&sql, &params)?;
+            let rows_num = sql_transaction.execute(&sql, params)?;
 
             let remove_nft_result = if rows_num > 0 {
                 RemoveNftResult::NftRemoved
             } else {
                 RemoveNftResult::NftDidNotExist
             };
-            sql_transaction.execute(&upsert_last_scanned_block_sql()?, &scanned_block_params)?;
+            sql_transaction.execute(&upsert_last_scanned_block_sql()?, scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(remove_nft_result)
         })
@@ -594,7 +594,7 @@ impl NftListStorageOps for SqliteNftStorage {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
             let params = [nft_json, nft.token_address, nft.token_id.to_string()];
-            sql_transaction.execute(&sql, &params)?;
+            sql_transaction.execute(&sql, params)?;
             sql_transaction.commit()?;
             Ok(())
         })
@@ -606,7 +606,7 @@ impl NftListStorageOps for SqliteNftStorage {
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            query_single_row(&conn, &sql, NO_PARAMS, block_number_from_row).map_to_mm(SqlError::from)
+            query_single_row(&conn, &sql, [], block_number_from_row).map_to_mm(SqlError::from)
         })
         .await?
         .map(|b| b.try_into())
@@ -642,8 +642,8 @@ impl NftListStorageOps for SqliteNftStorage {
                 Some(nft.token_address),
                 Some(nft.token_id.to_string()),
             ];
-            sql_transaction.execute(&sql, &params)?;
-            sql_transaction.execute(&upsert_last_scanned_block_sql()?, &scanned_block_params)?;
+            sql_transaction.execute(&sql, params)?;
+            sql_transaction.execute(&upsert_last_scanned_block_sql()?, scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(())
         })
@@ -665,8 +665,8 @@ impl NftListStorageOps for SqliteNftStorage {
                 Some(nft.token_address),
                 Some(nft.token_id.to_string()),
             ];
-            sql_transaction.execute(&sql, &params)?;
-            sql_transaction.execute(&upsert_last_scanned_block_sql()?, &scanned_block_params)?;
+            sql_transaction.execute(&sql, params)?;
+            sql_transaction.execute(&upsert_last_scanned_block_sql()?, scanned_block_params)?;
             sql_transaction.commit()?;
             Ok(())
         })
@@ -683,7 +683,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let sql_tx_history = create_tx_history_table_sql(chain)?;
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            conn.execute(&sql_tx_history, NO_PARAMS).map(|_| ())?;
+            conn.execute(&sql_tx_history, []).map(|_| ())?;
             Ok(())
         })
         .await
@@ -720,14 +720,14 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                 .map_err(|e| SqlError::ToSqlConversionFailure(e.into()))?;
             let total: isize = conn
                 .prepare(&total_count_builder_sql)?
-                .query_row(NO_PARAMS, |row| row.get(0))?;
+                .query_row([], |row| row.get(0))?;
             let count_total = total.try_into().expect("count should not be failed");
 
             let (offset, limit) = get_offset_limit(max, limit, page_number, count_total);
             let sql = finalize_nft_history_sql_builder(sql_builder, offset, limit)?;
             let txs = conn
                 .prepare(&sql)?
-                .query_map(NO_PARAMS, tx_history_from_row)?
+                .query_map([], tx_history_from_row)?
                 .collect::<Result<Vec<_>, _>>()?;
             let result = NftsTransferHistoryList {
                 transfer_history: txs,
@@ -767,7 +767,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     tx.token_name,
                     Some(tx_json),
                 ];
-                sql_transaction.execute(&insert_tx_in_history_sql(&chain)?, &params)?;
+                sql_transaction.execute(&insert_tx_in_history_sql(&chain)?, params)?;
             }
             sql_transaction.commit()?;
             Ok(())
@@ -780,7 +780,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            query_single_row(&conn, &sql, NO_PARAMS, block_number_from_row).map_to_mm(SqlError::from)
+            query_single_row(&conn, &sql, [], block_number_from_row).map_to_mm(SqlError::from)
         })
         .await?
         .map(|b| b.try_into())
@@ -849,7 +849,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
-            sql_transaction.execute(&sql, &params)?;
+            sql_transaction.execute(&sql, params)?;
             sql_transaction.commit()?;
             Ok(())
         })
