@@ -38,6 +38,8 @@ pub enum GetNftInfoError {
         _0
     )]
     ParseTimestampError(String),
+    #[display(fmt = "The contract type is required and should not be null.")]
+    ContractTypeIsNull,
 }
 
 impl From<GetNftInfoError> for WithdrawError {
@@ -102,9 +104,9 @@ impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
             GetNftInfoError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-            GetNftInfoError::InvalidResponse(_) | GetNftInfoError::ParseTimestampError(_) => {
-                StatusCode::FAILED_DEPENDENCY
-            },
+            GetNftInfoError::InvalidResponse(_)
+            | GetNftInfoError::ParseTimestampError(_)
+            | GetNftInfoError::ContractTypeIsNull => StatusCode::FAILED_DEPENDENCY,
             GetNftInfoError::Transport(_)
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)
