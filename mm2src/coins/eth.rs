@@ -662,14 +662,14 @@ impl EthCoinImpl {
     /// The id used to differentiate payments on Etomic swap smart contract
     fn etomic_swap_id(&self, time_lock: u32, secret_hash: &[u8], sender: H160) -> Vec<u8> {
         let mut input = vec![];
-        input.extend_from_slice(secret_hash);
         input.extend_from_slice(&u64::from(time_lock).to_be_bytes());
+        input.extend_from_slice(secret_hash);
         input.extend_from_slice(sender.as_bytes());
         keccak256(&input).to_vec()
     }
 
-    /// The old function to compute the etomic swap id. This is used temporarily inbetween two releases 
-    /// for a transition to the new swap id computation, and will be removed afterwards 
+    /// The old function to compute the etomic swap id. This is used temporarily inbetween two releases
+    /// for a transition to the new swap id computation, and will be removed afterwards
     fn etomic_swap_id_old(&self, time_lock: u32, secret_hash: &[u8]) -> Vec<u8> {
         let mut input = vec![];
         input.extend_from_slice(&time_lock.to_le_bytes());
