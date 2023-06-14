@@ -1156,11 +1156,12 @@ impl SwapOps for EthCoin {
         &self,
         if_my_payment_sent_args: CheckIfMyPaymentSentArgs,
     ) -> Box<dyn Future<Item = Option<TransactionEnum>, Error = String> + Send> {
-        let id = self.etomic_swap_id(
+        let mut id = self.etomic_swap_id(
             if_my_payment_sent_args.time_lock,
             if_my_payment_sent_args.secret_hash,
             self.my_address,
         );
+        let id_old = self.etomic_swap_id_old(if_my_payment_sent_args.time_lock, if_my_payment_sent_args.secret_hash);
         let swap_contract_address = try_fus!(if_my_payment_sent_args.swap_contract_address.try_to_address());
         let selfi = self.clone();
         let from_block = if_my_payment_sent_args.search_from_block;
@@ -1173,7 +1174,17 @@ impl SwapOps for EthCoin {
             );
 
             if status == U256::from(PaymentState::Uninitialized as u8) {
-                return Ok(None);
+                let status = try_s!(
+                    selfi
+                        .payment_status(swap_contract_address, Token::FixedBytes(id_old.clone()))
+                        .compat()
+                        .await
+                );
+                if status == U256::from(PaymentState::Uninitialized as u8) {
+                    return Ok(None);
+                } else {
+                    id = id_old;
+                }
             };
 
             let mut current_block = try_s!(selfi.current_block().compat().await);
@@ -3888,7 +3899,8 @@ impl EthCoin {
         let sender = try_f!(addr_from_raw_pubkey(&input.other_pub).map_to_mm(ValidatePaymentError::InvalidParameter));
 
         let selfi = self.clone();
-        let swap_id = selfi.etomic_swap_id(input.time_lock, &input.secret_hash, sender);
+        let mut swap_id = selfi.etomic_swap_id(input.time_lock, &input.secret_hash, sender);
+        let swap_id_old = selfi.etomic_swap_id_old(input.time_lock, &input.secret_hash);
         let decimals = self.decimals;
         let secret_hash = if input.secret_hash.len() == 32 {
             ripemd160(&input.secret_hash).to_vec()
@@ -3903,10 +3915,20 @@ impl EthCoin {
                 .await
                 .map_to_mm(ValidatePaymentError::Transport)?;
             if status != U256::from(PaymentState::Sent as u8) {
-                return MmError::err(ValidatePaymentError::UnexpectedPaymentState(format!(
-                    "Payment state is not PAYMENT_STATE_SENT, got {}",
-                    status
-                )));
+                let status = selfi
+                    .payment_status(expected_swap_contract_address, Token::FixedBytes(swap_id_old.clone()))
+                    .compat()
+                    .await
+                    .map_to_mm(ValidatePaymentError::Transport)?;
+
+                if status != U256::from(PaymentState::Sent as u8) {
+                    return MmError::err(ValidatePaymentError::UnexpectedPaymentState(format!(
+                        "Payment state is not PAYMENT_STATE_SENT, got {}",
+                        status
+                    )));
+                } else {
+                    swap_id = swap_id_old;
+                }
             }
 
             let tx_from_rpc = selfi.web3.eth().transaction(TransactionId::Hash(tx.hash)).await?;
