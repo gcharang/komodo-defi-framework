@@ -9,16 +9,16 @@ doctest = false
 
 [dependencies]
 async-trait = "0.1"
-libp2p-gossipsub = { git = "https://github.com/ozkanonur/rust-libp2p.git", branch = "master" }
+libp2p-gossipsub = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master" }
 common = { path = "../common" }
 derive_more = "0.99"
-libp2p-floodsub = { git = "https://github.com/ozkanonur/rust-libp2p.git", branch = "master", default-features = false }
+libp2p-floodsub = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false }
 futures = { version = "0.3.1", package = "futures", features = ["compat", "async-await"] }
 futures-rustls = { version = "0.21.1" }
 hex = "0.4.2"
 lazy_static = "1.4"
 secp256k1 = { version = "0.20", features = ["rand"] }
-log = "0.4.17"
+log = "0.4"
 rand = { package = "rand", version = "0.7", features = ["std", "wasm-bindgen"] }
 regex = "1"
 rmp-serde = "0.14.3"
@@ -31,11 +31,11 @@ pin-project = "1.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.20", features = ["rt-multi-thread", "macros"] }
-libp2p = { git = "https://github.com/ozkanonur/rust-libp2p.git", branch = "master", default-features = false, features = ["dns", "floodsub", "noise", "ping", "request-response", "secp256k1", "tcp", "tokio", "websocket"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false, features = ["dns", "floodsub", "noise", "ping", "request-response", "secp256k1", "tcp", "tokio", "websocket"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.9", features = ["js"] } # see https://docs.rs/getrandom/0.2.0/getrandom/#webassembly-support
-libp2p = { git = "https://github.com/ozkanonur/rust-libp2p.git", branch = "master", default-features = false, features = ["floodsub", "noise", "ping", "request-response", "secp256k1", "wasm-ext", "wasm-ext-websocket"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false, features = ["floodsub", "noise", "ping", "request-response", "secp256k1", "wasm-ext", "wasm-ext-websocket"] }
 wasm-bindgen-futures = "0.4.21"
 
 [dev-dependencies]
