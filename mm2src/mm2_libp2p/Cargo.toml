@@ -9,10 +9,8 @@ doctest = false
 
 [dependencies]
 async-trait = "0.1"
-libp2p-gossipsub = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master" }
 common = { path = "../common" }
 derive_more = "0.99"
-libp2p-floodsub = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false }
 futures = { version = "0.3.1", package = "futures", features = ["compat", "async-await"] }
 futures-rustls = { version = "0.21.1" }
 hex = "0.4.2"
@@ -31,10 +29,10 @@ pin-project = "1.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.20", features = ["rt-multi-thread", "macros"] }
-libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false, features = ["dns", "floodsub", "noise", "ping", "request-response", "secp256k1", "tcp", "tokio", "websocket"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false, features = ["dns", "floodsub", "gossipsub", "noise", "ping", "request-response", "secp256k1", "tcp", "tokio", "websocket"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false, features = ["floodsub", "noise", "ping", "request-response", "secp256k1", "wasm-ext", "wasm-ext-websocket"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", default-features = false, features = ["floodsub", "noise", "gossipsub", "ping", "request-response", "secp256k1", "wasm-ext", "wasm-ext-websocket"] }
 wasm-bindgen-futures = "0.4.21"
 
 [dev-dependencies]
