@@ -668,6 +668,15 @@ impl EthCoinImpl {
         keccak256(&input).to_vec()
     }
 
+    /// The old function to compute the etomic swap id. This is used temporarily inbetween two releases 
+    /// for a transition to the new swap id computation, and will be removed afterwards 
+    fn etomic_swap_id_old(&self, time_lock: u32, secret_hash: &[u8]) -> Vec<u8> {
+        let mut input = vec![];
+        input.extend_from_slice(&time_lock.to_le_bytes());
+        input.extend_from_slice(secret_hash);
+        sha256(&input).to_vec()
+    }
+
     /// Gets `SenderRefunded` events from etomic swap smart contract since `from_block`
     fn refund_events(
         &self,
