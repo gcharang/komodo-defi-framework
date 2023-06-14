@@ -525,7 +525,7 @@ pub(crate) struct NftListTable {
     chain: String,
     amount: String,
     block_number: u64,
-    contract_type: Option<ContractType>,
+    contract_type: ContractType,
     details_json: Json,
 }
 
