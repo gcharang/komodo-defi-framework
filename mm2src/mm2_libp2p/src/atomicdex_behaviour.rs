@@ -25,7 +25,7 @@ use libp2p::{core::{Multiaddr, Transport},
              noise,
              request_response::ResponseChannel,
              PeerId, Swarm};
-use log::{debug, error};
+use log::{debug, error, info};
 use rand::Rng;
 use std::{collections::hash_map::HashMap, net::IpAddr, time::Duration};
 use void::Void;
@@ -659,21 +659,23 @@ fn start_gossipsub(
     node_type: NodeType,
     on_poll: impl Fn(&AtomicDexSwarm) + Send + 'static,
 ) -> Result<(Sender<AdexBehaviourCmd>, AdexEventRx, PeerId), AdexBehaviourError> {
-    // let i_am_relay = node_type.is_relay();
-    // let mut rng = rand::thread_rng();
-    // let local_key = generate_ed25519_keypair(&mut rng, force_key);
-    // let local_peer_id = PeerId::from(local_key.public());
-    // info!("Local peer id: {:?}", local_peer_id);
+    let i_am_relay = node_type.is_relay();
+    let mut rng = rand::thread_rng();
+    let local_key = generate_ed25519_keypair(&mut rng, force_key);
+    let local_peer_id = PeerId::from(local_key.public());
+    info!("Local peer id: {:?}", local_peer_id);
+
+    let noise_config = noise::Config::new(&local_key).unwrap();
 
     // let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
     //     .into_authentic(&local_key)
     //     .expect("Signing libp2p-noise static DH keypair failed.");
 
-    // let network_info = node_type.to_network_info();
-    // let transport = match network_info {
-    //     NetworkInfo::InMemory => build_memory_transport(noise_keys),
-    //     NetworkInfo::Distributed { .. } => build_dns_ws_transport(noise_keys, node_type.wss_certs()),
-    // };
+    let network_info = node_type.to_network_info();
+    let transport = match network_info {
+        NetworkInfo::InMemory => build_memory_transport(noise_config),
+        NetworkInfo::Distributed { .. } => build_dns_ws_transport(noise_config, node_type.wss_certs()),
+    };
 
     // let (cmd_tx, cmd_rx) = channel(CHANNEL_BUF_SIZE);
     // let (event_tx, event_rx) = channel(CHANNEL_BUF_SIZE);
@@ -837,7 +839,7 @@ fn build_dns_ws_transport(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn build_dns_ws_transport(
-    noise_keys: libp2p::noise::AuthenticKeypair<libp2p::noise::X25519Spec>,
+    noise_keys: noise::Config,
     wss_certs: Option<&WssCerts>,
 ) -> BoxedTransport<(PeerId, libp2p::core::muxing::StreamMuxerBox)> {
     use libp2p::websocket::tls as libp2p_tls;
@@ -873,9 +875,7 @@ fn build_dns_ws_transport(
     upgrade_transport(transport, noise_keys)
 }
 
-fn build_memory_transport(
-    noise_keys: libp2p::noise::AuthenticKeypair<libp2p::noise::X25519Spec>,
-) -> BoxedTransport<(PeerId, libp2p::core::muxing::StreamMuxerBox)> {
+fn build_memory_transport(noise_keys: noise::Config) -> BoxedTransport<(PeerId, libp2p::core::muxing::StreamMuxerBox)> {
     let transport = libp2p::core::transport::MemoryTransport::default();
     upgrade_transport(transport, noise_keys)
 }
@@ -883,7 +883,7 @@ fn build_memory_transport(
 /// Set up an encrypted Transport over the Mplex protocol.
 fn upgrade_transport<T>(
     transport: T,
-    noise_keys: libp2p::noise::AuthenticKeypair<libp2p::noise::X25519Spec>,
+    noise_config: noise::Config,
 ) -> BoxedTransport<(PeerId, libp2p::core::muxing::StreamMuxerBox)>
 where
     T: Transport + Send + Sync + 'static,
@@ -895,8 +895,8 @@ where
 {
     transport
         .upgrade(libp2p::core::upgrade::Version::V1)
-        .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-        .multiplex(libp2p::mplex::MplexConfig::default())
+        .authenticate(noise_config)
+        .multiplex(libp2p::yamux::Config::default())
         .timeout(std::time::Duration::from_secs(20))
         .map(|(peer, muxer), _| (peer, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
         .boxed()

@@ -3574,6 +3574,7 @@ dependencies = [
  "libp2p-tcp",
  "libp2p-wasm-ext",
  "libp2p-websocket",
+ "libp2p-yamux",
  "multiaddr",
  "pin-project",
 ]
@@ -3910,6 +3911,18 @@ dependencies = [
  "soketto",
  "url",
  "webpki-roots 0.23.0",
+]
+
+[[package]]
+name = "libp2p-yamux"
+version = "0.44.0"
+source = "git+https://github.com/libp2p/rust-libp2p.git?branch=master#755e3417f775929541e546ab7535ecba8aee3633"
+dependencies = [
+ "futures 0.3.28",
+ "libp2p-core",
+ "log 0.4.19",
+ "thiserror",
+ "yamux",
 ]
 
 [[package]]
@@ -4922,6 +4935,12 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
 ]
+
+[[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "nom"
@@ -9411,6 +9430,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
+]
+
+[[package]]
+name = "yamux"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5d9ba232399af1783a58d8eb26f6b5006fbefe2dc9ef36bd283324792d03ea5"
+dependencies = [
+ "futures 0.3.28",
+ "log 0.4.19",
+ "nohash-hasher",
+ "parking_lot 0.12.0",
+ "rand 0.8.5",
+ "static_assertions",
 ]
 
 [[package]]
