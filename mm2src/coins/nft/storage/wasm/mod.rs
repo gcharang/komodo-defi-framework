@@ -20,7 +20,6 @@ pub enum WasmNftCacheError {
     NotSupported(String),
     InternalError(String),
     GetLastNftBlockError(String),
-    GetLastScannedBlockError(String),
     ParseBigDecimalError(ParseBigDecimalError),
 }
 

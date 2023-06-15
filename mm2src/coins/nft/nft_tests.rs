@@ -203,12 +203,12 @@ mod for_db_tests {
         let token_id = BigDecimal::from_str("214300044414").unwrap();
         let nft = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
         assert_eq!(nft.block_number, 28056721);
+        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
         let last_block = NftListStorageOps::get_last_block_number(&storage, &chain)
             .await
             .unwrap()
             .unwrap();
-        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
-        assert_eq!(last_block, last_scanned_block);
+        assert_eq!(last_scanned_block, last_block);
     }
 
     pub(crate) async fn test_add_txs_impl() {

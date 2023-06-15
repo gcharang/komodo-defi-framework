@@ -255,19 +255,11 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<LastScannedBlockTable>().await?;
-        let maybe_item = table
-            .cursor_builder()
-            .only("chain", chain.to_string())
-            .map_err(|e| WasmNftCacheError::GetLastScannedBlockError(e.to_string()))?
-            .bound("last_scanned_block", 0u64, u64::MAX)
-            .reverse()
-            .open_cursor("chain")
-            .await
-            .map_err(|e| WasmNftCacheError::GetLastScannedBlockError(e.to_string()))?
-            .next()
-            .await
-            .map_err(|e| WasmNftCacheError::GetLastScannedBlockError(e.to_string()))?;
-        Ok(maybe_item.map(|(_, item)| item.last_scanned_block))
+        if let Some((_item_id, item)) = table.get_item_by_unique_index("chain", chain.to_string()).await? {
+            Ok(Some(item.last_scanned_block))
+        } else {
+            return Ok(None);
+        }
     }
 
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error> {
