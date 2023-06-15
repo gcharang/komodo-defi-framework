@@ -15,16 +15,16 @@ use futures::{channel::{mpsc::{Receiver, Sender},
               future::join_all,
               Future, SinkExt};
 use futures_rustls::rustls;
-use libp2p::core::transport::Boxed as BoxedTransport;
+use libp2p::floodsub::{Floodsub, FloodsubEvent, Topic as FloodsubTopic};
+use libp2p::gossipsub::{Behaviour as Gossipsub, Event as GossipsubEvent, Message as GossipsubMessage, MessageId,
+                        TopicHash};
+use libp2p::{core::transport::Boxed as BoxedTransport, swarm::NetworkBehaviour};
 use libp2p::{core::{Multiaddr, Transport},
              identity,
              multiaddr::Protocol,
              noise,
              request_response::ResponseChannel,
-             PeerId};
-use libp2p::{NetworkBehaviour, Swarm};
-use libp2p_floodsub::{Floodsub, FloodsubEvent, Topic as FloodsubTopic};
-use libp2p_gossipsub::{Gossipsub, GossipsubEvent, GossipsubMessage, MessageId, TopicHash};
+             PeerId, Swarm};
 use log::{debug, error};
 use rand::Rng;
 use std::{collections::hash_map::HashMap, net::IpAddr, time::Duration};

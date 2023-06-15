@@ -6,10 +6,11 @@ use futures::io::{AsyncRead, AsyncWrite};
 use futures::task::{Context, Poll};
 use futures::StreamExt;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
-use libp2p::request_response::{ProtocolName, ProtocolSupport, RequestId, RequestResponse, RequestResponseCodec,
-                               RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
-use libp2p::NetworkBehaviour;
+use libp2p::request_response::{Behaviour as RequestResponse, Codec as RequestResponseCodec,
+                               Config as RequestResponseConfig, Event as RequestResponseEvent,
+                               Message as RequestResponseMessage};
+use libp2p::request_response::{ProtocolSupport, RequestId, ResponseChannel};
+use libp2p::swarm::{NetworkBehaviour, PollParameters, ToSwarm};
 use libp2p::PeerId;
 use log::{debug, error, warn};
 use serde::de::DeserializeOwned;
@@ -109,8 +110,7 @@ impl RequestResponseBehaviour {
         &mut self,
         cx: &mut Context,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<RequestResponseBehaviourEvent, <Self as NetworkBehaviour>::ConnectionHandler>>
-    {
+    ) -> Poll<ToSwarm<RequestResponseBehaviourEvent, <Self as NetworkBehaviour>::ConnectionHandler>> {
         // poll the `rx`
         match self.rx.poll_next_unpin(cx) {
             // received a request, forward it through the network and put to the `pending_requests`
@@ -124,7 +124,7 @@ impl RequestResponseBehaviour {
 
         if let Some(event) = self.events.pop_front() {
             // forward a pending event to the top
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+            return Poll::Ready(ToSwarm::GenerateEvent(event));
         }
 
         while let Poll::Ready(Some(())) = self.timeout_interval.poll_next_unpin(cx) {
@@ -167,8 +167,8 @@ impl RequestResponseBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<RequestResponseEvent<PeerRequest, PeerResponse>> for RequestResponseBehaviour {
-    fn inject_event(&mut self, event: RequestResponseEvent<PeerRequest, PeerResponse>) {
+impl From<RequestResponseEvent<PeerRequest, PeerResponse>> for RequestResponseBehaviour {
+    fn from(&mut self, event: RequestResponseEvent<PeerRequest, PeerResponse>) {
         let (peer_id, message) = match event {
             RequestResponseEvent::Message { peer, message } => (peer, message),
             RequestResponseEvent::InboundFailure { error, .. } => {
@@ -245,17 +245,17 @@ macro_rules! try_io {
     };
 }
 
-impl ProtocolName for Protocol {
-    fn protocol_name(&self) -> &[u8] {
+impl AsRef<str> for Protocol {
+    fn as_ref(&self) -> &str {
         match self {
-            Protocol::Version1 => b"/request-response/1",
+            Protocol::Version1 => "/request-response/1",
         }
     }
 }
 
 #[async_trait]
 impl<
-        Proto: Clone + ProtocolName + Send + Sync,
+        Proto: Clone + AsRef<str> + Send + Sync,
         Req: DeserializeOwned + Serialize + Send + Sync,
         Res: DeserializeOwned + Serialize + Send + Sync,
     > RequestResponseCodec for Codec<Proto, Req, Res>
