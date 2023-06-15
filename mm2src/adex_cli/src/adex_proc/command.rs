@@ -41,6 +41,7 @@ pub(crate) enum Method {
     OrderbookDepth,
     #[serde(rename = "orders_history_by_filter")]
     OrdersHistory,
+    UpdateMakerOrder,
 }
 
 #[derive(Serialize, Clone, Copy, Display)]

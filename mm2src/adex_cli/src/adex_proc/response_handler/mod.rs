@@ -59,6 +59,7 @@ pub(crate) trait ResponseHandler {
     fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()>;
     fn on_orderbook_depth(&self, orderbook_depth: Vec<PairWithDepth>) -> Result<()>;
     fn on_orders_history(&self, order_history: OrdersHistoryResponse, settings: OrdersHistorySettings) -> Result<()>;
+    fn on_update_maker_order(&self, maker_order: MakerOrderForRpc) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -308,15 +309,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()> {
-        let mut writer = self.writer.borrow_mut();
-        let writer: &mut dyn Write = writer.deref_mut();
-        writeln_field!(writer, "Maker order", "", 0);
-        Self::write_maker_order(writer, &order)?;
-        Self::write_maker_matches(writer, &order.matches)?;
-        writeln_safe_io!(writer, "");
-        Ok(())
-    }
+    fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()> { self.on_maker_order_response(order) }
 
     fn on_orderbook_depth(&self, mut orderbook_depth: Vec<PairWithDepth>) -> Result<()> {
         let mut term_table = TermTable::with_rows(vec![Row::new(vec![
@@ -403,6 +396,8 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
 
         Ok(())
     }
+
+    fn on_update_maker_order(&self, order: MakerOrderForRpc) -> Result<()> { self.on_maker_order_response(order) }
 }
 
 fn term_table_blank(style: TableStyle, sep_row: bool, bottom_border: bool, top_border: bool) -> TermTable<'static> {
@@ -922,6 +917,16 @@ impl ResponseHandlerImpl<'_> {
             TableCell::new(uuid_parse_error.uuid),
             TableCell::new(uuid_parse_error.warning),
         ])
+    }
+
+    fn on_maker_order_response(&self, order: MakerOrderForRpc) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer: &mut dyn Write = writer.deref_mut();
+        writeln_field!(writer, "Maker order", "", 0);
+        Self::write_maker_order(writer, &order)?;
+        Self::write_maker_matches(writer, &order.matches)?;
+        writeln_safe_io!(writer, "");
+        Ok(())
     }
 }
 

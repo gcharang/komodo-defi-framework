@@ -514,3 +514,16 @@ pub struct UuidParseError {
     pub uuid: String,
     pub warning: String,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct UpdateMakerOrderRequest {
+    pub uuid: Uuid,
+    pub new_price: Option<MmNumber>,
+    pub max: Option<bool>,
+    pub volume_delta: Option<MmNumber>,
+    pub min_volume: Option<MmNumber>,
+    pub base_confs: Option<u64>,
+    pub base_nota: Option<bool>,
+    pub rel_confs: Option<u64>,
+    pub rel_nota: Option<bool>,
+}

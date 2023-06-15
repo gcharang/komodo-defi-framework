@@ -71,6 +71,8 @@ enum Command {
     MyOrders,
     #[command(about = "Returns all orders whether active or inactive that match the selected filters")]
     History(OrdersHistoryArgs),
+    #[command(about = "Updates an active order on the orderbook created before by setprice")]
+    UpdateMakerOrder(UpdateMakerOrderArgs),
 }
 
 #[derive(Parser)]
@@ -141,6 +143,7 @@ impl Cli {
             Command::SetPrice(set_price_args) => proc.set_price(set_price_args.into()).await?,
             Command::OrderbookDepth(orderbook_depth_args) => proc.orderbook_depth(orderbook_depth_args.into()).await?,
             Command::History(history_args) => proc.orders_history(history_args.into(), history_args.into()).await?,
+            Command::UpdateMakerOrder(update_maker_args) => proc.update_maker_order(update_maker_args.into()).await?,
         }
         Ok(())
     }

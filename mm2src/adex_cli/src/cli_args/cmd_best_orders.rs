@@ -6,38 +6,38 @@ use std::mem::take;
 use super::parse_mm_number;
 
 #[derive(Args)]
-pub struct BestOrderArgs {
+pub(crate) struct BestOrderArgs {
     #[arg(help = "Whether to buy or sell the selected coin")]
-    pub coin: String,
+    pub(crate) coin: String,
     #[arg(value_enum, help = "The ticker of the coin to get best orders")]
-    pub action: OrderActionArg,
+    pub(crate) action: OrderActionArg,
     #[arg(
         long,
         help = "Tickers included in response when orderbook_ticker is configured for the queried coin in coins file",
         default_value = "false"
     )]
-    pub show_orig_tickets: bool,
+    pub(crate) show_orig_tickets: bool,
     #[arg(long, help = "Excludes orders that is mine", default_value = "false")]
-    pub exclude_mine: bool,
+    pub(crate) exclude_mine: bool,
     #[command(flatten)]
-    pub delegate: BestOrdersByArg,
+    pub(crate) delegate: BestOrdersByArg,
 }
 
 #[derive(Args)]
 #[group(required = true, multiple = false)]
-pub struct BestOrdersByArg {
+pub(crate) struct BestOrdersByArg {
     #[arg(long, group = "best-orders", value_parser=parse_mm_number, help="The returned results will show the best prices for trades that can fill the requested volume")]
-    pub volume: Option<MmNumber>,
+    pub(crate) volume: Option<MmNumber>,
     #[arg(
         long,
         group = "best-orders",
         help = "The returned results will show a list of the best prices"
     )]
-    pub number: Option<usize>,
+    pub(crate) number: Option<usize>,
 }
 
 #[derive(Copy, Clone, ValueEnum)]
-pub enum OrderActionArg {
+pub(crate) enum OrderActionArg {
     Buy,
     Sell,
 }

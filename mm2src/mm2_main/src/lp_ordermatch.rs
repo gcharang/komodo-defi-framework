@@ -52,7 +52,8 @@ use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, Can
                             MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest,
                             OrderStatusResponse, OrderType, OrdersHistoryRequest, OrdersHistoryResponse,
                             RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, SetPriceReq, Status, TakerAction,
-                            TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc, UuidParseError};
+                            TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc,
+                            UpdateMakerOrderRequest, UuidParseError};
 use mm2_rpc::data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
 #[cfg(test)] use mocktopus::macros::*;
 use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker_order_on_update,
@@ -4404,19 +4405,6 @@ impl AgeSec for OrderbookItem {}
 
 fn get_true() -> bool { true }
 
-#[derive(Deserialize)]
-pub struct MakerOrderUpdateReq {
-    uuid: Uuid,
-    new_price: Option<MmNumber>,
-    max: Option<bool>,
-    volume_delta: Option<MmNumber>,
-    min_volume: Option<MmNumber>,
-    base_confs: Option<u64>,
-    base_nota: Option<bool>,
-    rel_confs: Option<u64>,
-    rel_nota: Option<bool>,
-}
-
 /// Cancels the orders in case of error on different checks
 /// https://github.com/KomodoPlatform/atomicDEX-API/issues/794
 async fn cancel_orders_on_error<T, E>(ctx: &MmArc, req: &SetPriceReq, error: E) -> Result<T, E> {
@@ -4592,7 +4580,7 @@ async fn cancel_previous_maker_orders(
     }
 }
 
-pub async fn update_maker_order(ctx: &MmArc, req: MakerOrderUpdateReq) -> Result<MakerOrder, String> {
+pub async fn update_maker_order(ctx: &MmArc, req: UpdateMakerOrderRequest) -> Result<MakerOrder, String> {
     let ordermatch_ctx = try_s!(OrdermatchContext::from_ctx(ctx));
     let order_mutex = {
         let maker_orders_ctx = ordermatch_ctx.maker_orders_ctx.lock();
@@ -4723,7 +4711,7 @@ pub async fn update_maker_order(ctx: &MmArc, req: MakerOrderUpdateReq) -> Result
 }
 
 pub async fn update_maker_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let req: MakerOrderUpdateReq = try_s!(json::from_value(req));
+    let req: UpdateMakerOrderRequest = try_s!(json::from_value(req));
     let order = try_s!(update_maker_order(&ctx, req).await);
     let rpc_result = MakerOrderForRpc::from(&order);
     let res = try_s!(json::to_vec(&Mm2RpcResult::new(rpc_result)));

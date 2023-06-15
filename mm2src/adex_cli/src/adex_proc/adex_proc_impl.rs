@@ -5,7 +5,8 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOr
                             CancelOrderRequest, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
                             MmVersionResponse, MyOrdersResponse, OrderStatusRequest, OrderStatusResponse,
                             OrderbookDepthRequest, OrderbookRequest, OrderbookResponse, OrdersHistoryRequest,
-                            OrdersHistoryResponse, PairWithDepth, SellBuyRequest, SellBuyResponse, SetPriceReq, Status};
+                            OrdersHistoryResponse, PairWithDepth, SellBuyRequest, SellBuyResponse, SetPriceReq,
+                            Status, UpdateMakerOrderRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
@@ -27,7 +28,7 @@ pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, 
 
 impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
     pub async fn enable(&self, asset: &str) -> Result<()> {
-        info!("Enabling asset: {asset}");
+        info!("Enabling asset: {asset} ...");
 
         let activation_scheme = get_activation_scheme()?;
         let Some(activation_method) = activation_scheme.get_activation_method(asset) else {
@@ -104,7 +105,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn sell(&self, order: SellBuyRequest) -> Result<()> {
         info!(
-            "Selling: {} {} for: {} {} at the price of {} {} per {}",
+            "Selling: {} {} for: {} {} at the price of {} {} per {} ...",
             order.volume,
             order.base,
             order.volume.clone() * order.price.clone(),
@@ -133,7 +134,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn buy(&self, order: SellBuyRequest) -> Result<()> {
         info!(
-            "Buying: {} {} with: {} {} at the price of {} {} per {}",
+            "Buying: {} {} with: {} {} at the price of {} {} per {} ...",
             order.volume,
             order.base,
             order.volume.clone() * order.price.clone(),
@@ -161,7 +162,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn send_stop(&self) -> Result<()> {
-        info!("Sending stop command");
+        info!("Sending stop command ...");
         let stop_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Stop)
@@ -174,7 +175,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn get_version(self) -> Result<()> {
-        info!("Request for mm2 version");
+        info!("Request for mm2 version ...");
         let version_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Version)
@@ -188,7 +189,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn cancel_order(&self, order_id: &Uuid) -> Result<()> {
-        info!("Cancelling order: {order_id}");
+        info!("Cancelling order: {order_id} ...");
         let cancel_command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelOrder)
@@ -207,17 +208,17 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn cancel_all_orders(&self) -> Result<()> {
-        info!("Cancelling all orders");
+        info!("Cancelling all orders ...");
         self.cancel_all_orders_impl(CancelBy::All).await
     }
 
     pub async fn cancel_by_pair(&self, base: String, rel: String) -> Result<()> {
-        info!("Cancelling by pair, base: {base}, rel: {rel}");
+        info!("Cancelling by pair, base: {base}, rel: {rel} ...");
         self.cancel_all_orders_impl(CancelBy::Pair { base, rel }).await
     }
 
     pub async fn cancel_by_coin(&self, ticker: String) -> Result<()> {
-        info!("Cancelling by coin: {ticker}");
+        info!("Cancelling by coin: {ticker} ...");
         self.cancel_all_orders_impl(CancelBy::Coin { ticker }).await
     }
 
@@ -240,7 +241,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn order_status(&self, uuid: &Uuid) -> Result<()> {
-        info!("Getting order status: {uuid}");
+        info!("Getting order status: {uuid} ...");
         let order_status_command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderStatus)
@@ -258,7 +259,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub async fn my_orders(&self) -> Result<()> {
-        info!("Getting my orders");
+        info!("Getting my orders ...");
         let command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::MyOrders)
@@ -277,7 +278,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn best_orders(&self, best_orders_request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
         info!(
-            "Getting best orders: {} {}",
+            "Getting best orders: {} {} ...",
             best_orders_request.action, best_orders_request.coin
         );
         let command = Command::builder()
@@ -310,7 +311,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn set_price(&self, set_price_request: SetPriceReq) -> Result<()> {
         info!(
-            "Setting price for pair: {} {}",
+            "Setting price for pair: {} {} ...",
             set_price_request.base, set_price_request.rel
         );
         let command = Command::builder()
@@ -332,7 +333,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub async fn orderbook_depth(&self, orderbook_depth_request: OrderbookDepthRequest) -> Result<()> {
         info!(
-            "Getting orderbook depth for pairs: {}",
+            "Getting orderbook depth for pairs: {} ...",
             orderbook_depth_request
                 .pairs
                 .iter()
@@ -375,6 +376,25 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .await
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orders_history(result, settings),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            _ => bail!(""),
+        }
+    }
+
+    pub async fn update_maker_order(&self, update_maker_request: UpdateMakerOrderRequest) -> Result<()> {
+        info!("Updating maker order ...");
+        let command = Command::builder()
+            .userpass(self.config.rpc_password()?)
+            .method(Method::UpdateMakerOrder)
+            .flatten_data(update_maker_request)
+            .build()?;
+
+        match self
+            .transport
+            .send::<_, Mm2RpcResult<MakerOrderForRpc>, Json>(command)
+            .await
+        {
+            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_update_maker_order(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
             _ => bail!(""),
         }
