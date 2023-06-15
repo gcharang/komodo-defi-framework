@@ -200,8 +200,12 @@ mod for_db_tests {
         let scanned_block = 28056726;
         let nft_list = nft_list();
         storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
-        let last_block = storage.get_last_block_number(&chain).await.unwrap().unwrap();
+        let token_add = "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string();
+        let token_id = BigDecimal::from_str("214300044414").unwrap();
+        let nft = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
+        assert_eq!(nft.block_number, 28056721);
         let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+        let last_block = storage.get_last_block_number(&chain).await.unwrap().unwrap();
         assert_eq!(last_block, last_scanned_block);
     }
 }
