@@ -845,7 +845,7 @@ fn build_dns_ws_transport(
     use libp2p::websocket::tls as libp2p_tls;
 
     let ws_tcp = libp2p::dns::TokioDnsConfig::custom(
-        libp2p::tcp::TokioTcpConfig::new().nodelay(true),
+        libp2p::tcp::Config::new().nodelay(true),
         libp2p::dns::ResolverConfig::google(),
         Default::default(),
     )
@@ -865,7 +865,7 @@ fn build_dns_ws_transport(
     // This is for preventing port reuse of dns/tcp instead of
     // websocket ports.
     let dns_tcp = libp2p::dns::TokioDnsConfig::custom(
-        libp2p::tcp::TokioTcpConfig::new().nodelay(true),
+        libp2p::tcp::Config::new().nodelay(true),
         libp2p::dns::ResolverConfig::google(),
         Default::default(),
     )
@@ -889,7 +889,6 @@ where
     T: Transport + Send + Sync + 'static,
     T::Output: futures::AsyncRead + futures::AsyncWrite + Unpin + Send + 'static,
     T::ListenerUpgrade: Send,
-    T::Listener: Send,
     T::Dial: Send,
     T::Error: Send + Sync + 'static,
 {
