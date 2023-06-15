@@ -194,9 +194,9 @@ mod for_db_tests {
         let ctx = mm_ctx_with_custom_db();
         let storage = NftStorageBuilder::new(&ctx).build().unwrap();
         let chain = Chain::Bsc;
-        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
-        assert!(!is_initialized);
         NftListStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
         let scanned_block = 28056726;
         let nft_list = nft_list();
         storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
