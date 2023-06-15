@@ -133,9 +133,9 @@ pub(crate) struct UriMeta {
     pub(crate) image: Option<String>,
     #[serde(rename(deserialize = "name"))]
     pub(crate) token_name: Option<String>,
-    description: Option<String>,
-    attributes: Option<Json>,
-    animation_url: Option<String>,
+    pub(crate) description: Option<String>,
+    pub(crate) attributes: Option<Json>,
+    pub(crate) animation_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
