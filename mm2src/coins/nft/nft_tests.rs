@@ -6,7 +6,7 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 #[cfg(any(test, target_arch = "wasm32"))]
 mod for_db_tests {
     use crate::nft::nft_structs::{Chain, ContractType, Nft, NftTransferHistory, TransferStatus, UriMeta};
-    use crate::nft::storage::{NftListStorageOps, NftStorageBuilder};
+    use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
     use mm2_number::BigDecimal;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use std::str::FromStr;
@@ -111,7 +111,6 @@ mod for_db_tests {
         vec![nft, nft1, nft2]
     }
 
-    #[allow(dead_code)]
     fn nft_tx_historty() -> Vec<NftTransferHistory> {
         let tx = NftTransferHistory {
             chain: Chain::Bsc,
@@ -204,9 +203,41 @@ mod for_db_tests {
         let token_id = BigDecimal::from_str("214300044414").unwrap();
         let nft = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
         assert_eq!(nft.block_number, 28056721);
+        let last_block = NftListStorageOps::get_last_block_number(&storage, &chain)
+            .await
+            .unwrap()
+            .unwrap();
         let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
-        let last_block = storage.get_last_block_number(&chain).await.unwrap().unwrap();
         assert_eq!(last_block, last_scanned_block);
+    }
+
+    pub(crate) async fn test_add_txs_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let txs = nft_tx_historty();
+        storage.add_txs_to_history(&chain, txs).await.unwrap();
+        let token_add = "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string();
+        let token_id = BigDecimal::from_str("214300044414").unwrap();
+        let tx1 = storage
+            .get_txs_by_token_addr_id(&chain, token_add, token_id)
+            .await
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .clone();
+        assert_eq!(tx1.block_number, 28056721);
+        let tx_hash = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe".to_string();
+        let tx2 = storage.get_tx_by_tx_hash(&chain, tx_hash).await.unwrap().unwrap();
+        assert_eq!(tx2.block_number, 28056726);
+        let last_block = NftTxHistoryStorageOps::get_last_block_number(&storage, &chain)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(last_block, 28056726);
     }
 }
 
@@ -250,6 +281,9 @@ mod native_tests {
 
     #[test]
     fn test_add_nfts() { block_on(test_add_nfts_impl()) }
+
+    #[test]
+    fn test_add_txs() { block_on(test_add_txs_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -291,4 +325,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_add_nfts() { test_add_nfts_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_add_txs() { test_add_txs_impl().await }
 }

@@ -242,7 +242,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .bound("block_number", 0u64, u64::MAX)
             .reverse()
-            .open_cursor("chain")
+            .open_cursor(NftListTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .next()
@@ -376,7 +376,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .bound("block_number", 0u64, u64::MAX)
             .reverse()
-            .open_cursor("chain")
+            .open_cursor("block_number")
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .next()
@@ -398,7 +398,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .bound("block_number", from_block, u64::MAX)
-            .open_cursor("chain")
+            .open_cursor(NftTxHistoryTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
 
@@ -426,7 +426,6 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         let table = db_transaction.table::<NftTxHistoryTable>().await?;
         let index_keys = MultiIndex::new(NftTxHistoryTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
-            .with_value(&token_address)?
             .with_value(&token_address)?
             .with_value(token_id.to_string())?;
         table
@@ -532,6 +531,8 @@ pub(crate) struct NftListTable {
 impl NftListTable {
     const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 
+    const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
+
     fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
         let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
         Ok(NftListTable {
@@ -557,6 +558,7 @@ impl TableSignature for NftListTable {
                 &["chain", "token_address", "token_id"],
                 true,
             )?;
+            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], true)?;
             table.create_index("chain", false)?;
         }
         Ok(())
@@ -584,6 +586,8 @@ impl NftTxHistoryTable {
     const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 
     const CHAIN_TX_HASH_INDEX: &str = "chain_tx_hash_index";
+
+    const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
 
     fn from_tx_history(tx: &NftTransferHistory) -> WasmNftCacheResult<NftTxHistoryTable> {
         let details_json = json::to_value(tx).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
@@ -617,6 +621,7 @@ impl TableSignature for NftTxHistoryTable {
                 false,
             )?;
             table.create_multi_index(Self::CHAIN_TX_HASH_INDEX, &["chain", "transaction_hash"], true)?;
+            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], true)?;
             table.create_index("chain", false)?;
         }
         Ok(())
