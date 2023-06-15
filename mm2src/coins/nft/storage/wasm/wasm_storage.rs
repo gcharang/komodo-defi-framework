@@ -550,8 +550,9 @@ impl TableSignature for NftListTable {
                 &["chain", "token_address", "token_id"],
                 true,
             )?;
-            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], true)?;
+            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
             table.create_index("chain", false)?;
+            table.create_index("block_number", false)?;
         }
         Ok(())
     }
@@ -614,6 +615,7 @@ impl TableSignature for NftTxHistoryTable {
             )?;
             table.create_multi_index(Self::CHAIN_TX_HASH_INDEX, &["chain", "transaction_hash"], true)?;
             table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], true)?;
+            table.create_index("block_number", true)?;
             table.create_index("chain", false)?;
         }
         Ok(())
