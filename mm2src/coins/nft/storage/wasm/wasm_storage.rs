@@ -376,7 +376,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .bound("block_number", 0u64, u64::MAX)
             .reverse()
-            .open_cursor("block_number")
+            .open_cursor(NftTxHistoryTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .next()

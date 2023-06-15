@@ -233,6 +233,8 @@ mod for_db_tests {
         let tx_hash = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe".to_string();
         let tx2 = storage.get_tx_by_tx_hash(&chain, tx_hash).await.unwrap().unwrap();
         assert_eq!(tx2.block_number, 28056726);
+        let tx_from = storage.get_txs_from_block(&chain, 28056721).await.unwrap();
+        assert_eq!(tx_from.len(), 2);
         let last_block = NftTxHistoryStorageOps::get_last_block_number(&storage, &chain)
             .await
             .unwrap()
