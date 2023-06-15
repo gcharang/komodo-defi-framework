@@ -1049,7 +1049,7 @@ impl TendermintCoin {
         &self,
         denom: Denom,
         to: &AccountId,
-        amount: cosmrs::Decimal,
+        amount: u128,
         secret_hash: &[u8],
         time_lock: u64,
     ) -> MmResult<IrisHtlc, TxMarshalingErr> {
@@ -1205,8 +1205,7 @@ impl TendermintCoin {
         let pubkey_hash = dhash160(other_pub);
         let to = try_tx_fus!(AccountId::new(&self.account_prefix, pubkey_hash.as_slice()));
 
-        let amount_as_u64 = try_tx_fus!(sat_from_big_decimal(&amount, decimals));
-        let amount = cosmrs::Decimal::from(amount_as_u64);
+        let amount = try_tx_fus!(sat_from_big_decimal(&amount, decimals)) as u128;
 
         let secret_hash = secret_hash.to_vec();
         let coin = self.clone();
@@ -1258,8 +1257,7 @@ impl TendermintCoin {
         let pubkey_hash = dhash160(fee_addr);
         let to_address = try_tx_fus!(AccountId::new(&self.account_prefix, pubkey_hash.as_slice()));
 
-        let amount_as_u64 = try_tx_fus!(sat_from_big_decimal(&amount, decimals));
-        let amount = cosmrs::Decimal::from(amount_as_u64);
+        let amount = try_tx_fus!(sat_from_big_decimal(&amount, decimals)) as u128;
 
         let amount = vec![Coin { denom, amount }];
 
@@ -2766,7 +2764,6 @@ pub mod tendermint_coin_tests {
         // << BEGIN HTLC CREATION
         let to: AccountId = IRIS_TESTNET_HTLC_PAIR2_ADDRESS.parse().unwrap();
         const UAMOUNT: u64 = 1;
-        let amount: cosmrs::Decimal = UAMOUNT.into();
         let amount_dec = big_decimal_from_sat_unsigned(UAMOUNT, coin.decimals);
 
         let mut sec = [0u8; 32];
@@ -2776,7 +2773,7 @@ pub mod tendermint_coin_tests {
         let time_lock = 1000;
 
         let create_htlc_tx = coin
-            .gen_create_htlc_tx(coin.denom.clone(), &to, amount, sha256(&sec).as_slice(), time_lock)
+            .gen_create_htlc_tx(coin.denom.clone(), &to, UAMOUNT as u128, sha256(&sec).as_slice(), time_lock)
             .unwrap();
 
         let current_block_fut = coin.current_block().compat();

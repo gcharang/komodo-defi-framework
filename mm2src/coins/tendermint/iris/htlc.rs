@@ -23,8 +23,7 @@
 use super::htlc_proto::{ClaimHtlcProtoRep, CreateHtlcProtoRep};
 
 use crate::tendermint::type_urls::{CLAIM_HTLC_TYPE_URL, CREATE_HTLC_TYPE_URL};
-use cosmrs::{tx::{Msg, MsgProto},
-             AccountId, Coin, ErrorReport};
+use cosmrs::{proto::traits::TypeUrl, tx::Msg, AccountId, Coin, ErrorReport};
 use std::convert::TryFrom;
 
 // https://github.com/irisnet/irismod/blob/043e058cd6e17f4f96d32f17bfd20b67debfab0b/proto/htlc/htlc.proto#L36
@@ -119,7 +118,7 @@ impl From<&MsgCreateHtlc> for CreateHtlcProtoRep {
     }
 }
 
-impl MsgProto for CreateHtlcProtoRep {
+impl TypeUrl for CreateHtlcProtoRep {
     const TYPE_URL: &'static str = CREATE_HTLC_TYPE_URL;
 }
 
@@ -171,6 +170,6 @@ impl From<&MsgClaimHtlc> for ClaimHtlcProtoRep {
     }
 }
 
-impl MsgProto for ClaimHtlcProtoRep {
+impl TypeUrl for ClaimHtlcProtoRep {
     const TYPE_URL: &'static str = CLAIM_HTLC_TYPE_URL;
 }
