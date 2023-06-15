@@ -200,6 +200,9 @@ mod for_db_tests {
         let scanned_block = 28056726;
         let nft_list = nft_list();
         storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
+        let last_block = storage.get_last_block_number(&chain).await.unwrap().unwrap();
+        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+        assert_eq!(last_block, last_scanned_block);
     }
 }
 
