@@ -205,31 +205,33 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
         if let Some(nfts_list) = response["result"].as_array() {
             for nft_json in nfts_list {
                 let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string())?;
-                if nft_wrapper.contract_type.is_some() {
-                    let uri_meta = try_get_uri_meta(&nft_wrapper.token_uri).await?;
-                    let nft = Nft {
-                        chain: *chain,
-                        token_address: nft_wrapper.token_address,
-                        token_id: nft_wrapper.token_id.0,
-                        amount: nft_wrapper.amount.0,
-                        owner_of: nft_wrapper.owner_of,
-                        token_hash: nft_wrapper.token_hash,
-                        block_number_minted: *nft_wrapper.block_number_minted,
-                        block_number: *nft_wrapper.block_number,
-                        contract_type: nft_wrapper.contract_type.unwrap().0,
-                        collection_name: nft_wrapper.name,
-                        symbol: nft_wrapper.symbol,
-                        token_uri: nft_wrapper.token_uri,
-                        metadata: nft_wrapper.metadata,
-                        last_token_uri_sync: nft_wrapper.last_token_uri_sync,
-                        last_metadata_sync: nft_wrapper.last_metadata_sync,
-                        minter_address: nft_wrapper.minter_address,
-                        possible_spam: nft_wrapper.possible_spam,
-                        uri_meta,
-                    };
-                    // collect NFTs from the page
-                    res_list.push(nft);
-                }
+                let contract_type = match nft_wrapper.contract_type {
+                    Some(contract_type) => contract_type.0,
+                    None => continue,
+                };
+                let uri_meta = try_get_uri_meta(&nft_wrapper.token_uri).await?;
+                let nft = Nft {
+                    chain: *chain,
+                    token_address: nft_wrapper.token_address,
+                    token_id: nft_wrapper.token_id.0,
+                    amount: nft_wrapper.amount.0,
+                    owner_of: nft_wrapper.owner_of,
+                    token_hash: nft_wrapper.token_hash,
+                    block_number_minted: *nft_wrapper.block_number_minted,
+                    block_number: *nft_wrapper.block_number,
+                    contract_type,
+                    collection_name: nft_wrapper.name,
+                    symbol: nft_wrapper.symbol,
+                    token_uri: nft_wrapper.token_uri,
+                    metadata: nft_wrapper.metadata,
+                    last_token_uri_sync: nft_wrapper.last_token_uri_sync,
+                    last_metadata_sync: nft_wrapper.last_metadata_sync,
+                    minter_address: nft_wrapper.minter_address,
+                    possible_spam: nft_wrapper.possible_spam,
+                    uri_meta,
+                };
+                // collect NFTs from the page
+                res_list.push(nft);
             }
             // if cursor is not null, there are other NFTs on next page,
             // and we need to send new request with cursor to get info from the next page.
@@ -283,37 +285,39 @@ async fn get_moralis_nft_transfers(
         if let Some(transfer_list) = response["result"].as_array() {
             for transfer in transfer_list {
                 let transfer_wrapper: NftTransferHistoryWrapper = serde_json::from_str(&transfer.to_string())?;
-                if transfer_wrapper.contract_type.is_some() {
-                    let status = get_tx_status(&wallet_address, &transfer_wrapper.to_address);
-                    let block_timestamp = parse_rfc3339_to_timestamp(&transfer_wrapper.block_timestamp)
-                        .map_to_mm(|e| GetNftInfoError::ParseTimestampError(e.to_string()))?;
-                    let transfer_history = NftTransferHistory {
-                        chain: *chain,
-                        block_number: *transfer_wrapper.block_number,
-                        block_timestamp,
-                        block_hash: transfer_wrapper.block_hash,
-                        transaction_hash: transfer_wrapper.transaction_hash,
-                        transaction_index: transfer_wrapper.transaction_index,
-                        log_index: transfer_wrapper.log_index,
-                        value: transfer_wrapper.value.0,
-                        contract_type: transfer_wrapper.contract_type.unwrap().0,
-                        transaction_type: transfer_wrapper.transaction_type,
-                        token_address: transfer_wrapper.token_address,
-                        token_id: transfer_wrapper.token_id.0,
-                        collection_name: None,
-                        image: None,
-                        token_name: None,
-                        from_address: transfer_wrapper.from_address,
-                        to_address: transfer_wrapper.to_address,
-                        status,
-                        amount: transfer_wrapper.amount.0,
-                        verified: transfer_wrapper.verified,
-                        operator: transfer_wrapper.operator,
-                        possible_spam: transfer_wrapper.possible_spam,
-                    };
-                    // collect NFTs transfers from the page
-                    res_list.push(transfer_history);
-                }
+                let contract_type = match transfer_wrapper.contract_type {
+                    Some(contract_type) => contract_type.0,
+                    None => continue,
+                };
+                let status = get_tx_status(&wallet_address, &transfer_wrapper.to_address);
+                let block_timestamp = parse_rfc3339_to_timestamp(&transfer_wrapper.block_timestamp)
+                    .map_to_mm(|e| GetNftInfoError::ParseTimestampError(e.to_string()))?;
+                let transfer_history = NftTransferHistory {
+                    chain: *chain,
+                    block_number: *transfer_wrapper.block_number,
+                    block_timestamp,
+                    block_hash: transfer_wrapper.block_hash,
+                    transaction_hash: transfer_wrapper.transaction_hash,
+                    transaction_index: transfer_wrapper.transaction_index,
+                    log_index: transfer_wrapper.log_index,
+                    value: transfer_wrapper.value.0,
+                    contract_type,
+                    transaction_type: transfer_wrapper.transaction_type,
+                    token_address: transfer_wrapper.token_address,
+                    token_id: transfer_wrapper.token_id.0,
+                    collection_name: None,
+                    image: None,
+                    token_name: None,
+                    from_address: transfer_wrapper.from_address,
+                    to_address: transfer_wrapper.to_address,
+                    status,
+                    amount: transfer_wrapper.amount.0,
+                    verified: transfer_wrapper.verified,
+                    operator: transfer_wrapper.operator,
+                    possible_spam: transfer_wrapper.possible_spam,
+                };
+                // collect NFTs transfers from the page
+                res_list.push(transfer_history);
             }
             // if the cursor is not null, there are other NFTs transfers on next page,
             // and we need to send new request with cursor to get info from the next page.
@@ -352,9 +356,10 @@ async fn get_moralis_metadata(
 
     let response = send_request_to_uri(uri.as_str()).await?;
     let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
-    if nft_wrapper.contract_type.is_none() {
-        return MmError::err(GetNftInfoError::ContractTypeIsNull);
-    }
+    let contract_type = match nft_wrapper.contract_type {
+        Some(contract_type) => contract_type.0,
+        None => return MmError::err(GetNftInfoError::ContractTypeIsNull),
+    };
     let uri_meta = try_get_uri_meta(&nft_wrapper.token_uri).await?;
     let nft_metadata = Nft {
         chain: *chain,
@@ -365,7 +370,7 @@ async fn get_moralis_metadata(
         token_hash: nft_wrapper.token_hash,
         block_number_minted: *nft_wrapper.block_number_minted,
         block_number: *nft_wrapper.block_number,
-        contract_type: nft_wrapper.contract_type.unwrap().0,
+        contract_type,
         collection_name: nft_wrapper.name,
         symbol: nft_wrapper.symbol,
         token_uri: nft_wrapper.token_uri,
