@@ -13,8 +13,7 @@ use std::num::NonZeroUsize;
 #[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub mod wasm;
 
-#[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RemoveNftResult {
     NftRemoved,
     NftDidNotExist,

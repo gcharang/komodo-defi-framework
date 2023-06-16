@@ -6,7 +6,7 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 #[cfg(any(test, target_arch = "wasm32"))]
 mod for_db_tests {
     use crate::nft::nft_structs::{Chain, ContractType, Nft, NftTransferHistory, TransferStatus, UriMeta};
-    use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
+    use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps, RemoveNftResult};
     use mm2_number::BigDecimal;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use std::num::NonZeroUsize;
@@ -22,12 +22,41 @@ mod for_db_tests {
     const TOKEN_ID: &str = "214300044414";
     const TX_HASH: &str = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe";
 
+    fn nft() -> Nft {
+        Nft {
+            chain: Chain::Bsc,
+            token_address: "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string(),
+            token_id: Default::default(),
+            amount: BigDecimal::from_str("2").unwrap(),
+            owner_of: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
+            token_hash: "b34ddf294013d20a6d70691027625839".to_string(),
+            block_number_minted: 25465916,
+            block_number: 25919780,
+            contract_type: ContractType::Erc1155,
+            collection_name: None,
+            symbol: None,
+            token_uri: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.json".to_string()),
+            metadata: Some("{\"name\":\"Tiki box\"}".to_string()),
+            last_token_uri_sync: Some("2023-02-07T17:10:08.402Z".to_string()),
+            last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
+            minter_address: Some("ERC1155 tokens don't have a single minter".to_string()),
+            possible_spam: Some(false),
+            uri_meta: UriMeta {
+                image: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.png".to_string()),
+                token_name: None,
+                description: Some("Born to usher in Bull markets.".to_string()),
+                attributes: None,
+                animation_url: None,
+            },
+        }
+    }
+
     fn nft_list() -> Vec<Nft> {
         let nft = Nft {
             chain: Chain::Bsc,
             token_address: "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string(),
             token_id: Default::default(),
-            amount: BigDecimal::from_str("1").unwrap(),
+            amount: BigDecimal::from_str("2").unwrap(),
             owner_of: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
             token_hash: "b34ddf294013d20a6d70691027625839".to_string(),
             block_number_minted: 25465916,
@@ -201,9 +230,8 @@ mod for_db_tests {
         NftListStorageOps::init(&storage, &chain).await.unwrap();
         let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
         assert!(is_initialized);
-        let scanned_block = 28056726;
         let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
+        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
         let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
         let nft = storage
@@ -221,9 +249,8 @@ mod for_db_tests {
         NftListStorageOps::init(&storage, &chain).await.unwrap();
         let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
         assert!(is_initialized);
-        let scanned_block = 28056726;
         let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
+        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
         let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
         let last_block = NftListStorageOps::get_last_block_number(&storage, &chain)
@@ -240,9 +267,8 @@ mod for_db_tests {
         NftListStorageOps::init(&storage, &chain).await.unwrap();
         let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
         assert!(is_initialized);
-        let scanned_block = 28056726;
         let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
+        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
         let nft_list = storage
             .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()))
@@ -253,6 +279,73 @@ mod for_db_tests {
         assert_eq!(nft.block_number, 28056721);
         assert_eq!(nft_list.skipped, 1);
         assert_eq!(nft_list.total, 3);
+    }
+
+    pub(crate) async fn test_remove_nft_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftListStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let nft_list = nft_list();
+        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+
+        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+        let remove_rslt = storage
+            .remove_nft_from_list(&chain, TOKEN_ADD.to_string(), token_id, 28056800)
+            .await
+            .unwrap();
+        assert_eq!(remove_rslt, RemoveNftResult::NftRemoved);
+        let list_len = storage
+            .get_nft_list(vec![chain], true, 10, None)
+            .await
+            .unwrap()
+            .nfts
+            .len();
+        assert_eq!(list_len, 2);
+        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+        assert_eq!(last_scanned_block, 28056800);
+    }
+
+    pub(crate) async fn test_nft_amount_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftListStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let mut nft = nft();
+        storage
+            .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
+            .await
+            .unwrap();
+
+        nft.amount -= BigDecimal::from(1);
+        storage.update_nft_amount(&chain, nft.clone(), 25919800).await.unwrap();
+        let amount = storage
+            .get_nft_amount(&chain, nft.token_address.clone(), nft.token_id.clone())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(amount, "1");
+        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+        assert_eq!(last_scanned_block, 25919800);
+
+        nft.amount += BigDecimal::from(1);
+        nft.block_number = 25919900;
+        storage
+            .update_nft_amount_and_block_number(&chain, nft.clone())
+            .await
+            .unwrap();
+        let amount = storage
+            .get_nft_amount(&chain, nft.token_address, nft.token_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(amount, "2");
+        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+        assert_eq!(last_scanned_block, 25919900);
     }
 
     pub(crate) async fn test_add_get_txs_impl() {
@@ -349,6 +442,12 @@ mod native_tests {
     fn test_nft_list() { block_on(test_nft_list_impl()) }
 
     #[test]
+    fn test_remove_nft() { block_on(test_remove_nft_impl()) }
+
+    #[test]
+    fn test_nft_amount() { block_on(test_nft_amount_impl()) }
+
+    #[test]
     fn test_add_get_txs() { block_on(test_add_get_txs_impl()) }
 
     #[test]
@@ -400,6 +499,12 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_nft_list() { test_nft_list_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_remove_nft() { test_remove_nft_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_nft_amount() { test_nft_amount_impl().await }
 
     #[wasm_bindgen_test]
     async fn test_add_get_txs() { test_add_get_txs_impl().await }
