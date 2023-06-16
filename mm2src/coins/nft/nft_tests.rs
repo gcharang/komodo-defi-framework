@@ -17,6 +17,10 @@ mod for_db_tests {
         wasm_bindgen_test_configure!(run_in_browser);
     }
 
+    const TOKEN_ADD: &str = "0xfd913a305d70a60aac4faac70c739563738e1f81";
+    const TOKEN_ID: &str = "214300044414";
+    const TX_HASH: &str = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe";
+
     fn nft_list() -> Vec<Nft> {
         let nft = Nft {
             chain: Chain::Bsc,
@@ -189,7 +193,7 @@ mod for_db_tests {
         vec![tx, tx1, tx2]
     }
 
-    pub(crate) async fn test_add_nfts_impl() {
+    pub(crate) async fn test_add_get_nfts_impl() {
         let ctx = mm_ctx_with_custom_db();
         let storage = NftStorageBuilder::new(&ctx).build().unwrap();
         let chain = Chain::Bsc;
@@ -199,10 +203,27 @@ mod for_db_tests {
         let scanned_block = 28056726;
         let nft_list = nft_list();
         storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
-        let token_add = "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string();
-        let token_id = BigDecimal::from_str("214300044414").unwrap();
-        let nft = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
+
+        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+        let nft = storage
+            .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(nft.block_number, 28056721);
+    }
+
+    pub(crate) async fn test_last_nft_blocks_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftListStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let scanned_block = 28056726;
+        let nft_list = nft_list();
+        storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
+
         let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
         let last_block = NftListStorageOps::get_last_block_number(&storage, &chain)
             .await
@@ -211,7 +232,7 @@ mod for_db_tests {
         assert_eq!(last_scanned_block, last_block);
     }
 
-    pub(crate) async fn test_add_txs_impl() {
+    pub(crate) async fn test_add_get_txs_impl() {
         let ctx = mm_ctx_with_custom_db();
         let storage = NftStorageBuilder::new(&ctx).build().unwrap();
         let chain = Chain::Bsc;
@@ -220,21 +241,35 @@ mod for_db_tests {
         assert!(is_initialized);
         let txs = nft_tx_historty();
         storage.add_txs_to_history(&chain, txs).await.unwrap();
-        let token_add = "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string();
-        let token_id = BigDecimal::from_str("214300044414").unwrap();
+        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
         let tx1 = storage
-            .get_txs_by_token_addr_id(&chain, token_add, token_id)
+            .get_txs_by_token_addr_id(&chain, TOKEN_ADD.to_string(), token_id)
             .await
             .unwrap()
             .get(0)
             .unwrap()
             .clone();
         assert_eq!(tx1.block_number, 28056721);
-        let tx_hash = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe".to_string();
-        let tx2 = storage.get_tx_by_tx_hash(&chain, tx_hash).await.unwrap().unwrap();
+        let tx2 = storage
+            .get_tx_by_tx_hash(&chain, TX_HASH.to_string())
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(tx2.block_number, 28056726);
         let tx_from = storage.get_txs_from_block(&chain, 28056721).await.unwrap();
         assert_eq!(tx_from.len(), 2);
+    }
+
+    pub(crate) async fn test_last_tx_block_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let txs = nft_tx_historty();
+        storage.add_txs_to_history(&chain, txs).await.unwrap();
+
         let last_block = NftTxHistoryStorageOps::get_last_block_number(&storage, &chain)
             .await
             .unwrap()
@@ -282,10 +317,16 @@ mod native_tests {
     }
 
     #[test]
-    fn test_add_nfts() { block_on(test_add_nfts_impl()) }
+    fn test_add_get_nfts() { block_on(test_add_get_nfts_impl()) }
 
     #[test]
-    fn test_add_txs() { block_on(test_add_txs_impl()) }
+    fn test_last_nft_blocks() { block_on(test_last_nft_blocks_impl()) }
+
+    #[test]
+    fn test_add_get_txs() { block_on(test_add_get_txs_impl()) }
+
+    #[test]
+    fn test_last_tx_block() { block_on(test_last_tx_block_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -326,8 +367,14 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn test_add_nfts() { test_add_nfts_impl().await }
+    async fn test_add_get_nfts() { test_add_get_nfts_impl().await }
 
     #[wasm_bindgen_test]
-    async fn test_add_txs() { test_add_txs_impl().await }
+    async fn test_last_nft_blocks() { test_last_nft_blocks_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_add_get_txs() { test_add_get_txs_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_last_tx_block() { test_last_tx_block_impl().await }
 }
