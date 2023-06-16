@@ -80,7 +80,7 @@ pub struct RpcOrderbookEntry {
     pub min_volume_rat: BigRational,
     pub min_volume_fraction: Fraction,
     pub pubkey: String,
-    pub age: i64,
+    pub age: u64,
     pub uuid: Uuid,
     pub is_mine: bool,
     #[serde(flatten)]

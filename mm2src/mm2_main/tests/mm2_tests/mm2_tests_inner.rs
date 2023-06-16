@@ -1006,7 +1006,6 @@ fn test_withdraw_and_send() {
         "-0.00101",
         0.001,
     );
-    // dev chain gas price is 0 so ETH expected balance change doesn't include the fee
     withdraw_and_send(
         &mm_alice,
         "ETH",
@@ -1015,6 +1014,8 @@ fn test_withdraw_and_send() {
         "-0.001",
         0.001,
     );
+    log!("Wait for the ETH payment to be sent");
+    thread::sleep(Duration::from_secs(15));
     withdraw_and_send(
         &mm_alice,
         "JST",
