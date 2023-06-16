@@ -32,7 +32,7 @@ pub(crate) trait ResponseHandler {
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
-    pub writer: RefCell<&'a mut dyn Write>,
+    pub(crate) writer: RefCell<&'a mut dyn Write>,
 }
 
 impl ResponseHandler for ResponseHandlerImpl<'_> {
@@ -209,7 +209,7 @@ mod orderbook {
     use super::super::{smart_fraction_fmt::{SmarFractPrecision, SmartFractionFmt},
                        OrderbookConfig};
 
-    pub fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
+    pub(super) fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
         let cmp = left.entry.price.cmp(&right.entry.price).reverse();
         if cmp.is_eq() {
             return left
@@ -222,7 +222,7 @@ mod orderbook {
         cmp
     }
 
-    pub fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
+    pub(super) fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
         let cmp = left.entry.price.cmp(&right.entry.price).reverse();
         if cmp.is_eq() {
             return left
@@ -239,7 +239,7 @@ mod orderbook {
         Delim,
     }
 
-    pub struct AskBidRow<'a> {
+    pub(super) struct AskBidRow<'a> {
         volume: AskBidRowVal,
         price: AskBidRowVal,
         uuid: AskBidRowVal,
@@ -282,7 +282,7 @@ mod orderbook {
             }
         }
 
-        pub(crate) fn new_delimiter(config: &'a OrderbookConfig) -> Self {
+        pub(super) fn new_delimiter(config: &'a OrderbookConfig) -> Self {
             Self {
                 is_mine: AskBidRowVal::Delim,
                 volume: AskBidRowVal::Delim,
@@ -298,7 +298,7 @@ mod orderbook {
             }
         }
 
-        pub(crate) fn from_orderbook_entry(
+        pub(super) fn from_orderbook_entry(
             entry: &AggregatedOrderbookEntry,
             vol_prec: &SmarFractPrecision,
             price_prec: &SmarFractPrecision,

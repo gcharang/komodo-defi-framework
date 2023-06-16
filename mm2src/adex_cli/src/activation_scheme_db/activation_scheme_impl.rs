@@ -13,7 +13,7 @@ pub(crate) struct ActivationScheme {
 }
 
 impl ActivationScheme {
-    pub fn get_activation_method(&self, coin: &str) -> Option<&Json> { self.scheme.get(coin) }
+    pub(crate) fn get_activation_method(&self, coin: &str) -> Option<&Json> { self.scheme.get(coin) }
 
     fn init(&mut self) -> Result<()> {
         let mut scheme_source: Vec<Json> = Self::load_json_file()?;

@@ -13,13 +13,13 @@ use crate::transport::Transport;
 use crate::{error_bail, warn_bail};
 
 pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, C: AdexConfig + ?Sized> {
-    pub transport: &'trp T,
-    pub response_handler: &'hand H,
-    pub config: &'cfg C,
+    pub(crate) transport: &'trp T,
+    pub(crate) response_handler: &'hand H,
+    pub(crate) config: &'cfg C,
 }
 
 impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
-    pub async fn enable(&self, asset: &str) -> Result<()> {
+    pub(crate) async fn enable(&self, asset: &str) -> Result<()> {
         info!("Enabling asset: {asset}");
 
         let activation_scheme = get_activation_scheme()?;
@@ -39,7 +39,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn get_balance(&self, asset: &str) -> Result<()> {
+    pub(crate) async fn get_balance(&self, asset: &str) -> Result<()> {
         info!("Getting balance, coin: {asset} ...");
         let command = Command::builder()
             .method(Method::GetBalance)
@@ -54,7 +54,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn get_enabled(&self) -> Result<()> {
+    pub(crate) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
 
         let command = Command::<i32>::builder()
@@ -73,7 +73,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn get_orderbook(&self, base: &str, rel: &str, orderbook_config: OrderbookConfig) -> Result<()> {
+    pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, orderbook_config: OrderbookConfig) -> Result<()> {
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
 
         let command = Command::builder()
@@ -94,7 +94,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn sell(&self, order: SellBuyRequest) -> Result<()> {
+    pub(crate) async fn sell(&self, order: SellBuyRequest) -> Result<()> {
         info!(
             "Selling: {} {} for: {} {} at the price of {} {} per {}",
             order.volume,
@@ -123,7 +123,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn buy(&self, order: SellBuyRequest) -> Result<()> {
+    pub(crate) async fn buy(&self, order: SellBuyRequest) -> Result<()> {
         info!(
             "Buying: {} {} with: {} {} at the price of {} {} per {}",
             order.volume,
@@ -152,7 +152,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn send_stop(&self) -> Result<()> {
+    pub(crate) async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command");
         let stop_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
@@ -166,7 +166,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn get_version(self) -> Result<()> {
+    pub(crate) async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version");
         let version_command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)

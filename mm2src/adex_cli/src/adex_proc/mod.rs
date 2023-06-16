@@ -3,19 +3,19 @@ mod command;
 mod response_handler;
 mod smart_fraction_fmt;
 
-pub(crate) use adex_proc_impl::AdexProc;
-pub(crate) use response_handler::{ResponseHandler, ResponseHandlerImpl};
-pub(crate) use smart_fraction_fmt::SmarFractPrecision;
+pub(super) use adex_proc_impl::AdexProc;
+pub(super) use response_handler::{ResponseHandler, ResponseHandlerImpl};
+pub(super) use smart_fraction_fmt::SmarFractPrecision;
 
 #[derive(Clone)]
-pub(crate) struct OrderbookConfig {
-    pub uuids: bool,
-    pub min_volume: bool,
-    pub max_volume: bool,
-    pub publics: bool,
-    pub address: bool,
-    pub age: bool,
-    pub conf_settings: bool,
-    pub asks_limit: Option<usize>,
-    pub bids_limit: Option<usize>,
+pub(super) struct OrderbookConfig {
+    pub(super) uuids: bool,
+    pub(super) min_volume: bool,
+    pub(super) max_volume: bool,
+    pub(super) publics: bool,
+    pub(super) address: bool,
+    pub(super) age: bool,
+    pub(super) conf_settings: bool,
+    pub(super) asks_limit: Option<usize>,
+    pub(super) bids_limit: Option<usize>,
 }

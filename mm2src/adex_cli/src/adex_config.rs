@@ -23,12 +23,12 @@ const VOLUME_PRECISION_MAX: usize = 5;
 const VOLUME_PRECISION: SmarFractPrecision = (VOLUME_PRECISION_MIN, VOLUME_PRECISION_MAX);
 const PRICE_PRECISION: SmarFractPrecision = (PRICE_PRECISION_MIN, PRICE_PRECISION_MAX);
 
-pub(crate) fn get_config() {
+pub(super) fn get_config() {
     let Ok(adex_cfg) = AdexConfigImpl::from_config_path() else { return; };
     info!("{}", adex_cfg)
 }
 
-pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Result<()> {
+pub(super) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Result<()> {
     assert!(set_password || rpc_api_uri.is_some());
     let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|_| AdexConfigImpl::default());
 
@@ -49,7 +49,7 @@ pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Res
     Ok(())
 }
 
-pub(crate) trait AdexConfig {
+pub(super) trait AdexConfig {
     fn rpc_password(&self) -> Result<String>;
     fn rpc_uri(&self) -> Result<String>;
     fn orderbook_price_precision(&self) -> &SmarFractPrecision;
@@ -57,7 +57,7 @@ pub(crate) trait AdexConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub(crate) struct AdexConfigImpl {
+pub(super) struct AdexConfigImpl {
     #[serde(skip_serializing_if = "Option::is_none")]
     rpc_password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -98,7 +98,7 @@ impl Display for AdexConfigImpl {
 
 impl AdexConfigImpl {
     #[cfg(test)]
-    pub fn new(rpc_password: &str, rpc_uri: &str) -> Self {
+    pub(super) fn new(rpc_password: &str, rpc_uri: &str) -> Self {
         Self {
             rpc_password: Some(rpc_password.to_string()),
             rpc_uri: Some(rpc_uri.to_string()),
@@ -106,7 +106,7 @@ impl AdexConfigImpl {
     }
 
     #[cfg(not(test))]
-    pub fn read_config() -> Result<AdexConfigImpl> {
+    pub(super) fn read_config() -> Result<AdexConfigImpl> {
         let config = AdexConfigImpl::from_config_path()?;
         match config {
             config @ AdexConfigImpl {
@@ -119,7 +119,7 @@ impl AdexConfigImpl {
 
     fn is_set(&self) -> bool { self.rpc_uri.is_some() && self.rpc_password.is_some() }
 
-    pub fn get_config_dir() -> Result<PathBuf> {
+    pub(super) fn get_config_dir() -> Result<PathBuf> {
         let project_dirs = ProjectDirs::from(PROJECT_QUALIFIER, PROJECT_COMPANY, PROJECT_APP)
             .ok_or_else(|| error_anyhow!("Failed to get project_dirs"))?;
         let config_path: PathBuf = project_dirs.config_dir().into();
