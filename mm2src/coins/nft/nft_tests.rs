@@ -5,7 +5,8 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 
 #[cfg(any(test, target_arch = "wasm32"))]
 mod for_db_tests {
-    use crate::nft::nft_structs::{Chain, ContractType, Nft, NftTransferHistory, TransferStatus, UriMeta};
+    use crate::nft::nft_structs::{Chain, ContractType, Nft, NftTransferHistory, NftTxHistoryFilters, TransferStatus,
+                                  UriMeta};
     use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps, RemoveNftResult};
     use mm2_number::BigDecimal;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
@@ -298,7 +299,7 @@ mod for_db_tests {
             .unwrap();
         assert_eq!(remove_rslt, RemoveNftResult::NftRemoved);
         let list_len = storage
-            .get_nft_list(vec![chain], true, 10, None)
+            .get_nft_list(vec![chain], true, 1, None)
             .await
             .unwrap()
             .nfts
@@ -348,6 +349,29 @@ mod for_db_tests {
         assert_eq!(last_scanned_block, 25919900);
     }
 
+    pub(crate) async fn test_refresh_metadata_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftListStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+
+        let new_symbol = "NEW_SYMBOL";
+        let mut nft = nft();
+        storage
+            .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
+            .await
+            .unwrap();
+        nft.symbol = Some(new_symbol.to_string());
+        drop_mutability!(nft);
+        let token_add = nft.token_address.clone();
+        let token_id = nft.token_id.clone();
+        storage.refresh_nft_metadata(&chain, nft).await.unwrap();
+        let nft_upd = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
+        assert_eq!(new_symbol.to_string(), nft_upd.symbol.unwrap());
+    }
+
     pub(crate) async fn test_add_get_txs_impl() {
         let ctx = mm_ctx_with_custom_db();
         let storage = NftStorageBuilder::new(&ctx).build().unwrap();
@@ -391,6 +415,85 @@ mod for_db_tests {
             .unwrap()
             .unwrap();
         assert_eq!(last_block, 28056726);
+    }
+
+    pub(crate) async fn test_tx_history_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let txs = nft_tx_historty();
+        storage.add_txs_to_history(&chain, txs).await.unwrap();
+
+        let tx_history = storage
+            .get_tx_history(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()), None)
+            .await
+            .unwrap();
+        assert_eq!(tx_history.transfer_history.len(), 1);
+        let tx = tx_history.transfer_history.get(0).unwrap();
+        assert_eq!(tx.block_number, 28056721);
+        assert_eq!(tx_history.skipped, 1);
+        assert_eq!(tx_history.total, 3);
+    }
+
+    pub(crate) async fn test_tx_history_filters_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let txs = nft_tx_historty();
+        storage.add_txs_to_history(&chain, txs).await.unwrap();
+
+        let filters = NftTxHistoryFilters {
+            receive: true,
+            send: false,
+            from_date: None,
+            to_date: None,
+        };
+
+        let filters1 = NftTxHistoryFilters {
+            receive: false,
+            send: false,
+            from_date: None,
+            to_date: Some(1677166110),
+        };
+
+        let filters2 = NftTxHistoryFilters {
+            receive: false,
+            send: false,
+            from_date: Some(1677166110),
+            to_date: Some(1683627417),
+        };
+
+        let tx_history = storage
+            .get_tx_history(vec![chain], true, 1, None, Some(filters))
+            .await
+            .unwrap();
+        assert_eq!(tx_history.transfer_history.len(), 3);
+        let tx = tx_history.transfer_history.get(0).unwrap();
+        assert_eq!(tx.block_number, 28056726);
+
+        let tx_history1 = storage
+            .get_tx_history(vec![chain], true, 1, None, Some(filters1))
+            .await
+            .unwrap();
+        assert_eq!(tx_history1.transfer_history.len(), 1);
+        let tx1 = tx_history1.transfer_history.get(0).unwrap();
+        assert_eq!(tx1.block_number, 25919780);
+
+        let tx_history2 = storage
+            .get_tx_history(vec![chain], true, 1, None, Some(filters2))
+            .await
+            .unwrap();
+        assert_eq!(tx_history2.transfer_history.len(), 2);
+        let tx_0 = tx_history2.transfer_history.get(0).unwrap();
+        assert_eq!(tx_0.block_number, 28056721);
+        let tx_1 = tx_history2.transfer_history.get(1).unwrap();
+        assert_eq!(tx_1.block_number, 25919780);
     }
 }
 
@@ -445,6 +548,9 @@ mod native_tests {
     fn test_remove_nft() { block_on(test_remove_nft_impl()) }
 
     #[test]
+    fn test_refresh_metadata() { block_on(test_refresh_metadata_impl()) }
+
+    #[test]
     fn test_nft_amount() { block_on(test_nft_amount_impl()) }
 
     #[test]
@@ -452,6 +558,12 @@ mod native_tests {
 
     #[test]
     fn test_last_tx_block() { block_on(test_last_tx_block_impl()) }
+
+    #[test]
+    fn test_tx_history() { block_on(test_tx_history_impl()) }
+
+    #[test]
+    fn test_tx_history_filters() { block_on(test_tx_history_filters_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -507,8 +619,17 @@ mod wasm_tests {
     async fn test_nft_amount() { test_nft_amount_impl().await }
 
     #[wasm_bindgen_test]
+    async fn test_refresh_metadata() { test_refresh_metadata_impl().await }
+
+    #[wasm_bindgen_test]
     async fn test_add_get_txs() { test_add_get_txs_impl().await }
 
     #[wasm_bindgen_test]
     async fn test_last_tx_block() { test_last_tx_block_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_tx_history() { test_tx_history_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_tx_history_filters() { test_tx_history_filters_impl().await }
 }

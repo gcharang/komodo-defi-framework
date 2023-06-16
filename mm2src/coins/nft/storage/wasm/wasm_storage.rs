@@ -75,15 +75,10 @@ impl IndexedDbNftStorage {
         I: Iterator<Item = NftTxHistoryTable>,
     {
         let mut filtered_txs = Vec::new();
-
         for tx_table in txs {
             let tx = tx_details_from_item(tx_table)?;
             if let Some(filters) = &filters {
-                let status_matches = (filters.receive && tx.status == TransferStatus::Receive)
-                    || (filters.send && tx.status == TransferStatus::Send);
-                let date_matches = filters.from_date.map_or(true, |from| tx.block_timestamp >= from)
-                    && filters.to_date.map_or(true, |to| tx.block_timestamp <= to);
-                if status_matches && date_matches {
+                if filters.is_status_match(&tx) && filters.is_date_match(&tx) {
                     filtered_txs.push(tx);
                 }
             } else {
@@ -92,6 +87,21 @@ impl IndexedDbNftStorage {
         }
         drop_mutability!(filtered_txs);
         Ok(filtered_txs)
+    }
+}
+
+impl NftTxHistoryFilters {
+    fn is_status_match(&self, tx: &NftTransferHistory) -> bool {
+        if !self.receive && !self.send {
+            true
+        } else {
+            (self.receive && tx.status == TransferStatus::Receive) || (self.send && tx.status == TransferStatus::Send)
+        }
+    }
+
+    fn is_date_match(&self, tx: &NftTransferHistory) -> bool {
+        self.from_date.map_or(true, |from| tx.block_timestamp >= from)
+            && self.to_date.map_or(true, |to| tx.block_timestamp <= to)
     }
 }
 
