@@ -9,6 +9,7 @@ mod for_db_tests {
     use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
     use mm2_number::BigDecimal;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
+    use std::num::NonZeroUsize;
     use std::str::FromStr;
 
     cfg_wasm32! {
@@ -232,6 +233,28 @@ mod for_db_tests {
         assert_eq!(last_scanned_block, last_block);
     }
 
+    pub(crate) async fn test_nft_list_impl() {
+        let ctx = mm_ctx_with_custom_db();
+        let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+        let chain = Chain::Bsc;
+        NftListStorageOps::init(&storage, &chain).await.unwrap();
+        let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+        assert!(is_initialized);
+        let scanned_block = 28056726;
+        let nft_list = nft_list();
+        storage.add_nfts_to_list(&chain, nft_list, scanned_block).await.unwrap();
+
+        let nft_list = storage
+            .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(nft_list.nfts.len(), 1);
+        let nft = nft_list.nfts.get(0).unwrap();
+        assert_eq!(nft.block_number, 28056721);
+        assert_eq!(nft_list.skipped, 1);
+        assert_eq!(nft_list.total, 3);
+    }
+
     pub(crate) async fn test_add_get_txs_impl() {
         let ctx = mm_ctx_with_custom_db();
         let storage = NftStorageBuilder::new(&ctx).build().unwrap();
@@ -323,6 +346,9 @@ mod native_tests {
     fn test_last_nft_blocks() { block_on(test_last_nft_blocks_impl()) }
 
     #[test]
+    fn test_nft_list() { block_on(test_nft_list_impl()) }
+
+    #[test]
     fn test_add_get_txs() { block_on(test_add_get_txs_impl()) }
 
     #[test]
@@ -371,6 +397,9 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_last_nft_blocks() { test_last_nft_blocks_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_nft_list() { test_nft_list_impl().await }
 
     #[wasm_bindgen_test]
     async fn test_add_get_txs() { test_add_get_txs_impl().await }
