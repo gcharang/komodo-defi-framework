@@ -7,11 +7,12 @@ use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorag
 use crate::CoinsContext;
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
-use mm2_db::indexed_db::{DbUpgrader, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
+use mm2_db::indexed_db::{BeBigUint, DbUpgrader, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::map_mm_error::MapMmError;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::prelude::MmResult;
 use mm2_number::BigDecimal;
+use num_traits::ToPrimitive;
 use serde_json::{self as json, Value as Json};
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
@@ -138,7 +139,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         }
         let last_scanned_block = LastScannedBlockTable {
             chain: chain.to_string(),
-            last_scanned_block,
+            last_scanned_block: BeBigUint::from(last_scanned_block),
         };
         last_scanned_block_table
             .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
@@ -184,7 +185,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .with_value(token_id.to_string())?;
         let last_scanned_block = LastScannedBlockTable {
             chain: chain.to_string(),
-            last_scanned_block: scanned_block,
+            last_scanned_block: BeBigUint::from(scanned_block),
         };
 
         let nft_removed = nft_table.delete_item_by_unique_multi_index(index_keys).await?.is_some();
@@ -240,7 +241,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .cursor_builder()
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-            .bound("block_number", 0u64, u64::MAX)
+            .bound("block_number", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
             .reverse()
             .open_cursor(NftListTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
@@ -248,7 +249,15 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .next()
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
-        Ok(maybe_item.map(|(_, item)| item.block_number))
+        let maybe_item = maybe_item
+            .map(|(_, item)| {
+                item.block_number
+                    .to_u64()
+                    .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))
+            })
+            .transpose()?;
+
+        Ok(maybe_item)
     }
 
     async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
@@ -256,7 +265,11 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<LastScannedBlockTable>().await?;
         if let Some((_item_id, item)) = table.get_item_by_unique_index("chain", chain.to_string()).await? {
-            Ok(Some(item.last_scanned_block))
+            let last_scanned_block = item
+                .last_scanned_block
+                .to_u64()
+                .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))?;
+            Ok(Some(last_scanned_block))
         } else {
             return Ok(None);
         }
@@ -278,7 +291,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .await?;
         let last_scanned_block = LastScannedBlockTable {
             chain: chain.to_string(),
-            last_scanned_block: scanned_block,
+            last_scanned_block: BeBigUint::from(scanned_block),
         };
         last_scanned_block_table
             .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
@@ -302,7 +315,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .await?;
         let last_scanned_block = LastScannedBlockTable {
             chain: chain.to_string(),
-            last_scanned_block: nft.block_number,
+            last_scanned_block: BeBigUint::from(nft.block_number),
         };
         last_scanned_block_table
             .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
@@ -366,7 +379,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .cursor_builder()
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-            .bound("block_number", 0u64, u64::MAX)
+            .bound("block_number", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
             .reverse()
             .open_cursor(NftTxHistoryTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
@@ -374,7 +387,14 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .next()
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
-        Ok(maybe_item.map(|(_, item)| item.block_number))
+        let maybe_item = maybe_item
+            .map(|(_, item)| {
+                item.block_number
+                    .to_u64()
+                    .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))
+            })
+            .transpose()?;
+        Ok(maybe_item)
     }
 
     async fn get_txs_from_block(
@@ -389,7 +409,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .cursor_builder()
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-            .bound("block_number", from_block, u64::MAX)
+            .bound("block_number", BeBigUint::from(from_block), BeBigUint::from(u64::MAX))
             .open_cursor(NftTxHistoryTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
@@ -515,7 +535,7 @@ pub(crate) struct NftListTable {
     token_id: String,
     chain: String,
     amount: String,
-    block_number: u64,
+    block_number: BeBigUint,
     contract_type: ContractType,
     details_json: Json,
 }
@@ -532,7 +552,7 @@ impl NftListTable {
             token_id: nft.token_id.to_string(),
             chain: nft.chain.to_string(),
             amount: nft.amount.to_string(),
-            block_number: nft.block_number,
+            block_number: BeBigUint::from(nft.block_number),
             contract_type: nft.contract_type,
             details_json,
         })
@@ -562,8 +582,8 @@ impl TableSignature for NftListTable {
 pub(crate) struct NftTxHistoryTable {
     transaction_hash: String,
     chain: String,
-    block_number: u64,
-    block_timestamp: u64,
+    block_number: BeBigUint,
+    block_timestamp: BeBigUint,
     contract_type: ContractType,
     token_address: String,
     token_id: String,
@@ -587,8 +607,8 @@ impl NftTxHistoryTable {
         Ok(NftTxHistoryTable {
             transaction_hash: tx.transaction_hash.clone(),
             chain: tx.chain.to_string(),
-            block_number: tx.block_number,
-            block_timestamp: tx.block_timestamp,
+            block_number: BeBigUint::from(tx.block_number),
+            block_timestamp: BeBigUint::from(tx.block_timestamp),
             contract_type: tx.contract_type,
             token_address: tx.token_address.clone(),
             token_id: tx.token_id.to_string(),
@@ -614,8 +634,8 @@ impl TableSignature for NftTxHistoryTable {
                 false,
             )?;
             table.create_multi_index(Self::CHAIN_TX_HASH_INDEX, &["chain", "transaction_hash"], true)?;
-            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], true)?;
-            table.create_index("block_number", true)?;
+            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
+            table.create_index("block_number", false)?;
             table.create_index("chain", false)?;
         }
         Ok(())
@@ -625,7 +645,7 @@ impl TableSignature for NftTxHistoryTable {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct LastScannedBlockTable {
     chain: String,
-    last_scanned_block: u64,
+    last_scanned_block: BeBigUint,
 }
 
 impl TableSignature for LastScannedBlockTable {
