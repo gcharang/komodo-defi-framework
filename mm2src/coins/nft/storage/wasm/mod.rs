@@ -3,8 +3,8 @@ use mm2_db::indexed_db::{DbTransactionError, InitDbError};
 use mm2_err_handle::prelude::*;
 use mm2_number::bigdecimal::ParseBigDecimalError;
 
-pub mod nft_idb;
-pub mod wasm_storage;
+pub(crate) mod nft_idb;
+pub(crate) mod wasm_storage;
 
 pub type WasmNftCacheResult<T> = MmResult<T, WasmNftCacheError>;
 

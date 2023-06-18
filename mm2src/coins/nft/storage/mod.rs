@@ -10,8 +10,10 @@ use mm2_number::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
-#[cfg(not(target_arch = "wasm32"))] pub mod sql_storage;
-#[cfg(target_arch = "wasm32")] pub mod wasm;
+#[cfg(any(test, target_arch = "wasm32"))]
+pub(crate) mod for_db_tests;
+#[cfg(not(target_arch = "wasm32"))] pub(crate) mod sql_storage;
+#[cfg(target_arch = "wasm32")] pub(crate) mod wasm;
 
 #[derive(Debug, PartialEq)]
 pub enum RemoveNftResult {
