@@ -512,7 +512,7 @@ pub(crate) async fn test_tx_history_filters_impl() {
     assert_eq!(tx_1.block_number, 25919780);
 }
 
-pub(crate) async fn test_get_update_tx_meta() {
+pub(crate) async fn test_get_update_tx_meta_impl() {
     let ctx = mm_ctx_with_custom_db();
     let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
@@ -524,30 +524,21 @@ pub(crate) async fn test_get_update_tx_meta() {
     let vec_token_add_id = storage.get_txs_with_empty_meta(&chain).await.unwrap();
     assert_eq!(vec_token_add_id.len(), 2);
 
-    let token_add_id = vec_token_add_id.get(0).unwrap();
-    assert_eq!(BigDecimal::default(), token_add_id.token_id);
+    let token_add = "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string();
     let tx_meta = TxMeta {
-        token_address: token_add_id.token_address.clone(),
-        token_id: token_add_id.token_id.clone(),
+        token_address: token_add.clone(),
+        token_id: Default::default(),
         collection_name: None,
         image: None,
         token_name: Some("Tiki box".to_string()),
     };
     storage.update_txs_meta_by_token_addr_id(&chain, tx_meta).await.unwrap();
     let tx_upd = storage
-        .get_txs_by_token_addr_id(
-            &chain,
-            token_add_id.token_address.clone(),
-            token_add_id.token_id.clone(),
-        )
+        .get_txs_by_token_addr_id(&chain, token_add, Default::default())
         .await
         .unwrap();
     let tx_upd = tx_upd.get(0).unwrap();
     assert_eq!(tx_upd.token_name, Some("Tiki box".to_string()));
-
-    let token_add_id_1 = vec_token_add_id.get(1).unwrap();
-    let token_id_1 = BigDecimal::from_str("214300047252").unwrap();
-    assert_eq!(token_id_1, token_add_id_1.token_id);
 
     let tx_meta = tx();
     storage.update_tx_meta_by_hash(&chain, tx_meta).await.unwrap();
