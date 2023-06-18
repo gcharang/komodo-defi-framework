@@ -104,9 +104,10 @@ impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
             GetNftInfoError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-            GetNftInfoError::InvalidResponse(_)
-            | GetNftInfoError::ParseTimestampError(_)
-            | GetNftInfoError::ContractTypeIsNull => StatusCode::FAILED_DEPENDENCY,
+            GetNftInfoError::InvalidResponse(_) | GetNftInfoError::ParseTimestampError(_) => {
+                StatusCode::FAILED_DEPENDENCY
+            },
+            GetNftInfoError::ContractTypeIsNull => StatusCode::NOT_FOUND,
             GetNftInfoError::Transport(_)
             | GetNftInfoError::Internal(_)
             | GetNftInfoError::GetEthAddressError(_)

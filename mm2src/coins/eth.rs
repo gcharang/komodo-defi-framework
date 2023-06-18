@@ -1381,7 +1381,7 @@ impl SwapOps for EthCoin {
     }
 
     fn is_supported_by_watchers(&self) -> bool {
-        false
+        std::env::var("USE_WATCHER_REWARD").is_ok()
         //self.contract_supports_watchers
     }
 }
@@ -1788,7 +1788,7 @@ impl WatcherOps for EthCoin {
             },
         };
 
-        let send_contract_reward_on_spend = true;
+        let send_contract_reward_on_spend = other_coin.is_eth();
 
         Ok(Some(WatcherReward {
             amount,
