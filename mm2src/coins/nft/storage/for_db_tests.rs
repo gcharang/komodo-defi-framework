@@ -1,5 +1,5 @@
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftTransferHistory, NftTxHistoryFilters, TransferStatus,
-                              UriMeta};
+                              TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps, RemoveNftResult};
 use mm2_number::BigDecimal;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
@@ -42,6 +42,33 @@ fn nft() -> Nft {
             attributes: None,
             animation_url: None,
         },
+    }
+}
+
+fn tx() -> NftTransferHistory {
+    NftTransferHistory {
+        chain: Chain::Bsc,
+        block_number: 28056726,
+        block_timestamp: 1683627432,
+        block_hash: "0x3d68b78391fb3cf8570df27036214f7e9a5a6a45d309197936f51d826041bfe7".to_string(),
+        transaction_hash: "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe".to_string(),
+        transaction_index: 198,
+        log_index: 495,
+        value: Default::default(),
+        contract_type: ContractType::Erc721,
+        transaction_type: "Single".to_string(),
+        token_address: "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string(),
+        token_id: BigDecimal::from_str("214300047252").unwrap(),
+        collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
+        image: Some("https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string()),
+        token_name: Some("Nebula Nodes".to_string()),
+        from_address: "0x6fad0ec6bb76914b2a2a800686acc22970645820".to_string(),
+        to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
+        status: TransferStatus::Receive,
+        amount: BigDecimal::from_str("1").unwrap(),
+        verified: 1,
+        operator: None,
+        possible_spam: Some(false),
     }
 }
 
@@ -150,7 +177,7 @@ fn nft_tx_historty() -> Vec<NftTransferHistory> {
         token_address: "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string(),
         token_id: Default::default(),
         collection_name: None,
-        image: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.png".to_string()),
+        image: None,
         token_name: None,
         from_address: "0x4ff0bbc9b64d635a4696d1a38554fb2529c103ff".to_string(),
         to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
@@ -174,9 +201,9 @@ fn nft_tx_historty() -> Vec<NftTransferHistory> {
         transaction_type: "Single".to_string(),
         token_address: "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string(),
         token_id: BigDecimal::from_str("214300047252").unwrap(),
-        collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
-        image: Some("https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string()),
-        token_name: Some("Nebula Nodes".to_string()),
+        collection_name: None,
+        image: None,
+        token_name: None,
         from_address: "0x6fad0ec6bb76914b2a2a800686acc22970645820".to_string(),
         to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
         status: TransferStatus::Receive,
@@ -483,4 +510,51 @@ pub(crate) async fn test_tx_history_filters_impl() {
     assert_eq!(tx_0.block_number, 28056721);
     let tx_1 = tx_history2.transfer_history.get(1).unwrap();
     assert_eq!(tx_1.block_number, 25919780);
+}
+
+pub(crate) async fn test_get_update_tx_meta() {
+    let ctx = mm_ctx_with_custom_db();
+    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+    let chain = Chain::Bsc;
+    NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
+    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
+    assert!(is_initialized);
+    let txs = nft_tx_historty();
+    storage.add_txs_to_history(&chain, txs).await.unwrap();
+    let vec_token_add_id = storage.get_txs_with_empty_meta(&chain).await.unwrap();
+    assert_eq!(vec_token_add_id.len(), 2);
+
+    let token_add_id = vec_token_add_id.get(0).unwrap();
+    assert_eq!(BigDecimal::default(), token_add_id.token_id);
+    let tx_meta = TxMeta {
+        token_address: token_add_id.token_address.clone(),
+        token_id: token_add_id.token_id.clone(),
+        collection_name: None,
+        image: None,
+        token_name: Some("Tiki box".to_string()),
+    };
+    storage.update_txs_meta_by_token_addr_id(&chain, tx_meta).await.unwrap();
+    let tx_upd = storage
+        .get_txs_by_token_addr_id(
+            &chain,
+            token_add_id.token_address.clone(),
+            token_add_id.token_id.clone(),
+        )
+        .await
+        .unwrap();
+    let tx_upd = tx_upd.get(0).unwrap();
+    assert_eq!(tx_upd.token_name, Some("Tiki box".to_string()));
+
+    let token_add_id_1 = vec_token_add_id.get(1).unwrap();
+    let token_id_1 = BigDecimal::from_str("214300047252").unwrap();
+    assert_eq!(token_id_1, token_add_id_1.token_id);
+
+    let tx_meta = tx();
+    storage.update_tx_meta_by_hash(&chain, tx_meta).await.unwrap();
+    let tx_by_hash = storage
+        .get_tx_by_tx_hash(&chain, TX_HASH.to_string())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(tx_by_hash.token_name, Some("Nebula Nodes".to_string()))
 }

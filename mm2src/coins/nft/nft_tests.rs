@@ -70,6 +70,9 @@ mod native_tests {
 
     #[test]
     fn test_tx_history_filters() { block_on(test_tx_history_filters_impl()) }
+
+    #[test]
+    fn test_get_update_tx() { block_on(test_get_update_tx_meta()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -138,4 +141,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_tx_history_filters() { test_tx_history_filters_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_get_update_tx() { test_get_update_tx_meta().await }
 }
