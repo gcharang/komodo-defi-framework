@@ -174,13 +174,13 @@ pub struct TakerRequestForRpc {
     pub conf_settings: Option<OrderConfirmationsSettings>,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TakerAction {
     Buy,
     Sell,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum OrderType {
     FillOrKill,
@@ -203,7 +203,7 @@ impl Default for MatchBy {
     fn default() -> Self { MatchBy::Any }
 }
 
-#[derive(Clone, Copy, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OrderConfirmationsSettings {
     pub base_confs: u64,
     pub base_nota: bool,

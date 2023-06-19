@@ -106,8 +106,8 @@ pub fn process_best_orders_p2p_request(
                     };
                     let order_w_proof = orderbook.orderbook_item_with_proof(o.clone());
                     protocol_infos.insert(order_w_proof.order.uuid, order_w_proof.order.base_rel_proto_info());
-                    if let Some(info) = order_w_proof.order.conf_settings {
-                        conf_infos.insert(order_w_proof.order.uuid, info);
+                    if let Some(ref info) = order_w_proof.order.conf_settings {
+                        conf_infos.insert(order_w_proof.order.uuid, info.clone());
                     }
                     best_orders.push(order_w_proof.into());
 
@@ -178,8 +178,8 @@ pub fn process_best_orders_p2p_request_by_number(
                 Some(o) => {
                     let order_w_proof = orderbook.orderbook_item_with_proof(o.clone());
                     protocol_infos.insert(order_w_proof.order.uuid, order_w_proof.order.base_rel_proto_info());
-                    if let Some(info) = order_w_proof.order.conf_settings {
-                        conf_infos.insert(order_w_proof.order.uuid, info);
+                    if let Some(ref info) = order_w_proof.order.conf_settings {
+                        conf_infos.insert(order_w_proof.order.uuid, info.clone());
                     }
                     best_orders.push(order_w_proof.into());
                 },

@@ -748,8 +748,8 @@ fn get_pubkeys_orders(orderbook: &Orderbook, base: String, rel: String) -> GetPu
         };
         let uuids = uuids_by_pubkey.entry(order.pubkey.clone()).or_insert_with(Vec::new);
         protocol_infos.insert(order.uuid, order.base_rel_proto_info());
-        if let Some(info) = order.conf_settings {
-            conf_infos.insert(order.uuid, info);
+        if let Some(ref info) = order.conf_settings {
+            conf_infos.insert(order.uuid, info.clone());
         }
         uuids.push((*uuid, order.clone().into()))
     }
@@ -955,8 +955,8 @@ fn process_sync_pubkey_orderbook_state(
                         base: o.base_protocol_info.clone(),
                         rel: o.rel_protocol_info.clone(),
                     });
-                    if let Some(info) = o.conf_settings {
-                        conf_infos.insert(o.uuid, info);
+                    if let Some(ref info) = o.conf_settings {
+                        conf_infos.insert(o.uuid, info.clone());
                     }
                 },
                 None => {
@@ -1042,7 +1042,7 @@ fn maker_order_created_p2p_notify(
         price: order.price.to_ratio(),
         max_volume: order.available_amount().to_ratio(),
         min_volume: order.min_base_vol.to_ratio(),
-        conf_settings: order.conf_settings.unwrap(),
+        conf_settings: order.conf_settings.clone().unwrap(),
         created_at: now_sec(),
         timestamp: now_sec(),
         pair_trie_root: H64::default(),
@@ -2914,7 +2914,7 @@ fn lp_connect_start_bob(ctx: MmArc, maker_match: MakerMatch, maker_order: MakerO
         let my_persistent_pub = compressed_pub_key_from_priv_raw(raw_priv.as_slice(), ChecksumType::DSHA256).unwrap();
 
         let my_conf_settings = choose_maker_confs_and_notas(
-            maker_order.conf_settings,
+            maker_order.conf_settings.clone(),
             &maker_match.request,
             &maker_coin,
             &taker_coin,
@@ -3398,8 +3398,12 @@ async fn process_maker_reserved(ctx: MmArc, from_pubkey: H256Json, reserved_msg:
         reserved_messages.sort_unstable_by_key(|r| r.price());
 
         for reserved_msg in reserved_messages {
-            let my_conf_settings =
-                choose_maker_confs_and_notas(reserved_msg.conf_settings, &my_order.request, &base_coin, &rel_coin);
+            let my_conf_settings = choose_maker_confs_and_notas(
+                reserved_msg.conf_settings.clone(),
+                &my_order.request,
+                &base_coin,
+                &rel_coin,
+            );
             let other_conf_settings =
                 choose_taker_confs_and_notas(&my_order.request, &reserved_msg.conf_settings, &base_coin, &rel_coin);
             let atomic_locktime_v = AtomicLocktimeVersion::V2 {
@@ -3525,7 +3529,7 @@ async fn process_taker_request(ctx: MmArc, from_pubkey: H256Json, taker_request:
             };
 
             let my_conf_settings =
-                choose_maker_confs_and_notas(order.conf_settings, &taker_request, &base_coin, &rel_coin);
+                choose_maker_confs_and_notas(order.conf_settings.clone(), &taker_request, &base_coin, &rel_coin);
             let other_conf_settings =
                 choose_taker_confs_and_notas(&taker_request, &order.conf_settings, &base_coin, &rel_coin);
             let atomic_locktime_v = AtomicLocktimeVersion::V2 {
@@ -3563,7 +3567,7 @@ async fn process_taker_request(ctx: MmArc, from_pubkey: H256Json, taker_request:
                     rel: order.rel_orderbook_ticker().to_owned(),
                     taker_order_uuid: taker_request.uuid,
                     maker_order_uuid: *uuid,
-                    conf_settings: order.conf_settings.or_else(|| {
+                    conf_settings: order.conf_settings.clone().or_else(|| {
                         Some(OrderConfirmationsSettings {
                             base_confs: base_coin.required_confirmations(),
                             base_nota: base_coin.requires_notarization(),
@@ -3756,13 +3760,13 @@ impl<'a> From<&'a TakerRequest> for TakerRequestForRpc {
             base_amount_rat: request.base_amount.to_ratio(),
             rel_amount: request.rel_amount.to_decimal(),
             rel_amount_rat: request.rel_amount.to_ratio(),
-            action: request.action,
+            action: request.action.clone(),
             uuid: request.uuid,
             method: "request".to_string(),
             sender_pubkey: request.sender_pubkey,
             dest_pub_key: request.dest_pub_key,
             match_by: request.match_by.clone(),
-            conf_settings: request.conf_settings,
+            conf_settings: request.conf_settings.clone(),
         }
     }
 }
@@ -3829,7 +3833,7 @@ pub async fn lp_auto_buy(
 
     let res = try_s!(json::to_vec(&Mm2RpcResult::new(SellBuyResponse {
         request: (&order.request).into(),
-        order_type: order.order_type,
+        order_type: order.order_type.clone(),
         min_volume: order.min_volume.clone().into(),
         base_orderbook_ticker: order.base_orderbook_ticker.clone(),
         rel_orderbook_ticker: order.rel_orderbook_ticker.clone(),
@@ -4129,7 +4133,7 @@ impl OrderbookItem {
             base_min_volume,
             rel_max_volume,
             rel_min_volume,
-            conf_settings: self.conf_settings,
+            conf_settings: self.conf_settings.clone(),
         }
     }
 
@@ -4142,7 +4146,7 @@ impl OrderbookItem {
         let base_min_volume = (&min_vol_mm / &price_mm).into();
         let rel_max_volume = max_vol_mm.clone().into();
         let rel_min_volume = min_vol_mm.clone().into();
-        let conf_settings = self.conf_settings.map(|conf| conf.reversed());
+        let conf_settings = self.conf_settings.as_ref().map(|conf| conf.reversed());
 
         RpcOrderbookEntry {
             coin: self.base.clone(),
@@ -4184,7 +4188,7 @@ impl OrderbookItem {
             is_mine,
             base_max_volume: max_vol_mm.into(),
             base_min_volume: min_vol_mm.into(),
-            conf_settings: self.conf_settings,
+            conf_settings: self.conf_settings.clone(),
         }
     }
 
@@ -4193,7 +4197,7 @@ impl OrderbookItem {
         let max_vol_mm = MmNumber::from(self.max_volume.clone());
         let min_vol_mm = MmNumber::from(self.min_volume.clone());
 
-        let conf_settings = self.conf_settings.map(|conf| conf.reversed());
+        let conf_settings = self.conf_settings.as_ref().map(|conf| conf.reversed());
 
         RpcOrderbookEntryV2 {
             coin: self.base.clone(),
@@ -4648,7 +4652,7 @@ pub async fn update_maker_order(ctx: &MmArc, req: MakerOrderUpdateReq) -> Result
         _ => return ERR!("Base coin {} and/or rel coin {} are not activated", base, rel),
     };
 
-    let original_conf_settings = order_before_update.conf_settings.unwrap();
+    let original_conf_settings = order_before_update.conf_settings.clone().unwrap();
     let updated_conf_settings = OrderConfirmationsSettings {
         base_confs: req.base_confs.unwrap_or(original_conf_settings.base_confs),
         base_nota: req.base_nota.unwrap_or(original_conf_settings.base_nota),
@@ -5539,7 +5543,7 @@ fn choose_maker_confs_and_notas(
     });
 
     let (maker_coin_confs, maker_coin_nota, taker_coin_confs, taker_coin_nota) = match taker_req.conf_settings {
-        Some(taker_settings) => match taker_req.action {
+        Some(ref taker_settings) => match taker_req.action {
             TakerAction::Sell => {
                 let maker_coin_confs = if taker_settings.rel_confs < maker_settings.base_confs {
                     taker_settings.rel_confs
@@ -5601,7 +5605,7 @@ fn choose_taker_confs_and_notas(
 ) -> SwapConfirmationsSettings {
     let (mut taker_coin_confs, mut taker_coin_nota, maker_coin_confs, maker_coin_nota) = match taker_req.action {
         TakerAction::Buy => match taker_req.conf_settings {
-            Some(s) => (s.rel_confs, s.rel_nota, s.base_confs, s.base_nota),
+            Some(ref s) => (s.rel_confs, s.rel_nota, s.base_confs, s.base_nota),
             None => (
                 taker_coin.required_confirmations(),
                 taker_coin.requires_notarization(),
@@ -5610,7 +5614,7 @@ fn choose_taker_confs_and_notas(
             ),
         },
         TakerAction::Sell => match taker_req.conf_settings {
-            Some(s) => (s.base_confs, s.base_nota, s.rel_confs, s.rel_nota),
+            Some(ref s) => (s.base_confs, s.base_nota, s.rel_confs, s.rel_nota),
             None => (
                 taker_coin.required_confirmations(),
                 taker_coin.requires_notarization(),

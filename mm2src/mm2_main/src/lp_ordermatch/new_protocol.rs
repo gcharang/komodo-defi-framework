@@ -237,7 +237,7 @@ impl MakerOrderUpdated {
     pub fn new_conf_settings(&self) -> Option<OrderConfirmationsSettings> {
         match self {
             MakerOrderUpdated::V1(_) => None,
-            MakerOrderUpdated::V2(v2) => v2.conf_settings,
+            MakerOrderUpdated::V2(v2) => v2.conf_settings.clone(),
         }
     }
 
@@ -345,7 +345,7 @@ mod new_protocol_tests {
             new_min_volume: Some(BigRational::from_integer(1.into())),
             timestamp,
             pair_trie_root: H64::default(),
-            conf_settings,
+            conf_settings: conf_settings.clone(),
         });
 
         let expected = MakerOrderUpdatedV1 {

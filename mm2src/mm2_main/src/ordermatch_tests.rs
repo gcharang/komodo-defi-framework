@@ -1828,8 +1828,8 @@ fn test_request_and_fill_orderbook() {
                 let orders = orders
                     .into_iter()
                     .map(|(uuid, order)| {
-                        if let Some(conf_settings) = order.conf_settings {
-                            conf_infos.insert(uuid, conf_settings);
+                        if let Some(ref conf_settings) = order.conf_settings {
+                            conf_infos.insert(uuid, conf_settings.clone());
                         }
                         (uuid, order.into())
                     })

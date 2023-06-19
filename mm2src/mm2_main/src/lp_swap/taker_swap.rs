@@ -2417,7 +2417,7 @@ pub async fn taker_swap_trade_preimage(
     let order_builder = TakerOrderBuilder::new(&base_coin, &rel_coin)
         .with_base_amount(base_amount)
         .with_rel_amount(rel_amount)
-        .with_action(action)
+        .with_action(action.clone())
         .with_match_by(MatchBy::Any)
         .with_conf_settings(conf_settings)
         .with_sender_pubkey(H256Json::from(our_public_id.bytes));
