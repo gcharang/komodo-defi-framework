@@ -41,6 +41,10 @@ fn nft() -> Nft {
             description: Some("Born to usher in Bull markets.".to_string()),
             attributes: None,
             animation_url: None,
+            external_url: None,
+            image_details: None,
+            dna: None,
+            compiler: None,
         },
     }
 }
@@ -97,6 +101,10 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Born to usher in Bull markets.".to_string()),
             attributes: None,
             animation_url: None,
+            external_url: None,
+            image_details: None,
+            dna: None,
+            compiler: None,
         },
     };
 
@@ -127,6 +135,10 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Interchain nodes".to_string()),
             attributes: None,
             animation_url: None,
+            external_url: None,
+            image_details: None,
+            dna: None,
+            compiler: None,
         },
     };
 
@@ -157,6 +169,10 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Interchain nodes".to_string()),
             attributes: None,
             animation_url: None,
+            external_url: None,
+            image_details: None,
+            dna: None,
+            compiler: None,
         },
     };
     vec![nft, nft1, nft2]

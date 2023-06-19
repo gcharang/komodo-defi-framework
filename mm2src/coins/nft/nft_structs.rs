@@ -129,13 +129,47 @@ impl fmt::Display for ContractType {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub(crate) struct UriMeta {
+pub(crate) struct UriMetaFromStr {
     pub(crate) image: Option<String>,
+    /// the same as image, some tokens use **image_url** name for **image** field
+    /// but sometimes token_uri contains both`image_url` and `image`
+    pub(crate) image_url: Option<String>,
     #[serde(rename(deserialize = "name"))]
     pub(crate) token_name: Option<String>,
     pub(crate) description: Option<String>,
     pub(crate) attributes: Option<Json>,
     pub(crate) animation_url: Option<String>,
+    pub(crate) external_url: Option<String>,
+    pub(crate) image_details: Option<String>,
+    pub(crate) dna: Option<String>,
+    pub(crate) compiler: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub(crate) struct UriMeta {
+    pub(crate) image: Option<String>,
+    pub(crate) token_name: Option<String>,
+    pub(crate) description: Option<String>,
+    pub(crate) attributes: Option<Json>,
+    pub(crate) animation_url: Option<String>,
+    pub(crate) external_url: Option<String>,
+    pub(crate) image_details: Option<String>,
+    pub(crate) dna: Option<String>,
+    pub(crate) compiler: Option<String>,
+}
+
+impl UriMeta {
+    pub(crate) fn merge_from(&mut self, other: UriMetaFromStr) {
+        self.image = self.image.clone().or(other.image).or(other.image_url);
+        self.token_name = self.token_name.clone().or(other.token_name);
+        self.description = self.description.clone().or(other.description);
+        self.attributes = self.attributes.clone().or(other.attributes);
+        self.animation_url = self.animation_url.clone().or(other.animation_url);
+        self.external_url = self.external_url.clone().or(other.external_url);
+        self.image_details = self.image_details.clone().or(other.image_details);
+        self.dna = self.dna.clone().or(other.dna);
+        self.compiler = self.compiler.clone().or(other.compiler);
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
