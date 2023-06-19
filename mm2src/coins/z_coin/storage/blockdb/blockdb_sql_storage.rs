@@ -1,6 +1,6 @@
 use crate::z_coin::storage::{BlockDbError, BlockDbImpl};
 
-use common::block_on;
+use async_trait::async_trait;
 use db_common::sqlite::rusqlite::{params, Connection};
 use db_common::sqlite::{query_single_row, run_optimization_pragmas};
 use mm2_core::mm_ctx::MmArc;
@@ -143,13 +143,14 @@ impl BlockDbImpl {
     }
 }
 
+#[async_trait(?Send)]
 impl BlockSource for BlockDbImpl {
     type Error = SqliteClientError;
 
-    fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
+    async fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
     where
         F: FnMut(CompactBlock) -> Result<(), Self::Error>,
     {
-        block_on(self.with_blocks(from_height, limit, with_row))
+        self.with_blocks(from_height, limit, with_row).await
     }
 }

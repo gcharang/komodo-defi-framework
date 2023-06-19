@@ -306,13 +306,13 @@ impl BlockDbImpl {
     }
 }
 
+#[async_trait(?Send)]
 impl BlockSource for BlockDbImpl {
     type Error = BlockDbError;
-    fn with_blocks<F>(&self, _from_height: BlockHeight, _limit: Option<u32>, _with_row: F) -> Result<(), Self::Error>
+    async fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
     where
         F: FnMut(CompactBlock) -> Result<(), Self::Error>,
     {
-        // self.with_blocks(from_height, limit, with_row).await
-        todo!()
+        self.with_blocks(from_height, limit, with_row).await
     }
 }
