@@ -236,7 +236,7 @@ pub async fn my_balance(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, Stri
     };
     let my_balance = try_s!(coin.my_balance().compat().await);
 
-    let res = try_s!(serde_json::to_vec(&BalanceResponse {
+    let res = try_s!(json::to_vec(&BalanceResponse {
         coin: ticker,
         balance: my_balance.spendable,
         unspendable_balance: my_balance.unspendable,
@@ -261,7 +261,7 @@ pub async fn stop(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
     // and it may lead to an unexpected behaviour.
     common::executor::spawn(fut);
 
-    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(Status::Success)));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(Status::Success)));
     Ok(try_s!(Response::builder().body(res)))
 }
 
@@ -298,7 +298,7 @@ pub async fn sim_panic(req: Json) -> Result<Response<Vec<u8>>, String> {
 pub fn version(ctx: MmArc) -> HyRes {
     rpc_response(
         RESPONSE_OK_STATUS_CODE,
-        serde_json::to_string(&MmVersionResponse {
+        json::to_string(&MmVersionResponse {
             result: ctx.mm_version.clone(),
             datetime: ctx.datetime.clone(),
         })

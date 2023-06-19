@@ -3475,7 +3475,7 @@ pub async fn get_enabled_coins(ctx: MmArc) -> Result<Response<Vec<u8>>, String> 
             })
         })
         .collect());
-    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(enabled_coins)));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(enabled_coins)));
     Ok(try_s!(Response::builder().body(res)))
 }
 
