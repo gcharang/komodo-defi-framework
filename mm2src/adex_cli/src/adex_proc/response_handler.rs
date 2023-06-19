@@ -334,12 +334,15 @@ mod orderbook {
                 age: AskBidRowVal::Value(entry.entry.age.to_string()),
                 public: AskBidRowVal::Value(entry.entry.pubkey.clone()),
                 address: AskBidRowVal::Value(entry.entry.address.clone()),
-                conf_settings: AskBidRowVal::Value(entry.entry.conf_settings.map_or("none".to_string(), |settings| {
-                    format!(
-                        "{},{}:{},{}",
-                        settings.base_confs, settings.base_nota, settings.rel_confs, settings.rel_nota
-                    )
-                })),
+                conf_settings: AskBidRowVal::Value(entry.entry.conf_settings.as_ref().map_or(
+                    "none".to_string(),
+                    |settings| {
+                        format!(
+                            "{},{}:{},{}",
+                            settings.base_confs, settings.base_nota, settings.rel_confs, settings.rel_nota
+                        )
+                    },
+                )),
                 config,
             }
         }
