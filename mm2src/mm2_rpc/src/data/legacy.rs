@@ -123,7 +123,6 @@ pub struct SellBuyRequest {
     /// Not used. Deprecated.
     #[allow(dead_code)]
     pub duration: Option<u32>,
-    // TODO: remove this field on API refactoring, method should be separated from params
     pub method: String,
     #[allow(dead_code)]
     pub gui: Option<String>,
