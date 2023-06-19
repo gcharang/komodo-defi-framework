@@ -269,15 +269,15 @@ mod orderbook {
         ) -> Self {
             Self {
                 is_mine: AskBidRowVal::Value(String::new()),
-                volume: AskBidRowVal::Value(volume.into()),
-                price: AskBidRowVal::Value(price.into()),
-                uuid: AskBidRowVal::Value(uuid.into()),
-                min_volume: AskBidRowVal::Value(min_volume.into()),
-                max_volume: AskBidRowVal::Value(max_volume.into()),
-                age: AskBidRowVal::Value(age.into()),
-                public: AskBidRowVal::Value(public.into()),
-                address: AskBidRowVal::Value(address.into()),
-                conf_settings: AskBidRowVal::Value(conf_settings.into()),
+                volume: AskBidRowVal::Value(volume.to_string()),
+                price: AskBidRowVal::Value(price.to_string()),
+                uuid: AskBidRowVal::Value(uuid.to_string()),
+                min_volume: AskBidRowVal::Value(min_volume.to_string()),
+                max_volume: AskBidRowVal::Value(max_volume.to_string()),
+                age: AskBidRowVal::Value(age.to_string()),
+                public: AskBidRowVal::Value(public.to_string()),
+                address: AskBidRowVal::Value(address.to_string()),
+                conf_settings: AskBidRowVal::Value(conf_settings.to_string()),
                 config,
             }
         }
@@ -305,7 +305,7 @@ mod orderbook {
             config: &'a OrderbookConfig,
         ) -> Self {
             AskBidRow {
-                is_mine: AskBidRowVal::Value(if entry.entry.is_mine { "*".into() } else { "".into() }),
+                is_mine: AskBidRowVal::Value((if entry.entry.is_mine { "*" } else { "" }).to_string()),
                 volume: AskBidRowVal::Value(
                     SmartFractionFmt::new(
                         vol_prec.0,
@@ -334,7 +334,7 @@ mod orderbook {
                 age: AskBidRowVal::Value(entry.entry.age.to_string()),
                 public: AskBidRowVal::Value(entry.entry.pubkey.clone()),
                 address: AskBidRowVal::Value(entry.entry.address.clone()),
-                conf_settings: AskBidRowVal::Value(entry.entry.conf_settings.map_or("none".into(), |settings| {
+                conf_settings: AskBidRowVal::Value(entry.entry.conf_settings.map_or("none".to_string(), |settings| {
                     format!(
                         "{},{}:{},{}",
                         settings.base_confs, settings.base_nota, settings.rel_confs, settings.rel_nota

@@ -80,8 +80,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::GetOrderbook)
             .flatten_data(OrderbookRequest {
-                base: base.into(),
-                rel: rel.into(),
+                base: base.to_string(),
+                rel: rel.to_string(),
             })
             .build();
 

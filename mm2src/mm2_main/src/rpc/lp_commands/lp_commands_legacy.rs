@@ -163,11 +163,11 @@ pub async fn enable(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> 
     let coin: MmCoinEnum = try_s!(lp_coininit(&ctx, &ticker, &req).await);
     let balance = try_s!(coin.my_balance().compat().await);
     let res = CoinInitResponse {
-        result: "success".into(),
+        result: "success".to_string(),
         address: try_s!(coin.my_address()),
         balance: balance.spendable,
         unspendable_balance: balance.unspendable,
-        coin: coin.ticker().into(),
+        coin: coin.ticker().to_string(),
         required_confirmations: coin.required_confirmations(),
         requires_notarization: coin.requires_notarization(),
         mature_confirmations: coin.mature_confirmations(),
