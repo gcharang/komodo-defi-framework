@@ -11,7 +11,7 @@ use std::io::Write;
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
 use crate::error_anyhow;
-use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
+use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
