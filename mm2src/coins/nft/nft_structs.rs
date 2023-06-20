@@ -140,7 +140,7 @@ pub(crate) struct UriMetaFromStr {
     pub(crate) attributes: Option<Json>,
     pub(crate) animation_url: Option<String>,
     pub(crate) external_url: Option<String>,
-    pub(crate) image_details: Option<String>,
+    pub(crate) image_details: Option<Json>,
     pub(crate) dna: Option<String>,
     pub(crate) compiler: Option<String>,
 }
@@ -153,7 +153,7 @@ pub(crate) struct UriMeta {
     pub(crate) attributes: Option<Json>,
     pub(crate) animation_url: Option<String>,
     pub(crate) external_url: Option<String>,
-    pub(crate) image_details: Option<String>,
+    pub(crate) image_details: Option<Json>,
     pub(crate) dna: Option<String>,
     pub(crate) compiler: Option<String>,
 }
@@ -361,6 +361,7 @@ pub struct NftTransferHistory {
     pub(crate) transaction_type: String,
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
+    pub(crate) token_uri: Option<String>,
     pub(crate) collection_name: Option<String>,
     pub(crate) image: Option<String>,
     pub(crate) token_name: Option<String>,
@@ -428,6 +429,7 @@ pub struct NftTokenAddrId {
 pub struct TxMeta {
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
+    pub(crate) token_uri: Option<String>,
     pub(crate) collection_name: Option<String>,
     pub(crate) image: Option<String>,
     pub(crate) token_name: Option<String>,

@@ -58,6 +58,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     token_id VARCHAR(256) NOT NULL,
     status TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
+    token_uri TEXT,
     collection_name TEXT,
     image TEXT,
     token_name TEXT,
@@ -274,7 +275,7 @@ fn update_meta_by_tx_hash_sql(chain: &Chain) -> MmResult<String, SqlError> {
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET collection_name = ?1, image = ?2, token_name = ?3, details_json = ?4 WHERE transaction_hash = ?5;",
+        "UPDATE {} SET token_uri = ?1, collection_name = ?2, image = ?3, token_name = ?4, details_json = ?5 WHERE transaction_hash = ?6;",
         table_name
     );
     Ok(sql)
@@ -409,6 +410,7 @@ fn get_txs_with_empty_meta_builder<'a>(conn: &'a Connection, chain: &'a Chain) -
         .distinct()
         .field("token_address")
         .field("token_id")
+        .and_where_is_null("token_uri")
         .and_where_is_null("collection_name")
         .and_where_is_null("image")
         .and_where_is_null("token_name");
@@ -839,6 +841,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let sql = update_meta_by_tx_hash_sql(chain)?;
         let tx_json = json::to_string(&tx).expect("serialization should not fail");
         let params = [
+            tx.token_uri,
             tx.collection_name,
             tx.image,
             tx.token_name,
@@ -862,6 +865,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
             .get_txs_by_token_addr_id(chain, tx_meta.token_address, tx_meta.token_id)
             .await?;
         for mut tx in txs.into_iter() {
+            tx.token_uri = tx_meta.token_uri.clone();
             tx.collection_name = tx_meta.collection_name.clone();
             tx.image = tx_meta.image.clone();
             tx.token_name = tx_meta.token_name.clone();

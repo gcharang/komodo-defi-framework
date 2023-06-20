@@ -172,6 +172,7 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     let tx_meta = TxMeta {
         token_address: nft_db.token_address,
         token_id: nft_db.token_id,
+        token_uri: nft_db.token_uri,
         collection_name: nft_db.collection_name,
         image: nft_db.uri_meta.image,
         token_name: nft_db.uri_meta.token_name,
@@ -305,6 +306,7 @@ async fn get_moralis_nft_transfers(
                     transaction_type: transfer_wrapper.transaction_type,
                     token_address: transfer_wrapper.token_address,
                     token_id: transfer_wrapper.token_id.0,
+                    token_uri: None,
                     collection_name: None,
                     image: None,
                     token_name: None,
@@ -532,6 +534,7 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let tx_meta = TxMeta {
         token_address: nft_db.token_address,
         token_id: nft_db.token_id,
+        token_uri: nft_db.token_uri,
         collection_name: nft_db.collection_name,
         image: nft_db.uri_meta.image,
         token_name: nft_db.uri_meta.token_name,
@@ -562,6 +565,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let tx_meta = TxMeta {
         token_address: nft.token_address,
         token_id: nft.token_id,
+        token_uri: nft.token_uri,
         collection_name: nft.collection_name,
         image: nft.uri_meta.image,
         token_name: nft.uri_meta.token_name,
@@ -587,6 +591,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             let tx_meta = TxMeta {
                 token_address: nft_db.token_address,
                 token_id: nft_db.token_id,
+                token_uri: nft_db.token_uri,
                 collection_name: nft_db.collection_name,
                 image: nft_db.uri_meta.image,
                 token_name: nft_db.uri_meta.token_name,
@@ -605,6 +610,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             let tx_meta = TxMeta {
                 token_address: nft_db.token_address,
                 token_id: nft_db.token_id,
+                token_uri: nft_db.token_uri,
                 collection_name: nft_db.collection_name,
                 image: nft_db.uri_meta.image,
                 token_name: nft_db.uri_meta.token_name,
@@ -646,6 +652,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         let tx_meta = TxMeta {
             token_address: nft_db.token_address,
             token_id: nft_db.token_id,
+            token_uri: nft_db.token_uri,
             collection_name: nft_db.collection_name,
             image: nft_db.uri_meta.image,
             token_name: nft_db.uri_meta.token_name,
@@ -678,6 +685,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         let tx_meta = TxMeta {
             token_address: nft.token_address,
             token_id: nft.token_id,
+            token_uri: nft.token_uri,
             collection_name: nft.collection_name,
             image: nft.uri_meta.image,
             token_name: nft.uri_meta.token_name,
@@ -734,6 +742,7 @@ where
         let tx_meta = TxMeta {
             token_address: nft.token_address,
             token_id: nft.token_id,
+            token_uri: nft.token_uri,
             collection_name: nft.collection_name,
             image: nft.uri_meta.image,
             token_name: nft.uri_meta.token_name,
@@ -754,6 +763,7 @@ where
         let tx_meta = TxMeta {
             token_address: nft_meta.token_address,
             token_id: nft_meta.token_id,
+            token_uri: nft_meta.token_uri,
             collection_name: nft_meta.collection_name,
             image: nft_meta.uri_meta.image,
             token_name: nft_meta.uri_meta.token_name,

@@ -496,6 +496,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTxHistoryTable>().await?;
         for mut tx in txs {
+            tx.token_uri = tx_meta.token_uri.clone();
             tx.collection_name = tx_meta.collection_name.clone();
             tx.image = tx_meta.image.clone();
             tx.token_name = tx_meta.token_name.clone();
@@ -527,7 +528,11 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
         {
-            if item.collection_name.is_none() && item.image.is_none() && item.token_name.is_none() {
+            if item.token_uri.is_none()
+                && item.collection_name.is_none()
+                && item.image.is_none()
+                && item.token_name.is_none()
+            {
                 res.insert(NftTokenAddrId {
                     token_address: item.token_address,
                     token_id: BigDecimal::from_str(&item.token_id).map_err(WasmNftCacheError::ParseBigDecimalError)?,
@@ -599,6 +604,7 @@ pub(crate) struct NftTxHistoryTable {
     token_id: String,
     status: TransferStatus,
     amount: String,
+    token_uri: Option<String>,
     collection_name: Option<String>,
     image: Option<String>,
     token_name: Option<String>,
@@ -624,6 +630,7 @@ impl NftTxHistoryTable {
             token_id: tx.token_id.to_string(),
             status: tx.status,
             amount: tx.amount.to_string(),
+            token_uri: tx.token_uri.clone(),
             collection_name: tx.collection_name.clone(),
             image: tx.image.clone(),
             token_name: tx.token_name.clone(),
