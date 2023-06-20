@@ -296,14 +296,13 @@ pub async fn sim_panic(req: Json) -> Result<Response<Vec<u8>>, String> {
 }
 
 pub fn version(ctx: MmArc) -> HyRes {
-    rpc_response(
-        RESPONSE_OK_STATUS_CODE,
-        json::to_string(&MmVersionResponse {
-            result: ctx.mm_version.clone(),
-            datetime: ctx.datetime.clone(),
-        })
-        .expect("Expected valid JSON object"),
-    )
+    match json::to_vec(&MmVersionResponse {
+        result: ctx.mm_version.clone(),
+        datetime: ctx.datetime.clone(),
+    }) {
+        Ok(response) => rpc_response(RESPONSE_OK_STATUS_CODE, response),
+        Err(err) => rpc_err_response(INTERNAL_SERVER_ERROR_CODE, ERRL!("{}", err).as_str()),
+    }
 }
 
 pub async fn get_peers_info(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
