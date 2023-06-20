@@ -1,5 +1,5 @@
-mod formatters;
-mod orderbook;
+#[path = "response_handler/formatters/mod.rs"] mod formatters;
+#[path = "response_handler/orderbook.rs"] mod orderbook;
 
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
