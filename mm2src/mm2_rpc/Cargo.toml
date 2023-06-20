@@ -23,4 +23,4 @@ uuid = { version = "1.2.2", features = ["fast-rng", "serde", "v4"] }
 
 [features]
 default = []
-rpc_facilities = ["dep:futures", "dep:gstuff", "dep:http", "dep:mm2_err_handle", "dep:ser_error", "dep:ser_error_derive"]
+rpc_facilities = ["futures", "gstuff", "http", "mm2_err_handle", "ser_error", "ser_error_derive"]

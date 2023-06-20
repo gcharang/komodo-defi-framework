@@ -3,10 +3,11 @@ use mm2_rpc::data::legacy::AggregatedOrderbookEntry;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-use super::{format_confirmation_settings, formatters::smart_fraction_fmt::SmartFractionFmt, OrderbookConfig};
-use crate::adex_config::{PricePrecision, VolumePrecision};
+use super::{format_confirmation_settings,
+            formatters::smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt},
+            OrderbookConfig};
 
-pub fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
+pub(super) fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
     let cmp = left.entry.price.cmp(&right.entry.price).reverse();
     if cmp.is_eq() {
         return left
@@ -19,7 +20,7 @@ pub fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEn
     cmp
 }
 
-pub fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
+pub(super) fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
     let cmp = left.entry.price.cmp(&right.entry.price).reverse();
     if cmp.is_eq() {
         return left
@@ -36,7 +37,7 @@ enum AskBidRowVal {
     Delim,
 }
 
-pub struct AskBidRow<'a> {
+pub(super) struct AskBidRow<'a> {
     volume: AskBidRowVal,
     price: AskBidRowVal,
     uuid: AskBidRowVal,
@@ -66,20 +67,20 @@ impl<'a> AskBidRow<'a> {
     ) -> Self {
         Self {
             is_mine: AskBidRowVal::Value(String::new()),
-            volume: AskBidRowVal::Value(volume.into()),
-            price: AskBidRowVal::Value(price.into()),
-            uuid: AskBidRowVal::Value(uuid.into()),
-            min_volume: AskBidRowVal::Value(min_volume.into()),
-            max_volume: AskBidRowVal::Value(max_volume.into()),
-            age: AskBidRowVal::Value(age.into()),
-            public: AskBidRowVal::Value(public.into()),
-            address: AskBidRowVal::Value(address.into()),
-            conf_settings: AskBidRowVal::Value(conf_settings.into()),
+            volume: AskBidRowVal::Value(volume.to_string()),
+            price: AskBidRowVal::Value(price.to_string()),
+            uuid: AskBidRowVal::Value(uuid.to_string()),
+            min_volume: AskBidRowVal::Value(min_volume.to_string()),
+            max_volume: AskBidRowVal::Value(max_volume.to_string()),
+            age: AskBidRowVal::Value(age.to_string()),
+            public: AskBidRowVal::Value(public.to_string()),
+            address: AskBidRowVal::Value(address.to_string()),
+            conf_settings: AskBidRowVal::Value(conf_settings.to_string()),
             config,
         }
     }
 
-    pub(crate) fn new_delimiter(config: &'a OrderbookConfig) -> Self {
+    pub(super) fn new_delimiter(config: &'a OrderbookConfig) -> Self {
         Self {
             is_mine: AskBidRowVal::Delim,
             volume: AskBidRowVal::Delim,
@@ -95,14 +96,14 @@ impl<'a> AskBidRow<'a> {
         }
     }
 
-    pub(crate) fn from_orderbook_entry(
+    pub(super) fn from_orderbook_entry(
         entry: &AggregatedOrderbookEntry,
-        vol_prec: &VolumePrecision,
-        price_prec: &PricePrecision,
+        vol_prec: &SmartFractPrecision,
+        price_prec: &SmartFractPrecision,
         config: &'a OrderbookConfig,
     ) -> Self {
         AskBidRow {
-            is_mine: AskBidRowVal::Value(if entry.entry.is_mine { "*".into() } else { "".into() }),
+            is_mine: AskBidRowVal::Value((if entry.entry.is_mine { "*" } else { "" }).to_string()),
             volume: AskBidRowVal::Value(
                 SmartFractionFmt::new(
                     vol_prec.0,
@@ -135,7 +136,8 @@ impl<'a> AskBidRow<'a> {
                 entry
                     .entry
                     .conf_settings
-                    .map_or("none".into(), |settings| format_confirmation_settings(&settings)),
+                    .as_ref()
+                    .map_or("none".to_string(), format_confirmation_settings),
             ),
             config,
         }

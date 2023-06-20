@@ -7,20 +7,20 @@ use serde::Serialize;
 use crate::error_anyhow;
 
 #[derive(Serialize, Clone)]
-pub(crate) struct Command<T>
+pub(super) struct Command<T>
 where
     T: Serialize + Sized,
 {
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    pub flatten_data: Option<T>,
-    pub userpass: String,
+    pub(self) flatten_data: Option<T>,
+    pub(self) userpass: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub method: Option<Method>,
+    pub(self) method: Option<Method>,
 }
 
 #[derive(Serialize, Clone, Display)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum Method {
+pub(super) enum Method {
     Stop,
     Version,
     #[serde(rename = "my_balance")]
@@ -45,16 +45,16 @@ pub(crate) enum Method {
 }
 
 #[derive(Serialize, Clone, Copy, Display)]
-pub(crate) struct Dummy {}
+pub(super) struct Dummy {}
 
 impl<T> Command<T>
 where
     T: Serialize + Sized,
 {
-    pub fn builder() -> CommandBuilder<T> { CommandBuilder::new() }
+    pub(super) fn builder() -> CommandBuilder<T> { CommandBuilder::new() }
 }
 
-pub(crate) struct CommandBuilder<T> {
+pub(super) struct CommandBuilder<T> {
     userpass: Option<String>,
     method: Option<Method>,
     flatten_data: Option<T>,
@@ -72,22 +72,22 @@ where
         }
     }
 
-    pub(crate) fn userpass(&mut self, userpass: String) -> &mut Self {
+    pub(super) fn userpass(&mut self, userpass: String) -> &mut Self {
         self.userpass = Some(userpass);
         self
     }
 
-    pub(crate) fn method(&mut self, method: Method) -> &mut Self {
+    pub(super) fn method(&mut self, method: Method) -> &mut Self {
         self.method = Some(method);
         self
     }
 
-    pub(crate) fn flatten_data(&mut self, flatten_data: T) -> &mut Self {
+    pub(super) fn flatten_data(&mut self, flatten_data: T) -> &mut Self {
         self.flatten_data = Some(flatten_data);
         self
     }
 
-    pub(crate) fn build(&mut self) -> Result<Command<T>> {
+    pub(super) fn build(&mut self) -> Result<Command<T>> {
         Ok(Command {
             userpass: self
                 .userpass

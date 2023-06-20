@@ -3,7 +3,8 @@
 
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
-use common::io::{write_safe_io, writeln_safe_io, WriteSafeIO};
+use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
+use formatters::smart_fraction_fmt::SmartFractionFmt;
 use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
@@ -21,16 +22,16 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::ops::DerefMut;
 use std::string::ToString;
-use uuid::Uuid;
-
 use term_table::row::Row;
 use term_table::table_cell::{Alignment, TableCell};
 use term_table::{Table as TermTable, TableStyle};
+use uuid::Uuid;
 
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
-use crate::adex_proc::response_handler::formatters::smart_fraction_fmt::SmartFractionFmt;
 use crate::error_anyhow;
+
+pub(crate) use formatters::smart_fraction_fmt::SmartFractPrecision;
 
 const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
@@ -63,7 +64,7 @@ pub(crate) trait ResponseHandler {
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
-    pub writer: RefCell<&'a mut dyn Write>,
+    pub(crate) writer: RefCell<&'a mut dyn Write>,
 }
 
 impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
@@ -93,8 +94,8 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
     ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
 
-        let base_vol_head = "Volume: ".to_string() + &orderbook.base;
-        let rel_price_head = "Price: ".to_string() + &orderbook.rel;
+        let base_vol_head = format!("Volume: {}", orderbook.base);
+        let rel_price_head = format!("Price: {}", orderbook.rel);
         writeln_safe_io!(
             writer,
             "{}",
@@ -291,7 +292,8 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                     TableCell::new(
                         &order
                             .conf_settings
-                            .map_or_else(|| "none".to_string(), |value| format_confirmation_settings(&value)),
+                            .as_ref()
+                            .map_or_else(|| "none".to_string(), format_confirmation_settings),
                     ),
                 ]));
             }
@@ -562,7 +564,8 @@ impl ResponseHandlerImpl<'_> {
             TableCell::new(
                 order
                     .conf_settings
-                    .map_or_else(|| "none".to_string(), |value| format_confirmation_settings(&value)),
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), format_confirmation_settings),
             ),
             TableCell::new(order.changes_history.as_ref().map_or_else(
                 || "none".to_string(),
@@ -755,7 +758,8 @@ impl ResponseHandlerImpl<'_> {
             TableCell::new(
                 order
                     .conf_settings
-                    .map_or_else(|| "none".to_string(), |value| format_confirmation_settings(&value)),
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), format_confirmation_settings),
             ),
             TableCell::new(order.changes_history.as_ref().map_or_else(
                 || "none".to_string(),

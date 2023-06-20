@@ -29,7 +29,6 @@ use coins::{coin_conf, find_pair, lp_coinfind, BalanceTradeFeeUpdatedHandler, Co
 use common::executor::{simple_map::AbortableSimpleMap, AbortSettings, AbortableSystem, AbortedError, SpawnAbortable,
                        SpawnFuture, Timer};
 use common::log::{error, warn, LogOnError};
-use common::now_sec_i64;
 use common::time_cache::TimeCache;
 use common::{bits256, log, new_uuid, now_ms, now_sec};
 use crypto::privkey::SerializableSecp256k1Keypair;
@@ -60,7 +59,6 @@ use my_orders_storage::{delete_my_maker_order, delete_my_taker_order, save_maker
                         save_my_new_maker_order, save_my_new_taker_order, MyActiveOrders, MyOrdersFilteringHistory,
                         MyOrdersHistory, MyOrdersStorage};
 use num_traits::identities::Zero;
-use num_traits::ToPrimitive;
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::H256 as H256Json;
 use serde::{Deserialize, Serialize};
@@ -217,7 +215,7 @@ impl From<(new_protocol::MakerOrderCreated, String)> for OrderbookItem {
 }
 
 pub fn addr_format_from_protocol_info(protocol_info: &[u8]) -> AddressFormat {
-    match rmp_serde::from_read_ref::<_, AddressFormat>(protocol_info) {
+    match rmp_serde::from_slice::<AddressFormat>(protocol_info) {
         Ok(format) => format,
         Err(_) => AddressFormat::Standard,
     }
@@ -365,12 +363,12 @@ fn process_maker_order_updated(
 //     Ok(())
 // }
 
-// ZHTLC protocol coin uses random keypair to sign P2P messages per every order.
-// So, each ZHTLC order has unique «pubkey» field that doesn’t match node persistent pubkey derived from passphrase.
+// Some coins, for example ZHTLC, have privacy features like random keypair to sign P2P messages per every order.
+// So, each order of such coin has unique «pubkey» field that doesn’t match node persistent pubkey derived from passphrase.
 // We can compare pubkeys from maker_orders and from asks or bids, to find our order.
 #[inline(always)]
-fn is_my_order(my_orders_pubkeys: &HashSet<String>, my_pub: &Option<String>, order_pubkey: &str) -> bool {
-    my_pub.as_deref() == Some(order_pubkey) || my_orders_pubkeys.contains(order_pubkey)
+fn is_my_order(order_pubkey: &str, my_pub: &Option<String>, my_p2p_pubkeys: &HashSet<String>) -> bool {
+    my_pub.as_deref() == Some(order_pubkey) || my_p2p_pubkeys.contains(order_pubkey)
 }
 
 /// Request best asks and bids for the given `base` and `rel` coins from relays.
@@ -401,11 +399,7 @@ async fn request_and_fill_orderbook(ctx: &MmArc, base: &str, rel: &str) -> Resul
     let ordermatch_ctx = OrdermatchContext::from_ctx(ctx).unwrap();
     let mut orderbook = ordermatch_ctx.orderbook.lock();
 
-    let my_pubsecp = match CryptoCtx::from_ctx(ctx).discard_mm_trace() {
-        Ok(crypto_ctx) => Some(crypto_ctx.mm2_internal_pubkey_hex()),
-        Err(CryptoCtxError::NotInitialized) => None,
-        Err(other) => return ERR!("{}", other),
-    };
+    let my_pubsecp = mm2_internal_pubkey_hex(ctx, String::from).map_err(MmError::into_inner)?;
 
     let alb_pair = alb_ordered_pair(base, rel);
     for (pubkey, GetOrderbookPubkeyItem { orders, .. }) in pubkey_orders {
@@ -417,7 +411,7 @@ async fn request_and_fill_orderbook(ctx: &MmArc, base: &str, rel: &str) -> Resul
             },
         };
 
-        if is_my_order(&orderbook.my_p2p_pubkeys, &my_pubsecp, &pubkey) {
+        if is_my_order(&pubkey, &my_pubsecp, &orderbook.my_p2p_pubkeys) {
             continue;
         }
 
@@ -476,6 +470,18 @@ fn delete_my_order(ctx: &MmArc, uuid: Uuid, p2p_privkey: Option<SerializableSecp
     orderbook.remove_order_trie_update(uuid);
     if let Some(key) = p2p_privkey {
         orderbook.my_p2p_pubkeys.remove(&hex::encode(key.public_slice()));
+    }
+}
+
+pub(crate) fn mm2_internal_pubkey_hex<E, F>(ctx: &MmArc, err_construct: F) -> MmResult<Option<String>, E>
+where
+    E: NotMmError,
+    F: Fn(String) -> E,
+{
+    match CryptoCtx::from_ctx(ctx).split_mm() {
+        Ok(crypto_ctx) => Ok(Some(CryptoCtx::mm2_internal_pubkey_hex(crypto_ctx.as_ref()))),
+        Err((CryptoCtxError::NotInitialized, _)) => Ok(None),
+        Err((CryptoCtxError::Internal(error), trace)) => MmError::err_with_trace(err_construct(error), trace),
     }
 }
 
@@ -744,8 +750,8 @@ fn get_pubkeys_orders(orderbook: &Orderbook, base: String, rel: String) -> GetPu
         };
         let uuids = uuids_by_pubkey.entry(order.pubkey.clone()).or_insert_with(Vec::new);
         protocol_infos.insert(order.uuid, order.base_rel_proto_info());
-        if let Some(info) = order.conf_settings {
-            conf_infos.insert(order.uuid, info);
+        if let Some(ref info) = order.conf_settings {
+            conf_infos.insert(order.uuid, info.clone());
         }
         uuids.push((*uuid, order.clone().into()))
     }
@@ -951,8 +957,8 @@ fn process_sync_pubkey_orderbook_state(
                         base: o.base_protocol_info.clone(),
                         rel: o.rel_protocol_info.clone(),
                     });
-                    if let Some(info) = o.conf_settings {
-                        conf_infos.insert(o.uuid, info);
+                    if let Some(ref info) = o.conf_settings {
+                        conf_infos.insert(o.uuid, info.clone());
                     }
                 },
                 None => {
@@ -1038,7 +1044,7 @@ fn maker_order_created_p2p_notify(
         price: order.price.to_ratio(),
         max_volume: order.available_amount().to_ratio(),
         min_volume: order.min_base_vol.to_ratio(),
-        conf_settings: order.conf_settings.unwrap(),
+        conf_settings: order.conf_settings.clone().unwrap(),
         created_at: now_sec(),
         timestamp: now_sec(),
         pair_trie_root: H64::default(),
@@ -1583,7 +1589,7 @@ impl<'a> From<&'a TakerOrder> for TakerOrderForRpc {
                 .map(|(uuid, taker_match)| (*uuid, taker_match.into()))
                 .collect(),
             cancellable: order.is_cancellable(),
-            order_type: order.order_type,
+            order_type: order.order_type.clone(),
             base_orderbook_ticker: order.base_orderbook_ticker.as_ref().map(|val| val.to_string()),
             rel_orderbook_ticker: order.rel_orderbook_ticker.as_ref().map(|val| val.to_string()),
         }
@@ -1741,7 +1747,7 @@ impl<'a> From<&'a MakerOrder> for MakerOrderForRpc {
                 .collect(),
             started_swaps: order.started_swaps.clone(),
             uuid: order.uuid,
-            conf_settings: order.conf_settings,
+            conf_settings: order.conf_settings.clone(),
             changes_history: order.changes_history.clone(),
             base_orderbook_ticker: order.base_orderbook_ticker.clone(),
             rel_orderbook_ticker: order.rel_orderbook_ticker.clone(),
@@ -2310,7 +2316,7 @@ impl<'a> From<&'a MakerReserved> for MakerReservedForRpc {
             maker_order_uuid: reserved.maker_order_uuid,
             sender_pubkey: reserved.sender_pubkey,
             dest_pub_key: reserved.dest_pub_key,
-            conf_settings: reserved.conf_settings,
+            conf_settings: reserved.conf_settings.clone(),
             method: "reserved".to_string(),
         }
     }
@@ -3008,7 +3014,7 @@ fn lp_connect_start_bob(ctx: MmArc, maker_match: MakerMatch, maker_order: MakerO
         let my_persistent_pub = compressed_pub_key_from_priv_raw(raw_priv.as_slice(), ChecksumType::DSHA256).unwrap();
 
         let my_conf_settings = choose_maker_confs_and_notas(
-            maker_order.conf_settings,
+            maker_order.conf_settings.clone(),
             &maker_match.request,
             &maker_coin,
             &taker_coin,
@@ -3492,8 +3498,12 @@ async fn process_maker_reserved(ctx: MmArc, from_pubkey: H256Json, reserved_msg:
         reserved_messages.sort_unstable_by_key(|r| r.price());
 
         for reserved_msg in reserved_messages {
-            let my_conf_settings =
-                choose_maker_confs_and_notas(reserved_msg.conf_settings, &my_order.request, &base_coin, &rel_coin);
+            let my_conf_settings = choose_maker_confs_and_notas(
+                reserved_msg.conf_settings.clone(),
+                &my_order.request,
+                &base_coin,
+                &rel_coin,
+            );
             let other_conf_settings =
                 choose_taker_confs_and_notas(&my_order.request, &reserved_msg.conf_settings, &base_coin, &rel_coin);
             let atomic_locktime_v = AtomicLocktimeVersion::V2 {
@@ -3619,7 +3629,7 @@ async fn process_taker_request(ctx: MmArc, from_pubkey: H256Json, taker_request:
             };
 
             let my_conf_settings =
-                choose_maker_confs_and_notas(order.conf_settings, &taker_request, &base_coin, &rel_coin);
+                choose_maker_confs_and_notas(order.conf_settings.clone(), &taker_request, &base_coin, &rel_coin);
             let other_conf_settings =
                 choose_taker_confs_and_notas(&taker_request, &order.conf_settings, &base_coin, &rel_coin);
             let atomic_locktime_v = AtomicLocktimeVersion::V2 {
@@ -3657,7 +3667,7 @@ async fn process_taker_request(ctx: MmArc, from_pubkey: H256Json, taker_request:
                     rel: order.rel_orderbook_ticker().to_owned(),
                     taker_order_uuid: taker_request.uuid,
                     maker_order_uuid: *uuid,
-                    conf_settings: order.conf_settings.or_else(|| {
+                    conf_settings: order.conf_settings.clone().or_else(|| {
                         Some(OrderConfirmationsSettings {
                             base_confs: base_coin.required_confirmations(),
                             base_nota: base_coin.requires_notarization(),
@@ -3863,13 +3873,13 @@ impl<'a> From<&'a TakerRequest> for TakerRequestForRpc {
             base_amount_rat: request.base_amount.to_ratio(),
             rel_amount: request.rel_amount.to_decimal(),
             rel_amount_rat: request.rel_amount.to_ratio(),
-            action: request.action,
+            action: request.action.clone(),
             uuid: request.uuid,
             method: "request".to_string(),
             sender_pubkey: request.sender_pubkey,
             dest_pub_key: request.dest_pub_key,
             match_by: request.match_by.clone(),
-            conf_settings: request.conf_settings,
+            conf_settings: request.conf_settings.clone(),
         }
     }
 }
@@ -3946,9 +3956,9 @@ pub async fn lp_auto_buy(
         order.p2p_keypair(),
     );
 
-    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(SellBuyResponse {
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(SellBuyResponse {
         request: (&order.request).into(),
-        order_type: order.order_type,
+        order_type: order.order_type.clone(),
         min_volume: order.min_volume.clone().into(),
         base_orderbook_ticker: order.base_orderbook_ticker.clone(),
         rel_orderbook_ticker: order.rel_orderbook_ticker.clone(),
@@ -3976,13 +3986,23 @@ struct OrderbookP2PItem {
     created_at: u64,
 }
 
+macro_rules! try_get_age_or_default {
+    ($created_at: expr) => {{
+        let now = now_sec();
+        now.checked_sub($created_at).unwrap_or_else(|| {
+            warn!("now - created_at: ({} - {}) caused a u64 underflow", now, $created_at);
+            Default::default()
+        })
+    }};
+}
+
 impl OrderbookP2PItem {
     fn as_rpc_best_orders_buy(
         &self,
         address: String,
         conf_settings: Option<&OrderConfirmationsSettings>,
         is_mine: bool,
-    ) -> Result<RpcOrderbookEntry, String> {
+    ) -> RpcOrderbookEntry {
         let price_mm = MmNumber::from(self.price.clone());
         let max_vol_mm = MmNumber::from(self.max_volume.clone());
         let min_vol_mm = MmNumber::from(self.min_volume.clone());
@@ -3992,7 +4012,7 @@ impl OrderbookP2PItem {
         let rel_max_volume = (&max_vol_mm * &price_mm).into();
         let rel_min_volume = (&min_vol_mm * &price_mm).into();
 
-        Ok(RpcOrderbookEntry {
+        RpcOrderbookEntry {
             coin: self.rel.clone(),
             address,
             price: price_mm.to_decimal(),
@@ -4005,7 +4025,7 @@ impl OrderbookP2PItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: now_sec_i64(),
+            age: try_get_age_or_default!(self.created_at),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4013,7 +4033,7 @@ impl OrderbookP2PItem {
             rel_max_volume,
             rel_min_volume,
             conf_settings: conf_settings.cloned(),
-        })
+        }
     }
 
     fn as_rpc_best_orders_buy_v2(
@@ -4046,7 +4066,7 @@ impl OrderbookP2PItem {
         address: String,
         conf_settings: Option<&OrderConfirmationsSettings>,
         is_mine: bool,
-    ) -> Result<RpcOrderbookEntry, String> {
+    ) -> RpcOrderbookEntry {
         let price_mm = MmNumber::from(1i32) / self.price.clone().into();
         let max_vol_mm = MmNumber::from(self.max_volume.clone());
         let min_vol_mm = MmNumber::from(self.min_volume.clone());
@@ -4057,7 +4077,7 @@ impl OrderbookP2PItem {
         let rel_min_volume = min_vol_mm.clone().into();
         let conf_settings = conf_settings.map(|conf| conf.reversed());
 
-        Ok(RpcOrderbookEntry {
+        RpcOrderbookEntry {
             coin: self.base.clone(),
             address,
             price: price_mm.to_decimal(),
@@ -4070,7 +4090,7 @@ impl OrderbookP2PItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: now_sec_i64(),
+            age: try_get_age_or_default!(self.created_at),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4078,7 +4098,7 @@ impl OrderbookP2PItem {
             rel_max_volume,
             rel_min_volume,
             conf_settings,
-        })
+        }
     }
 
     fn as_rpc_best_orders_sell_v2(
@@ -4208,7 +4228,7 @@ impl OrderbookItem {
         }
     }
 
-    fn as_rpc_entry_ask(&self, address: String, is_mine: bool) -> Result<RpcOrderbookEntry, String> {
+    fn as_rpc_entry_ask(&self, address: String, is_mine: bool) -> RpcOrderbookEntry {
         let price_mm = MmNumber::from(self.price.clone());
         let max_vol_mm = MmNumber::from(self.max_volume.clone());
         let min_vol_mm = MmNumber::from(self.min_volume.clone());
@@ -4218,7 +4238,7 @@ impl OrderbookItem {
         let rel_max_volume = (&max_vol_mm * &price_mm).into();
         let rel_min_volume = (&min_vol_mm * &price_mm).into();
 
-        Ok(RpcOrderbookEntry {
+        RpcOrderbookEntry {
             coin: self.base.clone(),
             address,
             price: price_mm.to_decimal(),
@@ -4231,18 +4251,18 @@ impl OrderbookItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: now_sec_i64(),
+            age: try_get_age_or_default!(self.created_at),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
             base_min_volume,
             rel_max_volume,
             rel_min_volume,
-            conf_settings: self.conf_settings,
-        })
+            conf_settings: self.conf_settings.clone(),
+        }
     }
 
-    fn as_rpc_entry_bid(&self, address: String, is_mine: bool) -> Result<RpcOrderbookEntry, String> {
+    fn as_rpc_entry_bid(&self, address: String, is_mine: bool) -> RpcOrderbookEntry {
         let price_mm = MmNumber::from(1i32) / self.price.clone().into();
         let max_vol_mm = MmNumber::from(self.max_volume.clone());
         let min_vol_mm = MmNumber::from(self.min_volume.clone());
@@ -4251,9 +4271,10 @@ impl OrderbookItem {
         let base_min_volume = (&min_vol_mm / &price_mm).into();
         let rel_max_volume = max_vol_mm.clone().into();
         let rel_min_volume = min_vol_mm.clone().into();
-        let conf_settings = self.conf_settings.map(|conf| conf.reversed());
+        // TODO: @rozhkovdmitrii why lambda???
+        let conf_settings = self.conf_settings.as_ref().map(|conf| conf.reversed());
 
-        Ok(RpcOrderbookEntry {
+        RpcOrderbookEntry {
             coin: self.base.clone(),
             address,
             price: price_mm.to_decimal(),
@@ -4266,7 +4287,7 @@ impl OrderbookItem {
             min_volume_rat: min_vol_mm.to_ratio(),
             min_volume_fraction: min_vol_mm.to_fraction(),
             pubkey: self.pubkey.clone(),
-            age: now_sec_i64(),
+            age: try_get_age_or_default!(self.created_at),
             uuid: self.uuid,
             is_mine,
             base_max_volume,
@@ -4274,7 +4295,7 @@ impl OrderbookItem {
             rel_max_volume,
             rel_min_volume,
             conf_settings,
-        })
+        }
     }
 
     fn as_rpc_v2_entry_ask(&self, address: OrderbookAddress, is_mine: bool) -> RpcOrderbookEntryV2 {
@@ -4293,7 +4314,7 @@ impl OrderbookItem {
             is_mine,
             base_max_volume: max_vol_mm.into(),
             base_min_volume: min_vol_mm.into(),
-            conf_settings: self.conf_settings,
+            conf_settings: self.conf_settings.clone(),
         }
     }
 
@@ -4302,7 +4323,7 @@ impl OrderbookItem {
         let max_vol_mm = MmNumber::from(self.max_volume.clone());
         let min_vol_mm = MmNumber::from(self.min_volume.clone());
 
-        let conf_settings = self.conf_settings.map(|conf| conf.reversed());
+        let conf_settings = self.conf_settings.as_ref().map(|conf| conf.reversed());
 
         RpcOrderbookEntryV2 {
             coin: self.base.clone(),
@@ -4375,33 +4396,6 @@ impl OrderbookItem {
         rmp_serde::to_vec(&helper).expect("Serialization should never fail")
     }
 }
-
-trait CreatedAt {
-    fn created_at(&self) -> u64;
-}
-
-impl CreatedAt for OrderbookP2PItem {
-    fn created_at(&self) -> u64 { self.created_at }
-}
-
-impl CreatedAt for OrderbookItem {
-    fn created_at(&self) -> u64 { self.created_at }
-}
-
-trait AgeSec: CreatedAt {
-    fn age_sec(&self) -> Result<i64, String> {
-        let (now, created_at) = (now_sec(), self.created_at());
-        let err_fn = || format!("Failed to get age from (now, created at): ({now}, {created_at}");
-        now_sec()
-            .checked_sub(created_at)
-            .ok_or_else(err_fn)?
-            .to_i64()
-            .ok_or_else(err_fn)
-    }
-}
-
-impl AgeSec for OrderbookP2PItem {}
-impl AgeSec for OrderbookItem {}
 
 fn get_true() -> bool { true }
 
@@ -4602,7 +4596,7 @@ pub async fn update_maker_order(ctx: &MmArc, req: UpdateMakerOrderRequest) -> Re
         _ => return ERR!("Base coin {} and/or rel coin {} are not activated", base, rel),
     };
 
-    let original_conf_settings = order_before_update.conf_settings.unwrap();
+    let original_conf_settings = order_before_update.conf_settings.clone().unwrap();
     let updated_conf_settings = OrderConfirmationsSettings {
         base_confs: req.base_confs.unwrap_or(original_conf_settings.base_confs),
         base_nota: req.base_nota.unwrap_or(original_conf_settings.base_nota),
@@ -4974,7 +4968,7 @@ pub async fn cancel_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
         }
         return Response::builder()
             .body(json::to_vec(&Mm2RpcResult::new(Status::Success)).expect("Serialization failed"))
-            .map_err(|e| ERRL!("{}", e));
+            .map_err(|e| ERRL!("{}", e)); // TODO: @rozhkovdmitrii provide panic free implementation
     }
 
     let mut taker_orders = ordermatch_ctx.my_taker_orders.lock().await;
@@ -5032,7 +5026,7 @@ pub async fn my_orders(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
 
     Response::builder()
         .body(json::to_vec(&response).expect("Serialization failed"))
-        .map_err(|e| ERRL!("{}", e))
+        .map_err(|e| ERRL!("{}", e)) // TODO: @rozhkovdmitrii provide a panic free implementations
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -5318,7 +5312,7 @@ fn choose_maker_confs_and_notas(
     });
 
     let (maker_coin_confs, maker_coin_nota, taker_coin_confs, taker_coin_nota) = match taker_req.conf_settings {
-        Some(taker_settings) => match taker_req.action {
+        Some(ref taker_settings) => match taker_req.action {
             TakerAction::Sell => {
                 let maker_coin_confs = if taker_settings.rel_confs < maker_settings.base_confs {
                     taker_settings.rel_confs
@@ -5380,7 +5374,7 @@ fn choose_taker_confs_and_notas(
 ) -> SwapConfirmationsSettings {
     let (mut taker_coin_confs, mut taker_coin_nota, maker_coin_confs, maker_coin_nota) = match taker_req.action {
         TakerAction::Buy => match taker_req.conf_settings {
-            Some(s) => (s.rel_confs, s.rel_nota, s.base_confs, s.base_nota),
+            Some(ref s) => (s.rel_confs, s.rel_nota, s.base_confs, s.base_nota),
             None => (
                 taker_coin.required_confirmations(),
                 taker_coin.requires_notarization(),
@@ -5389,7 +5383,7 @@ fn choose_taker_confs_and_notas(
             ),
         },
         TakerAction::Sell => match taker_req.conf_settings {
-            Some(s) => (s.base_confs, s.base_nota, s.rel_confs, s.rel_nota),
+            Some(ref s) => (s.base_confs, s.base_nota, s.rel_confs, s.rel_nota),
             None => (
                 taker_coin.required_confirmations(),
                 taker_coin.requires_notarization(),
@@ -5493,12 +5487,13 @@ fn orderbook_address(
         CoinProtocol::SOLANA | CoinProtocol::SPLTOKEN { .. } => {
             MmError::err(OrderbookAddrErr::CoinIsNotSupported(coin.to_owned()))
         },
+        CoinProtocol::ZHTLC { .. } => Ok(OrderbookAddress::Shielded),
         #[cfg(not(target_arch = "wasm32"))]
         // Todo: Shielded address is used for lightning for now, the lightning node public key can be used for the orderbook entry pubkey
         // Todo: instead of the platform coin pubkey which is used right now. But lightning payments are supposed to be private,
         // Todo: so maybe we should hide the node address in the orderbook, only the sending node and the receiving node should know about a payment,
         // Todo: a routing node will know about a payment it routed but not the sender or the receiver. This will require using a new keypair for every order/swap
         // Todo: similar to how it's done for zcoin.
-        CoinProtocol::ZHTLC { .. } | CoinProtocol::LIGHTNING { .. } => Ok(OrderbookAddress::Shielded),
+        CoinProtocol::LIGHTNING { .. } => Ok(OrderbookAddress::Shielded),
     }
 }

@@ -6,6 +6,7 @@
 
 use http::{HeaderMap, StatusCode};
 use mm2_number::{BigDecimal, BigRational, Fraction, MmNumber};
+use mm2_rpc::data::legacy::{MatchBy, OrderConfirmationsSettings, OrderType, RpcOrderbookEntry, TakerAction};
 use rpc::v1::types::H256 as H256Json;
 use serde::de::DeserializeOwned;
 use serde_json::Value as Json;
@@ -77,23 +78,6 @@ impl RpcResponse {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(tag = "type", content = "data")]
-pub enum OrderType {
-    FillOrKill,
-    GoodTillCancelled,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OrderConfirmationsSettings {
-    pub base_confs: u64,
-    pub base_nota: bool,
-    pub rel_confs: u64,
-    pub rel_nota: bool,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct HistoricalOrder {
@@ -102,22 +86,6 @@ struct HistoricalOrder {
     price: Option<MmNumber>,
     updated_at: Option<u64>,
     conf_settings: Option<OrderConfirmationsSettings>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub enum TakerAction {
-    Buy,
-    Sell,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(tag = "type", content = "data")]
-pub enum MatchBy {
-    Any,
-    Orders(HashSet<Uuid>),
-    Pubkeys(HashSet<H256Json>),
 }
 
 #[derive(Deserialize)]
@@ -300,47 +268,10 @@ pub struct MyOrdersRpcResult {
     pub result: MyOrdersRpc,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OrderbookEntry {
-    pub coin: String,
-    pub address: String,
-    pub price: BigDecimal,
-    pub price_rat: BigRational,
-    pub price_fraction: Fraction,
-    #[serde(rename = "maxvolume")]
-    pub max_volume: BigDecimal,
-    pub max_volume_rat: BigRational,
-    pub max_volume_fraction: Fraction,
-    pub base_max_volume: BigDecimal,
-    pub base_max_volume_rat: BigRational,
-    pub base_max_volume_fraction: Fraction,
-    pub base_min_volume: BigDecimal,
-    pub base_min_volume_rat: BigRational,
-    pub base_min_volume_fraction: Fraction,
-    pub rel_max_volume: BigDecimal,
-    pub rel_max_volume_rat: BigRational,
-    pub rel_max_volume_fraction: Fraction,
-    pub rel_min_volume: BigDecimal,
-    pub rel_min_volume_rat: BigRational,
-    pub rel_min_volume_fraction: Fraction,
-    pub min_volume: BigDecimal,
-    pub min_volume_rat: BigRational,
-    pub min_volume_fraction: Fraction,
-    pub pubkey: String,
-    pub age: i64,
-    pub uuid: Uuid,
-    pub is_mine: bool,
-    pub base_confs: u64,
-    pub base_nota: bool,
-    pub rel_confs: u64,
-    pub rel_nota: bool,
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BestOrdersResponse {
-    pub result: HashMap<String, Vec<OrderbookEntry>>,
+    pub result: HashMap<String, Vec<RpcOrderbookEntry>>,
     pub original_tickers: HashMap<String, HashSet<String>>,
 }
 
@@ -362,19 +293,6 @@ pub struct PairWithDepth {
 #[serde(deny_unknown_fields)]
 pub struct OrderbookDepthResponse {
     pub result: Vec<PairWithDepth>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EnableElectrumResponse {
-    pub coin: String,
-    pub address: String,
-    pub balance: BigDecimal,
-    pub unspendable_balance: BigDecimal,
-    pub required_confirmations: u64,
-    pub mature_confirmations: Option<u64>,
-    pub requires_notarization: bool,
-    pub result: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -565,15 +483,6 @@ pub struct TransactionDetails {
     pub internal_id: String,
     pub transaction_type: TransactionType,
     pub memo: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct MyBalanceResponse {
-    pub address: String,
-    pub balance: BigDecimal,
-    pub unspendable_balance: BigDecimal,
-    pub coin: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -991,7 +900,7 @@ pub struct OrderbookV2Response {
     pub total_bids_rel_vol: MmNumberMultiRepr,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct BestOrdersV2Response {
     pub orders: HashMap<String, Vec<RpcOrderbookEntryV2>>,

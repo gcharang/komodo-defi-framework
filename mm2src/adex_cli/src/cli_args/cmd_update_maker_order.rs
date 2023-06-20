@@ -59,7 +59,7 @@ impl From<&mut UpdateMakerOrderArgs> for UpdateMakerOrderRequest {
         UpdateMakerOrderRequest {
             uuid: take(&mut value.uuid),
             new_price: value.price.take(),
-            max: value.volume.max_volume.then(|| true),
+            max: value.volume.max_volume.then_some(true),
             volume_delta: value.volume.volume_delta.take(),
             min_volume: value.min_volume.take(),
             base_confs: value.base_confs.take(),

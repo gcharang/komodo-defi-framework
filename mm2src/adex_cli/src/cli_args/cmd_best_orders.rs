@@ -69,7 +69,7 @@ impl From<&mut BestOrderArgs> for BestOrdersRequestV2 {
             coin: take(&mut value.coin),
             action: value.action.into(),
             request_by: (&mut value.delegate).into(),
-            exclude_my: Some(value.exclude_mine),
+            exclude_mine: value.exclude_mine,
         }
     }
 }

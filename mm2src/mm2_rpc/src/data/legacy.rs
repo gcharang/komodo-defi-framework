@@ -80,7 +80,7 @@ pub struct RpcOrderbookEntry {
     pub min_volume_rat: BigRational,
     pub min_volume_fraction: Fraction,
     pub pubkey: String,
-    pub age: i64,
+    pub age: u64,
     pub uuid: Uuid,
     pub is_mine: bool,
     #[serde(flatten)]
@@ -123,7 +123,6 @@ pub struct SellBuyRequest {
     /// Not used. Deprecated.
     #[allow(dead_code)]
     pub duration: Option<u32>,
-    // TODO: remove this field on API refactoring, method should be separated from params
     pub method: String,
     #[allow(dead_code)]
     pub gui: Option<String>,
@@ -174,13 +173,13 @@ pub struct TakerRequestForRpc {
     pub conf_settings: Option<OrderConfirmationsSettings>,
 }
 
-#[derive(Display, Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Display, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TakerAction {
     Buy,
     Sell,
 }
 
-#[derive(Display, Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Display, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum OrderType {
     FillOrKill,
@@ -203,7 +202,7 @@ impl Default for MatchBy {
     fn default() -> Self { MatchBy::Any }
 }
 
-#[derive(Clone, Copy, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OrderConfirmationsSettings {
     pub base_confs: u64,
     pub base_nota: bool,
@@ -222,7 +221,7 @@ impl OrderConfirmationsSettings {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CoinInitResponse {
     pub result: String,
     pub address: String,
@@ -451,7 +450,7 @@ pub struct PairWithDepth {
     pub depth: PairDepth,
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PairDepth {
     pub asks: usize,
     pub bids: usize,

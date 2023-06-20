@@ -1,18 +1,24 @@
 use std::cell::Cell;
 
-pub(crate) struct SmartFractionFmt {
+pub type SmartFractPrecision = (usize, usize);
+
+pub(in super::super) struct SmartFractionFmt {
     precision_min: i32,
     precision_max: i32,
     num: Cell<f64>,
 }
 
 #[derive(Debug)]
-pub(crate) enum SmartFractionTrimErr {
+pub(in super::super) enum SmartFractionTrimErr {
     WrongParams,
 }
 
 impl SmartFractionFmt {
-    pub fn new(precision_min: usize, precision_max: usize, num: f64) -> Result<Self, SmartFractionTrimErr> {
+    pub(in super::super) fn new(
+        precision_min: usize,
+        precision_max: usize,
+        num: f64,
+    ) -> Result<Self, SmartFractionTrimErr> {
         if precision_min == 0 || precision_min > precision_max {
             return Err(SmartFractionTrimErr::WrongParams);
         }

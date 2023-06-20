@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Result};
 use common::log::{error, info};
+use http::StatusCode;
+use itertools::Itertools;
 use mm2_net::transport::slurp_url;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -28,7 +30,7 @@ pub(crate) async fn init_activation_scheme() -> Result<()> {
         .map_err(|error| error_anyhow!("Failed to write activation_scheme: {error}"))
 }
 
-pub(crate) fn get_activation_scheme_path() -> Result<PathBuf> {
+pub(super) fn get_activation_scheme_path() -> Result<PathBuf> {
     let mut config_path = AdexConfigImpl::get_config_dir()?;
     config_path.push(ACTIVATION_SCHEME_FILE);
     Ok(config_path)
@@ -36,9 +38,15 @@ pub(crate) fn get_activation_scheme_path() -> Result<PathBuf> {
 
 async fn get_activation_scheme_data() -> Result<Vec<u8>> {
     info!("Download activation_scheme from: {COIN_ACTIVATION_SOURCE}");
-    let (_status_code, _headers, data) = slurp_url(COIN_ACTIVATION_SOURCE).await.map_err(|error| {
-        error_anyhow!("Failed to get activation_scheme from: {COIN_ACTIVATION_SOURCE}, error: {error}")
-    })?;
-
-    Ok(data)
+    match slurp_url(COIN_ACTIVATION_SOURCE).await {
+        Ok((StatusCode::OK, _, data)) => Ok(data),
+        Ok((status_code, headers, data)) => Err(error_anyhow!(
+            "Failed to get activation scheme from: {COIN_ACTIVATION_SOURCE}, bad status: {status_code}, headers: {}, data: {}",
+            headers.iter().map(|(k, v)| format!("{k}: {v:?}")).join(", "),
+            String::from_utf8_lossy(&data)
+        )),
+        Err(error) => Err(error_anyhow!(
+            "Failed to get activation_scheme from: {COIN_ACTIVATION_SOURCE}, error: {error}"
+        )),
+    }
 }

@@ -163,11 +163,11 @@ pub async fn enable(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> 
     let coin: MmCoinEnum = try_s!(lp_coininit(&ctx, &ticker, &req).await);
     let balance = try_s!(coin.my_balance().compat().await);
     let res = CoinInitResponse {
-        result: "success".into(),
+        result: "success".to_string(),
         address: try_s!(coin.my_address()),
         balance: balance.spendable,
         unspendable_balance: balance.unspendable,
-        coin: coin.ticker().into(),
+        coin: coin.ticker().to_string(),
         required_confirmations: coin.required_confirmations(),
         requires_notarization: coin.requires_notarization(),
         mature_confirmations: coin.mature_confirmations(),
@@ -236,7 +236,7 @@ pub async fn my_balance(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, Stri
     };
     let my_balance = try_s!(coin.my_balance().compat().await);
 
-    let res = try_s!(serde_json::to_vec(&BalanceResponse {
+    let res = try_s!(json::to_vec(&BalanceResponse {
         coin: ticker,
         balance: my_balance.spendable,
         unspendable_balance: my_balance.unspendable,
@@ -261,7 +261,7 @@ pub async fn stop(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
     // and it may lead to an unexpected behaviour.
     common::executor::spawn(fut);
 
-    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(Status::Success)));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(Status::Success)));
     Ok(try_s!(Response::builder().body(res)))
 }
 
@@ -296,14 +296,13 @@ pub async fn sim_panic(req: Json) -> Result<Response<Vec<u8>>, String> {
 }
 
 pub fn version(ctx: MmArc) -> HyRes {
-    rpc_response(
-        RESPONSE_OK_STATUS_CODE,
-        serde_json::to_string(&MmVersionResponse {
-            result: ctx.mm_version.clone(),
-            datetime: ctx.datetime.clone(),
-        })
-        .expect("Expected valid JSON object"),
-    )
+    match json::to_vec(&MmVersionResponse {
+        result: ctx.mm_version.clone(),
+        datetime: ctx.datetime.clone(),
+    }) {
+        Ok(response) => rpc_response(RESPONSE_OK_STATUS_CODE, response),
+        Err(err) => rpc_err_response(INTERNAL_SERVER_ERROR_CODE, ERRL!("{}", err).as_str()),
+    }
 }
 
 pub async fn get_peers_info(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {

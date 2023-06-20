@@ -109,9 +109,7 @@ macro_rules! some_or_return_ok_none {
 #[macro_use]
 pub mod jsonrpc_client;
 #[macro_use]
-pub mod fmt;
-#[macro_use]
-pub mod io;
+pub mod write_safe;
 #[macro_use]
 pub mod log;
 

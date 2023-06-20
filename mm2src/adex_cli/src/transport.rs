@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{error_anyhow, error_bail, warn_bail};
 
 #[async_trait]
-pub(crate) trait Transport {
+pub(super) trait Transport {
     async fn send<ReqT, OkT, ErrT>(&self, req: ReqT) -> Result<Result<OkT, ErrT>>
     where
         ReqT: Serialize + Send + Sync,
@@ -16,12 +16,12 @@ pub(crate) trait Transport {
         ErrT: for<'a> Deserialize<'a>;
 }
 
-pub(crate) struct SlurpTransport {
+pub(super) struct SlurpTransport {
     rpc_uri: String,
 }
 
 impl SlurpTransport {
-    pub fn new(rpc_uri: String) -> SlurpTransport { SlurpTransport { rpc_uri } }
+    pub(super) fn new(rpc_uri: String) -> SlurpTransport { SlurpTransport { rpc_uri } }
 }
 
 #[async_trait]
@@ -40,7 +40,7 @@ impl Transport for SlurpTransport {
     }
 }
 
-pub(crate) trait Response {
+trait Response {
     fn process<OkT, ErrT>(self) -> Result<Result<OkT, ErrT>>
     where
         OkT: for<'a> Deserialize<'a>,

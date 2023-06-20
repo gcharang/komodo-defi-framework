@@ -10,25 +10,25 @@ use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 
 #[cfg(windows)]
 mod reexport {
-    pub use std::ffi::CString;
-    pub use std::mem;
-    pub use std::mem::size_of;
-    pub use std::ptr::null;
-    pub use std::u32;
-    pub use winapi::um::processthreadsapi::{CreateProcessA, OpenProcess, TerminateProcess, PROCESS_INFORMATION,
-                                            STARTUPINFOA};
-    pub use winapi::um::winnt::{PROCESS_TERMINATE, SYNCHRONIZE};
+    pub(super) use std::ffi::CString;
+    pub(super) use std::mem;
+    pub(super) use std::mem::size_of;
+    pub(super) use std::ptr::null;
+    pub(super) use std::u32;
+    pub(super) use winapi::um::processthreadsapi::{CreateProcessA, OpenProcess, TerminateProcess, PROCESS_INFORMATION,
+                                                   STARTUPINFOA};
+    pub(super) use winapi::um::winnt::{PROCESS_TERMINATE, SYNCHRONIZE};
 
-    pub const MM2_BINARY: &str = "mm2.exe";
+    pub(super) const MM2_BINARY: &str = "mm2.exe";
 }
 
 #[cfg(windows)] use reexport::*;
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod unix_not_macos_reexport {
-    pub use std::process::{Command, Stdio};
+    pub(super) use std::process::{Command, Stdio};
 
-    pub const KILL_CMD: &str = "kill";
+    pub(super) const KILL_CMD: &str = "kill";
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -36,20 +36,20 @@ use unix_not_macos_reexport::*;
 
 #[cfg(unix)]
 mod unix_reexport {
-    pub const MM2_BINARY: &str = "mm2";
+    pub(super) const MM2_BINARY: &str = "mm2";
 }
 
 #[cfg(unix)] use unix_reexport::*;
 
 #[cfg(target_os = "macos")]
 mod macos_reexport {
-    pub use std::fs;
-    pub const LAUNCH_CTL_COOL_DOWN_TIMEOUT_MS: u64 = 500;
-    pub use common::log::debug;
-    pub use std::process::{Command, Stdio};
-    pub use std::thread::sleep;
-    pub use std::time::Duration;
-    pub const LAUNCHCTL_MM2_ID: &str = "com.mm2.daemon";
+    pub(super) use std::fs;
+    pub(super) const LAUNCH_CTL_COOL_DOWN_TIMEOUT_MS: u64 = 500;
+    pub(super) use common::log::debug;
+    pub(super) use std::process::Command;
+    pub(super) use std::thread::sleep;
+    pub(super) use std::time::Duration;
+    pub(super) const LAUNCHCTL_MM2_ID: &str = "com.mm2.daemon";
 }
 
 #[cfg(target_os = "macos")] use macos_reexport::*;

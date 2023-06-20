@@ -4,14 +4,13 @@ use common::{block_on, log};
 use http::StatusCode;
 use mm2_main::mm2::lp_ordermatch::MIN_ORDER_KEEP_ALIVE_INTERVAL;
 use mm2_number::{BigDecimal, BigRational, MmNumber};
-use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookResponse};
+use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, CoinInitResponse, OrderbookResponse};
 use mm2_test_helpers::electrums::rick_electrums;
 use mm2_test_helpers::for_tests::{eth_jst_testnet_conf, eth_testnet_conf, get_passphrase, morty_conf, orderbook_v2,
                                   rick_conf, zombie_conf, MarketMakerIt, Mm2TestConf, ETH_DEV_NODES, RICK,
                                   ZOMBIE_ELECTRUMS, ZOMBIE_LIGHTWALLETD_URLS, ZOMBIE_TICKER};
 use mm2_test_helpers::get_passphrase;
-use mm2_test_helpers::structs::{EnableElectrumResponse, GetPublicKeyResult, OrderbookV2Response, RpcV2Response,
-                                SetPriceResponse};
+use mm2_test_helpers::structs::{GetPublicKeyResult, OrderbookV2Response, RpcV2Response, SetPriceResponse};
 use serde_json::{self as json, json, Value as Json};
 use std::env;
 use std::str::FromStr;
@@ -281,7 +280,7 @@ fn alice_can_see_the_active_order_after_orderbook_sync_segwit() {
         electrum.1
     );
     log!("enable tBTC: {:?}", electrum);
-    let enable_tbtc_res: EnableElectrumResponse = json::from_str(&electrum.1).unwrap();
+    let enable_tbtc_res: CoinInitResponse = json::from_str(&electrum.1).unwrap();
     let tbtc_segwit_address = enable_tbtc_res.address;
 
     let electrum = block_on(mm_bob.rpc(&json!({
@@ -481,7 +480,7 @@ fn test_orderbook_segwit() {
         electrum.1
     );
     log!("enable tBTC: {:?}", electrum);
-    let enable_tbtc_res: EnableElectrumResponse = json::from_str(&electrum.1).unwrap();
+    let enable_tbtc_res: CoinInitResponse = json::from_str(&electrum.1).unwrap();
     let tbtc_segwit_address = enable_tbtc_res.address;
 
     let electrum = block_on(mm_bob.rpc(&json!({
@@ -705,20 +704,32 @@ fn test_conf_settings_in_orderbook() {
         1,
         "Alice RICK/MORTY orderbook must have exactly 1 ask"
     );
-    assert_eq!(alice_orderbook.asks[0].entry.conf_settings.unwrap().base_confs, 10);
-    assert!(alice_orderbook.asks[0].entry.conf_settings.unwrap().base_nota);
-    assert_eq!(alice_orderbook.asks[0].entry.conf_settings.unwrap().rel_confs, 5);
-    assert!(!alice_orderbook.asks[0].entry.conf_settings.unwrap().rel_nota);
+    assert_eq!(
+        alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().base_confs,
+        10
+    );
+    assert!(alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(
+        alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().rel_confs,
+        5
+    );
+    assert!(!alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().rel_nota);
 
     assert_eq!(
         alice_orderbook.bids.len(),
         1,
         "Alice RICK/MORTY orderbook must have exactly 1 bid"
     );
-    assert_eq!(alice_orderbook.bids[0].entry.conf_settings.unwrap().base_confs, 10);
-    assert!(alice_orderbook.bids[0].entry.conf_settings.unwrap().base_nota);
-    assert_eq!(alice_orderbook.bids[0].entry.conf_settings.unwrap().rel_confs, 5);
-    assert!(!alice_orderbook.bids[0].entry.conf_settings.unwrap().rel_nota);
+    assert_eq!(
+        alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().base_confs,
+        10
+    );
+    assert!(alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(
+        alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().rel_confs,
+        5
+    );
+    assert!(!alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();
@@ -845,10 +856,16 @@ fn alice_can_see_confs_in_orderbook_after_sync() {
         .iter()
         .find(|entry| entry.entry.pubkey == bob_pubkey)
         .unwrap();
-    assert_eq!(bob_order_in_orderbook.entry.conf_settings.unwrap().base_confs, 10);
-    assert!(bob_order_in_orderbook.entry.conf_settings.unwrap().base_nota);
-    assert_eq!(bob_order_in_orderbook.entry.conf_settings.unwrap().rel_confs, 5);
-    assert!(!bob_order_in_orderbook.entry.conf_settings.unwrap().rel_nota);
+    assert_eq!(
+        bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().base_confs,
+        10
+    );
+    assert!(bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(
+        bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().rel_confs,
+        5
+    );
+    assert!(!bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();

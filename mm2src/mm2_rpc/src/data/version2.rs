@@ -18,7 +18,7 @@ pub struct MmRpcRequest<M, T> {
 }
 
 /// Please note there is no standardized `1.0` version, so this enumeration should not be used in the legacy protocol context.
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub enum MmRpcVersion {
     #[serde(rename = "2.0")]
     V2,
@@ -53,7 +53,8 @@ pub struct BestOrdersRequestV2 {
     pub coin: String,
     pub action: BestOrdersAction,
     pub request_by: RequestBestOrdersBy,
-    pub exclude_my: Option<bool>,
+    #[serde(default)]
+    pub exclude_mine: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -64,7 +65,7 @@ pub enum RequestBestOrdersBy {
     Number(usize),
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
 #[serde(rename_all = "lowercase")]
 pub enum BestOrdersAction {
     Buy,

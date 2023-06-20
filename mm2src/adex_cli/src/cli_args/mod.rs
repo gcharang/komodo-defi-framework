@@ -3,6 +3,7 @@ mod cmd_buy_sell;
 mod cmd_orderbook;
 mod cmd_orderbook_depth;
 mod cmd_orders_history;
+mod cmd_set_config;
 mod cmd_set_price;
 mod cmd_update_maker_order;
 
@@ -16,6 +17,7 @@ pub(crate) use cmd_buy_sell::*;
 pub(crate) use cmd_orderbook::*;
 pub(crate) use cmd_orderbook_depth::*;
 pub(crate) use cmd_orders_history::*;
+pub(crate) use cmd_set_config::*;
 pub(crate) use cmd_set_price::*;
 pub(crate) use cmd_update_maker_order::*;
 

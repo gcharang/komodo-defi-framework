@@ -7,6 +7,7 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::adex_proc::SmartFractPrecision;
 use crate::helpers::rewrite_json_file;
 use crate::logging::{error_anyhow, warn_bail};
 
@@ -19,52 +20,44 @@ const PRICE_PRECISION_MIN: usize = 8;
 const PRICE_PRECISION_MAX: usize = 8;
 const VOLUME_PRECISION_MIN: usize = 2;
 const VOLUME_PRECISION_MAX: usize = 5;
-const VOLUME_PRECISION: VolumePrecision = (VOLUME_PRECISION_MIN, VOLUME_PRECISION_MAX);
-const PRICE_PRECISION: PricePrecision = (PRICE_PRECISION_MIN, PRICE_PRECISION_MAX);
+const VOLUME_PRECISION: SmartFractPrecision = (VOLUME_PRECISION_MIN, VOLUME_PRECISION_MAX);
+const PRICE_PRECISION: SmartFractPrecision = (PRICE_PRECISION_MIN, PRICE_PRECISION_MAX);
 
-pub(crate) type PricePrecision = (usize, usize);
-pub(crate) type VolumePrecision = (usize, usize);
-
-pub(crate) fn get_config() {
+pub(super) fn get_config() {
     let Ok(adex_cfg) = AdexConfigImpl::from_config_path() else { return; };
     info!("{}", adex_cfg)
 }
 
-pub(crate) fn set_config(set_password: bool, rpc_api_uri: Option<String>) {
+pub(super) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Result<()> {
+    assert!(set_password || rpc_api_uri.is_some());
     let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|_| AdexConfigImpl::default());
-    let mut is_changes_happened = false;
+
     if set_password {
         let rpc_password = Password::new("Enter RPC API password:")
             .prompt()
-            .map(|value| {
-                is_changes_happened = true;
-                value
-            })
-            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))
-            .ok();
+            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
         adex_cfg.set_rpc_password(rpc_password);
     }
-    if rpc_api_uri.is_some() {
+
+    if let Some(rpc_api_uri) = rpc_api_uri {
         adex_cfg.set_rpc_uri(rpc_api_uri);
-        is_changes_happened = true;
     }
 
-    if is_changes_happened && adex_cfg.write_to_config_path().is_ok() {
-        info!("Configuration has been set");
-    } else {
-        warn!("Nothing changed");
-    }
+    adex_cfg.write_to_config_path()?;
+    info!("Configuration has been set");
+
+    Ok(())
 }
 
-pub(crate) trait AdexConfig {
+pub(super) trait AdexConfig {
     fn rpc_password(&self) -> Result<String>;
     fn rpc_uri(&self) -> Result<String>;
-    fn orderbook_price_precision(&self) -> &PricePrecision;
-    fn orderbook_volume_precision(&self) -> &VolumePrecision;
+    fn orderbook_price_precision(&self) -> &SmartFractPrecision;
+    fn orderbook_volume_precision(&self) -> &SmartFractPrecision;
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub(crate) struct AdexConfigImpl {
+pub(super) struct AdexConfigImpl {
     #[serde(skip_serializing_if = "Option::is_none")]
     rpc_password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,8 +77,8 @@ impl AdexConfig for AdexConfigImpl {
             .map(String::clone)
             .ok_or_else(|| error_anyhow!("No rpc_uri in config"))
     }
-    fn orderbook_price_precision(&self) -> &PricePrecision { &PRICE_PRECISION }
-    fn orderbook_volume_precision(&self) -> &VolumePrecision { &VOLUME_PRECISION }
+    fn orderbook_price_precision(&self) -> &SmartFractPrecision { &PRICE_PRECISION }
+    fn orderbook_volume_precision(&self) -> &SmartFractPrecision { &VOLUME_PRECISION }
 }
 
 impl Display for AdexConfigImpl {
@@ -93,20 +86,19 @@ impl Display for AdexConfigImpl {
         if !self.is_set() {
             return writeln!(f, "adex configuration is not set");
         }
-        if let Some(rpc_api_uri) = &self.rpc_uri {
-            writeln!(f, "mm2 RPC URL: {}", rpc_api_uri)?
-        };
-
-        if self.rpc_password.is_some() {
-            writeln!(f, "mm2 RPC password: *************")?
-        }
+        writeln!(
+            f,
+            "mm2 RPC URL: {}",
+            self.rpc_uri.as_ref().expect("Expected rpc_uri is set")
+        )?;
+        writeln!(f, "mm2 RPC password: *************")?;
         Ok(())
     }
 }
 
 impl AdexConfigImpl {
     #[cfg(test)]
-    pub fn new(rpc_password: &str, rpc_uri: &str) -> Self {
+    pub(super) fn new(rpc_password: &str, rpc_uri: &str) -> Self {
         Self {
             rpc_password: Some(rpc_password.to_string()),
             rpc_uri: Some(rpc_uri.to_string()),
@@ -114,7 +106,7 @@ impl AdexConfigImpl {
     }
 
     #[cfg(not(test))]
-    pub fn read_config() -> Result<AdexConfigImpl> {
+    pub(super) fn read_config() -> Result<AdexConfigImpl> {
         let config = AdexConfigImpl::from_config_path()?;
         match config {
             config @ AdexConfigImpl {
@@ -127,7 +119,7 @@ impl AdexConfigImpl {
 
     fn is_set(&self) -> bool { self.rpc_uri.is_some() && self.rpc_password.is_some() }
 
-    pub fn get_config_dir() -> Result<PathBuf> {
+    pub(super) fn get_config_dir() -> Result<PathBuf> {
         let project_dirs = ProjectDirs::from(PROJECT_QUALIFIER, PROJECT_COMPANY, PROJECT_APP)
             .ok_or_else(|| error_anyhow!("Failed to get project_dirs"))?;
         let config_path: PathBuf = project_dirs.config_dir().into();
@@ -172,7 +164,7 @@ impl AdexConfigImpl {
         rewrite_json_file(self, adex_path_str)
     }
 
-    fn set_rpc_password(&mut self, rpc_password: Option<String>) { self.rpc_password = rpc_password; }
+    fn set_rpc_password(&mut self, rpc_password: String) { self.rpc_password.replace(rpc_password); }
 
-    fn set_rpc_uri(&mut self, rpc_uri: Option<String>) { self.rpc_uri = rpc_uri; }
+    fn set_rpc_uri(&mut self, rpc_uri: String) { self.rpc_uri.replace(rpc_uri); }
 }

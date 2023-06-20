@@ -82,6 +82,7 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 use std::time::Duration;
 use utxo_signer::with_key_pair::UtxoSignWithKeyPairError;
+use zcash_primitives::transaction::Transaction as ZTransaction;
 
 cfg_native! {
     use crate::lightning::LightningCoin;
@@ -92,8 +93,6 @@ cfg_native! {
     use lightning_invoice::{Invoice, ParseOrSemanticError};
     use std::io;
     use std::path::PathBuf;
-    use zcash_primitives::transaction::Transaction as ZTransaction;
-    use z_coin::ZcoinProtocolInfo;
 }
 
 cfg_wasm32! {
@@ -288,8 +287,8 @@ use utxo::{BlockchainNetwork, GenerateTxError, UtxoFeeDetails, UtxoTx};
 pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 
-#[cfg(not(target_arch = "wasm32"))] pub mod z_coin;
-#[cfg(not(target_arch = "wasm32"))] use z_coin::ZCoin;
+pub mod z_coin;
+use z_coin::{ZCoin, ZcoinProtocolInfo};
 
 pub type TransactionFut = Box<dyn Future<Item = TransactionEnum, Error = TransactionErr> + Send>;
 pub type BalanceResult<T> = Result<T, MmError<BalanceError>>;
@@ -468,7 +467,6 @@ pub trait Transaction: fmt::Debug + 'static {
 pub enum TransactionEnum {
     UtxoTx(UtxoTx),
     SignedEthTx(SignedEthTx),
-    #[cfg(not(target_arch = "wasm32"))]
     ZTransaction(ZTransaction),
     CosmosTransaction(CosmosTransaction),
     #[cfg(not(target_arch = "wasm32"))]
@@ -477,7 +475,6 @@ pub enum TransactionEnum {
 
 ifrom!(TransactionEnum, UtxoTx);
 ifrom!(TransactionEnum, SignedEthTx);
-#[cfg(not(target_arch = "wasm32"))]
 ifrom!(TransactionEnum, ZTransaction);
 #[cfg(not(target_arch = "wasm32"))]
 ifrom!(TransactionEnum, LightningPayment);
@@ -497,7 +494,6 @@ impl Deref for TransactionEnum {
         match self {
             TransactionEnum::UtxoTx(ref t) => t,
             TransactionEnum::SignedEthTx(ref t) => t,
-            #[cfg(not(target_arch = "wasm32"))]
             TransactionEnum::ZTransaction(ref t) => t,
             TransactionEnum::CosmosTransaction(ref t) => t,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2342,7 +2338,6 @@ pub enum MmCoinEnum {
     QtumCoin(QtumCoin),
     Qrc20Coin(Qrc20Coin),
     EthCoin(EthCoin),
-    #[cfg(not(target_arch = "wasm32"))]
     ZCoin(ZCoin),
     Bch(BchCoin),
     SlpToken(SlpToken),
@@ -2428,7 +2423,6 @@ impl From<LightningCoin> for MmCoinEnum {
     fn from(c: LightningCoin) -> MmCoinEnum { MmCoinEnum::LightningCoin(c) }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl From<ZCoin> for MmCoinEnum {
     fn from(c: ZCoin) -> MmCoinEnum { MmCoinEnum::ZCoin(c) }
 }
@@ -2448,7 +2442,6 @@ impl Deref for MmCoinEnum {
             MmCoinEnum::TendermintToken(ref c) => c,
             #[cfg(not(target_arch = "wasm32"))]
             MmCoinEnum::LightningCoin(ref c) => c,
-            #[cfg(not(target_arch = "wasm32"))]
             MmCoinEnum::ZCoin(ref c) => c,
             MmCoinEnum::Test(ref c) => c,
             #[cfg(all(
@@ -2841,7 +2834,6 @@ pub enum CoinProtocol {
         token_contract_address: String,
         decimals: u8,
     },
-    #[cfg(not(target_arch = "wasm32"))]
     ZHTLC(ZcoinProtocolInfo),
 }
 
@@ -3094,7 +3086,6 @@ pub async fn lp_coininit(ctx: &MmArc, ticker: &str, req: &Json) -> Result<MmCoin
         },
         CoinProtocol::TENDERMINT { .. } => return ERR!("TENDERMINT protocol is not supported by lp_coininit"),
         CoinProtocol::TENDERMINTTOKEN(_) => return ERR!("TENDERMINTTOKEN protocol is not supported by lp_coininit"),
-        #[cfg(not(target_arch = "wasm32"))]
         CoinProtocol::ZHTLC { .. } => return ERR!("ZHTLC protocol is not supported by lp_coininit"),
         #[cfg(not(target_arch = "wasm32"))]
         CoinProtocol::LIGHTNING { .. } => return ERR!("Lightning protocol is not supported by lp_coininit"),
@@ -3484,7 +3475,7 @@ pub async fn get_enabled_coins(ctx: MmArc) -> Result<Response<Vec<u8>>, String> 
             })
         })
         .collect());
-    let res = try_s!(serde_json::to_vec(&Mm2RpcResult::new(enabled_coins)));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(enabled_coins)));
     Ok(try_s!(Response::builder().body(res)))
 }
 
@@ -3680,7 +3671,6 @@ pub fn address_by_coin_conf_and_pubkey_str(
         CoinProtocol::SOLANA | CoinProtocol::SPLTOKEN { .. } => {
             ERR!("Solana pubkey is the public address - you do not need to use this rpc call.")
         },
-        #[cfg(not(target_arch = "wasm32"))]
         CoinProtocol::ZHTLC { .. } => ERR!("address_by_coin_conf_and_pubkey_str is not supported for ZHTLC protocol!"),
     }
 }

@@ -114,7 +114,7 @@ impl<T: Serialize, E: SerMmErrorType> MmRpcResponse<T, E> {
 
     fn error_to_json(&self, error: impl serde::ser::Error) -> Json {
         let response: MmRpcResponse<(), _> = MmRpcResponse {
-            mmrpc: self.mmrpc,
+            mmrpc: self.mmrpc.clone(),
             result: MmRpcResult::Err(MmError::new(SerializationError::InternalError(error.to_string()))),
             id: self.id,
         };

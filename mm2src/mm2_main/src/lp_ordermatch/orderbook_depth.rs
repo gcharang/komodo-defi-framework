@@ -78,7 +78,7 @@ pub async fn orderbook_depth_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
                         if orderbook_pair == pair && original_pair != pair {
                             result.push(PairWithDepth {
                                 pair: original_pair,
-                                depth,
+                                depth: depth.clone(),
                             });
                             None
                         } else {
