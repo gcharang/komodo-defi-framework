@@ -46,7 +46,7 @@ mod macos_reexport {
     pub(super) use std::fs;
     pub(super) const LAUNCH_CTL_COOL_DOWN_TIMEOUT_MS: u64 = 500;
     pub(super) use common::log::debug;
-    pub(super) use std::process::{Command, Stdio};
+    pub(super) use std::process::Command;
     pub(super) use std::thread::sleep;
     pub(super) use std::time::Duration;
     pub(super) const LAUNCHCTL_MM2_ID: &str = "com.mm2.daemon";
