@@ -1,4 +1,5 @@
 #![feature(ip)]
+#![feature(trivial_bounds)]
 
 #[macro_use] extern crate lazy_static;
 
@@ -18,6 +19,7 @@ use sha2::{Digest, Sha256};
 pub use atomicdex_behaviour::{spawn_gossipsub, AdexBehaviourError, NodeType, WssCerts};
 pub use libp2p::identity::secp256k1::PublicKey as Libp2pSecpPublic;
 pub use libp2p::identity::PublicKey as Libp2pPublic;
+use libp2p::{ping::Event as PingEvent, swarm::ConnectionHandler};
 pub use libp2p::{Multiaddr, PeerId};
 pub use peers_exchange::PeerAddresses;
 pub use relay_address::{RelayAddress, RelayAddressError};
@@ -27,6 +29,28 @@ use serde::{de, Deserialize, Serialize, Serializer};
 lazy_static! {
     static ref SECP_VERIFY: Secp256k1<VerifyOnly> = Secp256k1::verification_only();
     static ref SECP_SIGN: Secp256k1<SignOnly> = Secp256k1::signing_only();
+}
+
+pub type ConnectionHandlerWrapper = Box<
+    dyn ConnectionHandler<
+        Error = (),
+        FromBehaviour = (),
+        InboundOpenInfo = (),
+        InboundProtocol = (),
+        OutboundOpenInfo = (),
+        OutboundProtocol = (),
+        ToBehaviour = (),
+    >,
+>;
+
+#[derive(Default)]
+pub struct Void {}
+
+impl From<PingEvent> for Void {
+    fn from(&mut self, event: PingEvent) {
+        println!("recv ping {:?}", event);
+        self.events.push_back(Void::default());
+    }
 }
 
 #[derive(Clone, Copy)]

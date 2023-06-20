@@ -546,24 +546,24 @@ fn maintain_connection_to_relays(swarm: &mut AtomicDexSwarm, bootstrap_addresses
     todo!()
 }
 
-fn announce_my_addresses(swarm: &mut AtomicDexSwarm) {
-    let global_listeners: PeerAddresses = Swarm::listeners(swarm)
-        .filter(|listener| {
-            for protocol in listener.iter() {
-                if let Protocol::Ip4(ip) = protocol {
-                    return ip.is_global();
-                }
-            }
-            false
-        })
-        .take(1)
-        .cloned()
-        .collect();
-    if !global_listeners.is_empty() {
-        // swarm.behaviour_mut().announce_listeners(global_listeners);
-        todo!()
-    }
-}
+// fn announce_my_addresses(swarm: &mut AtomicDexSwarm) {
+//     let global_listeners: PeerAddresses = Swarm::listeners(swarm)
+//         .filter(|listener| {
+//             for protocol in listener.iter() {
+//                 if let Protocol::Ip4(ip) = protocol {
+//                     return ip.is_global();
+//                 }
+//             }
+//             false
+//         })
+//         .take(1)
+//         .cloned()
+//         .collect();
+//     if !global_listeners.is_empty() {
+//         // swarm.behaviour_mut().announce_listeners(global_listeners);
+//         todo!()
+//     }
+// }
 
 #[derive(Debug, Display)]
 pub enum AdexBehaviourError {

@@ -62,7 +62,7 @@ struct PendingRequest {
 }
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "RequestResponseBehaviourEvent", event_process = true)]
+#[behaviour(to_swarm = "RequestResponseBehaviourEvent", event_process = true)]
 #[behaviour(poll_method = "poll_event")]
 pub struct RequestResponseBehaviour {
     /// The inner RequestResponse network behaviour.
