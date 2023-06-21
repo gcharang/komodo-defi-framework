@@ -7,9 +7,18 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 mod native_tests {
     use crate::nft::nft_structs::{NftTransferHistoryWrapper, NftWrapper, UriMeta};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
-    use crate::nft::send_request_to_uri;
     use crate::nft::storage::for_db_tests::*;
+    use crate::nft::{check_moralis_ipfs_bafy, send_request_to_uri};
     use common::block_on;
+
+    #[test]
+    fn test_moralis_ipfs_bafy() {
+        let uri =
+            "https://ipfs.moralis.io:2053/ipfs/bafybeifnek24coy5xj5qabdwh24dlp5omq34nzgvazkfyxgnqms4eidsiq/1.json";
+        let res_uri = check_moralis_ipfs_bafy(Some(uri));
+        let expected = "https://ipfs.io/ipfs/bafybeifnek24coy5xj5qabdwh24dlp5omq34nzgvazkfyxgnqms4eidsiq/1.json";
+        assert_eq!(expected, res_uri.unwrap());
+    }
 
     #[test]
     fn test_moralis_nft_list() {

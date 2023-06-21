@@ -156,10 +156,11 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         chain: req.chain,
     };
     let mut nft_db = get_nft_metadata(ctx, req).await?;
-    let uri_meta = get_uri_meta(&moralis_meta.token_uri, &moralis_meta.metadata).await;
+    let token_uri = check_moralis_ipfs_bafy(moralis_meta.token_uri.as_deref());
+    let uri_meta = get_uri_meta(token_uri.as_deref(), moralis_meta.metadata.as_deref()).await;
     nft_db.collection_name = moralis_meta.collection_name;
     nft_db.symbol = moralis_meta.symbol;
-    nft_db.token_uri = moralis_meta.token_uri;
+    nft_db.token_uri = token_uri;
     nft_db.metadata = moralis_meta.metadata;
     nft_db.last_token_uri_sync = moralis_meta.last_token_uri_sync;
     nft_db.last_metadata_sync = moralis_meta.last_metadata_sync;
@@ -210,7 +211,8 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
                     Some(contract_type) => contract_type.0,
                     None => continue,
                 };
-                let uri_meta = get_uri_meta(&nft_wrapper.token_uri, &nft_wrapper.metadata).await;
+                let token_uri = check_moralis_ipfs_bafy(nft_wrapper.token_uri.as_deref());
+                let uri_meta = get_uri_meta(token_uri.as_deref(), nft_wrapper.metadata.as_deref()).await;
                 let nft = Nft {
                     chain: *chain,
                     token_address: nft_wrapper.token_address,
@@ -223,7 +225,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
                     contract_type,
                     collection_name: nft_wrapper.name,
                     symbol: nft_wrapper.symbol,
-                    token_uri: nft_wrapper.token_uri,
+                    token_uri,
                     metadata: nft_wrapper.metadata,
                     last_token_uri_sync: nft_wrapper.last_token_uri_sync,
                     last_metadata_sync: nft_wrapper.last_metadata_sync,
@@ -362,7 +364,8 @@ async fn get_moralis_metadata(
         Some(contract_type) => contract_type.0,
         None => return MmError::err(GetNftInfoError::ContractTypeIsNull),
     };
-    let uri_meta = get_uri_meta(&nft_wrapper.token_uri, &nft_wrapper.metadata).await;
+    let token_uri = check_moralis_ipfs_bafy(nft_wrapper.token_uri.as_deref());
+    let uri_meta = get_uri_meta(token_uri.as_deref(), nft_wrapper.metadata.as_deref()).await;
     let nft_metadata = Nft {
         chain: *chain,
         token_address: nft_wrapper.token_address,
@@ -375,7 +378,7 @@ async fn get_moralis_metadata(
         contract_type,
         collection_name: nft_wrapper.name,
         symbol: nft_wrapper.symbol,
-        token_uri: nft_wrapper.token_uri,
+        token_uri,
         metadata: nft_wrapper.metadata,
         last_token_uri_sync: nft_wrapper.last_token_uri_sync,
         last_metadata_sync: nft_wrapper.last_metadata_sync,
@@ -447,7 +450,18 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
     Ok(response)
 }
 
-async fn try_get_uri_meta(token_uri: &Option<String>) -> UriMeta {
+fn check_moralis_ipfs_bafy(token_uri: Option<&str>) -> Option<String> {
+    token_uri.map(|uri| {
+        if uri.contains("https://ipfs.moralis.io") && uri.contains("bafy") {
+            let parts: Vec<&str> = uri.splitn(2, "/ipfs/").collect();
+            format!("https://ipfs.io/ipfs/{}", parts[1])
+        } else {
+            uri.to_string()
+        }
+    })
+}
+
+async fn try_get_uri_meta(token_uri: Option<&str>) -> UriMeta {
     let mut uri_meta = UriMeta::default();
     if let Some(token_uri) = token_uri {
         if let Ok(response_meta) = send_request_to_uri(token_uri).await {
@@ -460,13 +474,15 @@ async fn try_get_uri_meta(token_uri: &Option<String>) -> UriMeta {
     uri_meta
 }
 
-async fn get_uri_meta(token_uri: &Option<String>, metadata: &Option<String>) -> UriMeta {
+async fn get_uri_meta(token_uri: Option<&str>, metadata: Option<&str>) -> UriMeta {
     let mut uri_meta = try_get_uri_meta(token_uri).await;
     if let Some(metadata) = metadata {
         if let Ok(meta_from_meta) = serde_json::from_str::<UriMetaFromStr>(metadata) {
             uri_meta.merge_from(meta_from_meta);
         }
     }
+    uri_meta.image = check_moralis_ipfs_bafy(uri_meta.image.as_deref());
+    uri_meta.animation_url = check_moralis_ipfs_bafy(uri_meta.animation_url.as_deref());
     drop_mutability!(uri_meta);
     uri_meta
 }
@@ -660,7 +676,8 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     } else {
         let moralis_meta = get_moralis_metadata(tx.token_address, tx.token_id.clone(), chain, url).await?;
-        let uri_meta = get_uri_meta(&moralis_meta.token_uri, &moralis_meta.metadata).await;
+        let token_uri = check_moralis_ipfs_bafy(moralis_meta.token_uri.as_deref());
+        let uri_meta = get_uri_meta(token_uri.as_deref(), moralis_meta.metadata.as_deref()).await;
         let nft = Nft {
             chain: *chain,
             token_address: moralis_meta.token_address,
@@ -673,7 +690,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             contract_type: moralis_meta.contract_type,
             collection_name: moralis_meta.collection_name,
             symbol: moralis_meta.symbol,
-            token_uri: moralis_meta.token_uri,
+            token_uri,
             metadata: moralis_meta.metadata,
             last_token_uri_sync: moralis_meta.last_token_uri_sync,
             last_metadata_sync: moralis_meta.last_metadata_sync,
