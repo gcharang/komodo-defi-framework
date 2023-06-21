@@ -1,10 +1,10 @@
 use crate::request_response::Codec;
-use crate::NetworkInfo;
+use crate::{ConnectionHandlerWrapper, NetworkInfo};
 use futures::StreamExt;
 use futures_ticker::Ticker;
 use libp2p::request_response::{Behaviour as RequestResponse, Config as RequestResponseConfig,
                                Event as RequestResponseEvent, Message as RequestResponseMessage};
-use libp2p::swarm::{NetworkBehaviour, ToSwarm};
+use libp2p::swarm::{NetworkBehaviour, ToSwarm as NetworkBehaviourAction};
 use libp2p::{multiaddr::{Multiaddr, Protocol},
              request_response::ProtocolSupport,
              swarm::PollParameters,
@@ -17,6 +17,7 @@ use std::{collections::{HashMap, VecDeque},
           iter,
           task::{Context, Poll},
           time::Duration};
+use void::Void;
 
 pub type PeerAddresses = HashSet<Multiaddr>;
 
@@ -81,7 +82,7 @@ pub struct PeersExchange {
     #[behaviour(ignore)]
     reserved_peers: Vec<PeerId>,
     #[behaviour(ignore)]
-    events: VecDeque<ToSwarm<(), <Self as NetworkBehaviour>::ConnectionHandler>>,
+    events: VecDeque<NetworkBehaviourAction<Void, ConnectionHandlerWrapper>>,
     #[behaviour(ignore)]
     maintain_peers_interval: Ticker,
     #[behaviour(ignore)]
@@ -94,7 +95,7 @@ impl PeersExchange {
         let codec = Codec::default();
         let protocol = iter::once((PeersExchangeProtocol::Version1, ProtocolSupport::Full));
         let config = RequestResponseConfig::default();
-        let request_response = RequestResponse::new(codec, protocol, config);
+        let request_response = RequestResponse::new(protocol, config);
         PeersExchange {
             request_response,
             known_peers: Vec::new(),
@@ -280,7 +281,7 @@ impl PeersExchange {
         &mut self,
         cx: &mut Context,
         _params: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<(), <Self as NetworkBehaviour>::ConnectionHandler>> {
+    ) -> Poll<NetworkBehaviourAction<Void, ConnectionHandlerWrapper>> {
         while let Poll::Ready(Some(())) = self.maintain_peers_interval.poll_next_unpin(cx) {
             self.maintain_known_peers();
         }

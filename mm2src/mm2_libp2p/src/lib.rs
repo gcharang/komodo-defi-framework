@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 pub use atomicdex_behaviour::{spawn_gossipsub, AdexBehaviourError, NodeType, WssCerts};
 pub use libp2p::identity::secp256k1::PublicKey as Libp2pSecpPublic;
 pub use libp2p::identity::PublicKey as Libp2pPublic;
-use libp2p::{ping::Event as PingEvent, swarm::ConnectionHandler};
+use libp2p::swarm::ConnectionHandler;
 pub use libp2p::{Multiaddr, PeerId};
 pub use peers_exchange::PeerAddresses;
 pub use relay_address::{RelayAddress, RelayAddressError};
@@ -42,16 +42,6 @@ pub type ConnectionHandlerWrapper = Box<
         ToBehaviour = (),
     >,
 >;
-
-#[derive(Default)]
-pub struct Void {}
-
-impl From<PingEvent> for Void {
-    fn from(&mut self, event: PingEvent) {
-        println!("recv ping {:?}", event);
-        self.events.push_back(Void::default());
-    }
-}
 
 #[derive(Clone, Copy)]
 pub enum NetworkInfo {
