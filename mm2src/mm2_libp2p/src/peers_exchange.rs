@@ -1,6 +1,7 @@
 use crate::request_response::Codec;
 use crate::NetworkInfo;
 use futures::StreamExt;
+use futures_ticker::Ticker;
 use libp2p::request_response::{Behaviour as RequestResponse, Config as RequestResponseConfig,
                                Event as RequestResponseEvent, Message as RequestResponseMessage};
 use libp2p::swarm::{NetworkBehaviour, ToSwarm};
@@ -16,7 +17,6 @@ use std::{collections::{HashMap, VecDeque},
           iter,
           task::{Context, Poll},
           time::Duration};
-use wasm_timer::{Instant, Interval};
 
 pub type PeerAddresses = HashSet<Multiaddr>;
 
@@ -83,7 +83,7 @@ pub struct PeersExchange {
     #[behaviour(ignore)]
     events: VecDeque<ToSwarm<(), <Self as NetworkBehaviour>::ConnectionHandler>>,
     #[behaviour(ignore)]
-    maintain_peers_interval: Interval,
+    maintain_peers_interval: Ticker,
     #[behaviour(ignore)]
     network_info: NetworkInfo,
 }
@@ -100,9 +100,9 @@ impl PeersExchange {
             known_peers: Vec::new(),
             reserved_peers: Vec::new(),
             events: VecDeque::new(),
-            maintain_peers_interval: Interval::new_at(
-                Instant::now() + Duration::from_secs(REQUEST_PEERS_INITIAL_DELAY),
+            maintain_peers_interval: Ticker::new_with_next(
                 Duration::from_secs(REQUEST_PEERS_INTERVAL),
+                Duration::from_secs(REQUEST_PEERS_INITIAL_DELAY),
             ),
             network_info,
         }

@@ -5,6 +5,8 @@ use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::task::{Context, Poll};
 use futures::StreamExt;
+use futures_ticker::Ticker;
+use instant::Instant;
 use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 use libp2p::request_response::{Behaviour as RequestResponse, Codec as RequestResponseCodec,
                                Config as RequestResponseConfig, Event as RequestResponseEvent,
@@ -18,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::time::Duration;
-use wasm_timer::{Instant, Interval};
 
 const MAX_BUFFER_SIZE: usize = 1024 * 1024 - 100;
 
@@ -29,13 +30,13 @@ pub type RequestResponseSender = mpsc::UnboundedSender<(PeerId, PeerRequest, one
 pub fn build_request_response_behaviour() -> RequestResponseBehaviour {
     let config = RequestResponseConfig::default();
     let protocol = iter::once((Protocol::Version1, ProtocolSupport::Full));
-    let inner = RequestResponse::new(Codec::default(), protocol, config);
+    let inner = RequestResponse::new(protocol, config);
 
     let (tx, rx) = mpsc::unbounded();
     let pending_requests = HashMap::new();
     let events = VecDeque::new();
     let timeout = Duration::from_secs(10);
-    let timeout_interval = Interval::new(Duration::from_secs(1));
+    let timeout_interval = Ticker::new(Duration::from_secs(1));
 
     RequestResponseBehaviour {
         inner,
@@ -81,7 +82,7 @@ pub struct RequestResponseBehaviour {
     timeout: Duration,
     /// Interval for request timeout check
     #[behaviour(ignore)]
-    timeout_interval: Interval,
+    timeout_interval: Ticker,
 }
 
 impl RequestResponseBehaviour {
