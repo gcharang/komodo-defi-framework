@@ -1,108 +1,87 @@
-use super::rpc_clients::{UtxoJsonRpcClientInfo, UtxoRpcClientOps};
-use crate::utxo::NonZeroU64;
+use crate::utxo::rpc_clients::{BlockHashOrHeight, EstimateFeeMethod, EstimateFeeMode, SpentOutputInfo, UnspentInfo,
+                               UnspentMap, UtxoJsonRpcClientInfo, UtxoRpcClientOps, UtxoRpcFut};
+use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
+use crate::utxo::{GetBlockHeaderError, NonZeroU64};
 use async_trait::async_trait;
+use common::jsonrpc_client::{JsonRpcClient, JsonRpcRequestEnum, JsonRpcResponseFut, RpcRes};
+use futures01::Future;
+use keys::Address;
+use mm2_err_handle::mm_error::MmError;
+use mm2_number::BigDecimal;
+use rpc::v1::types::{Bytes, Transaction, H256};
+use serialization::CoinVariant;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct BlockBookClient(pub Arc<BlockBookClient>);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BlockBookClientImpl {
     uri: String,
-    block_headers: String,
-    ticker: String,
+    coin_name: String,
+    block_headers_storage: BlockHeaderStorage,
+    next_id: AtomicU64,
+}
+
+impl JsonRpcClient for BlockBookClientImpl {
+    fn version(&self) -> &'static str { "1" }
+
+    fn next_id(&self) -> String { self.next_id.fetch_add(1, Relaxed).to_string() }
+
+    fn client_info(&self) -> String { UtxoJsonRpcClientInfo::client_info(self) }
+
+    fn transport(&self, request: JsonRpcRequestEnum) -> JsonRpcResponseFut { todo!() }
+}
+
+impl UtxoJsonRpcClientInfo for BlockBookClientImpl {
+    fn coin_name(&self) -> &str { self.coin_name.as_str() }
 }
 
 #[async_trait]
-impl UtxoJsonRpcClientInfo for BlockBookClientImpl {
-    fn coin_name(&self) -> &str { &self.coin_name() }
-
-    fn client_info(&self) -> String { format!("coin: {}", self.coin_name()) }
-}
-
 impl UtxoRpcClientOps for BlockBookClientImpl {
-    fn list_unspent(
-        &self,
-        address: &keys::Address,
-        decimals: u8,
-    ) -> super::rpc_clients::UtxoRpcFut<Vec<super::rpc_clients::UnspentInfo>> {
-        todo!()
-    }
+    fn list_unspent(&self, address: &Address, decimals: u8) -> UtxoRpcFut<Vec<UnspentInfo>> { todo!() }
 
-    fn list_unspent_group(
-        &self,
-        addresses: Vec<keys::Address>,
-        decimals: u8,
-    ) -> super::rpc_clients::UtxoRpcFut<super::rpc_clients::UnspentMap> {
-        todo!()
-    }
+    fn list_unspent_group(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<UnspentMap> { todo!() }
 
-    fn send_transaction(&self, tx: &chain::Transaction) -> super::rpc_clients::UtxoRpcFut<rpc::v1::types::H256> {
-        todo!()
-    }
+    fn send_transaction(&self, tx: &chain::Transaction) -> UtxoRpcFut<H256> { todo!() }
 
-    fn send_raw_transaction(&self, tx: rpc::v1::types::Bytes) -> super::rpc_clients::UtxoRpcFut<rpc::v1::types::H256> {
-        todo!()
-    }
+    fn send_raw_transaction(&self, tx: Bytes) -> UtxoRpcFut<H256> { todo!() }
 
-    fn get_transaction_bytes(
-        &self,
-        txid: &rpc::v1::types::H256,
-    ) -> super::rpc_clients::UtxoRpcFut<rpc::v1::types::Bytes> {
-        todo!()
-    }
+    fn get_transaction_bytes(&self, txid: &H256) -> UtxoRpcFut<Bytes> { todo!() }
 
-    fn get_verbose_transaction(
-        &self,
-        txid: &rpc::v1::types::H256,
-    ) -> super::rpc_clients::UtxoRpcFut<rpc::v1::types::Transaction> {
-        todo!()
-    }
+    fn get_verbose_transaction(&self, txid: &H256) -> UtxoRpcFut<Transaction> { todo!() }
 
-    fn get_verbose_transactions(
-        &self,
-        tx_ids: &[rpc::v1::types::H256],
-    ) -> super::rpc_clients::UtxoRpcFut<Vec<rpc::v1::types::Transaction>> {
-        todo!()
-    }
+    fn get_verbose_transactions(&self, tx_ids: &[H256]) -> UtxoRpcFut<Vec<Transaction>> { todo!() }
 
-    fn get_block_count(&self) -> super::rpc_clients::UtxoRpcFut<u64> { todo!() }
+    fn get_block_count(&self) -> UtxoRpcFut<u64> { todo!() }
 
-    fn display_balance(
-        &self,
-        address: keys::Address,
-        decimals: u8,
-    ) -> common::jsonrpc_client::RpcRes<mm2_number::BigDecimal> {
-        todo!()
-    }
+    fn display_balance(&self, address: Address, decimals: u8) -> RpcRes<BigDecimal> { todo!() }
 
-    fn display_balances(
-        &self,
-        addresses: Vec<keys::Address>,
-        decimals: u8,
-    ) -> super::rpc_clients::UtxoRpcFut<Vec<(keys::Address, mm2_number::BigDecimal)>> {
+    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<Vec<(Address, BigDecimal)>> {
         todo!()
     }
 
     fn estimate_fee_sat(
         &self,
         decimals: u8,
-        fee_method: &super::rpc_clients::EstimateFeeMethod,
-        mode: &Option<super::rpc_clients::EstimateFeeMode>,
+        fee_method: &EstimateFeeMethod,
+        mode: &Option<EstimateFeeMode>,
         n_blocks: u32,
-    ) -> super::rpc_clients::UtxoRpcFut<u64> {
+    ) -> UtxoRpcFut<u64> {
         todo!()
     }
 
-    fn get_relay_fee(&self) -> common::jsonrpc_client::RpcRes<mm2_number::BigDecimal> { todo!() }
+    fn get_relay_fee(&self) -> RpcRes<BigDecimal> { todo!() }
 
     fn find_output_spend(
         &self,
-        tx_hash: primitives::hash::H256,
+        tx_hash: keys::hash::H256,
         script_pubkey: &[u8],
         vout: usize,
-        from_block: super::rpc_clients::BlockHashOrHeight,
-    ) -> Box<dyn futures01::Future<Item = Option<super::rpc_clients::SpentOutputInfo>, Error = String> + Send> {
+        from_block: BlockHashOrHeight,
+    ) -> Box<dyn Future<Item = Option<SpentOutputInfo>, Error = String> + Send> {
         todo!()
     }
 
@@ -110,15 +89,10 @@ impl UtxoRpcClientOps for BlockBookClientImpl {
         &self,
         starting_block: u64,
         count: NonZeroU64,
-        coin_variant: serialization::CoinVariant,
-    ) -> super::rpc_clients::UtxoRpcFut<u32> {
+        coin_variant: CoinVariant,
+    ) -> UtxoRpcFut<u32> {
         todo!()
     }
 
-    async fn get_block_timestamp(
-        &self,
-        height: u64,
-    ) -> Result<u64, mm2_err_handle::prelude::MmError<super::GetBlockHeaderError>> {
-        todo!()
-    }
+    async fn get_block_timestamp(&self, height: u64) -> Result<u64, MmError<GetBlockHeaderError>> { todo!() }
 }
