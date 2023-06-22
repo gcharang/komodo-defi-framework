@@ -260,13 +260,27 @@ fn nft_tx_historty() -> Vec<NftTransferHistory> {
     vec![tx, tx1, tx2]
 }
 
-pub(crate) async fn test_add_get_nfts_impl() {
+async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTxHistoryStorageOps {
     let ctx = mm_ctx_with_custom_db();
     let storage = NftStorageBuilder::new(&ctx).build().unwrap();
-    let chain = Chain::Bsc;
-    NftListStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
+    NftListStorageOps::init(&storage, chain).await.unwrap();
+    let is_initialized = NftListStorageOps::is_initialized(&storage, chain).await.unwrap();
     assert!(is_initialized);
+    storage
+}
+
+async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + NftTxHistoryStorageOps {
+    let ctx = mm_ctx_with_custom_db();
+    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
+    NftTxHistoryStorageOps::init(&storage, chain).await.unwrap();
+    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, chain).await.unwrap();
+    assert!(is_initialized);
+    storage
+}
+
+pub(crate) async fn test_add_get_nfts_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
     storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
@@ -280,12 +294,8 @@ pub(crate) async fn test_add_get_nfts_impl() {
 }
 
 pub(crate) async fn test_last_nft_blocks_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftListStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
     storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
@@ -298,12 +308,8 @@ pub(crate) async fn test_last_nft_blocks_impl() {
 }
 
 pub(crate) async fn test_nft_list_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftListStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
     storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
@@ -319,12 +325,8 @@ pub(crate) async fn test_nft_list_impl() {
 }
 
 pub(crate) async fn test_remove_nft_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftListStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
     storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
@@ -346,12 +348,8 @@ pub(crate) async fn test_remove_nft_impl() {
 }
 
 pub(crate) async fn test_nft_amount_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftListStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_list_storage(&chain).await;
     let mut nft = nft();
     storage
         .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
@@ -386,13 +384,8 @@ pub(crate) async fn test_nft_amount_impl() {
 }
 
 pub(crate) async fn test_refresh_metadata_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftListStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
-
+    let storage = init_nft_list_storage(&chain).await;
     let new_symbol = "NEW_SYMBOL";
     let mut nft = nft();
     storage
@@ -409,14 +402,11 @@ pub(crate) async fn test_refresh_metadata_impl() {
 }
 
 pub(crate) async fn test_add_get_txs_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_history_storage(&chain).await;
     let txs = nft_tx_historty();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
+
     let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
     let tx1 = storage
         .get_txs_by_token_addr_id(&chain, TOKEN_ADD.to_string(), token_id)
@@ -437,12 +427,8 @@ pub(crate) async fn test_add_get_txs_impl() {
 }
 
 pub(crate) async fn test_last_tx_block_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_history_storage(&chain).await;
     let txs = nft_tx_historty();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
@@ -454,12 +440,8 @@ pub(crate) async fn test_last_tx_block_impl() {
 }
 
 pub(crate) async fn test_tx_history_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_history_storage(&chain).await;
     let txs = nft_tx_historty();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
@@ -475,12 +457,8 @@ pub(crate) async fn test_tx_history_impl() {
 }
 
 pub(crate) async fn test_tx_history_filters_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_history_storage(&chain).await;
     let txs = nft_tx_historty();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
@@ -533,14 +511,11 @@ pub(crate) async fn test_tx_history_filters_impl() {
 }
 
 pub(crate) async fn test_get_update_tx_meta_impl() {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     let chain = Chain::Bsc;
-    NftTxHistoryStorageOps::init(&storage, &chain).await.unwrap();
-    let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, &chain).await.unwrap();
-    assert!(is_initialized);
+    let storage = init_nft_history_storage(&chain).await;
     let txs = nft_tx_historty();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
+
     let vec_token_add_id = storage.get_txs_with_empty_meta(&chain).await.unwrap();
     assert_eq!(vec_token_add_id.len(), 2);
 
