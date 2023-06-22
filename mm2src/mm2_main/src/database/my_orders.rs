@@ -8,6 +8,7 @@ use db_common::sqlite::offset_by_uuid;
 use db_common::sqlite::rusqlite::{params_from_iter, Connection, Error as SqlError, Result as SqlResult, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
+use mm2_rpc::data::legacy::TakerAction;
 use mm2_rpc::data::legacy::{FilteringOrder, OrdersHistoryRequest, TakerAction};
 use std::convert::TryInto;
 use std::string::ParseError;

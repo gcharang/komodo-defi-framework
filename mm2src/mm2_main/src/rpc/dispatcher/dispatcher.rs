@@ -50,7 +50,7 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 use mm2_rpc::mm_protocol::MmRpcBuilder;
-use nft::{get_nft_list, get_nft_metadata, get_nft_transfers, withdraw_nft};
+use nft::{get_nft_list, get_nft_metadata, get_nft_transfers, refresh_nft_metadata, update_nft, withdraw_nft};
 use serde::de::DeserializeOwned;
 use serde_json::{self as json, Value as Json};
 use std::net::SocketAddr;
@@ -182,6 +182,7 @@ async fn dispatcher_v2(request: MmRpcRequest<String, Json>, ctx: MmArc) -> Dispa
         "my_tx_history" => handle_mmrpc(ctx, request, my_tx_history_v2_rpc).await,
         "orderbook" => handle_mmrpc(ctx, request, orderbook_rpc_v2).await,
         "recreate_swap_data" => handle_mmrpc(ctx, request, recreate_swap_data).await,
+        "refresh_nft_metadata" => handle_mmrpc(ctx, request, refresh_nft_metadata).await,
         "remove_delegation" => handle_mmrpc(ctx, request, remove_delegation).await,
         "remove_node_from_version_stat" => handle_mmrpc(ctx, request, remove_node_from_version_stat).await,
         "sign_message" => handle_mmrpc(ctx, request, sign_message).await,
@@ -191,6 +192,7 @@ async fn dispatcher_v2(request: MmRpcRequest<String, Json>, ctx: MmArc) -> Dispa
         "stop_version_stat_collection" => handle_mmrpc(ctx, request, stop_version_stat_collection).await,
         "trade_preimage" => handle_mmrpc(ctx, request, trade_preimage_rpc).await,
         "trezor_connection_status" => handle_mmrpc(ctx, request, trezor_connection_status).await,
+        "update_nft" => handle_mmrpc(ctx, request, update_nft).await,
         "update_version_stat_collection" => handle_mmrpc(ctx, request, update_version_stat_collection).await,
         "verify_message" => handle_mmrpc(ctx, request, verify_message).await,
         "withdraw" => handle_mmrpc(ctx, request, withdraw).await,
@@ -287,7 +289,7 @@ async fn rpc_task_dispatcher(
 ///
 /// `gui_storage_method` is a method name with the `gui_storage::` prefix removed.
 async fn gui_storage_dispatcher(
-    request: MmRpcRequest<String, Json>,
+    request: MmRpcRequest<String, Json>, // TODO: check again why not MmRpcRequest,
     ctx: MmArc,
     gui_storage_method: &str,
 ) -> DispatcherResult<Response<Vec<u8>>> {
@@ -316,7 +318,7 @@ async fn gui_storage_dispatcher(
 /// `lightning_method` is a method name with the `lightning::` prefix removed.
 #[cfg(not(target_arch = "wasm32"))]
 async fn lightning_dispatcher(
-    request: MmRpcRequest<String, Json>,
+    request: MmRpcRequest<String, Json>, // TODO: check again why not MmRpcRequest,
     ctx: MmArc,
     lightning_method: &str,
 ) -> DispatcherResult<Response<Vec<u8>>> {

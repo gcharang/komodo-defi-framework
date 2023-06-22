@@ -2,10 +2,13 @@
 #[path = "response_handler/orderbook.rs"] mod orderbook;
 
 use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use formatters::smart_fraction_fmt::SmartFractionFmt;
 use itertools::Itertools;
+use itertools::Itertools;
+use log::{error, info};
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, FilteringOrder,
@@ -14,11 +17,17 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
                             MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusResponse,
                             OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status,
                             TakerMatchForRpc, TakerOrderForRpc, UuidParseError};
+use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
+                            OrderbookResponse, SellBuyResponse, Status};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
+use serde_json::Value as Json;
+use std::cell::RefCell;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Debug;
+use std::io::Write;
 use std::io::Write;
 use std::ops::DerefMut;
 use std::string::ToString;
@@ -43,7 +52,7 @@ pub(crate) trait ResponseHandler {
         &self,
         orderbook: OrderbookResponse,
         config: &Cfg,
-        otderbook_config: OrderbookConfig,
+        orderbook_config: OrderbookConfig,
     ) -> Result<()>;
     fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
     fn on_version_response(&self, response: &MmVersionResponse) -> Result<()>;
@@ -68,6 +77,7 @@ pub(crate) struct ResponseHandlerImpl<'a> {
 }
 
 impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
+    // TODO: @rozhkovdmitrii check why explicit lifetime is here
     fn print_response(&self, result: Json) -> Result<()> {
         let mut binding = self.writer.borrow_mut();
         let writer = binding.deref_mut();
@@ -90,7 +100,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         &self,
         orderbook: OrderbookResponse,
         config: &Cfg,
-        otderbook_config: OrderbookConfig,
+        orderbook_config: OrderbookConfig,
     ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
 
@@ -109,7 +119,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                 "Public",
                 "Address",
                 "Order conf (bc,bn:rc,rn)",
-                &otderbook_config
+                &orderbook_config
             )
         );
 
@@ -120,13 +130,13 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
             writeln_safe_io!(
                 writer,
                 "{}",
-                orderbook::AskBidRow::new("", "No asks found", "", "", "", "", "", "", "", &otderbook_config)
+                orderbook::AskBidRow::new("", "No asks found", "", "", "", "", "", "", "", &orderbook_config)
             );
         } else {
             let skip = orderbook
                 .asks
                 .len()
-                .checked_sub(otderbook_config.asks_limit.unwrap_or(usize::MAX))
+                .checked_sub(orderbook_config.asks_limit.unwrap_or(usize::MAX))
                 .unwrap_or_default();
 
             orderbook
@@ -134,10 +144,10 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                 .iter()
                 .sorted_by(orderbook::cmp_asks)
                 .skip(skip)
-                .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &otderbook_config))
+                .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &orderbook_config))
                 .for_each(|row: orderbook::AskBidRow| writeln_safe_io!(writer, "{}", row));
         }
-        writeln_safe_io!(writer, "{}", orderbook::AskBidRow::new_delimiter(&otderbook_config));
+        writeln_safe_io!(writer, "{}", orderbook::AskBidRow::new_delimiter(&orderbook_config));
 
         if orderbook.bids.is_empty() {
             writeln_safe_io!(
@@ -150,7 +160,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                 .bids
                 .iter()
                 .sorted_by(orderbook::cmp_bids)
-                .take(otderbook_config.bids_limit.unwrap_or(usize::MAX))
+                .take(orderbook_config.bids_limit.unwrap_or(usize::MAX))
                 .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &otderbook_config))
                 .for_each(|row: orderbook::AskBidRow| writeln_safe_io!(writer, "{}", row));
         }

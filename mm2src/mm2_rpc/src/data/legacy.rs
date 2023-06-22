@@ -407,8 +407,6 @@ pub struct MakerConnectedForRpc {
     pub dest_pub_key: H256Json,
 }
 
-fn get_true() -> bool { true }
-
 #[derive(Serialize, Deserialize)]
 pub struct MyOrdersResponse {
     pub maker_orders: HashMap<Uuid, MakerOrderForMyOrdersRpc>,
@@ -526,3 +524,5 @@ pub struct UpdateMakerOrderRequest {
     pub rel_confs: Option<u64>,
     pub rel_nota: Option<bool>,
 }
+
+fn get_true() -> bool { true }

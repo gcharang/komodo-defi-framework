@@ -100,6 +100,7 @@ cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked, SharedDb};
     use tx_history_storage::wasm::{clear_tx_history, load_tx_history, save_tx_history, TxHistoryDb};
     pub type TxHistoryDbLocked<'a> = DbLocked<'a, TxHistoryDb>;
+    use nft::storage::wasm::nft_idb::NftCacheIDB;
 }
 
 // using custom copy of try_fus as futures crate was renamed to futures01
@@ -360,7 +361,7 @@ impl From<CoinFindError> for RawTransactionError {
     }
 }
 
-#[derive(Debug, Deserialize, Display, EnumFromStringify, Serialize, SerializeErrorType)]
+#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum GetMyAddressError {
     CoinsConfCheckError(String),
@@ -1922,10 +1923,8 @@ pub enum WithdrawError {
         available: BigDecimal,
         required: BigDecimal,
     },
-}
-
-impl From<GetNftInfoError> for WithdrawError {
-    fn from(e: GetNftInfoError) -> Self { WithdrawError::GetNftInfoError(e) }
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
 }
 
 impl HttpStatusCode for WithdrawError {
@@ -1954,7 +1953,9 @@ impl HttpStatusCode for WithdrawError {
             WithdrawError::HwError(_) => StatusCode::GONE,
             #[cfg(target_arch = "wasm32")]
             WithdrawError::BroadcastExpected(_) => StatusCode::BAD_REQUEST,
-            WithdrawError::Transport(_) | WithdrawError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            WithdrawError::Transport(_) | WithdrawError::InternalError(_) | WithdrawError::DbError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            },
         }
     }
 }
@@ -2542,6 +2543,8 @@ pub struct CoinsContext {
     tx_history_db: SharedDb<TxHistoryDb>,
     #[cfg(target_arch = "wasm32")]
     hd_wallet_db: SharedDb<HDWalletDb>,
+    #[cfg(target_arch = "wasm32")]
+    pub nft_cache_db: SharedDb<NftCacheIDB>,
 }
 
 #[derive(Debug)]
@@ -2566,6 +2569,8 @@ impl CoinsContext {
                 tx_history_db: ConstructibleDb::new(ctx).into_shared(),
                 #[cfg(target_arch = "wasm32")]
                 hd_wallet_db: ConstructibleDb::new_shared_db(ctx).into_shared(),
+                #[cfg(target_arch = "wasm32")]
+                nft_cache_db: ConstructibleDb::new(ctx).into_shared(),
             })
         })))
     }
