@@ -27,6 +27,7 @@ pub(crate) mod bchd_grpc;
 #[rustfmt::skip]
 #[path = "utxo/pb.rs"]
 mod bchd_pb;
+mod blockbook_client;
 pub mod qtum;
 pub mod rpc_clients;
 pub mod slp;
