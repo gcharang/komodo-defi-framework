@@ -64,6 +64,7 @@ use mm2_err_handle::prelude::*;
 use mm2_metrics::MetricsWeak;
 use mm2_number::{bigdecimal::{BigDecimal, ParseBigDecimalError, Zero},
                  MmNumber};
+use mm2_rpc::data::legacy::{EnabledCoin, GetEnabledResponse, Mm2RpcResult};
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -3466,16 +3467,10 @@ pub async fn get_trade_fee(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, S
     Ok(try_s!(Response::builder().body(res)))
 }
 
-#[derive(Serialize)]
-struct EnabledCoin {
-    ticker: String,
-    address: String,
-}
-
 pub async fn get_enabled_coins(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
     let coins_ctx: Arc<CoinsContext> = try_s!(CoinsContext::from_ctx(&ctx));
     let coins = coins_ctx.coins.lock().await;
-    let enabled_coins: Vec<_> = try_s!(coins
+    let enabled_coins: GetEnabledResponse = try_s!(coins
         .iter()
         .map(|(ticker, coin)| {
             let address = try_s!(coin.inner.my_address());
@@ -3485,8 +3480,7 @@ pub async fn get_enabled_coins(ctx: MmArc) -> Result<Response<Vec<u8>>, String> 
             })
         })
         .collect());
-
-    let res = try_s!(json::to_vec(&json!({ "result": enabled_coins })));
+    let res = try_s!(json::to_vec(&Mm2RpcResult::new(enabled_coins)));
     Ok(try_s!(Response::builder().body(res)))
 }
 

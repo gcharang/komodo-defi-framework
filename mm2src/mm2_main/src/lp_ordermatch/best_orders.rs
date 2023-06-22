@@ -5,14 +5,14 @@ use http::{Response, StatusCode};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber};
+use mm2_rpc::data::legacy::OrderConfirmationsSettings;
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use super::{addr_format_from_protocol_info, is_my_order, mm2_internal_pubkey_hex, orderbook_address,
-            BaseRelProtocolInfo, OrderConfirmationsSettings, OrderbookP2PItemWithProof, OrdermatchContext,
-            OrdermatchRequest, RpcOrderbookEntryV2};
+            BaseRelProtocolInfo, OrderbookP2PItemWithProof, OrdermatchContext, OrdermatchRequest, RpcOrderbookEntryV2};
 use crate::mm2::lp_network::{request_any_relay, P2PRequest};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -106,8 +106,8 @@ pub fn process_best_orders_p2p_request(
                     };
                     let order_w_proof = orderbook.orderbook_item_with_proof(o.clone());
                     protocol_infos.insert(order_w_proof.order.uuid, order_w_proof.order.base_rel_proto_info());
-                    if let Some(info) = order_w_proof.order.conf_settings {
-                        conf_infos.insert(order_w_proof.order.uuid, info);
+                    if let Some(ref info) = order_w_proof.order.conf_settings {
+                        conf_infos.insert(order_w_proof.order.uuid, info.clone());
                     }
                     best_orders.push(order_w_proof.into());
 
@@ -178,8 +178,8 @@ pub fn process_best_orders_p2p_request_by_number(
                 Some(o) => {
                     let order_w_proof = orderbook.orderbook_item_with_proof(o.clone());
                     protocol_infos.insert(order_w_proof.order.uuid, order_w_proof.order.base_rel_proto_info());
-                    if let Some(info) = order_w_proof.order.conf_settings {
-                        conf_infos.insert(order_w_proof.order.uuid, info);
+                    if let Some(ref info) = order_w_proof.order.conf_settings {
+                        conf_infos.insert(order_w_proof.order.uuid, info.clone());
                     }
                     best_orders.push(order_w_proof.into());
                 },

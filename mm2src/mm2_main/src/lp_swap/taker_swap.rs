@@ -11,7 +11,7 @@ use super::{broadcast_my_swap_status, broadcast_swap_message, broadcast_swap_msg
             SavedSwap, SavedSwapIo, SavedTradeFee, SwapConfirmationsSettings, SwapError, SwapMsg, SwapPubkeys,
             SwapTxDataMsg, SwapsContext, TransactionIdentifier, WAIT_CONFIRM_INTERVAL_SEC};
 use crate::mm2::lp_network::subscribe_to_topic;
-use crate::mm2::lp_ordermatch::{MatchBy, OrderConfirmationsSettings, TakerAction, TakerOrderBuilder};
+use crate::mm2::lp_ordermatch::TakerOrderBuilder;
 use crate::mm2::lp_swap::{broadcast_p2p_tx_msg, broadcast_swap_msg_every_delayed, tx_helper_topic,
                           wait_for_maker_payment_conf_duration, TakerSwapWatcherData};
 use coins::lp_price::fetch_swap_coins_price;
@@ -29,6 +29,7 @@ use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, MmNumber};
+use mm2_rpc::data::legacy::{MatchBy, OrderConfirmationsSettings, TakerAction};
 use parking_lot::Mutex as PaMutex;
 use primitives::hash::H264;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json, H264 as H264Json};

@@ -1,7 +1,7 @@
 use crate::eth::GetEthAddressError;
 use crate::nft::storage::{CreateNftStorageError, NftStorageError};
 use crate::{GetMyAddressError, WithdrawError};
-use common::HttpStatusCode;
+use common::{HttpStatusCode, ParseRfc3339Err};
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use http::StatusCode;
@@ -33,11 +33,7 @@ pub enum GetNftInfoError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
-    #[display(
-        fmt = "Error parsing datetime to timestamp. Expected format 'YYYY-MM-DDTHH:MM:SS.sssZ', got: {}",
-        _0
-    )]
-    ParseTimestampError(String),
+    ParseRfc3339Err(ParseRfc3339Err),
     #[display(fmt = "The contract type is required and should not be null.")]
     ContractTypeIsNull,
 }
@@ -52,7 +48,8 @@ impl From<SlurpError> for GetNftInfoError {
         match e {
             SlurpError::ErrorDeserializing { .. } => GetNftInfoError::InvalidResponse(error_str),
             SlurpError::Transport { .. } | SlurpError::Timeout { .. } => GetNftInfoError::Transport(error_str),
-            SlurpError::Internal(_) | SlurpError::InvalidRequest(_) => GetNftInfoError::Internal(error_str),
+            SlurpError::InvalidRequest(_) => GetNftInfoError::InvalidRequest(error_str),
+            SlurpError::Internal(_) => GetNftInfoError::Internal(error_str),
         }
     }
 }
@@ -83,10 +80,7 @@ impl From<CreateNftStorageError> for GetNftInfoError {
 }
 
 impl<T: NftStorageError> From<T> for GetNftInfoError {
-    fn from(err: T) -> Self {
-        let msg = format!("{:?}", err);
-        GetNftInfoError::DbError(msg)
-    }
+    fn from(err: T) -> Self { GetNftInfoError::DbError(format!("{:?}", err)) }
 }
 
 impl From<GetInfoFromUriError> for GetNftInfoError {
@@ -100,13 +94,15 @@ impl From<GetInfoFromUriError> for GetNftInfoError {
     }
 }
 
+impl From<ParseRfc3339Err> for GetNftInfoError {
+    fn from(e: ParseRfc3339Err) -> Self { GetNftInfoError::ParseRfc3339Err(e) }
+}
+
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
             GetNftInfoError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-            GetNftInfoError::InvalidResponse(_) | GetNftInfoError::ParseTimestampError(_) => {
-                StatusCode::FAILED_DEPENDENCY
-            },
+            GetNftInfoError::InvalidResponse(_) | GetNftInfoError::ParseRfc3339Err(_) => StatusCode::FAILED_DEPENDENCY,
             GetNftInfoError::ContractTypeIsNull => StatusCode::NOT_FOUND,
             GetNftInfoError::Transport(_)
             | GetNftInfoError::Internal(_)
@@ -179,10 +175,7 @@ impl From<GetMyAddressError> for UpdateNftError {
 }
 
 impl<T: NftStorageError> From<T> for UpdateNftError {
-    fn from(err: T) -> Self {
-        let msg = format!("{:?}", err);
-        UpdateNftError::DbError(msg)
-    }
+    fn from(err: T) -> Self { UpdateNftError::DbError(format!("{:?}", err)) }
 }
 
 impl HttpStatusCode for UpdateNftError {
@@ -221,7 +214,8 @@ impl From<SlurpError> for GetInfoFromUriError {
         match e {
             SlurpError::ErrorDeserializing { .. } => GetInfoFromUriError::InvalidResponse(error_str),
             SlurpError::Transport { .. } | SlurpError::Timeout { .. } => GetInfoFromUriError::Transport(error_str),
-            SlurpError::Internal(_) | SlurpError::InvalidRequest(_) => GetInfoFromUriError::Internal(error_str),
+            SlurpError::InvalidRequest(_) => GetInfoFromUriError::InvalidRequest(error_str),
+            SlurpError::Internal(_) => GetInfoFromUriError::Internal(error_str),
         }
     }
 }

@@ -1,10 +1,11 @@
-use super::{MatchBy as SuperMatchBy, TakerAction};
-use crate::mm2::lp_ordermatch::{AlbOrderedOrderbookPair, OrderConfirmationsSettings, H64};
 use common::now_sec;
 use compact_uuid::CompactUuid;
 use mm2_number::{BigRational, MmNumber};
+use mm2_rpc::data::legacy::{MatchBy as SuperMatchBy, OrderConfirmationsSettings, TakerAction};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+use crate::mm2::lp_ordermatch::{AlbOrderedOrderbookPair, H64};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
@@ -108,7 +109,7 @@ mod compact_uuid {
     }
 }
 
-#[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MakerOrderCreated {
     pub uuid: CompactUuid,
     pub base: String,
@@ -236,7 +237,7 @@ impl MakerOrderUpdated {
     pub fn new_conf_settings(&self) -> Option<OrderConfirmationsSettings> {
         match self {
             MakerOrderUpdated::V1(_) => None,
-            MakerOrderUpdated::V2(v2) => v2.conf_settings,
+            MakerOrderUpdated::V2(v2) => v2.conf_settings.clone(),
         }
     }
 
@@ -344,7 +345,7 @@ mod new_protocol_tests {
             new_min_volume: Some(BigRational::from_integer(1.into())),
             timestamp,
             pair_trie_root: H64::default(),
-            conf_settings,
+            conf_settings: conf_settings.clone(),
         });
 
         let expected = MakerOrderUpdatedV1 {

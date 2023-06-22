@@ -2,11 +2,12 @@ use crate::integration_tests_common::*;
 use common::{block_on, log};
 use http::StatusCode;
 use mm2_number::BigDecimal;
+use mm2_rpc::data::legacy::CoinInitResponse;
 use mm2_test_helpers::for_tests::ETH_DEV_NODES;
 use mm2_test_helpers::for_tests::{best_orders_v2, best_orders_v2_by_number, eth_jst_testnet_conf, eth_testnet_conf,
                                   get_passphrase, morty_conf, rick_conf, tbtc_conf, tbtc_segwit_conf, MarketMakerIt,
                                   Mm2TestConf, RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS};
-use mm2_test_helpers::structs::{BestOrdersResponse, EnableElectrumResponse, SetPriceResponse};
+use mm2_test_helpers::structs::{BestOrdersResponse, SetPriceResponse};
 use serde_json::{self as json, json};
 use std::collections::BTreeSet;
 use std::env::{self};
@@ -829,7 +830,7 @@ fn test_best_orders_address_and_confirmations() {
         electrum.1
     );
     log!("enable tBTC: {:?}", electrum);
-    let enable_tbtc_res: EnableElectrumResponse = json::from_str(&electrum.1).unwrap();
+    let enable_tbtc_res: CoinInitResponse = json::from_str(&electrum.1).unwrap();
     let tbtc_segwit_address = enable_tbtc_res.address;
 
     let electrum = block_on(mm_bob.rpc(&json!({
@@ -847,7 +848,7 @@ fn test_best_orders_address_and_confirmations() {
         electrum.1
     );
     log!("enable RICK: {:?}", electrum);
-    let enable_rick_res: EnableElectrumResponse = json::from_str(&electrum.1).unwrap();
+    let enable_rick_res: CoinInitResponse = json::from_str(&electrum.1).unwrap();
     let rick_address = enable_rick_res.address;
 
     // issue sell request on Bob side by setting base/rel price
@@ -912,10 +913,10 @@ fn test_best_orders_address_and_confirmations() {
     assert_eq!(1, best_orders.len());
     assert_eq!(best_orders[0].coin, "RICK");
     assert_eq!(best_orders[0].address, rick_address);
-    assert_eq!(best_orders[0].base_confs, 5);
-    assert!(!best_orders[0].base_nota);
-    assert_eq!(best_orders[0].rel_confs, 10);
-    assert!(best_orders[0].rel_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().base_confs, 5);
+    assert!(!best_orders[0].conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().rel_confs, 10);
+    assert!(best_orders[0].conf_settings.as_ref().unwrap().rel_nota);
 
     let rc = block_on(mm_alice.rpc(&json! ({
         "userpass": mm_alice.userpass,
@@ -931,10 +932,10 @@ fn test_best_orders_address_and_confirmations() {
     assert_eq!(1, best_orders.len());
     assert_eq!(best_orders[0].coin, "tBTC");
     assert_eq!(best_orders[0].address, tbtc_segwit_address);
-    assert_eq!(best_orders[0].base_confs, 10);
-    assert!(best_orders[0].base_nota);
-    assert_eq!(best_orders[0].rel_confs, 5);
-    assert!(!best_orders[0].rel_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().base_confs, 10);
+    assert!(best_orders[0].conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().rel_confs, 5);
+    assert!(!best_orders[0].conf_settings.as_ref().unwrap().rel_nota);
 
     // checking buy and sell best_orders against ("RICK", "tBTC", "0.7", "0.0002", Some("0.00015"))
     let rc = block_on(mm_alice.rpc(&json! ({
@@ -951,10 +952,10 @@ fn test_best_orders_address_and_confirmations() {
     assert_eq!(1, best_orders.len());
     assert_eq!(best_orders[0].coin, "tBTC");
     assert_eq!(best_orders[0].address, tbtc_segwit_address);
-    assert_eq!(best_orders[0].base_confs, 10);
-    assert!(best_orders[0].base_nota);
-    assert_eq!(best_orders[0].rel_confs, 5);
-    assert!(!best_orders[0].rel_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().base_confs, 10);
+    assert!(best_orders[0].conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().rel_confs, 5);
+    assert!(!best_orders[0].conf_settings.as_ref().unwrap().rel_nota);
 
     let rc = block_on(mm_alice.rpc(&json! ({
         "userpass": mm_alice.userpass,
@@ -970,10 +971,10 @@ fn test_best_orders_address_and_confirmations() {
     assert_eq!(1, best_orders.len());
     assert_eq!(best_orders[0].coin, "RICK");
     assert_eq!(best_orders[0].address, rick_address);
-    assert_eq!(best_orders[0].base_confs, 5);
-    assert!(!best_orders[0].base_nota);
-    assert_eq!(best_orders[0].rel_confs, 10);
-    assert!(best_orders[0].rel_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().base_confs, 5);
+    assert!(!best_orders[0].conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(best_orders[0].conf_settings.as_ref().unwrap().rel_confs, 10);
+    assert!(best_orders[0].conf_settings.as_ref().unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();

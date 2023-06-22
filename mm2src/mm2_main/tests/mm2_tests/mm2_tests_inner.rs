@@ -8,6 +8,7 @@ use http::{HeaderMap, StatusCode};
 use mm2_main::mm2::lp_ordermatch::MIN_ORDER_KEEP_ALIVE_INTERVAL;
 use mm2_metrics::{MetricType, MetricsJson};
 use mm2_number::{BigDecimal, BigRational, Fraction, MmNumber};
+use mm2_rpc::data::legacy::{CoinInitResponse, MmVersionResponse, OrderbookResponse};
 use mm2_test_helpers::electrums::*;
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "zhtlc-native-tests")))]
 use mm2_test_helpers::for_tests::check_stats_swap_status;
@@ -81,7 +82,7 @@ fn test_rpc() {
     .unwrap();
     assert_eq!(version.0, StatusCode::OK);
     assert_eq!((version.2)[ACCESS_CONTROL_ALLOW_ORIGIN], "http://localhost:4000");
-    let _version: MmVersion = json::from_str(&version.1).unwrap();
+    let _version: MmVersionResponse = json::from_str(&version.1).unwrap();
 
     let help = block_on(mm.rpc(&json! ({
         "userpass": mm.userpass,
@@ -898,7 +899,7 @@ fn withdraw_and_send(
     mm: &MarketMakerIt,
     coin: &str,
     to: &str,
-    enable_res: &HashMap<&'static str, EnableElectrumResponse>,
+    enable_res: &HashMap<&'static str, CoinInitResponse>,
     expected_bal_change: &str,
     amount: f64,
 ) {
@@ -1166,8 +1167,7 @@ fn test_tbtc_withdraw_to_cashaddresses_should_fail() {
     );
     log!("enable_coins (alice): {:?}", electrum);
 
-    let electrum_response: EnableElectrumResponse =
-        json::from_str(&electrum.1).expect("Expected 'EnableElectrumResponse'");
+    let electrum_response: CoinInitResponse = json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
     let mut enable_res = HashMap::new();
     enable_res.insert("tBTC", electrum_response);
 
@@ -3842,8 +3842,7 @@ fn test_validateaddress_segwit() {
     );
     log!("enable_coins (alice): {:?}", electrum);
 
-    let electrum_response: EnableElectrumResponse =
-        json::from_str(&electrum.1).expect("Expected 'EnableElectrumResponse'");
+    let electrum_response: CoinInitResponse = json::from_str(&electrum.1).expect("Expected 'CoinInitResponse'");
     let mut enable_res = HashMap::new();
     enable_res.insert("tBTC", electrum_response);
 
@@ -4901,7 +4900,7 @@ fn test_my_orders_after_matched() {
 fn test_sell_conf_settings() {
     let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
 
-    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), 
+    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address": ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
 
     let mm_bob = MarketMakerIt::start(
@@ -4971,7 +4970,7 @@ fn test_sell_conf_settings() {
 fn test_set_price_conf_settings() {
     let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
 
-    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), 
+    let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address": ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
 
     let mm_bob = MarketMakerIt::start(
@@ -6379,20 +6378,32 @@ fn test_conf_settings_in_orderbook() {
         1,
         "Alice RICK/MORTY orderbook must have exactly 1 ask"
     );
-    assert_eq!(alice_orderbook.asks[0].base_confs, 10);
-    assert!(alice_orderbook.asks[0].base_nota);
-    assert_eq!(alice_orderbook.asks[0].rel_confs, 5);
-    assert!(!alice_orderbook.asks[0].rel_nota);
+    assert_eq!(
+        alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().base_confs,
+        10
+    );
+    assert!(alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(
+        alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().rel_confs,
+        5
+    );
+    assert!(!alice_orderbook.asks[0].entry.conf_settings.as_ref().unwrap().rel_nota);
 
     assert_eq!(
         alice_orderbook.bids.len(),
         1,
         "Alice RICK/MORTY orderbook must have exactly 1 bid"
     );
-    assert_eq!(alice_orderbook.bids[0].base_confs, 10);
-    assert!(alice_orderbook.bids[0].base_nota);
-    assert_eq!(alice_orderbook.bids[0].rel_confs, 5);
-    assert!(!alice_orderbook.bids[0].rel_nota);
+    assert_eq!(
+        alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().base_confs,
+        10
+    );
+    assert!(alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(
+        alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().rel_confs,
+        5
+    );
+    assert!(!alice_orderbook.bids[0].entry.conf_settings.as_ref().unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();
@@ -6518,12 +6529,18 @@ fn alice_can_see_confs_in_orderbook_after_sync() {
     let bob_order_in_orderbook = alice_orderbook
         .asks
         .iter()
-        .find(|entry| entry.pubkey == bob_pubkey)
+        .find(|entry| entry.entry.pubkey == bob_pubkey)
         .unwrap();
-    assert_eq!(bob_order_in_orderbook.base_confs, 10);
-    assert!(bob_order_in_orderbook.base_nota);
-    assert_eq!(bob_order_in_orderbook.rel_confs, 5);
-    assert!(!bob_order_in_orderbook.rel_nota);
+    assert_eq!(
+        bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().base_confs,
+        10
+    );
+    assert!(bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().base_nota);
+    assert_eq!(
+        bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().rel_confs,
+        5
+    );
+    assert!(!bob_order_in_orderbook.entry.conf_settings.as_ref().unwrap().rel_nota);
 
     block_on(mm_bob.stop()).unwrap();
     block_on(mm_alice.stop()).unwrap();

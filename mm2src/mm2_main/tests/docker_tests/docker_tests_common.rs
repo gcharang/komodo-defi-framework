@@ -1,10 +1,12 @@
 pub use common::{block_on, now_ms, now_sec, wait_until_ms, wait_until_sec};
 pub use mm2_number::MmNumber;
+use mm2_rpc::data::legacy::BalanceResponse;
 pub use mm2_test_helpers::for_tests::{check_my_swap_status, check_recent_swaps, check_stats_swap_status,
                                       enable_native, enable_native_bch, eth_jst_testnet_conf, eth_sepolia_conf,
                                       eth_testnet_conf, jst_sepolia_conf, mm_dump, MarketMakerIt, ETH_DEV_NODES,
                                       ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT, MAKER_ERROR_EVENTS,
                                       MAKER_SUCCESS_EVENTS, TAKER_ERROR_EVENTS, TAKER_SUCCESS_EVENTS};
+
 pub use secp256k1::{PublicKey, SecretKey};
 pub use std::env;
 pub use std::thread;
@@ -31,7 +33,7 @@ use http::StatusCode;
 use keys::{Address, AddressHashEnum, KeyPair, NetworkPrefix as CashAddrPrefix};
 use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
 use mm2_number::BigDecimal;
-use mm2_test_helpers::structs::{MyBalanceResponse, TransactionDetails};
+use mm2_test_helpers::structs::TransactionDetails;
 use primitives::hash::{H160, H256};
 use script::Builder;
 use secp256k1::Secp256k1;
@@ -971,7 +973,7 @@ pub fn _solana_supplied_node() -> MarketMakerIt {
     .unwrap()
 }
 
-pub fn get_balance(mm: &MarketMakerIt, coin: &str) -> MyBalanceResponse {
+pub fn get_balance(mm: &MarketMakerIt, coin: &str) -> BalanceResponse {
     let rc = block_on(mm.rpc(&json!({
         "userpass": mm.userpass,
         "method": "my_balance",
