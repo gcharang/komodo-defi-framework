@@ -18,6 +18,8 @@ pub struct NftListReq {
     #[serde(default = "ten")]
     pub(crate) limit: usize,
     pub(crate) page_number: Option<NonZeroUsize>,
+    #[serde(default)]
+    pub(crate) protect_from_spam: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +27,8 @@ pub struct NftMetadataReq {
     pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) chain: Chain,
+    #[serde(default)]
+    pub(crate) protect_from_spam: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,8 +145,6 @@ pub(crate) struct UriMetaFromStr {
     pub(crate) animation_url: Option<String>,
     pub(crate) external_url: Option<String>,
     pub(crate) image_details: Option<Json>,
-    pub(crate) dna: Option<String>,
-    pub(crate) compiler: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -154,8 +156,6 @@ pub(crate) struct UriMeta {
     pub(crate) animation_url: Option<String>,
     pub(crate) external_url: Option<String>,
     pub(crate) image_details: Option<Json>,
-    pub(crate) dna: Option<String>,
-    pub(crate) compiler: Option<String>,
 }
 
 impl UriMeta {
@@ -167,8 +167,6 @@ impl UriMeta {
         self.animation_url = self.animation_url.clone().or(other.animation_url);
         self.external_url = self.external_url.clone().or(other.external_url);
         self.image_details = self.image_details.clone().or(other.image_details);
-        self.dna = self.dna.clone().or(other.dna);
-        self.compiler = self.compiler.clone().or(other.compiler);
     }
 }
 
@@ -302,6 +300,7 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
@@ -311,6 +310,8 @@ pub struct NftTransfersReq {
     #[serde(default = "ten")]
     pub(crate) limit: usize,
     pub(crate) page_number: Option<NonZeroUsize>,
+    #[serde(default)]
+    pub(crate) protect_from_spam: bool,
 }
 
 #[derive(Debug, Display)]

@@ -43,8 +43,6 @@ fn nft() -> Nft {
             animation_url: None,
             external_url: None,
             image_details: None,
-            dna: None,
-            compiler: None,
         },
     }
 }
@@ -104,8 +102,6 @@ fn nft_list() -> Vec<Nft> {
             animation_url: None,
             external_url: None,
             image_details: None,
-            dna: None,
-            compiler: None,
         },
     };
 
@@ -138,8 +134,6 @@ fn nft_list() -> Vec<Nft> {
             animation_url: None,
             external_url: None,
             image_details: None,
-            dna: None,
-            compiler: None,
         },
     };
 
@@ -172,8 +166,6 @@ fn nft_list() -> Vec<Nft> {
             animation_url: None,
             external_url: None,
             image_details: None,
-            dna: None,
-            compiler: None,
         },
     };
     vec![nft, nft1, nft2]

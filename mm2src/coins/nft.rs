@@ -44,9 +44,15 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
             NftListStorageOps::init(&storage, chain).await?;
         }
     }
-    let nfts = storage
+    let mut nfts = storage
         .get_nft_list(req.chains, req.max, req.limit, req.page_number)
         .await?;
+    if req.protect_from_spam {
+        for nft in &mut nfts.nfts {
+            protect_from_nft_spam(nft)?;
+        }
+    }
+    drop_mutability!(nfts);
     Ok(nfts)
 }
 
@@ -56,13 +62,17 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
         NftListStorageOps::init(&storage, &req.chain).await?;
     }
-    let nft = storage
+    let mut nft = storage
         .get_nft(&req.chain, format!("{:#02x}", req.token_address), req.token_id.clone())
         .await?
         .ok_or_else(|| GetNftInfoError::TokenNotFoundInWallet {
             token_address: format!("{:#02x}", req.token_address),
             token_id: req.token_id.to_string(),
         })?;
+    if req.protect_from_spam {
+        protect_from_nft_spam(&mut nft)?;
+    }
+    drop_mutability!(nft);
     Ok(nft)
 }
 
@@ -74,9 +84,14 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
             NftTxHistoryStorageOps::init(&storage, chain).await?;
         }
     }
-    let transfer_history_list = storage
+    let mut transfer_history_list = storage
         .get_tx_history(req.chains, req.max, req.limit, req.page_number, req.filters)
         .await?;
+    if req.protect_from_spam {
+        for tx in &mut transfer_history_list.transfer_history {
+            protect_from_history_spam(tx);
+        }
+    }
     Ok(transfer_history_list)
 }
 
@@ -154,6 +169,7 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         token_address: req.token_address,
         token_id: req.token_id,
         chain: req.chain,
+        protect_from_spam: false,
     };
     let mut nft_db = get_nft_metadata(ctx, req).await?;
     let token_uri = check_moralis_ipfs_bafy(moralis_meta.token_uri.as_deref());
@@ -787,4 +803,73 @@ where
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     }
     Ok(())
+}
+
+fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
+    let mut is_spam = false;
+    if let Some(name) = &nft.collection_name {
+        if name.contains("http://") || name.contains("https://") {
+            nft.collection_name = Some("URL redacted for user protection".to_string());
+            is_spam = true;
+        }
+    }
+    if let Some(symbol) = &nft.symbol {
+        if symbol.contains("http://") || symbol.contains("https://") {
+            nft.symbol = Some("URL redacted for user protection".to_string());
+            is_spam = true;
+        }
+    }
+    if let Some(token_name) = &nft.uri_meta.token_name {
+        if token_name.contains("http://") || token_name.contains("https://") {
+            nft.uri_meta.token_name = Some("URL redacted for user protection".to_string());
+            is_spam = true;
+        }
+    }
+
+    if let Some(metadata_str) = &nft.metadata {
+        if let Ok(mut metadata) = serde_json::from_str::<serde_json::Map<String, Json>>(metadata_str) {
+            if let Some(name) = metadata.get("name").and_then(|v| v.as_str()) {
+                if name.contains("http://") || name.contains("https://") {
+                    metadata.insert(
+                        "name".to_string(),
+                        serde_json::Value::String("URL redacted for user protection".to_string()),
+                    );
+                    is_spam = true;
+                }
+            }
+            if let Some(symbol) = metadata.get("symbol").and_then(|v| v.as_str()) {
+                if symbol.contains("http://") || symbol.contains("https://") {
+                    metadata.insert(
+                        "symbol".to_string(),
+                        serde_json::Value::String("URL redacted for user protection".to_string()),
+                    );
+                    is_spam = true;
+                }
+            }
+            nft.metadata = Some(serde_json::to_string(&metadata)?);
+        }
+    }
+    if is_spam {
+        nft.possible_spam = Some(true);
+    }
+    Ok(())
+}
+
+fn protect_from_history_spam(tx: &mut NftTransferHistory) {
+    let mut is_spam = false;
+    if let Some(name) = &tx.collection_name {
+        if name.contains("http://") || name.contains("https://") {
+            tx.collection_name = Some("URL redacted for user protection".to_string());
+            is_spam = true;
+        }
+    }
+    if let Some(token_name) = &tx.token_name {
+        if token_name.contains("http://") || token_name.contains("https://") {
+            tx.token_name = Some("URL redacted for user protection".to_string());
+            is_spam = true;
+        }
+    }
+    if is_spam {
+        tx.possible_spam = Some(true);
+    }
 }
