@@ -9,11 +9,13 @@ pub(super) struct SmartFractionFmt {
 }
 
 #[derive(Debug)]
+#[cfg(test)]
 pub(super) enum SmartFractionTrimErr {
     WrongParams,
 }
 
 impl SmartFractionFmt {
+    #[cfg(test)]
     pub(super) fn new(precision_min: usize, precision_max: usize, num: f64) -> Result<Self, SmartFractionTrimErr> {
         if precision_min == 0 || precision_min > precision_max {
             return Err(SmartFractionTrimErr::WrongParams);

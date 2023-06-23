@@ -1,6 +1,9 @@
 #[path = "response_handler/orderbook.rs"] mod orderbook;
 #[path = "response_handler/smart_fraction_fmt.rs"]
 mod smart_fraction_fmt;
+#[path = "response_handler/test_formatters.rs"]
+#[cfg(test)]
+mod test_formatters;
 
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
