@@ -366,7 +366,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                     table.add_row(Self::$header_fn());
                     table.add_row(Row::new(vec![TableCell::new("")]));
                     table.rows.extend($rows.drain(..));
-                    writeln_safe_io!(writer, concat!($legend, "\n{}"), table.render())
+                    write_safe_io!(writer, concat!($legend, "\n{}"), table.render().replace('\0', ""))
                 }
             };
         }

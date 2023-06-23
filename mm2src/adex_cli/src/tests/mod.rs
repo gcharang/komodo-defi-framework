@@ -193,7 +193,7 @@ async fn test_order_status() {
 #[tokio::test]
 async fn test_my_orders() {
     tokio::spawn(fake_mm2_server(7793, include_bytes!("http_mock_data/my_orders.http")));
-    tokio::time::sleep(Duration::from_micros(100)).await;
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -210,7 +210,7 @@ async fn test_my_orders() {
 #[tokio::test]
 async fn test_best_orders() {
     tokio::spawn(fake_mm2_server(7794, include_bytes!("http_mock_data/best_orders.http")));
-    tokio::time::sleep(Duration::from_micros(100)).await;
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -230,7 +230,7 @@ async fn test_orderbook_depth() {
         7795,
         include_bytes!("http_mock_data/orderbook_depth.http"),
     ));
-    tokio::time::sleep(Duration::from_micros(100)).await;
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -242,6 +242,66 @@ async fn test_orderbook_depth() {
         .unwrap();
     let result = String::from_utf8(buffer).unwrap();
     assert_eq!(ORDERBOOK_DEPTH_OUTPUT, result);
+}
+
+#[tokio::test]
+async fn test_history_common() {
+    tokio::spawn(fake_mm2_server(
+        7796,
+        include_bytes!("http_mock_data/history-common.http"),
+    ));
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7796");
+    let args = vec!["adex-cli", "history", "--common"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(HISTORY_COMMON_OUTPUT, result);
+}
+
+#[tokio::test]
+async fn test_history_takers_detailed() {
+    tokio::spawn(fake_mm2_server(
+        7797,
+        include_bytes!("http_mock_data/history-takers-detailed.http"),
+    ));
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7797");
+    let args = vec!["adex-cli", "history", "--takers-detailed"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(HISTORY_TAKERS_DETAILED_OUTPUT, result);
+}
+
+#[tokio::test]
+async fn test_history_makers_detailed() {
+    tokio::spawn(fake_mm2_server(
+        7798,
+        include_bytes!("http_mock_data/history-takers-detailed.http"),
+    ));
+    tokio::time::sleep(Duration::from_micros(100)).await;
+    let mut buffer: Vec<u8> = vec![];
+    let response_handler = ResponseHandlerImpl {
+        writer: (&mut buffer as &mut dyn Write).into(),
+    };
+    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7798");
+    let args = vec!["adex-cli", "history", "--makers-detailed"];
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+    let result = String::from_utf8(buffer).unwrap();
+    assert_eq!(HISTORY_MAKERS_DETAILED_OUTPUT, result);
 }
 
 async fn fake_mm2_server(port: u16, predefined_response: &'static [u8]) {
@@ -401,4 +461,142 @@ const ORDERBOOK_DEPTH_OUTPUT: &str = "             Bids Asks
     BTC/KMD: 5    1    
     BTC/ETH: 0    1    
  RICK/MORTY: 5    5    
+";
+
+const HISTORY_COMMON_OUTPUT: &str = "\
+Orders history:
+┌────────────────────────────────────┬─────┬──────┬────┬─────┬───────┬───────┬─────────┬─────────────────┬─────────────────┬─────────┐
+│uuid                                │Type │Action│Base│Rel  │Volume │Price  │Status   │Created          │Updated          │Was taker│
+│                                    │     │      │    │     │       │       │         │                 │                 │         │
+│010a224e-a946-4726-bf6d-e521701053a2│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:41:33│23-06-07 10:37:47│false    │
+│ffc41a51-e110-43a0-bb60-203feceba50f│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:41:17│23-06-06 15:41:33│false    │
+│869cd8d1-914d-4756-a863-6f73e004c31c│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:38:36│23-06-06 15:41:33│false    │
+│3af195fe-f202-428d-8849-6c0b7754e894│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:38:30│23-06-06 15:38:36│false    │
+│73271a03-aab3-4789-83d9-9e9c3c808a96│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:38:04│23-06-06 15:38:30│false    │
+│e3be3027-333a-4867-928d-61e8442db466│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:37:49│23-06-06 15:38:04│false    │
+│a7a04dc8-c361-4cae-80e9-b0e883aa3ae1│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:36:49│23-06-06 15:37:49│false    │
+│ecc708e0-df8f-4d3f-95c7-73927ec92acc│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:35:47│23-06-06 15:36:48│false    │
+│e1797608-5b7d-45c4-80ae-b66da2e72209│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:35:16│23-06-06 15:35:47│false    │
+│f164e567-9e41-4faf-8754-3f87edd5b6d7│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:32:32│23-06-06 15:35:16│false    │
+│707c8428-779c-4e78-bcbd-97a7e403c14a│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:31:54│23-06-06 15:32:32│false    │
+│b0992fe8-c019-4c86-9d07-03055eaa86ab│Maker│Sell  │RICK│MORTY│2.00   │1.50   │Cancelled│23-06-06 15:23:34│23-06-06 15:31:54│false    │
+│85d6fc7c-5614-492a-9e85-4c19fab65949│Maker│Sell  │RICK│MORTY│2.00   │1.50   │Cancelled│23-06-06 15:23:07│23-06-06 15:23:20│false    │
+│5968ffcf-5b25-40c8-8bd7-c7cf9d3154f9│Maker│Sell  │RICK│MORTY│8.16   │1.50   │Cancelled│23-06-06 15:22:51│23-06-06 15:23:07│false    │
+│eab52e14-1460-4ece-943d-7a2950a22600│Maker│Sell  │RICK│MORTY│2.00   │1.50   │Cancelled│23-06-06 15:21:31│23-06-06 15:21:59│false    │
+│4318bf91-8416-417d-ac30-7745f30df687│Maker│Sell  │RICK│MORTY│2.00   │1000.00│Cancelled│23-06-06 15:21:17│23-06-06 15:21:31│false    │
+│a2f6930d-b97d-4c8c-9330-54912fd3b0b9│Maker│Sell  │RICK│MORTY│8.16   │1000.00│Cancelled│23-06-06 15:20:55│23-06-06 15:21:10│false    │
+│d68a81fd-7a90-4785-ad83-d3b06e362f6f│Maker│Sell  │RICK│MORTY│0.00100│1000.00│Cancelled│23-06-06 15:18:05│23-06-06 15:20:55│false    │
+│4c0ca34a-487c-43ef-b1f5-13eb4e1a8ece│Maker│Sell  │RICK│MORTY│0.00100│1.10   │Cancelled│23-06-06 15:17:45│23-06-06 15:18:05│false    │
+│cba44f7f-5d52-492e-a3f0-44ee006296da│Maker│Sell  │RICK│MORTY│1.50   │1.10   │Cancelled│23-06-06 15:13:57│23-06-06 15:17:45│false    │
+│02db133a-5e69-4056-9855-98d961927fdd│Maker│Sell  │RICK│MORTY│1.50   │1.10   │Cancelled│23-06-06 15:09:17│23-06-06 15:13:57│false    │
+│6476641f-9014-496c-a608-1bdf81cfbf2e│Maker│Sell  │RICK│MORTY│8.16   │1.10   │Cancelled│23-06-06 15:08:58│23-06-06 15:09:17│false    │
+│5a253d33-7c7c-40f5-977f-7805013e63b4│Maker│Sell  │RICK│MORTY│8.16   │1.10   │Cancelled│23-06-06 15:06:17│23-06-06 15:06:28│false    │
+│064bf73f-2a2a-4ca0-b83f-344ec16c5f29│Maker│Sell  │RICK│MORTY│8.16   │1.20   │Cancelled│23-06-06 15:04:52│23-06-06 15:06:17│false    │
+│475309b5-d6e1-40b2-a2d4-5307aa999d74│Maker│Sell  │RICK│MORTY│1.33   │1.20   │Cancelled│23-06-06 15:04:33│23-06-06 15:04:52│false    │
+│916bbc09-6b57-4ded-93b0-5a8461be0e99│Maker│Sell  │RICK│MORTY│0.50   │1.20   │Cancelled│23-06-06 14:53:06│23-06-06 15:03:07│false    │
+│fa256795-9ff3-4983-85d6-8a3fe4fb6f3a│Maker│Sell  │RICK│MORTY│8.16   │1.20   │Cancelled│23-06-06 14:52:20│23-06-06 14:52:59│false    │
+│23d2c04b-6fa5-4e76-bde9-4a8fe0b7a144│Maker│Sell  │RICK│MORTY│8.16   │1.10   │Cancelled│23-06-06 14:51:40│23-06-06 14:52:20│false    │
+│4e365431-4db0-4365-a67d-1e39820090a2│Taker│Buy   │RICK│MORTY│0.05   │1.10   │TimedOut │23-05-05 14:35:31│23-05-05 14:36:02│false    │
+│601bfc00-9033-45d8-86b2-3dbd54881212│Taker│Buy   │RICK│MORTY│0.05   │1.10   │Fulfilled│23-05-05 14:34:55│23-05-05 14:34:58│false    │
+└────────────────────────────────────┴─────┴──────┴────┴─────┴───────┴───────┴─────────┴─────────────────┴─────────────────┴─────────┘
+";
+
+const HISTORY_TAKERS_DETAILED_OUTPUT: &str = "\
+Taker orders history detailed:
+┌──────────────────────────┬──────────────────────────────────────────────────────────────────┬──────────────────────────┬──────────────────────────┬──────────────────────────┬───────────────────────────┐
+│ action                   │ uuid, sender, dest                                               │ type,created_at          │ match_by                 │ base,rel                 │ cancellable               │
+│ base(vol),rel(vol)       │                                                                  │ confirmation             │                          │ orderbook ticker         │                           │
+│                          │                                                                  │                          │                          │                          │                           │
+│ Buy                      │ 4e365431-4db0-4365-a67d-1e39820090a2                             │ GoodTillCancelled        │ Any                      │ none                     │ false                     │
+│ RICK(0.05),MORTY(0.05)   │ 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d │ 23-05-05 14:35:31        │                          │ none                     │                           │
+│                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
+│ matches                                                                                                                                                                                                  │
+│                       uuid: efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                                                         │
+│        reserved.(base,rel): RICK(0.05), MORTY(0.0499999995)                                                                                                                                              │
+│    reserved.(taker, maker): 4e365431-4db0-4365-a67d-1e39820090a2,efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                    │
+│    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
+│     reserved.conf_settings: 0,false:0,false                                                                                                                                                              │
+│               last_updated: 1683297334735                                                                                                                                                                │
+│      connect.(taker,maker): 4e365431-4db0-4365-a67d-1e39820090a2,efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                    │
+│     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5                                            │
+│                                                                                                                                                                                                          │
+│ Buy                      │ 601bfc00-9033-45d8-86b2-3dbd54881212                             │ GoodTillCancelled        │ Any                      │ none                     │ false                     │
+│ RICK(0.05),MORTY(0.05)   │ 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d │ 23-05-05 14:34:55        │                          │ none                     │                           │
+│                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
+│ matches                                                                                                                                                                                                  │
+│                       uuid: e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                                                         │
+│        reserved.(base,rel): RICK(0.05), MORTY(0.0499999995)                                                                                                                                              │
+│    reserved.(taker, maker): 601bfc00-9033-45d8-86b2-3dbd54881212,e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                    │
+│    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
+│     reserved.conf_settings: 0,false:0,false                                                                                                                                                              │
+│               last_updated: 1683297298668                                                                                                                                                                │
+│      connect.(taker,maker): 601bfc00-9033-45d8-86b2-3dbd54881212,e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                    │
+│     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5                                            │
+│                                                                                                                                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+";
+
+const HISTORY_MAKERS_DETAILED_OUTPUT: &str = "\
+Maker orders history detailed:
+┌────────────┬─────────┬──────────────────────────────────────┬────────────────────┬───────────────┬───────┬─────────────────┬─────────────────┬──────────────────┐
+│ base,rel   │ price   │ uuid                                 │ created at,        │ min base vol, │ swaps │ conf_settings   │ history changes │ orderbook ticker │
+│            │         │                                      │ updated at         │ max base vol  │       │                 │                 │ base, rel        │
+│            │         │                                      │                    │               │       │                 │                 │                  │
+│ RICK,MORTY │ 1.23    │ 010a224e-a946-4726-bf6d-e521701053a2 │ 23-06-06 15:41:33, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:41:33  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ ffc41a51-e110-43a0-bb60-203feceba50f │ 23-06-06 15:41:17, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:41:17  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ 869cd8d1-914d-4756-a863-6f73e004c31c │ 23-06-06 15:38:36, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:38:36  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ 3af195fe-f202-428d-8849-6c0b7754e894 │ 23-06-06 15:38:30, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:38:30  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ 73271a03-aab3-4789-83d9-9e9c3c808a96 │ 23-06-06 15:38:04, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:38:04  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ e3be3027-333a-4867-928d-61e8442db466 │ 23-06-06 15:37:49, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:37:49  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ a7a04dc8-c361-4cae-80e9-b0e883aa3ae1 │ 23-06-06 15:36:49, │ 1.00,         │ empty │ 3,true:1,false  │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:36:49  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ ecc708e0-df8f-4d3f-95c7-73927ec92acc │ 23-06-06 15:35:47, │ 1.00,         │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:35:47  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ e1797608-5b7d-45c4-80ae-b66da2e72209 │ 23-06-06 15:35:16, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:35:16  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ f164e567-9e41-4faf-8754-3f87edd5b6d7 │ 23-06-06 15:32:32, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:32:32  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.23    │ 707c8428-779c-4e78-bcbd-97a7e403c14a │ 23-06-06 15:31:54, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:31:54  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.50    │ b0992fe8-c019-4c86-9d07-03055eaa86ab │ 23-06-06 15:23:34, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:23:34  │ 2.00          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.50    │ 85d6fc7c-5614-492a-9e85-4c19fab65949 │ 23-06-06 15:23:07, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:23:07  │ 2.00          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.50    │ 5968ffcf-5b25-40c8-8bd7-c7cf9d3154f9 │ 23-06-06 15:22:51, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:22:51  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.50    │ eab52e14-1460-4ece-943d-7a2950a22600 │ 23-06-06 15:21:31, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:21:31  │ 2.00          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1000.00 │ 4318bf91-8416-417d-ac30-7745f30df687 │ 23-06-06 15:21:17, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:21:17  │ 2.00          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1000.00 │ a2f6930d-b97d-4c8c-9330-54912fd3b0b9 │ 23-06-06 15:20:55, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:20:55  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1000.00 │ d68a81fd-7a90-4785-ad83-d3b06e362f6f │ 23-06-06 15:18:05, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:18:05  │ 0.00100       │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.10    │ 4c0ca34a-487c-43ef-b1f5-13eb4e1a8ece │ 23-06-06 15:17:45, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:17:45  │ 0.00100       │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.10    │ cba44f7f-5d52-492e-a3f0-44ee006296da │ 23-06-06 15:13:57, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:13:57  │ 1.50          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.10    │ 02db133a-5e69-4056-9855-98d961927fdd │ 23-06-06 15:09:17, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:09:17  │ 1.50          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.10    │ 6476641f-9014-496c-a608-1bdf81cfbf2e │ 23-06-06 15:08:58, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:08:58  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.10    │ 5a253d33-7c7c-40f5-977f-7805013e63b4 │ 23-06-06 15:06:17, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:06:17  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.20    │ 064bf73f-2a2a-4ca0-b83f-344ec16c5f29 │ 23-06-06 15:04:52, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:04:52  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.20    │ 475309b5-d6e1-40b2-a2d4-5307aa999d74 │ 23-06-06 15:04:33, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 15:04:33  │ 1.33          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.20    │ 916bbc09-6b57-4ded-93b0-5a8461be0e99 │ 23-06-06 14:53:06, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 14:53:06  │ 0.50          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.20    │ fa256795-9ff3-4983-85d6-8a3fe4fb6f3a │ 23-06-06 14:52:20, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 14:52:20  │ 8.16          │       │                 │                 │ none             │
+│ RICK,MORTY │ 1.10    │ 23d2c04b-6fa5-4e76-bde9-4a8fe0b7a144 │ 23-06-06 14:51:40, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
+│            │         │                                      │ 23-06-06 14:51:40  │ 8.16          │       │                 │                 │ none             │
+└────────────┴─────────┴──────────────────────────────────────┴────────────────────┴───────────────┴───────┴─────────────────┴─────────────────┴──────────────────┘
 ";
