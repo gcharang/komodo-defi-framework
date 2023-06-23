@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use uuid::Uuid;
 
-use super::super::ResponseHandlerImpl;
+use super::ResponseHandlerImpl;
 
 #[test]
 fn test_print_maker_orders_with_matches() {

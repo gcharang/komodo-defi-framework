@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
 use super::{format_confirmation_settings,
-            formatters::smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt},
+            smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt},
             OrderbookConfig};
 
 pub(super) fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {

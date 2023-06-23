@@ -1,14 +1,11 @@
-#[path = "response_handler/formatters/mod.rs"] mod formatters;
 #[path = "response_handler/orderbook.rs"] mod orderbook;
+#[path = "response_handler/smart_fraction_fmt.rs"]
+mod smart_fraction_fmt;
 
-use anyhow::{anyhow, Result};
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
-use formatters::smart_fraction_fmt::SmartFractionFmt;
 use itertools::Itertools;
-use itertools::Itertools;
-use log::{error, info};
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, FilteringOrder,
@@ -17,17 +14,12 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
                             MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusResponse,
                             OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status,
                             TakerMatchForRpc, TakerOrderForRpc, UuidParseError};
-use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, GetEnabledResponse, Mm2RpcResult, MmVersionResponse,
-                            OrderbookResponse, SellBuyResponse, Status};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 use serde_json::Value as Json;
-use serde_json::Value as Json;
-use std::cell::RefCell;
+use smart_fraction_fmt::SmartFractionFmt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fmt::Debug;
-use std::io::Write;
 use std::io::Write;
 use std::ops::DerefMut;
 use std::string::ToString;
@@ -39,8 +31,6 @@ use uuid::Uuid;
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
 use crate::error_anyhow;
-
-pub(crate) use formatters::smart_fraction_fmt::SmartFractPrecision;
 
 const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
@@ -153,7 +143,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
             writeln_safe_io!(
                 writer,
                 "{}",
-                orderbook::AskBidRow::new("", "No bids found", "", "", "", "", "", "", "", &otderbook_config)
+                orderbook::AskBidRow::new("", "No bids found", "", "", "", "", "", "", "", &orderbook_config)
             );
         } else {
             orderbook
@@ -161,7 +151,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                 .iter()
                 .sorted_by(orderbook::cmp_bids)
                 .take(orderbook_config.bids_limit.unwrap_or(usize::MAX))
-                .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &otderbook_config))
+                .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &orderbook_config))
                 .for_each(|row: orderbook::AskBidRow| writeln_safe_io!(writer, "{}", row));
         }
         Ok(())
