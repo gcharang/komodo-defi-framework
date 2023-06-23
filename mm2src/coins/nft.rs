@@ -825,7 +825,15 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
             is_spam = true;
         }
     }
+    let meta_spam = check_nft_metadata_for_spam(nft)?;
+    if is_spam || meta_spam {
+        nft.possible_spam = Some(true);
+    }
+    Ok(())
+}
 
+fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Error> {
+    let mut is_spam = false;
     if let Some(metadata_str) = &nft.metadata {
         if let Ok(mut metadata) = serde_json::from_str::<serde_json::Map<String, Json>>(metadata_str) {
             if let Some(name) = metadata.get("name").and_then(|v| v.as_str()) {
@@ -834,6 +842,7 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
                         "name".to_string(),
                         serde_json::Value::String("URL redacted for user protection".to_string()),
                     );
+                    nft.metadata = Some(serde_json::to_string(&metadata)?);
                     is_spam = true;
                 }
             }
@@ -843,16 +852,13 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
                         "symbol".to_string(),
                         serde_json::Value::String("URL redacted for user protection".to_string()),
                     );
+                    nft.metadata = Some(serde_json::to_string(&metadata)?);
                     is_spam = true;
                 }
             }
-            nft.metadata = Some(serde_json::to_string(&metadata)?);
         }
     }
-    if is_spam {
-        nft.possible_spam = Some(true);
-    }
-    Ok(())
+    Ok(is_spam)
 }
 
 fn protect_from_history_spam(tx: &mut NftTransferHistory) {
