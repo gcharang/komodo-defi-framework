@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-pub type SmartFractPrecision = (usize, usize);
+pub(crate) type SmartFractPrecision = (usize, usize);
 
 pub(in super::super) struct SmartFractionFmt {
     precision_min: i32,

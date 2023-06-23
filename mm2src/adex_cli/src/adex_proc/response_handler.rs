@@ -5,6 +5,8 @@ mod smart_fraction_fmt;
 #[cfg(test)]
 mod test_formatters;
 
+pub(crate) use smart_fraction_fmt::SmartFractPrecision;
+
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
@@ -33,7 +35,10 @@ use uuid::Uuid;
 
 use super::OrderbookConfig;
 use crate::adex_config::AdexConfig;
-use crate::error_anyhow;
+use crate::cli_args::OrdersHistorySettings;
+use crate::logging::error_anyhow;
+use macros::{write_base_rel, write_confirmation_settings, write_connected, write_field, write_field_option,
+             writeln_field};
 
 const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
@@ -1009,12 +1014,9 @@ mod macros {
         };
     }
 
-    pub use {write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
+    pub use {write_base_rel, write_confirmation_settings, write_connected, write_field, write_field_option,
+             writeln_field};
 }
-
-use crate::cli_args::OrdersHistorySettings;
-use crate::write_field_option;
-use macros::{write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
 
 fn format_match_by(match_by: &MatchBy, delimiter: &str) -> String {
     match match_by {
