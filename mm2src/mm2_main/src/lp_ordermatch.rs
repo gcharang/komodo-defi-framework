@@ -44,7 +44,7 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, encode_message, pub_sub_topic, TopicHash, TopicPrefix,
                  TOPIC_SEPARATOR};
 use mm2_metrics::mm_gauge;
-use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
+use mm2_number::{BigDecimal, BigRational, MmNumber};
 use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
                             FilteringOrder, HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc,
                             MakerOrderForMyOrdersRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult,
