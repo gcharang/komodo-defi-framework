@@ -805,77 +805,61 @@ where
     Ok(())
 }
 
+fn check_and_redact_if_spam(value: &mut Option<String>) -> bool {
+    match value {
+        Some(s) if s.contains("http://") || s.contains("https://") => {
+            *value = Some("URL redacted for user protection".to_string());
+            true
+        },
+        _ => false,
+    }
+}
+
+fn protect_from_history_spam(tx: &mut NftTransferHistory) {
+    let collection_name_spam = check_and_redact_if_spam(&mut tx.collection_name);
+    let token_name_spam = check_and_redact_if_spam(&mut tx.token_name);
+
+    if collection_name_spam || token_name_spam {
+        tx.possible_spam = Some(true);
+    }
+}
+
 fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
-    let mut is_spam = false;
-    if let Some(name) = &nft.collection_name {
-        if name.contains("http://") || name.contains("https://") {
-            nft.collection_name = Some("URL redacted for user protection".to_string());
-            is_spam = true;
-        }
-    }
-    if let Some(symbol) = &nft.symbol {
-        if symbol.contains("http://") || symbol.contains("https://") {
-            nft.symbol = Some("URL redacted for user protection".to_string());
-            is_spam = true;
-        }
-    }
-    if let Some(token_name) = &nft.uri_meta.token_name {
-        if token_name.contains("http://") || token_name.contains("https://") {
-            nft.uri_meta.token_name = Some("URL redacted for user protection".to_string());
-            is_spam = true;
-        }
-    }
+    let collection_name_spam = check_and_redact_if_spam(&mut nft.collection_name);
+    let symbol_spam = check_and_redact_if_spam(&mut nft.symbol);
+    let token_name_spam = check_and_redact_if_spam(&mut nft.uri_meta.token_name);
     let meta_spam = check_nft_metadata_for_spam(nft)?;
-    if is_spam || meta_spam {
+
+    if collection_name_spam || symbol_spam || token_name_spam || meta_spam {
         nft.possible_spam = Some(true);
     }
     Ok(())
 }
 
 fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Error> {
-    let mut is_spam = false;
     if let Some(metadata_str) = &nft.metadata {
         if let Ok(mut metadata) = serde_json::from_str::<serde_json::Map<String, Json>>(metadata_str) {
-            if let Some(name) = metadata.get("name").and_then(|v| v.as_str()) {
-                if name.contains("http://") || name.contains("https://") {
-                    metadata.insert(
-                        "name".to_string(),
-                        serde_json::Value::String("URL redacted for user protection".to_string()),
-                    );
-                    nft.metadata = Some(serde_json::to_string(&metadata)?);
-                    is_spam = true;
-                }
-            }
-            if let Some(symbol) = metadata.get("symbol").and_then(|v| v.as_str()) {
-                if symbol.contains("http://") || symbol.contains("https://") {
-                    metadata.insert(
-                        "symbol".to_string(),
-                        serde_json::Value::String("URL redacted for user protection".to_string()),
-                    );
-                    nft.metadata = Some(serde_json::to_string(&metadata)?);
-                    is_spam = true;
-                }
+            if check_and_redact_metadata_field(&mut metadata, "name")? {
+                nft.metadata = Some(serde_json::to_string(&metadata)?);
+                return Ok(true);
             }
         }
     }
-    Ok(is_spam)
+    Ok(false)
 }
 
-fn protect_from_history_spam(tx: &mut NftTransferHistory) {
-    let mut is_spam = false;
-    if let Some(name) = &tx.collection_name {
-        if name.contains("http://") || name.contains("https://") {
-            tx.collection_name = Some("URL redacted for user protection".to_string());
-            is_spam = true;
-        }
-    }
-    if let Some(token_name) = &tx.token_name {
-        if token_name.contains("http://") || token_name.contains("https://") {
-            tx.token_name = Some("URL redacted for user protection".to_string());
-            is_spam = true;
-        }
-    }
-    if is_spam {
-        tx.possible_spam = Some(true);
+fn check_and_redact_metadata_field(
+    metadata: &mut serde_json::Map<String, Json>,
+    field: &str,
+) -> MmResult<bool, serde_json::Error> {
+    match metadata.get(field).and_then(|v| v.as_str()) {
+        Some(value) if value.contains("http://") || value.contains("https://") => {
+            metadata.insert(
+                field.to_string(),
+                serde_json::Value::String("URL redacted for user protection".to_string()),
+            );
+            Ok(true)
+        },
+        _ => Ok(false),
     }
 }
