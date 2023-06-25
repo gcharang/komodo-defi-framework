@@ -300,7 +300,6 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
