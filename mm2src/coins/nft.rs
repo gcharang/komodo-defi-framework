@@ -839,7 +839,7 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
 fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Error> {
     if let Some(metadata_str) = &nft.metadata {
         if let Ok(mut metadata) = serde_json::from_str::<serde_json::Map<String, Json>>(metadata_str) {
-            if check_and_redact_metadata_field(&mut metadata, "name")? {
+            if check_and_redact_metadata_field(&mut metadata, "name") {
                 nft.metadata = Some(serde_json::to_string(&metadata)?);
                 return Ok(true);
             }
@@ -848,18 +848,15 @@ fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Erro
     Ok(false)
 }
 
-fn check_and_redact_metadata_field(
-    metadata: &mut serde_json::Map<String, Json>,
-    field: &str,
-) -> MmResult<bool, serde_json::Error> {
+fn check_and_redact_metadata_field(metadata: &mut serde_json::Map<String, Json>, field: &str) -> bool {
     match metadata.get(field).and_then(|v| v.as_str()) {
         Some(value) if value.contains("http://") || value.contains("https://") => {
             metadata.insert(
                 field.to_string(),
                 serde_json::Value::String("URL redacted for user protection".to_string()),
             );
-            Ok(true)
+            true
         },
-        _ => Ok(false),
+        _ => false,
     }
 }
