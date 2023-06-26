@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 
 use super::{format_confirmation_settings,
             smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt},
-            OrderbookConfig};
+            OrderbookSettings};
 
 pub(super) fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
     let cmp = left.entry.price.cmp(&right.entry.price).reverse();
@@ -48,7 +48,7 @@ pub(super) struct AskBidRow<'a> {
     address: AskBidRowVal,
     is_mine: AskBidRowVal,
     conf_settings: AskBidRowVal,
-    config: &'a OrderbookConfig,
+    config: &'a OrderbookSettings,
 }
 
 impl<'a> AskBidRow<'a> {
@@ -63,7 +63,7 @@ impl<'a> AskBidRow<'a> {
         public: &str,
         address: &str,
         conf_settings: &str,
-        config: &'a OrderbookConfig,
+        config: &'a OrderbookSettings,
     ) -> Self {
         Self {
             is_mine: AskBidRowVal::Value(String::new()),
@@ -80,7 +80,7 @@ impl<'a> AskBidRow<'a> {
         }
     }
 
-    pub(super) fn new_delimiter(config: &'a OrderbookConfig) -> Self {
+    pub(super) fn new_delimiter(config: &'a OrderbookSettings) -> Self {
         Self {
             is_mine: AskBidRowVal::Delim,
             volume: AskBidRowVal::Delim,
@@ -100,7 +100,7 @@ impl<'a> AskBidRow<'a> {
         entry: &AggregatedOrderbookEntry,
         vol_prec: &SmartFractPrecision,
         price_prec: &SmartFractPrecision,
-        config: &'a OrderbookConfig,
+        config: &'a OrderbookSettings,
     ) -> Self {
         AskBidRow {
             is_mine: AskBidRowVal::Value((if entry.entry.is_mine { "*" } else { "" }).to_string()),

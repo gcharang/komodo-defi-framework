@@ -1,6 +1,7 @@
-use crate::adex_proc::OrderbookConfig;
 use clap::Args;
 use common::serde_derive::Serialize;
+
+use crate::adex_proc::OrderbookSettings;
 
 const ORDERBOOK_BIDS_LIMIT: &str = "20";
 const ORDERBOOK_ASKS_LIMIT: &str = "20";
@@ -31,9 +32,9 @@ pub struct OrderbookArgs {
     conf_settings: bool,
 }
 
-impl From<&OrderbookArgs> for OrderbookConfig {
+impl From<&OrderbookArgs> for OrderbookSettings {
     fn from(value: &OrderbookArgs) -> Self {
-        OrderbookConfig {
+        OrderbookSettings {
             uuids: value.uuids,
             min_volume: value.min_volume,
             max_volume: value.max_volume,

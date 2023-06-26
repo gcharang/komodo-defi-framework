@@ -5,6 +5,7 @@ use mm2_number::MmNumber;
 use mm2_rpc::data::legacy::OrdersHistoryRequest;
 
 use super::parse_mm_number;
+use crate::adex_proc;
 
 #[derive(Clone, ValueEnum, Display)]
 enum OrderTypeFilter {
@@ -95,27 +96,38 @@ impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
 
 #[derive(Args, Copy, Clone)]
 #[group(required = true, multiple = true)]
-pub(crate) struct OrdersHistorySettings {
+struct OrdersHistorySettings {
     #[arg(
         long,
         default_value_t = false,
         help = "Whether to show taker orders detailed history"
     )]
-    pub takers_detailed: bool,
+    takers_detailed: bool,
     #[arg(
         long,
         default_value_t = false,
         help = "Whether to show maker orders detailed history"
     )]
-    pub makers_detailed: bool,
+    makers_detailed: bool,
     #[arg(long, default_value_t = false, help = "Whether to show warnings")]
-    pub warnings: bool,
+    warnings: bool,
     #[arg(long, default_value_t = false, help = "Whether to show common history data")]
-    pub common: bool,
+    common: bool,
 }
 
-impl From<&mut OrdersHistoryArgs> for OrdersHistorySettings {
-    fn from(value: &mut OrdersHistoryArgs) -> Self { value.settings }
+impl From<&OrdersHistorySettings> for adex_proc::OrdersHistorySettings {
+    fn from(value: &OrdersHistorySettings) -> Self {
+        adex_proc::OrdersHistorySettings {
+            takers_detailed: value.takers_detailed,
+            makers_detailed: value.makers_detailed,
+            warnings: value.warnings,
+            common: value.common,
+        }
+    }
+}
+
+impl From<&mut OrdersHistoryArgs> for adex_proc::OrdersHistorySettings {
+    fn from(value: &mut OrdersHistoryArgs) -> Self { adex_proc::OrdersHistorySettings::from(&value.settings) }
 }
 
 fn parse_datetime(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {

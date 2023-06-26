@@ -13,10 +13,9 @@ use uuid::Uuid;
 
 use super::command::{Command, Dummy, Method};
 use super::response_handler::ResponseHandler;
-use super::OrderbookConfig;
+use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
-use crate::cli_args::OrdersHistorySettings;
 use crate::transport::Transport;
 use crate::{error_bail, warn_bail};
 
@@ -82,7 +81,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, orderbook_config: OrderbookConfig) -> Result<()> {
+    pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, ob_settings: OrderbookSettings) -> Result<()> {
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
 
         let command = Command::builder()
@@ -97,7 +96,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         match self.transport.send::<_, OrderbookResponse, Json>(command).await {
             Ok(Ok(ok)) => self
                 .response_handler
-                .on_orderbook_response(ok, self.config, orderbook_config),
+                .on_orderbook_response(ok, self.config, ob_settings),
             Ok(Err(err)) => self.response_handler.print_response(err),
             Err(err) => error_bail!("Failed to get orderbook: {err:?}"),
         }

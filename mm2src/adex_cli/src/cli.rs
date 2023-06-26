@@ -5,7 +5,7 @@ use std::mem::take;
 use uuid::Uuid;
 
 use crate::adex_config::{get_config, set_config, AdexConfig};
-use crate::adex_proc::{AdexProc, OrderbookConfig, ResponseHandler};
+use crate::adex_proc::{AdexProc, OrderbookSettings, ResponseHandler};
 use crate::scenarios::{get_status, init, start_process, stop_process};
 use crate::transport::SlurpTransport;
 
@@ -122,7 +122,7 @@ impl Cli {
                 proc.get_orderbook(
                     &orderbook_args.base,
                     &orderbook_args.rel,
-                    OrderbookConfig::from(orderbook_args),
+                    OrderbookSettings::from(orderbook_args),
                 )
                 .await?
             },
