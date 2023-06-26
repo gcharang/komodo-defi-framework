@@ -160,13 +160,27 @@ pub(crate) struct UriMeta {
 
 impl UriMeta {
     pub(crate) fn merge_from(&mut self, other: UriMetaFromStr) {
-        self.image = self.image.clone().or(other.image).or(other.image_url);
-        self.token_name = self.token_name.clone().or(other.token_name);
-        self.description = self.description.clone().or(other.description);
-        self.attributes = self.attributes.clone().or(other.attributes);
-        self.animation_url = self.animation_url.clone().or(other.animation_url);
-        self.external_url = self.external_url.clone().or(other.external_url);
-        self.image_details = self.image_details.clone().or(other.image_details);
+        if self.image.is_none() {
+            self.image = other.image.or(other.image_url);
+        }
+        if self.token_name.is_none() {
+            self.token_name = other.token_name;
+        }
+        if self.description.is_none() {
+            self.description = other.description;
+        }
+        if self.attributes.is_none() {
+            self.attributes = other.attributes;
+        }
+        if self.animation_url.is_none() {
+            self.animation_url = other.animation_url;
+        }
+        if self.external_url.is_none() {
+            self.external_url = other.external_url;
+        }
+        if self.image_details.is_none() {
+            self.image_details = other.image_details;
+        }
     }
 }
 
