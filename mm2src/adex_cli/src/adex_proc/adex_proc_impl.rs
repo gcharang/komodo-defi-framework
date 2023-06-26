@@ -41,8 +41,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
         match self.transport.send::<_, CoinInitResponse, Json>(command).await {
             Ok(Ok(ref ok)) => self.response_handler.on_enable_response(ok),
-            Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => error_bail!("Failed to enable asset: {asset}, error: {err:?}"),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            Err(error) => error_bail!("Failed to send enable request, asset: {asset}, error: {error}"),
         }
     }
 
@@ -50,14 +50,14 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Getting balance, coin: {asset} ...");
         let command = Command::builder()
             .method(Method::GetBalance)
-            .flatten_data(json!({ "coin": asset }))
+            .flatten_data(json!({ "coin": asset })) // TODO: @rozhkovdmitrii
             .userpass(self.config.rpc_password()?)
             .build()?;
 
         match self.transport.send::<_, BalanceResponse, Json>(command).await {
             Ok(Ok(balance_response)) => self.response_handler.on_balance_response(&balance_response),
-            Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => error_bail!("Failed to get balance: {err:?}"),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            Err(error) => error_bail!("Failed to send get-balance request: {error}"),
         }
     }
 
@@ -75,8 +75,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .await
         {
             Ok(Ok(ok)) => self.response_handler.on_get_enabled_response(&ok),
-            Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => error_bail!("Failed to get enabled coins: {:?}", err),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            Err(error) => error_bail!("Failed to send get-enabled-coins request: {error}"),
         }
     }
 
@@ -96,8 +96,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             Ok(Ok(ok)) => self
                 .response_handler
                 .on_orderbook_response(ok, self.config, ob_settings),
-            Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => error_bail!("Failed to get orderbook: {err:?}"),
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            Err(error) => error_bail!("Failed to send get-orderbook request: {error}"),
         }
     }
 
@@ -126,7 +126,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_sell_response(&ok),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => error_bail!("Failed to sell: {err:?}"),
+            Err(error) => error_bail!("Failed to send sell request: {error}"),
         }
     }
 
@@ -155,7 +155,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_buy_response(&ok),
             Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(err) => error_bail!("Failed to buy: {err:?}"),
+            Err(error) => error_bail!("Failed to send buy request: {error}"),
         }
     }
 
@@ -165,10 +165,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::Stop)
             .build()?;
+
         match self.transport.send::<_, Mm2RpcResult<Status>, Json>(stop_command).await {
             Ok(Ok(ok)) => self.response_handler.on_stop_response(&ok),
             Ok(Err(error)) => error_bail!("Failed to stop through the API: {error}"),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send stop request: {error}"),
         }
     }
 
@@ -182,7 +183,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         match self.transport.send::<_, MmVersionResponse, Json>(version_command).await {
             Ok(Ok(ok)) => self.response_handler.on_version_response(&ok),
             Ok(Err(error)) => error_bail!("Failed get version through the API: {error}"),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send get-version request: {error}"),
         }
     }
 
@@ -201,7 +202,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_cancel_order_response(&ok),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send cancel-order request: {error}"),
         }
     }
 
@@ -234,7 +235,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_cancel_all_response(&ok),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send candel-all-orders request: {error}"),
         }
     }
 
@@ -252,7 +253,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(ok)) => self.response_handler.on_order_status(&ok),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send order-status request: {error}"),
         }
     }
 
@@ -270,7 +271,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_my_orders(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send my-orders request: {error}"),
         }
     }
 
@@ -303,7 +304,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 error_bail!("Got error: {:?}", error)
             },
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send best-orders request: {error}"),
         }
     }
 
@@ -325,7 +326,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_set_price(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send set-price request: {error}"),
         }
     }
 
@@ -352,7 +353,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orderbook_depth(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send orderbook-depth request: {error}"),
         }
     }
 
@@ -375,7 +376,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orders_history(result, settings),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send history request: {error}"),
         }
     }
 
@@ -394,7 +395,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         {
             Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_update_maker_order(result),
             Ok(Err(error)) => self.response_handler.print_response(error),
-            _ => bail!(""),
+            Err(error) => error_bail!("Failed to send update-maker-order request: {error}"),
         }
     }
 }
