@@ -1,4 +1,4 @@
-use anyhow::{bail, Error, Result};
+use anyhow::{bail, Result};
 use itertools::Itertools;
 use log::{error, info, warn};
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
@@ -37,8 +37,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::builder()
             .flatten_data(activation_method)
             .userpass(self.config.rpc_password()?)
-            .build()
-            .map_err(Error::from)?;
+            .build()?;
 
         match self.transport.send::<_, CoinInitResponse, Json>(command).await {
             Ok(Ok(ref ok)) => self.response_handler.on_enable_response(ok),
