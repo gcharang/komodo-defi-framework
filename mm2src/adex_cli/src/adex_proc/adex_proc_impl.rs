@@ -28,7 +28,6 @@ pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, 
 impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
     pub(crate) async fn enable(&self, asset: &str) -> Result<()> {
         info!("Enabling asset: {asset} ...");
-
         let activation_scheme = get_activation_scheme()?;
         let Some(activation_method) = activation_scheme.get_activation_method(asset) else {
             warn_bail!("Asset is not known: {asset}")
@@ -65,7 +64,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
-
         let command = Command::<i32>::builder()
             .method(Method::GetEnabledCoins)
             .userpass(self.config.rpc_password()?)
@@ -84,7 +82,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, ob_settings: OrderbookSettings) -> Result<()> {
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
-
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::GetOrderbook)
@@ -277,15 +274,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn best_orders(&self, best_orders_request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
-        info!(
-            "Getting best orders: {} {} ...",
-            best_orders_request.action, best_orders_request.coin
-        );
+    pub async fn best_orders(&self, request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
+        info!("Getting best orders: {} {} ...", request.action, request.coin);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::BestOrders)
-            .flatten_data(best_orders_request)
+            .flatten_data(request)
             .build_v2()?;
 
         match self
@@ -310,15 +304,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn set_price(&self, set_price_request: SetPriceReq) -> Result<()> {
-        info!(
-            "Setting price for pair: {} {} ...",
-            set_price_request.base, set_price_request.rel
-        );
+    pub async fn set_price(&self, request: SetPriceReq) -> Result<()> {
+        info!("Setting price for pair: {} {} ...", request.base, request.rel);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::SetPrice)
-            .flatten_data(set_price_request)
+            .flatten_data(request)
             .build()?;
 
         match self
@@ -332,10 +323,10 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn orderbook_depth(&self, orderbook_depth_request: OrderbookDepthRequest) -> Result<()> {
+    pub async fn orderbook_depth(&self, request: OrderbookDepthRequest) -> Result<()> {
         info!(
             "Getting orderbook depth for pairs: {} ...",
-            orderbook_depth_request
+            request
                 .pairs
                 .iter()
                 .map(|pair| format!("{}/{}", pair.0, pair.1))
@@ -345,7 +336,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderbookDepth)
-            .flatten_data(orderbook_depth_request)
+            .flatten_data(request)
             .build()?;
 
         match self
@@ -382,12 +373,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         }
     }
 
-    pub async fn update_maker_order(&self, update_maker_request: UpdateMakerOrderRequest) -> Result<()> {
+    pub async fn update_maker_order(&self, request: UpdateMakerOrderRequest) -> Result<()> {
         info!("Updating maker order ...");
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::UpdateMakerOrder)
-            .flatten_data(update_maker_request)
+            .flatten_data(request)
             .build()?;
 
         match self
