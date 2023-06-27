@@ -9,7 +9,6 @@ use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, Can
                             SellBuyResponse, SetPriceReq, Status, UpdateMakerOrderRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
 use serde_json::Value as Json;
-use uuid::Uuid;
 
 use super::command::{Command, Dummy, Method};
 use super::response_handler::ResponseHandler;
@@ -143,36 +142,41 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(command, MmVersionResponse, self, on_version_response)
     }
 
-    pub(crate) async fn cancel_order(&self, order_id: Uuid) -> Result<()> {
-        info!("Cancelling order: {order_id}");
+    pub(crate) async fn cancel_order(&self, request: CancelOrderRequest) -> Result<()> {
+        info!("Cancelling order: {}", request.uuid);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelOrder)
-            .flatten_data(CancelOrderRequest { uuid: order_id })
+            .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<Status>, self, on_cancel_order_response)
     }
 
     pub(crate) async fn cancel_all_orders(&self) -> Result<()> {
         info!("Cancelling all orders");
-        self.cancel_all_orders_impl(CancelBy::All).await
+        self.cancel_all_orders_impl(CancelAllOrdersRequest {
+            cancel_by: CancelBy::All,
+        })
+        .await
     }
 
-    pub(crate) async fn cancel_by_pair(&self, base: String, rel: String) -> Result<()> {
+    pub(crate) async fn cancel_by_pair(&self, request: CancelAllOrdersRequest) -> Result<()> {
+        let CancelBy::Pair { base, rel } = &request.cancel_by else {panic!("Bad cast to CancelBy::Pair")};
         info!("Cancelling by pair, base: {base}, rel: {rel}");
-        self.cancel_all_orders_impl(CancelBy::Pair { base, rel }).await
+        self.cancel_all_orders_impl(request).await
     }
 
-    pub(crate) async fn cancel_by_coin(&self, ticker: String) -> Result<()> {
+    pub(crate) async fn cancel_by_coin(&self, request: CancelAllOrdersRequest) -> Result<()> {
+        let CancelBy::Coin { ticker } = &request.cancel_by else {panic!("Bad cast to CancelBy::Coin")};
         info!("Cancelling by coin: {ticker}");
-        self.cancel_all_orders_impl(CancelBy::Coin { ticker }).await
+        self.cancel_all_orders_impl(request).await
     }
 
-    async fn cancel_all_orders_impl(&self, cancel_by: CancelBy) -> Result<()> {
+    async fn cancel_all_orders_impl(&self, request: CancelAllOrdersRequest) -> Result<()> {
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelAllOrders)
-            .flatten_data(CancelAllOrdersRequest { cancel_by })
+            .flatten_data(request)
             .build()?;
         request_legacy!(
             command,

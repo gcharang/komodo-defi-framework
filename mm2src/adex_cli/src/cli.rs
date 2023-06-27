@@ -1,8 +1,5 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use mm2_rpc::data::legacy::SellBuyRequest;
-use std::mem::take;
-use uuid::Uuid;
 
 use crate::adex_config::{get_config, set_config, AdexConfig};
 use crate::adex_proc::{AdexProc, ResponseHandler};
@@ -116,14 +113,12 @@ impl Cli {
             Command::Orderbook(ref orderbook_args) => {
                 proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
             },
-            Command::Sell(SellOrderArgs { order_cli }) => proc.sell(SellBuyRequest::from(order_cli)).await?,
-            Command::Buy(BuyOrderArgs { order_cli }) => proc.buy(SellBuyRequest::from(order_cli)).await?,
-            Command::Cancel(CancelSubcommand::Order { uuid }) => proc.cancel_order(*uuid).await?,
+            Command::Sell(SellOrderArgs { order_cli }) => proc.sell(order_cli.into()).await?,
+            Command::Buy(BuyOrderArgs { order_cli }) => proc.buy(order_cli.into()).await?,
+            Command::Cancel(CancelSubcommand::Order(args)) => proc.cancel_order(args.into()).await?,
             Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
-            Command::Cancel(CancelSubcommand::ByPair { base, rel }) => {
-                proc.cancel_by_pair(take(base), take(rel)).await?
-            },
-            Command::Cancel(CancelSubcommand::ByCoin { ticker }) => proc.cancel_by_coin(take(ticker)).await?,
+            Command::Cancel(CancelSubcommand::ByPair(args)) => proc.cancel_by_pair(args.into()).await?,
+            Command::Cancel(CancelSubcommand::ByCoin(args)) => proc.cancel_by_coin(args.into()).await?,
             Command::OrderStatus(order_status_args) => proc.order_status(order_status_args.into()).await?,
             Command::BestOrders(best_orders_args) => {
                 let show_orig_tickets = best_orders_args.show_orig_tickets;
@@ -145,27 +140,4 @@ enum ConfigSubcommand {
     Set(SetConfigArgs),
     #[command(about = "Gets komodo adex cli configuration")]
     Get,
-}
-
-#[derive(Subcommand)]
-enum CancelSubcommand {
-    #[command(about = "Cancels certain order by uuid")]
-    Order {
-        #[arg(help = "Order identifier")]
-        uuid: Uuid,
-    },
-    #[command(about = "Cancels all orders of current node")]
-    All,
-    #[command(about = "Cancels all orders of specific pair")]
-    ByPair {
-        #[arg(help = "base coin of the pair; ")]
-        base: String,
-        #[arg(help = "rel coin of the pair; ")]
-        rel: String,
-    },
-    #[command(about = "Cancels all orders using the coin ticker as base or rel")]
-    ByCoin {
-        #[arg(help = "order is cancelled if it uses ticker as base or rel")]
-        ticker: String,
-    },
 }

@@ -1,6 +1,7 @@
 mod cmd_balance;
 mod cmd_best_orders;
 mod cmd_buy_sell;
+mod cmd_cancel;
 mod cmd_order_status;
 mod cmd_orderbook;
 mod cmd_orderbook_depth;
@@ -17,6 +18,7 @@ use std::str::FromStr;
 pub(crate) use cmd_balance::*;
 pub(crate) use cmd_best_orders::*;
 pub(crate) use cmd_buy_sell::*;
+pub(crate) use cmd_cancel::*;
 pub(crate) use cmd_order_status::*;
 pub(crate) use cmd_orderbook::*;
 pub(crate) use cmd_orderbook_depth::*;
