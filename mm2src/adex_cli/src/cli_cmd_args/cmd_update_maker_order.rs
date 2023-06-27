@@ -4,7 +4,7 @@ use mm2_rpc::data::legacy::UpdateMakerOrderRequest;
 use std::mem::take;
 use uuid::Uuid;
 
-use crate::cli_args::parse_mm_number;
+use crate::cli_cmd_args::parse_mm_number;
 
 #[derive(Args, Clone)]
 pub(crate) struct UpdateMakerOrderArgs {

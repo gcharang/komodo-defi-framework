@@ -3,7 +3,7 @@
 #[cfg(not(target_arch = "wasm32"))] mod adex_config;
 #[cfg(not(target_arch = "wasm32"))] mod adex_proc;
 #[cfg(not(target_arch = "wasm32"))] mod cli;
-#[cfg(not(target_arch = "wasm32"))] mod cli_args;
+#[cfg(not(target_arch = "wasm32"))] mod cli_cmd_args;
 #[cfg(not(target_arch = "wasm32"))] mod helpers;
 pub(self) mod logging;
 #[cfg(not(target_arch = "wasm32"))] mod scenarios;
