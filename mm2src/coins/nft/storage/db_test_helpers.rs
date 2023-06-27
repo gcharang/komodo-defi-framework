@@ -1,7 +1,6 @@
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftTransferHistory, NftTxHistoryFilters, TransferStatus,
                               TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps, RemoveNftResult};
-use common::block_on;
 use mm2_number::BigDecimal;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::num::NonZeroUsize;
@@ -280,7 +279,7 @@ async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + Nft
 }
 
 pub(crate) fn test_add_get_nfts_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_list_storage(&chain).await;
         let nft_list = nft_list();
@@ -297,7 +296,7 @@ pub(crate) fn test_add_get_nfts_impl() {
 }
 
 pub(crate) fn test_last_nft_blocks_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_list_storage(&chain).await;
         let nft_list = nft_list();
@@ -314,7 +313,7 @@ pub(crate) fn test_last_nft_blocks_impl() {
 }
 
 pub(crate) fn test_nft_list_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_list_storage(&chain).await;
         let nft_list = nft_list();
@@ -333,7 +332,7 @@ pub(crate) fn test_nft_list_impl() {
 }
 
 pub(crate) fn test_remove_nft_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_list_storage(&chain).await;
         let nft_list = nft_list();
@@ -358,7 +357,7 @@ pub(crate) fn test_remove_nft_impl() {
 }
 
 pub(crate) fn test_nft_amount_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_list_storage(&chain).await;
         let mut nft = nft();
@@ -396,7 +395,7 @@ pub(crate) fn test_nft_amount_impl() {
 }
 
 pub(crate) fn test_refresh_metadata_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_list_storage(&chain).await;
         let new_symbol = "NEW_SYMBOL";
@@ -416,7 +415,7 @@ pub(crate) fn test_refresh_metadata_impl() {
 }
 
 pub(crate) fn test_add_get_txs_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_history_storage(&chain).await;
         let txs = nft_tx_historty();
@@ -443,7 +442,7 @@ pub(crate) fn test_add_get_txs_impl() {
 }
 
 pub(crate) fn test_last_tx_block_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_history_storage(&chain).await;
         let txs = nft_tx_historty();
@@ -458,7 +457,7 @@ pub(crate) fn test_last_tx_block_impl() {
 }
 
 pub(crate) fn test_tx_history_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_history_storage(&chain).await;
         let txs = nft_tx_historty();
@@ -477,7 +476,7 @@ pub(crate) fn test_tx_history_impl() {
 }
 
 pub(crate) fn test_tx_history_filters_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_history_storage(&chain).await;
         let txs = nft_tx_historty();
@@ -533,7 +532,7 @@ pub(crate) fn test_tx_history_filters_impl() {
 }
 
 pub(crate) fn test_get_update_tx_meta_impl() {
-    block_on(async {
+    futures::executor::block_on(async {
         let chain = Chain::Bsc;
         let storage = init_nft_history_storage(&chain).await;
         let txs = nft_tx_historty();
