@@ -1,5 +1,6 @@
 use clap::Args;
 use common::serde_derive::Serialize;
+use mm2_rpc::data::legacy::OrderbookRequest;
 
 use crate::adex_proc::OrderbookSettings;
 
@@ -44,6 +45,15 @@ impl From<&OrderbookArgs> for OrderbookSettings {
             conf_settings: value.conf_settings,
             asks_limit: value.asks_limit,
             bids_limit: value.bids_limit,
+        }
+    }
+}
+
+impl From<&OrderbookArgs> for OrderbookRequest {
+    fn from(value: &OrderbookArgs) -> Self {
+        OrderbookRequest {
+            rel: value.rel.clone(),
+            base: value.base.clone(),
         }
     }
 }

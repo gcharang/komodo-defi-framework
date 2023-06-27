@@ -76,14 +76,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(command, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
-    pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, ob_settings: OrderbookSettings) -> Result<()> {
-        info!("Getting orderbook, base: {base}, rel: {rel}");
+    pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, ob_settings: OrderbookSettings) -> Result<()> {
+        info!("Getting orderbook, base: {}, rel: {}", request.base, request.rel);
         let command = Command::builder()
             .method(Method::GetOrderbook)
-            .flatten_data(OrderbookRequest {
-                base: base.to_string(),
-                rel: rel.to_string(),
-            })
+            .flatten_data(request)
             .build()?;
         request_legacy!(
             command,
@@ -95,41 +92,40 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         )
     }
 
-    pub(crate) async fn sell(&self, order: SellBuyRequest) -> Result<()> {
+    pub(crate) async fn sell(&self, request: SellBuyRequest) -> Result<()> {
         info!(
             "Selling: {} {} for: {} {} at the price of {} {} per {} ",
-            order.volume,
-            order.base,
-            order.volume.clone() * order.price.clone(),
-            order.rel,
-            order.price,
-            order.rel,
-            order.base,
+            request.volume,
+            request.base,
+            request.volume.clone() * request.price.clone(),
+            request.rel,
+            request.price,
+            request.rel,
+            request.base,
         );
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Sell)
-            .flatten_data(order)
+            .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
     }
 
-    pub(crate) async fn buy(&self, order: SellBuyRequest) -> Result<()> {
+    pub(crate) async fn buy(&self, request: SellBuyRequest) -> Result<()> {
         info!(
             "Buying: {} {} with: {} {} at the price of {} {} per {} ",
-            order.volume,
-            order.base,
-            order.volume.clone() * order.price.clone(),
-            order.rel,
-            order.price,
-            order.rel,
-            order.base,
+            request.volume,
+            request.base,
+            request.volume.clone() * request.price.clone(),
+            request.rel,
+            request.price,
+            request.rel,
+            request.base,
         );
-
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Buy)
-            .flatten_data(order)
+            .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
     }
@@ -256,7 +252,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .map(|pair| format!("{}/{}", pair.0, pair.1))
                 .join(", ")
         );
-
         let request = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderbookDepth)

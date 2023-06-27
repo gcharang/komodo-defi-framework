@@ -5,7 +5,7 @@ use std::mem::take;
 use uuid::Uuid;
 
 use crate::adex_config::{get_config, set_config, AdexConfig};
-use crate::adex_proc::{AdexProc, OrderbookSettings, ResponseHandler};
+use crate::adex_proc::{AdexProc, ResponseHandler};
 use crate::scenarios::{get_status, init, start_process, stop_process};
 use crate::transport::SlurpTransport;
 
@@ -119,12 +119,7 @@ impl Cli {
             Command::Balance { asset } => proc.get_balance(asset).await?,
             Command::GetEnabled => proc.get_enabled().await?,
             Command::Orderbook(ref orderbook_args) => {
-                proc.get_orderbook(
-                    &orderbook_args.base,
-                    &orderbook_args.rel,
-                    OrderbookSettings::from(orderbook_args),
-                )
-                .await?
+                proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
             },
             Command::Sell(SellOrderArgs { order_cli }) => proc.sell(SellBuyRequest::from(order_cli)).await?,
             Command::Buy(BuyOrderArgs { order_cli }) => proc.buy(SellBuyRequest::from(order_cli)).await?,
