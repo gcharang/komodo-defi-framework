@@ -60,9 +60,7 @@ enum Command {
     SetPrice(SetPriceArgs),
     #[command(subcommand, about = "To cancel one or a group of orders")]
     Cancel(CancelSubcommand),
-    OrderStatus {
-        uuid: Uuid,
-    },
+    OrderStatus(OrderStatusArgs),
     BestOrders(BestOrderArgs),
     #[command(about = "Get my orders")]
     MyOrders,
@@ -126,7 +124,7 @@ impl Cli {
                 proc.cancel_by_pair(take(base), take(rel)).await?
             },
             Command::Cancel(CancelSubcommand::ByCoin { ticker }) => proc.cancel_by_coin(take(ticker)).await?,
-            Command::OrderStatus { uuid } => proc.order_status(uuid).await?,
+            Command::OrderStatus(order_status_args) => proc.order_status(order_status_args.into()).await?,
             Command::BestOrders(best_orders_args) => {
                 let show_orig_tickets = best_orders_args.show_orig_tickets;
                 proc.best_orders(best_orders_args.into(), show_orig_tickets).await?

@@ -182,12 +182,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         )
     }
 
-    pub(crate) async fn order_status(&self, uuid: &Uuid) -> Result<()> {
-        info!("Getting order status: {uuid}");
+    pub(crate) async fn order_status(&self, request: OrderStatusRequest) -> Result<()> {
+        info!("Getting order status: {}", request.uuid);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderStatus)
-            .flatten_data(OrderStatusRequest { uuid: *uuid })
+            .flatten_data(request)
             .build()?;
         request_legacy!(command, OrderStatusResponse, self, on_order_status)
     }
