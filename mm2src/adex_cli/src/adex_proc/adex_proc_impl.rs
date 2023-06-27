@@ -79,7 +79,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, ob_settings: OrderbookSettings) -> Result<()> {
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
         let command = Command::builder()
-            .userpass(self.config.rpc_password()?)
             .method(Method::GetOrderbook)
             .flatten_data(OrderbookRequest {
                 base: base.to_string(),
@@ -146,10 +145,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version ...");
-        let command = Command::<Dummy>::builder()
-            .userpass(self.config.rpc_password()?)
-            .method(Method::Version)
-            .build()?;
+        let command = Command::<Dummy>::builder().method(Method::Version).build()?;
         request_legacy!(command, MmVersionResponse, self, on_version_response)
     }
 

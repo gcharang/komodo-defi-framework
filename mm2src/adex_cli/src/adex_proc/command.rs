@@ -13,7 +13,8 @@ where
 {
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub(self) flatten_data: Option<T>,
-    pub(self) userpass: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(self) userpass: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(self) method: Option<Method>,
 }
@@ -89,10 +90,7 @@ where
 
     pub(super) fn build(&mut self) -> Result<Command<T>> {
         Ok(Command {
-            userpass: self
-                .userpass
-                .take()
-                .ok_or_else(|| error_anyhow!("Build command failed, no userpass"))?,
+            userpass: self.userpass.take(),
             method: self.method.take(),
             flatten_data: self.flatten_data.take(),
         })
@@ -124,7 +122,7 @@ where
 impl<T: Serialize + Clone> std::fmt::Display for Command<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut cmd: Self = self.clone();
-        cmd.userpass = "***********".to_string();
+        cmd.userpass = self.userpass.as_ref().map(|_| "***********".to_string());
         writeln!(
             f,
             "{}",
