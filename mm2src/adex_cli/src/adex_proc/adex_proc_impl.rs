@@ -25,6 +25,19 @@ pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, 
     pub(crate) config: &'cfg C,
 }
 
+macro_rules! request_legacy {
+    ($request: ident, $response_ty: ty, $self: ident, $handler: ident$ (, $opt:expr)*) => {
+        match $self.transport.send::<_, $response_ty, Json>($request).await {
+            Ok(Ok(ok)) => $self.response_handler.$handler(ok, $($opt),*),
+            Ok(Err(error)) => $self.response_handler.print_response(error),
+            Err(error) => error_bail!(
+                concat!("Failed to send ", stringify!($response_ty), " request: {}"),
+                error
+            ),
+        }
+    };
+}
+
 impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
     pub(crate) async fn enable(&self, asset: &str) -> Result<()> {
         info!("Enabling asset: {asset} ...");
@@ -38,11 +51,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .build()?;
 
-        match self.transport.send::<_, CoinInitResponse, Json>(command).await {
-            Ok(Ok(ref ok)) => self.response_handler.on_enable_response(ok),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send enable request, asset: {asset}, error: {error}"),
-        }
+        request_legacy!(command, CoinInitResponse, self, on_enable_response)
     }
 
     pub(crate) async fn get_balance(&self, asset: &str) -> Result<()> {
@@ -54,12 +63,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             })
             .userpass(self.config.rpc_password()?)
             .build()?;
-
-        match self.transport.send::<_, MyBalanceResponse, Json>(command).await {
-            Ok(Ok(balance_response)) => self.response_handler.on_balance_response(&balance_response),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send get-balance request: {error}"),
-        }
+        request_legacy!(command, MyBalanceResponse, self, on_balance_response)
     }
 
     pub(crate) async fn get_enabled(&self) -> Result<()> {
@@ -69,15 +73,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .build()?;
 
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<GetEnabledResponse>, Json>(command)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_get_enabled_response(&ok),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send get-enabled-coins request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
     pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, ob_settings: OrderbookSettings) -> Result<()> {
@@ -90,14 +86,14 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 rel: rel.to_string(),
             })
             .build()?;
-
-        match self.transport.send::<_, OrderbookResponse, Json>(command).await {
-            Ok(Ok(ok)) => self
-                .response_handler
-                .on_orderbook_response(ok, self.config, ob_settings),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send get-orderbook request: {error}"),
-        }
+        request_legacy!(
+            command,
+            OrderbookResponse,
+            self,
+            on_orderbook_response,
+            self.config,
+            ob_settings
+        )
     }
 
     pub(crate) async fn sell(&self, order: SellBuyRequest) -> Result<()> {
@@ -111,22 +107,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             order.rel,
             order.base,
         );
-
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Sell)
             .flatten_data(order)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<SellBuyResponse>, Json>(command)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_sell_response(&ok),
-            Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(error) => error_bail!("Failed to send sell request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
     }
 
     pub(crate) async fn buy(&self, order: SellBuyRequest) -> Result<()> {
@@ -146,63 +132,35 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .method(Method::Buy)
             .flatten_data(order)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<SellBuyResponse>, Json>(command)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_buy_response(&ok),
-            Ok(Err(err)) => self.response_handler.print_response(err),
-            Err(error) => error_bail!("Failed to send buy request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
     }
 
     pub(crate) async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command ...");
-        let stop_command = Command::<Dummy>::builder()
+        let command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Stop)
             .build()?;
-
-        match self.transport.send::<_, Mm2RpcResult<Status>, Json>(stop_command).await {
-            Ok(Ok(ok)) => self.response_handler.on_stop_response(&ok),
-            Ok(Err(error)) => error_bail!("Failed to stop through the API: {error}"),
-            Err(error) => error_bail!("Failed to send stop request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<Status>, self, on_stop_response)
     }
 
     pub(crate) async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version ...");
-        let version_command = Command::<Dummy>::builder()
+        let command = Command::<Dummy>::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::Version)
             .build()?;
-
-        match self.transport.send::<_, MmVersionResponse, Json>(version_command).await {
-            Ok(Ok(ok)) => self.response_handler.on_version_response(&ok),
-            Ok(Err(error)) => error_bail!("Failed get version through the API: {error}"),
-            Err(error) => error_bail!("Failed to send get-version request: {error}"),
-        }
+        request_legacy!(command, MmVersionResponse, self, on_version_response)
     }
 
     pub async fn cancel_order(&self, order_id: &Uuid) -> Result<()> {
         info!("Cancelling order: {order_id} ...");
-        let cancel_command = Command::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelOrder)
             .flatten_data(CancelOrderRequest { uuid: *order_id })
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<Status>, Json>(cancel_command)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_cancel_order_response(&ok),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send cancel-order request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<Status>, self, on_cancel_order_response)
     }
 
     pub async fn cancel_all_orders(&self) -> Result<()> {
@@ -221,39 +179,27 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     async fn cancel_all_orders_impl(&self, cancel_by: CancelBy) -> Result<()> {
-        let cancel_all_orders = Command::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelAllOrders)
             .flatten_data(CancelAllOrdersRequest { cancel_by })
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<CancelAllOrdersResponse>, Json>(cancel_all_orders)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_cancel_all_response(&ok),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send candel-all-orders request: {error}"),
-        }
+        request_legacy!(
+            command,
+            Mm2RpcResult<CancelAllOrdersResponse>,
+            self,
+            on_cancel_all_response
+        )
     }
 
     pub async fn order_status(&self, uuid: &Uuid) -> Result<()> {
         info!("Getting order status: {uuid} ...");
-        let order_status_command = Command::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderStatus)
             .flatten_data(OrderStatusRequest { uuid: *uuid })
             .build()?;
-        match self
-            .transport
-            .send::<_, OrderStatusResponse, Json>(order_status_command)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_order_status(&ok),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send order-status request: {error}"),
-        }
+        request_legacy!(command, OrderStatusResponse, self, on_order_status)
     }
 
     pub async fn my_orders(&self) -> Result<()> {
@@ -262,16 +208,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.config.rpc_password()?)
             .method(Method::MyOrders)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<MyOrdersResponse>, Json>(command)
-            .await
-        {
-            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_my_orders(result),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send my-orders request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
     }
 
     pub async fn best_orders(&self, request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
@@ -300,7 +237,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 error_bail!("Got error: {:?}", error)
             },
             Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send best-orders request: {error}"),
+            Err(error) => error_bail!("Failed to send BestOrdersRequestV2 request: {error}"),
         }
     }
 
@@ -311,16 +248,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .method(Method::SetPrice)
             .flatten_data(request)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<MakerOrderForRpc>, Json>(command)
-            .await
-        {
-            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_set_price(result),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send set-price request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)
     }
 
     pub async fn orderbook_depth(&self, request: OrderbookDepthRequest) -> Result<()> {
@@ -333,44 +261,28 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .join(", ")
         );
 
-        let command = Command::builder()
+        let request = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrderbookDepth)
             .flatten_data(request)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<Vec<PairWithDepth>>, Json>(command)
-            .await
-        {
-            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orderbook_depth(result),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send orderbook-depth request: {error}"),
-        }
+        request_legacy!(request, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
     }
 
-    pub async fn orders_history(
-        &self,
-        orders_history_request: OrdersHistoryRequest,
-        settings: OrdersHistorySettings,
-    ) -> Result<()> {
+    pub async fn orders_history(&self, request: OrdersHistoryRequest, settings: OrdersHistorySettings) -> Result<()> {
         info!("Getting order history ...");
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::OrdersHistory)
-            .flatten_data(orders_history_request)
+            .flatten_data(request)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<OrdersHistoryResponse>, Json>(command)
-            .await
-        {
-            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_orders_history(result, settings),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send history request: {error}"),
-        }
+        request_legacy!(
+            command,
+            Mm2RpcResult<OrdersHistoryResponse>,
+            self,
+            on_orders_history,
+            settings
+        )
     }
 
     pub async fn update_maker_order(&self, request: UpdateMakerOrderRequest) -> Result<()> {
@@ -380,15 +292,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .method(Method::UpdateMakerOrder)
             .flatten_data(request)
             .build()?;
-
-        match self
-            .transport
-            .send::<_, Mm2RpcResult<MakerOrderForRpc>, Json>(command)
-            .await
-        {
-            Ok(Ok(Mm2RpcResult { result })) => self.response_handler.on_update_maker_order(result),
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send update-maker-order request: {error}"),
-        }
+        request_legacy!(command, Mm2RpcResult<MakerOrderForRpc>, self, on_update_maker_order)
     }
 }

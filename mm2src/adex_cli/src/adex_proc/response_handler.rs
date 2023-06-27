@@ -45,36 +45,40 @@ const NESTED_INDENT: usize = 26;
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
     fn debug_response<T: Debug + 'static>(&self, response: &T) -> Result<()>;
+
     fn on_orderbook_response<Cfg: AdexConfig + 'static>(
         &self,
-        orderbook_response: OrderbookResponse,
+        response: OrderbookResponse,
         config: &Cfg,
-        orderbook_settings: OrderbookSettings,
+        settings: OrderbookSettings,
     ) -> Result<()>;
-    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
-    fn on_version_response(&self, response: &MmVersionResponse) -> Result<()>;
-    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()>;
-    fn on_balance_response(&self, response: &MyBalanceResponse) -> Result<()>;
-    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
-    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()>;
-    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<()>;
-    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<()>;
-    fn on_order_status(&self, response: &OrderStatusResponse) -> Result<()>;
-    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()>;
-    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()>;
-    fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()>;
-    fn on_orderbook_depth(&self, orderbook_depth: Vec<PairWithDepth>) -> Result<()>;
-    fn on_orders_history(&self, order_history: OrdersHistoryResponse, settings: OrdersHistorySettings) -> Result<()>;
-    fn on_update_maker_order(&self, maker_order: MakerOrderForRpc) -> Result<()>;
+    fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
+    fn on_version_response(&self, response: MmVersionResponse) -> Result<()>;
+    fn on_enable_response(&self, response: CoinInitResponse) -> Result<()>;
+    fn on_balance_response(&self, response: MyBalanceResponse) -> Result<()>;
+    fn on_sell_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
+    fn on_buy_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
+    fn on_stop_response(&self, response: Mm2RpcResult<Status>) -> Result<()>;
+    fn on_cancel_order_response(&self, response: Mm2RpcResult<Status>) -> Result<()>;
+    fn on_cancel_all_response(&self, response: Mm2RpcResult<CancelAllOrdersResponse>) -> Result<()>;
+    fn on_order_status(&self, response: OrderStatusResponse) -> Result<()>;
+    fn on_best_orders(&self, response: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()>;
+    fn on_my_orders(&self, response: Mm2RpcResult<MyOrdersResponse>) -> Result<()>;
+    fn on_set_price(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()>;
+    fn on_orderbook_depth(&self, response: Mm2RpcResult<Vec<PairWithDepth>>) -> Result<()>;
+    fn on_orders_history(
+        &self,
+        response: Mm2RpcResult<OrdersHistoryResponse>,
+        settings: OrdersHistorySettings,
+    ) -> Result<()>;
+    fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
     pub(crate) writer: RefCell<&'a mut dyn Write>,
 }
 
-impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
-    // TODO: @rozhkovdmitrii check why explicit lifetime is here
+impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn print_response(&self, result: Json) -> Result<()> {
         let mut binding = self.writer.borrow_mut();
         let writer = binding.deref_mut();
@@ -95,14 +99,14 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
 
     fn on_orderbook_response<Cfg: AdexConfig + 'static>(
         &self,
-        orderbook_response: OrderbookResponse,
+        response: OrderbookResponse,
         config: &Cfg,
-        orderbook_settings: OrderbookSettings,
+        settings: OrderbookSettings,
     ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
 
-        let base_vol_head = format!("Volume: {}", orderbook_response.base);
-        let rel_price_head = format!("Price: {}", orderbook_response.rel);
+        let base_vol_head = format!("Volume: {}", response.base);
+        let rel_price_head = format!("Price: {}", response.rel);
         writeln_safe_io!(
             writer,
             "{}",
@@ -116,75 +120,71 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
                 "Public",
                 "Address",
                 "Order conf (bc,bn:rc,rn)",
-                &orderbook_settings
+                &settings
             )
         );
 
         let price_prec = config.orderbook_price_precision();
         let vol_prec = config.orderbook_volume_precision();
 
-        if orderbook_response.asks.is_empty() {
+        if response.asks.is_empty() {
             writeln_safe_io!(
                 writer,
                 "{}",
-                orderbook::AskBidRow::new("", "No asks found", "", "", "", "", "", "", "", &orderbook_settings)
+                orderbook::AskBidRow::new("", "No asks found", "", "", "", "", "", "", "", &settings)
             );
         } else {
-            let skip = orderbook_response
+            let skip = response
                 .asks
                 .len()
-                .checked_sub(orderbook_settings.asks_limit.unwrap_or(usize::MAX))
+                .checked_sub(settings.asks_limit.unwrap_or(usize::MAX))
                 .unwrap_or_default();
 
-            orderbook_response
+            response
                 .asks
                 .iter()
                 .sorted_by(orderbook::cmp_asks)
                 .skip(skip)
-                .map(|entry| {
-                    orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &orderbook_settings)
-                })
+                .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings))
                 .for_each(|row: orderbook::AskBidRow| writeln_safe_io!(writer, "{}", row));
         }
-        writeln_safe_io!(writer, "{}", orderbook::AskBidRow::new_delimiter(&orderbook_settings));
+        writeln_safe_io!(writer, "{}", orderbook::AskBidRow::new_delimiter(&settings));
 
-        if orderbook_response.bids.is_empty() {
+        if response.bids.is_empty() {
             writeln_safe_io!(
                 writer,
                 "{}",
-                orderbook::AskBidRow::new("", "No bids found", "", "", "", "", "", "", "", &orderbook_settings)
+                orderbook::AskBidRow::new("", "No bids found", "", "", "", "", "", "", "", &settings)
             );
         } else {
-            orderbook_response
+            response
                 .bids
                 .iter()
                 .sorted_by(orderbook::cmp_bids)
-                .take(orderbook_settings.bids_limit.unwrap_or(usize::MAX))
-                .map(|entry| {
-                    orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &orderbook_settings)
-                })
+                .take(settings.bids_limit.unwrap_or(usize::MAX))
+                .map(|entry| orderbook::AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings))
                 .for_each(|row: orderbook::AskBidRow| writeln_safe_io!(writer, "{}", row));
         }
         Ok(())
     }
 
-    fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()> {
+    fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "{:8} {}", "Ticker", "Address");
-        for row in &enabled.result {
+        for row in &response.result {
             writeln_safe_io!(writer, "{:8} {}", row.ticker, row.address);
         }
         Ok(())
     }
 
-    fn on_version_response(&self, response: &MmVersionResponse) -> Result<()> {
+    fn on_version_response(&self, response: MmVersionResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(writer, "Version: {}", response.result);
         writeln_safe_io!(writer, "Datetime: {}", response.datetime);
         Ok(())
     }
 
-    fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()> {
+    fn on_enable_response(&self, response: CoinInitResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         writeln_safe_io!(
             writer,
@@ -202,7 +202,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_balance_response(&self, response: &MyBalanceResponse) -> Result<()> {
+    fn on_balance_response(&self, response: MyBalanceResponse) -> Result<()> {
         writeln_safe_io!(
             self.writer.borrow_mut(),
             "coin: {}\nbalance: {}\nunspendable: {}\naddress: {}",
@@ -214,29 +214,29 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()> {
+    fn on_sell_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "{}", response.request.uuid);
         Ok(())
     }
 
-    fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()> {
+    fn on_buy_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "{}", response.request.uuid);
         Ok(())
     }
 
-    fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()> {
+    fn on_stop_response(&self, response: Mm2RpcResult<Status>) -> Result<()> {
         writeln_safe_io!(self.writer.borrow_mut(), "Service stopped: {}", response.result);
         Ok(())
     }
 
-    fn on_cancel_order_response(&self, response: &Mm2RpcResult<Status>) -> Result<()> {
+    fn on_cancel_order_response(&self, response: Mm2RpcResult<Status>) -> Result<()> {
         match response.result {
             Status::Success => writeln_safe_io!(self.writer.borrow_mut(), "Order cancelled"),
         }
         Ok(())
     }
 
-    fn on_cancel_all_response(&self, response: &Mm2RpcResult<CancelAllOrdersResponse>) -> Result<()> {
+    fn on_cancel_all_response(&self, response: Mm2RpcResult<CancelAllOrdersResponse>) -> Result<()> {
         let cancelled = &response.result.cancelled;
         let mut writer = self.writer.borrow_mut();
         if cancelled.is_empty() {
@@ -252,20 +252,20 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_order_status(&self, response: &OrderStatusResponse) -> Result<()> {
+    fn on_order_status(&self, response: OrderStatusResponse) -> Result<()> {
         let mut binding = self.writer.borrow_mut();
         let mut writer: &mut dyn Write = binding.deref_mut();
         match response {
-            OrderStatusResponse::Maker(maker_status) => Self::write_maker_order_for_my_orders(writer, maker_status),
-            OrderStatusResponse::Taker(taker_status) => self.print_taker_order(&mut writer, taker_status),
+            OrderStatusResponse::Maker(maker_status) => Self::write_maker_order_for_my_orders(writer, &maker_status),
+            OrderStatusResponse::Taker(taker_status) => self.print_taker_order(&mut writer, &taker_status),
         }
     }
 
-    fn on_best_orders(&self, best_orders: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()> {
+    fn on_best_orders(&self, response: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         if show_orig_tickets {
             writeln_field!(writer, "Original tickers", "", 0);
-            for (coin, ticker) in best_orders.original_tickers {
+            for (coin, ticker) in response.original_tickers {
                 writeln_field!(writer, coin, ticker.iter().join(","), 8);
             }
             return Ok(());
@@ -282,7 +282,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         ])]);
         term_table.style = TableStyle::thin();
         term_table.separate_rows = false;
-        for (coin, data) in best_orders.orders.iter().sorted_by_key(|p| p.0) {
+        for (coin, data) in response.orders.iter().sorted_by_key(|p| p.0) {
             term_table.add_row(Row::new(vec![TableCell::new_with_alignment(coin, 7, Alignment::Left)]));
             for order in data.iter().sorted_by_key(|o| o.uuid) {
                 term_table.add_row(Row::new(vec![
@@ -314,17 +314,20 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_my_orders(&self, my_orders: MyOrdersResponse) -> Result<()> {
+    fn on_my_orders(&self, response: Mm2RpcResult<MyOrdersResponse>) -> Result<()> {
+        let result = response.result;
         let mut writer = self.writer.borrow_mut();
         let writer: &mut dyn Write = writer.deref_mut();
-        writeln_safe_io!(writer, "{}", Self::format_taker_orders_table(&my_orders.taker_orders)?);
-        writeln_safe_io!(writer, "{}", Self::format_maker_orders_table(&my_orders.maker_orders)?);
+        writeln_safe_io!(writer, "{}", Self::format_taker_orders_table(&result.taker_orders)?);
+        writeln_safe_io!(writer, "{}", Self::format_maker_orders_table(&result.maker_orders)?);
         Ok(())
     }
 
-    fn on_set_price(&self, order: MakerOrderForRpc) -> Result<()> { self.on_maker_order_response(order) }
+    fn on_set_price(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
+        self.on_maker_order_response(response.result)
+    }
 
-    fn on_orderbook_depth(&self, mut orderbook_depth: Vec<PairWithDepth>) -> Result<()> {
+    fn on_orderbook_depth(&self, mut response: Mm2RpcResult<Vec<PairWithDepth>>) -> Result<()> {
         let mut term_table = TermTable::with_rows(vec![Row::new(vec![
             TableCell::new(""),
             TableCell::new_with_alignment_and_padding("Bids", 1, Alignment::Left, false),
@@ -334,7 +337,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         term_table.separate_rows = false;
         term_table.has_bottom_boarder = false;
         term_table.has_top_boarder = false;
-        orderbook_depth.drain(..).for_each(|data| {
+        response.result.drain(..).for_each(|data| {
             term_table.add_row(Row::new(vec![
                 TableCell::new_with_alignment_and_padding(
                     format!("{}/{}:", data.pair.0, data.pair.1),
@@ -354,7 +357,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
 
     fn on_orders_history(
         &self,
-        mut order_history: OrdersHistoryResponse,
+        mut response: Mm2RpcResult<OrdersHistoryResponse>,
         settings: OrdersHistorySettings,
     ) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
@@ -374,7 +377,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
             };
         }
         if settings.common {
-            let orders = order_history.orders.drain(..);
+            let orders = response.result.orders.drain(..);
             let mut rows: Vec<Row> = orders.map(Self::filtering_order_row).try_collect()?;
             write_result!(rows, filtering_order_header_row, "Orders history:");
         }
@@ -383,7 +386,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         let mut taker_rows = vec![];
 
         if settings.makers_detailed || settings.takers_detailed {
-            for order in order_history.details.drain(..) {
+            for order in response.result.details.drain(..) {
                 match order {
                     OrderForRpc::Maker(order) => Self::maker_order_rows(&order)?
                         .drain(..)
@@ -402,7 +405,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
             write_result!(maker_rows, maker_order_header_row, "Maker orders history detailed:");
         }
         if settings.warnings {
-            let warnings = order_history.warnings.drain(..);
+            let warnings = response.result.warnings.drain(..);
             let mut rows: Vec<Row> = warnings.map(Self::uuid_parse_error_row).collect();
             write_result!(rows, uuid_parse_error_header_row, "Uuid parse errors:");
         }
@@ -410,7 +413,9 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_update_maker_order(&self, order: MakerOrderForRpc) -> Result<()> { self.on_maker_order_response(order) }
+    fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
+        self.on_maker_order_response(response.result)
+    }
 }
 
 fn term_table_blank(style: TableStyle, sep_row: bool, bottom_border: bool, top_border: bool) -> TermTable<'static> {
