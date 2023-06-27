@@ -1,6 +1,6 @@
 pub use common::{block_on, now_ms, now_sec, wait_until_ms, wait_until_sec};
 pub use mm2_number::MmNumber;
-use mm2_rpc::data::legacy::BalanceResponse;
+use mm2_rpc::data::legacy::MyBalanceResponse;
 pub use mm2_test_helpers::for_tests::{check_my_swap_status, check_recent_swaps, check_stats_swap_status,
                                       enable_native, enable_native_bch, eth_jst_testnet_conf, eth_sepolia_conf,
                                       eth_testnet_conf, jst_sepolia_conf, mm_dump, MarketMakerIt, ETH_DEV_NODES,
@@ -973,7 +973,7 @@ pub fn _solana_supplied_node() -> MarketMakerIt {
     .unwrap()
 }
 
-pub fn get_balance(mm: &MarketMakerIt, coin: &str) -> BalanceResponse {
+pub fn get_balance(mm: &MarketMakerIt, coin: &str) -> MyBalanceResponse {
     let rc = block_on(mm.rpc(&json!({
         "userpass": mm.userpass,
         "method": "my_balance",

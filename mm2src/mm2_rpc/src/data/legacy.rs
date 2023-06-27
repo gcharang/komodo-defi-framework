@@ -21,7 +21,12 @@ impl<T> Deref for Mm2RpcResult<T> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BalanceResponse {
+pub struct MyBalanceRequest {
+    pub coin: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MyBalanceResponse {
     pub coin: String,
     pub balance: BigDecimal,
     pub unspendable_balance: BigDecimal,

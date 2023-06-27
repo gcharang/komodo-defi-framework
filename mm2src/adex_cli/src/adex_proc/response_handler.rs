@@ -13,9 +13,9 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use itertools::Itertools;
 use log::{error, info};
 use mm2_number::bigdecimal::ToPrimitive;
-use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, FilteringOrder,
-                            GetEnabledResponse, HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc,
-                            MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse,
+use mm2_rpc::data::legacy::{CancelAllOrdersResponse, CoinInitResponse, FilteringOrder, GetEnabledResponse,
+                            HistoricalOrder, MakerMatchForRpc, MakerOrderForMyOrdersRpc, MakerOrderForRpc,
+                            MakerReservedForRpc, MatchBy, Mm2RpcResult, MmVersionResponse, MyBalanceResponse,
                             MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusResponse,
                             OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status,
                             TakerMatchForRpc, TakerOrderForRpc, UuidParseError};
@@ -54,7 +54,7 @@ pub(crate) trait ResponseHandler {
     fn on_get_enabled_response(&self, enabled: &Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
     fn on_version_response(&self, response: &MmVersionResponse) -> Result<()>;
     fn on_enable_response(&self, response: &CoinInitResponse) -> Result<()>;
-    fn on_balance_response(&self, response: &BalanceResponse) -> Result<()>;
+    fn on_balance_response(&self, response: &MyBalanceResponse) -> Result<()>;
     fn on_sell_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
     fn on_buy_response(&self, response: &Mm2RpcResult<SellBuyResponse>) -> Result<()>;
     fn on_stop_response(&self, response: &Mm2RpcResult<Status>) -> Result<()>;
@@ -202,7 +202,7 @@ impl<'a> ResponseHandler for ResponseHandlerImpl<'a> {
         Ok(())
     }
 
-    fn on_balance_response(&self, response: &BalanceResponse) -> Result<()> {
+    fn on_balance_response(&self, response: &MyBalanceResponse) -> Result<()> {
         writeln_safe_io!(
             self.writer.borrow_mut(),
             "coin: {}\nbalance: {}\nunspendable: {}\naddress: {}",

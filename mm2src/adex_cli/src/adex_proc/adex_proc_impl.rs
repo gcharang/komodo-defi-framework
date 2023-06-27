@@ -1,14 +1,14 @@
 use anyhow::{bail, Result};
 use itertools::Itertools;
 use log::{error, info, warn};
-use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
-                            CancelOrderRequest, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
-                            MmVersionResponse, MyOrdersResponse, OrderStatusRequest, OrderStatusResponse,
-                            OrderbookDepthRequest, OrderbookRequest, OrderbookResponse, OrdersHistoryRequest,
-                            OrdersHistoryResponse, PairWithDepth, SellBuyRequest, SellBuyResponse, SetPriceReq,
-                            Status, UpdateMakerOrderRequest};
+use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
+                            CoinInitResponse, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult, MmVersionResponse,
+                            MyBalanceRequest, MyBalanceResponse, MyOrdersResponse, OrderStatusRequest,
+                            OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
+                            OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyRequest,
+                            SellBuyResponse, SetPriceReq, Status, UpdateMakerOrderRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
-use serde_json::{json, Value as Json};
+use serde_json::Value as Json;
 use uuid::Uuid;
 
 use super::command::{Command, Dummy, Method};
@@ -50,11 +50,13 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Getting balance, coin: {asset} ...");
         let command = Command::builder()
             .method(Method::GetBalance)
-            .flatten_data(json!({ "coin": asset })) // TODO: @rozhkovdmitrii
+            .flatten_data(MyBalanceRequest {
+                coin: asset.to_string(),
+            })
             .userpass(self.config.rpc_password()?)
             .build()?;
 
-        match self.transport.send::<_, BalanceResponse, Json>(command).await {
+        match self.transport.send::<_, MyBalanceResponse, Json>(command).await {
             Ok(Ok(balance_response)) => self.response_handler.on_balance_response(&balance_response),
             Ok(Err(error)) => self.response_handler.print_response(error),
             Err(error) => error_bail!("Failed to send get-balance request: {error}"),

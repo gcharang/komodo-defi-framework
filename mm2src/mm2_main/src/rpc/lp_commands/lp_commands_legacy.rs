@@ -28,7 +28,8 @@ use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
 use mm2_number::construct_detailed;
-use mm2_rpc::data::legacy::{BalanceResponse, CancelBy, CoinInitResponse, Mm2RpcResult, MmVersionResponse, Status};
+use mm2_rpc::data::legacy::{CancelBy, CoinInitResponse, Mm2RpcResult, MmVersionResponse, MyBalanceRequest,
+                            MyBalanceResponse, Status};
 use serde_json::{self as json, Value as Json};
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -228,7 +229,8 @@ pub fn metrics(ctx: MmArc) -> HyRes {
 
 /// Get my_balance of a coin
 pub async fn my_balance(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let ticker = try_s!(req["coin"].as_str().ok_or("No 'coin' field")).to_owned();
+    let MyBalanceRequest { coin: ticker } = try_s!(json::from_value(req.clone()));
+
     let coin = match lp_coinfind(&ctx, &ticker).await {
         Ok(Some(t)) => t,
         Ok(None) => return ERR!("No such coin: {}", ticker),
@@ -236,7 +238,7 @@ pub async fn my_balance(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, Stri
     };
     let my_balance = try_s!(coin.my_balance().compat().await);
 
-    let res = try_s!(json::to_vec(&BalanceResponse {
+    let res = try_s!(json::to_vec(&MyBalanceResponse {
         coin: ticker,
         balance: my_balance.spendable,
         unspendable_balance: my_balance.unspendable,
