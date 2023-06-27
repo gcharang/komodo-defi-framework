@@ -54,13 +54,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(command, CoinInitResponse, self, on_enable_response)
     }
 
-    pub(crate) async fn get_balance(&self, asset: &str) -> Result<()> {
-        info!("Getting balance, coin: {asset}");
+    pub(crate) async fn get_balance(&self, request: MyBalanceRequest) -> Result<()> {
+        info!("Getting balance, coin: {}", request.coin);
         let command = Command::builder()
             .method(Method::GetBalance)
-            .flatten_data(MyBalanceRequest {
-                coin: asset.to_string(),
-            })
+            .flatten_data(request)
             .userpass(self.config.rpc_password()?)
             .build()?;
         request_legacy!(command, MyBalanceResponse, self, on_balance_response)

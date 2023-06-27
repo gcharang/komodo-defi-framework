@@ -48,10 +48,7 @@ enum Command {
         asset: String,
     },
     #[command(about = "Gets balance of an asset")]
-    Balance {
-        #[arg(name = "ASSET", help = "Asset to get balance of")]
-        asset: String,
-    },
+    Balance(BalanceArgs),
     #[command(about = "Lists activated assets")]
     GetEnabled,
     #[command(about = "Gets orderbook")]
@@ -116,7 +113,7 @@ impl Cli {
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Enable { asset } => proc.enable(asset).await?,
-            Command::Balance { asset } => proc.get_balance(asset).await?,
+            Command::Balance(balance_args) => proc.get_balance(balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
             Command::Orderbook(ref orderbook_args) => {
                 proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
