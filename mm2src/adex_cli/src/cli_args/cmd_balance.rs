@@ -4,14 +4,14 @@ use std::mem::take;
 
 #[derive(Args)]
 pub struct BalanceArgs {
-    #[arg(name = "ASSET", help = "Asset to get balance of")]
-    asset: String,
+    #[arg(name = "COIN", help = "Coin to get balance of")]
+    coin: String,
 }
 
 impl From<&mut BalanceArgs> for MyBalanceRequest {
     fn from(value: &mut BalanceArgs) -> Self {
         MyBalanceRequest {
-            coin: take(&mut value.asset),
+            coin: take(&mut value.coin),
         }
     }
 }

@@ -39,11 +39,11 @@ macro_rules! request_legacy {
 }
 
 impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
-    pub(crate) async fn enable(&self, asset: &str) -> Result<()> {
-        info!("Enabling asset: {asset}");
+    pub(crate) async fn enable(&self, coin: &str) -> Result<()> {
+        info!("Enabling coin: {coin}");
         let activation_scheme = get_activation_scheme()?;
-        let Some(activation_method) = activation_scheme.get_activation_method(asset) else {
-            warn_bail!("Asset is not known: {asset}")
+        let Some(activation_method) = activation_scheme.get_activation_method(coin) else {
+            warn_bail!("Coin is not known: {coin}")
         };
 
         let command = Command::builder()

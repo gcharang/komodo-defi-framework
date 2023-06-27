@@ -42,14 +42,14 @@ enum Command {
     Version,
     #[command(subcommand, about = "To manage rpc_password and mm2 RPC URL")]
     Config(ConfigSubcommand),
-    #[command(about = "Puts an asset to the trading index")]
+    #[command(about = "Puts a coin to the trading index")]
     Enable {
-        #[arg(name = "ASSET", help = "Asset to be included into the trading index")]
-        asset: String,
+        #[arg(name = "COIN", help = "Coin to be included into the trading index")]
+        coin: String,
     },
-    #[command(about = "Gets balance of an asset")]
+    #[command(about = "Gets balance of a coin")]
     Balance(BalanceArgs),
-    #[command(about = "Lists activated assets")]
+    #[command(about = "Lists activated coins")]
     GetEnabled,
     #[command(about = "Gets orderbook")]
     Orderbook(OrderbookArgs),
@@ -112,7 +112,7 @@ impl Cli {
                 set_config(*set_password, adex_uri.take())?
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
-            Command::Enable { asset } => proc.enable(asset).await?,
+            Command::Enable { coin } => proc.enable(coin).await?,
             Command::Balance(balance_args) => proc.get_balance(balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
             Command::Orderbook(ref orderbook_args) => {
