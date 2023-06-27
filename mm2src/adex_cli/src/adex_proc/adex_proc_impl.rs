@@ -7,7 +7,7 @@ use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, Can
                             OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
                             OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyRequest,
                             SellBuyResponse, SetPriceReq, Status, UpdateMakerOrderRequest};
-use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2};
+use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 use serde_json::Value as Json;
 
 use super::command::{Command, Dummy, Method};
@@ -219,12 +219,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .await
         {
             Ok(Ok(MmRpcResponseV2 {
-                mmrpc: _,
+                mmrpc: MmRpcVersion::V2,
                 result: MmRpcResultV2::Ok { result },
                 id: _,
             })) => self.response_handler.on_best_orders(result, show_orig_tickets),
             Ok(Ok(MmRpcResponseV2 {
-                mmrpc: _,
+                mmrpc: MmRpcVersion::V2,
                 result: MmRpcResultV2::Err(error),
                 id: _,
             })) => {
