@@ -118,7 +118,7 @@ impl Cli {
             },
             Command::Sell(SellOrderArgs { order_cli }) => proc.sell(SellBuyRequest::from(order_cli)).await?,
             Command::Buy(BuyOrderArgs { order_cli }) => proc.buy(SellBuyRequest::from(order_cli)).await?,
-            Command::Cancel(CancelSubcommand::Order { uuid }) => proc.cancel_order(uuid).await?,
+            Command::Cancel(CancelSubcommand::Order { uuid }) => proc.cancel_order(*uuid).await?,
             Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
             Command::Cancel(CancelSubcommand::ByPair { base, rel }) => {
                 proc.cancel_by_pair(take(base), take(rel)).await?

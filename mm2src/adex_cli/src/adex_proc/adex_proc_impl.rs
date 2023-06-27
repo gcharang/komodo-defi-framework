@@ -143,12 +143,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(command, MmVersionResponse, self, on_version_response)
     }
 
-    pub(crate) async fn cancel_order(&self, order_id: &Uuid) -> Result<()> {
+    pub(crate) async fn cancel_order(&self, order_id: Uuid) -> Result<()> {
         info!("Cancelling order: {order_id}");
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
             .method(Method::CancelOrder)
-            .flatten_data(CancelOrderRequest { uuid: *order_id })
+            .flatten_data(CancelOrderRequest { uuid: order_id })
             .build()?;
         request_legacy!(command, Mm2RpcResult<Status>, self, on_cancel_order_response)
     }
