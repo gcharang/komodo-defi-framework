@@ -60,7 +60,7 @@ fn create_tx_history_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     amount VARCHAR(256) NOT NULL,
     token_uri TEXT,
     collection_name TEXT,
-    image TEXT,
+    image_url TEXT,
     token_name TEXT,
     details_json TEXT
         );",
@@ -237,7 +237,7 @@ fn insert_tx_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let sql = format!(
         "INSERT INTO {} (
             transaction_hash, chain, block_number, block_timestamp, contract_type,
-            token_address, token_id, status, amount, collection_name, image, token_name, details_json
+            token_address, token_id, status, amount, collection_name, image_url, token_name, details_json
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
         );",
@@ -275,7 +275,7 @@ fn update_meta_by_tx_hash_sql(chain: &Chain) -> MmResult<String, SqlError> {
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET token_uri = ?1, collection_name = ?2, image = ?3, token_name = ?4, details_json = ?5 WHERE transaction_hash = ?6;",
+        "UPDATE {} SET token_uri = ?1, collection_name = ?2, image_url = ?3, token_name = ?4, details_json = ?5 WHERE transaction_hash = ?6;",
         table_name
     );
     Ok(sql)
@@ -412,7 +412,7 @@ fn get_txs_with_empty_meta_builder<'a>(conn: &'a Connection, chain: &'a Chain) -
         .field("token_id")
         .and_where_is_null("token_uri")
         .and_where_is_null("collection_name")
-        .and_where_is_null("image")
+        .and_where_is_null("image_url")
         .and_where_is_null("token_name");
     drop_mutability!(sql_builder);
     Ok(sql_builder)
@@ -765,7 +765,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.status.to_string()),
                     Some(tx.amount.to_string()),
                     tx.collection_name,
-                    tx.image,
+                    tx.image_url,
                     tx.token_name,
                     Some(tx_json),
                 ];
@@ -843,7 +843,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let params = [
             tx.token_uri,
             tx.collection_name,
-            tx.image,
+            tx.image_url,
             tx.token_name,
             Some(tx_json),
             Some(tx.transaction_hash),
@@ -867,7 +867,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         for mut tx in txs.into_iter() {
             tx.token_uri = tx_meta.token_uri.clone();
             tx.collection_name = tx_meta.collection_name.clone();
-            tx.image = tx_meta.image.clone();
+            tx.image_url = tx_meta.image_url.clone();
             tx.token_name = tx_meta.token_name.clone();
             drop_mutability!(tx);
             selfi.update_tx_meta_by_hash(chain, tx).await?;

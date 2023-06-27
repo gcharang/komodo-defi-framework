@@ -7,7 +7,7 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 mod native_tests {
     use crate::nft::nft_structs::{NftTransferHistoryWrapper, NftWrapper, UriMeta};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
-    use crate::nft::storage::for_db_tests::*;
+    use crate::nft::storage::db_test_helpers::*;
     use crate::nft::{check_moralis_ipfs_bafy, send_request_to_uri};
     use common::block_on;
 
@@ -51,37 +51,37 @@ mod native_tests {
     }
 
     #[test]
-    fn test_add_get_nfts() { block_on(test_add_get_nfts_impl()) }
+    fn test_add_get_nfts() { test_add_get_nfts_impl() }
 
     #[test]
-    fn test_last_nft_blocks() { block_on(test_last_nft_blocks_impl()) }
+    fn test_last_nft_blocks() { test_last_nft_blocks_impl() }
 
     #[test]
-    fn test_nft_list() { block_on(test_nft_list_impl()) }
+    fn test_nft_list() { test_nft_list_impl() }
 
     #[test]
-    fn test_remove_nft() { block_on(test_remove_nft_impl()) }
+    fn test_remove_nft() { test_remove_nft_impl() }
 
     #[test]
-    fn test_refresh_metadata() { block_on(test_refresh_metadata_impl()) }
+    fn test_refresh_metadata() { test_refresh_metadata_impl() }
 
     #[test]
-    fn test_nft_amount() { block_on(test_nft_amount_impl()) }
+    fn test_nft_amount() { test_nft_amount_impl() }
 
     #[test]
-    fn test_add_get_txs() { block_on(test_add_get_txs_impl()) }
+    fn test_add_get_txs() { test_add_get_txs_impl() }
 
     #[test]
-    fn test_last_tx_block() { block_on(test_last_tx_block_impl()) }
+    fn test_last_tx_block() { test_last_tx_block_impl() }
 
     #[test]
-    fn test_tx_history() { block_on(test_tx_history_impl()) }
+    fn test_tx_history() { test_tx_history_impl() }
 
     #[test]
-    fn test_tx_history_filters() { block_on(test_tx_history_filters_impl()) }
+    fn test_tx_history_filters() { test_tx_history_filters_impl() }
 
     #[test]
-    fn test_get_update_tx_meta() { block_on(test_get_update_tx_meta_impl()) }
+    fn test_get_update_tx_meta() { test_get_update_tx_meta_impl() }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -89,7 +89,7 @@ mod wasm_tests {
     use crate::nft::nft_structs::{NftTransferHistoryWrapper, NftWrapper};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::send_request_to_uri;
-    use crate::nft::storage::for_db_tests::*;
+    use crate::nft::storage::db_test_helpers::*;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -122,35 +122,35 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn test_add_get_nfts() { test_add_get_nfts_impl().await }
+    fn test_add_get_nfts() { test_add_get_nfts_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_last_nft_blocks() { test_last_nft_blocks_impl().await }
+    fn test_last_nft_blocks() { test_last_nft_blocks_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_nft_list() { test_nft_list_impl().await }
+    fn test_nft_list() { test_nft_list_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_remove_nft() { test_remove_nft_impl().await }
+    fn test_remove_nft() { test_remove_nft_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_nft_amount() { test_nft_amount_impl().await }
+    fn test_nft_amount() { test_nft_amount_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_refresh_metadata() { test_refresh_metadata_impl().await }
+    fn test_refresh_metadata() { test_refresh_metadata_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_add_get_txs() { test_add_get_txs_impl().await }
+    fn test_add_get_txs() { test_add_get_txs_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_last_tx_block() { test_last_tx_block_impl().await }
+    fn test_last_tx_block() { test_last_tx_block_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_tx_history() { test_tx_history_impl().await }
+    fn test_tx_history() { test_tx_history_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_tx_history_filters() { test_tx_history_filters_impl().await }
+    fn test_tx_history_filters() { test_tx_history_filters_impl() }
 
     #[wasm_bindgen_test]
-    async fn test_get_update_tx_meta() { test_get_update_tx_meta_impl().await }
+    fn test_get_update_tx_meta() { test_get_update_tx_meta_impl() }
 }

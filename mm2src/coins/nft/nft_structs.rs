@@ -132,24 +132,21 @@ impl fmt::Display for ContractType {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub(crate) struct UriMetaFromStr {
-    pub(crate) image: Option<String>,
-    /// the same as image, some tokens use **image_url** name for **image** field
-    /// but sometimes token_uri contains both`image_url` and `image`
-    pub(crate) image_url: Option<String>,
-    #[serde(rename(deserialize = "name"))]
-    pub(crate) token_name: Option<String>,
-    pub(crate) description: Option<String>,
-    pub(crate) attributes: Option<Json>,
-    pub(crate) animation_url: Option<String>,
-    pub(crate) external_url: Option<String>,
-    pub(crate) image_details: Option<Json>,
-}
-
+/// `UriMeta` structure is the object which we create from `token_uri` and `metadata`.
+///
+/// `token_uri` and `metadata` usually contain either `image` or `image_url` with image url.
+/// But most often nft creators use only `image` name for this value (from my observation),
+/// less often they use both parameters with the same url.
+///
+/// I suspect this is because some APIs only look for one of these image url names, so nft creators try to satisfy all sides.
+/// In any case, since there is no clear standard, we have to look for both options,
+/// when we build `UriMeta` from `token_uri` or `metadata`.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct UriMeta {
-    pub(crate) image: Option<String>,
+    #[serde(rename = "image")]
+    pub(crate) raw_image_url: Option<String>,
+    pub(crate) image_url: Option<String>,
+    #[serde(rename = "name")]
     pub(crate) token_name: Option<String>,
     pub(crate) description: Option<String>,
     pub(crate) attributes: Option<Json>,
@@ -159,9 +156,13 @@ pub(crate) struct UriMeta {
 }
 
 impl UriMeta {
-    pub(crate) fn merge_from(&mut self, other: UriMetaFromStr) {
-        if self.image.is_none() {
-            self.image = other.image.or(other.image_url);
+    /// `merge_from` function doesnt change `raw_image_url` field.
+    /// It tries to update `image_url` field instead, if it is None.
+    /// As `image` is the original name of `raw_image_url` field in data from `token_uri` or `metadata`,
+    /// try to find **Some()** in this field first.
+    pub(crate) fn merge_from(&mut self, other: UriMeta) {
+        if self.image_url.is_none() {
+            self.image_url = other.raw_image_url.or(other.image_url);
         }
         if self.token_name.is_none() {
             self.token_name = other.token_name;
@@ -202,7 +203,7 @@ pub struct Nft {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
-    pub(crate) possible_spam: Option<bool>,
+    pub(crate) possible_spam: bool,
     pub(crate) uri_meta: UriMeta,
 }
 
@@ -225,7 +226,8 @@ pub(crate) struct NftWrapper {
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
     pub(crate) minter_address: Option<String>,
-    pub(crate) possible_spam: Option<bool>,
+    #[serde(default)]
+    pub(crate) possible_spam: bool,
 }
 
 #[derive(Debug)]
@@ -377,7 +379,7 @@ pub struct NftTransferHistory {
     pub(crate) token_id: BigDecimal,
     pub(crate) token_uri: Option<String>,
     pub(crate) collection_name: Option<String>,
-    pub(crate) image: Option<String>,
+    pub(crate) image_url: Option<String>,
     pub(crate) token_name: Option<String>,
     pub(crate) from_address: String,
     pub(crate) to_address: String,
@@ -385,7 +387,7 @@ pub struct NftTransferHistory {
     pub(crate) amount: BigDecimal,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
-    pub(crate) possible_spam: Option<bool>,
+    pub(crate) possible_spam: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -407,7 +409,8 @@ pub(crate) struct NftTransferHistoryWrapper {
     pub(crate) amount: SerdeStringWrap<BigDecimal>,
     pub(crate) verified: u64,
     pub(crate) operator: Option<String>,
-    pub(crate) possible_spam: Option<bool>,
+    #[serde(default)]
+    pub(crate) possible_spam: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -445,6 +448,6 @@ pub struct TxMeta {
     pub(crate) token_id: BigDecimal,
     pub(crate) token_uri: Option<String>,
     pub(crate) collection_name: Option<String>,
-    pub(crate) image: Option<String>,
+    pub(crate) image_url: Option<String>,
     pub(crate) token_name: Option<String>,
 }

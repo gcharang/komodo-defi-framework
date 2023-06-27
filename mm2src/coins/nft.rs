@@ -15,7 +15,7 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftList, NftListReq, N
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft::nft_structs::{RefreshMetadataReq, TransferStatus, TxMeta, UriMeta, UriMetaFromStr};
+use crate::nft::nft_structs::{RefreshMetadataReq, TransferStatus, TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use http::header::ACCEPT;
@@ -44,16 +44,16 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
             NftListStorageOps::init(&storage, chain).await?;
         }
     }
-    let mut nfts = storage
+    let mut nft_list = storage
         .get_nft_list(req.chains, req.max, req.limit, req.page_number)
         .await?;
     if req.protect_from_spam {
-        for nft in &mut nfts.nfts {
+        for nft in &mut nft_list.nfts {
             protect_from_nft_spam(nft)?;
         }
     }
-    drop_mutability!(nfts);
-    Ok(nfts)
+    drop_mutability!(nft_list);
+    Ok(nft_list)
 }
 
 /// `get_nft_metadata` function returns info of one specific NFT.
@@ -92,6 +92,7 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
             protect_from_history_spam(tx);
         }
     }
+    drop_mutability!(transfer_history_list);
     Ok(transfer_history_list)
 }
 
@@ -191,7 +192,7 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         token_id: nft_db.token_id,
         token_uri: nft_db.token_uri,
         collection_name: nft_db.collection_name,
-        image: nft_db.uri_meta.image,
+        image_url: nft_db.uri_meta.image_url,
         token_name: nft_db.uri_meta.token_name,
     };
     storage.update_txs_meta_by_token_addr_id(&nft_db.chain, tx_meta).await?;
@@ -325,7 +326,7 @@ async fn get_moralis_nft_transfers(
                     token_id: transfer_wrapper.token_id.0,
                     token_uri: None,
                     collection_name: None,
-                    image: None,
+                    image_url: None,
                     token_name: None,
                     from_address: transfer_wrapper.from_address,
                     to_address: transfer_wrapper.to_address,
@@ -476,27 +477,21 @@ fn check_moralis_ipfs_bafy(token_uri: Option<&str>) -> Option<String> {
     })
 }
 
-async fn try_get_uri_meta(token_uri: Option<&str>) -> UriMeta {
+async fn get_uri_meta(token_uri: Option<&str>, metadata: Option<&str>) -> UriMeta {
     let mut uri_meta = UriMeta::default();
     if let Some(token_uri) = token_uri {
         if let Ok(response_meta) = send_request_to_uri(token_uri).await {
-            if let Ok(uri_meta_res) = serde_json::from_str::<UriMetaFromStr>(&response_meta.to_string()) {
-                uri_meta.merge_from(uri_meta_res);
+            if let Ok(token_uri_meta) = serde_json::from_value(response_meta) {
+                uri_meta = token_uri_meta;
             }
         }
     }
-    drop_mutability!(uri_meta);
-    uri_meta
-}
-
-async fn get_uri_meta(token_uri: Option<&str>, metadata: Option<&str>) -> UriMeta {
-    let mut uri_meta = try_get_uri_meta(token_uri).await;
     if let Some(metadata) = metadata {
-        if let Ok(meta_from_meta) = serde_json::from_str::<UriMetaFromStr>(metadata) {
-            uri_meta.merge_from(meta_from_meta);
+        if let Ok(meta_from_meta) = serde_json::from_str::<UriMeta>(metadata) {
+            uri_meta.merge_from(meta_from_meta)
         }
     }
-    uri_meta.image = check_moralis_ipfs_bafy(uri_meta.image.as_deref());
+    uri_meta.image_url = check_moralis_ipfs_bafy(uri_meta.image_url.as_deref());
     uri_meta.animation_url = check_moralis_ipfs_bafy(uri_meta.animation_url.as_deref());
     drop_mutability!(uri_meta);
     uri_meta
@@ -567,7 +562,7 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
         token_id: nft_db.token_id,
         token_uri: nft_db.token_uri,
         collection_name: nft_db.collection_name,
-        image: nft_db.uri_meta.image,
+        image_url: nft_db.uri_meta.image_url,
         token_name: nft_db.uri_meta.token_name,
     };
     storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -598,7 +593,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
         token_id: nft.token_id,
         token_uri: nft.token_uri,
         collection_name: nft.collection_name,
-        image: nft.uri_meta.image,
+        image_url: nft.uri_meta.image_url,
         token_name: nft.uri_meta.token_name,
     };
     storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -624,7 +619,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
                 token_id: nft_db.token_id,
                 token_uri: nft_db.token_uri,
                 collection_name: nft_db.collection_name,
-                image: nft_db.uri_meta.image,
+                image_url: nft_db.uri_meta.image_url,
                 token_name: nft_db.uri_meta.token_name,
             };
             storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -643,7 +638,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
                 token_id: nft_db.token_id,
                 token_uri: nft_db.token_uri,
                 collection_name: nft_db.collection_name,
-                image: nft_db.uri_meta.image,
+                image_url: nft_db.uri_meta.image_url,
                 token_name: nft_db.uri_meta.token_name,
             };
             storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -685,7 +680,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             token_id: nft_db.token_id,
             token_uri: nft_db.token_uri,
             collection_name: nft_db.collection_name,
-            image: nft_db.uri_meta.image,
+            image_url: nft_db.uri_meta.image_url,
             token_name: nft_db.uri_meta.token_name,
         };
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -719,7 +714,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             token_id: nft.token_id,
             token_uri: nft.token_uri,
             collection_name: nft.collection_name,
-            image: nft.uri_meta.image,
+            image_url: nft.uri_meta.image_url,
             token_name: nft.uri_meta.token_name,
         };
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -776,7 +771,7 @@ where
             token_id: nft.token_id,
             token_uri: nft.token_uri,
             collection_name: nft.collection_name,
-            image: nft.uri_meta.image,
+            image_url: nft.uri_meta.image_url,
             token_name: nft.uri_meta.token_name,
         };
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -797,7 +792,7 @@ where
             token_id: nft_meta.token_id,
             token_uri: nft_meta.token_uri,
             collection_name: nft_meta.collection_name,
-            image: nft_meta.uri_meta.image,
+            image_url: nft_meta.uri_meta.image_url,
             token_name: nft_meta.uri_meta.token_name,
         };
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
@@ -805,25 +800,35 @@ where
     Ok(())
 }
 
-fn check_and_redact_if_spam(value: &mut Option<String>) -> bool {
-    match value {
+/// `check_and_redact_if_spam` checks if the text contains any links.///
+/// It doesn't matter if the link is valid or not, as this is a spam check.
+/// If text contains some link, then it is a spam.
+fn check_and_redact_if_spam(text: &mut Option<String>) -> bool {
+    match text {
         Some(s) if s.contains("http://") || s.contains("https://") => {
-            *value = Some("URL redacted for user protection".to_string());
+            *text = Some("URL redacted for user protection".to_string());
             true
         },
         _ => false,
     }
 }
-
+/// `protect_from_history_spam` function checks and redact spam in `NftTransferHistory`.
+///
+/// `collection_name` and `token_name` in `NftTransferHistory` shouldn't contain any links,
+/// they must be just an arbitrary text, which represents NFT names.
 fn protect_from_history_spam(tx: &mut NftTransferHistory) {
     let collection_name_spam = check_and_redact_if_spam(&mut tx.collection_name);
     let token_name_spam = check_and_redact_if_spam(&mut tx.token_name);
 
     if collection_name_spam || token_name_spam {
-        tx.possible_spam = Some(true);
+        tx.possible_spam = true;
     }
 }
-
+/// `protect_from_nft_spam` function checks and redact spam in `Nft`.
+///
+/// `collection_name` and `token_name` in `Nft` shouldn't contain any links,
+/// they must be just an arbitrary text, which represents NFT names.
+/// `symbol` also must be a text or sign that represents a symbol.
 fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
     let collection_name_spam = check_and_redact_if_spam(&mut nft.collection_name);
     let symbol_spam = check_and_redact_if_spam(&mut nft.symbol);
@@ -831,15 +836,17 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
     let meta_spam = check_nft_metadata_for_spam(nft)?;
 
     if collection_name_spam || symbol_spam || token_name_spam || meta_spam {
-        nft.possible_spam = Some(true);
+        nft.possible_spam = true;
     }
     Ok(())
 }
-
+/// `check_nft_metadata_for_spam` function checks and redact spam in `metadata` field from `Nft`.
+///
+/// **note:** `token_name` is usually called `name` in `metadata`.
 fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Error> {
     if let Some(metadata_str) = &nft.metadata {
         if let Ok(mut metadata) = serde_json::from_str::<serde_json::Map<String, Json>>(metadata_str) {
-            if check_and_redact_metadata_field(&mut metadata, "name") {
+            if check_spam_and_redact_metadata_field(&mut metadata, "name") {
                 nft.metadata = Some(serde_json::to_string(&metadata)?);
                 return Ok(true);
             }
@@ -848,9 +855,15 @@ fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Erro
     Ok(false)
 }
 
-fn check_and_redact_metadata_field(metadata: &mut serde_json::Map<String, Json>, field: &str) -> bool {
+/// The `check_spam_and_redact_metadata_field` function scans a specified field in a JSON metadata object for potential spam.
+///
+/// This function checks the provided `metadata` map for a field matching the `field` parameter.
+/// If this field is found and its value contains some link, it's considered to contain spam.
+/// To protect users, function redacts field containing spam link.
+/// The function returns `true` if it detected spam link, or `false` otherwise.
+fn check_spam_and_redact_metadata_field(metadata: &mut serde_json::Map<String, Json>, field: &str) -> bool {
     match metadata.get(field).and_then(|v| v.as_str()) {
-        Some(value) if value.contains("http://") || value.contains("https://") => {
+        Some(text) if text.contains("http://") || text.contains("https://") => {
             metadata.insert(
                 field.to_string(),
                 serde_json::Value::String("URL redacted for user protection".to_string()),

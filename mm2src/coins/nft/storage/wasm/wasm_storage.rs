@@ -85,18 +85,15 @@ impl IndexedDbNftStorage {
                 filtered_txs.push(tx);
             }
         }
-        drop_mutability!(filtered_txs);
         Ok(filtered_txs)
     }
 }
 
 impl NftTxHistoryFilters {
     fn is_status_match(&self, tx: &NftTransferHistory) -> bool {
-        if !self.receive && !self.send {
-            true
-        } else {
-            (self.receive && tx.status == TransferStatus::Receive) || (self.send && tx.status == TransferStatus::Send)
-        }
+        (!self.receive && !self.send)
+            || (self.receive && tx.status == TransferStatus::Receive)
+            || (self.send && tx.status == TransferStatus::Send)
     }
 
     fn is_date_match(&self, tx: &NftTransferHistory) -> bool {
@@ -174,7 +171,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
             Ok(Some(nft_details_from_item(item)?))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -228,7 +225,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
             Ok(Some(nft_details_from_item(item)?.amount.to_string()))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -264,7 +261,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
                 .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))?;
             Ok(Some(last_scanned_block))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -399,7 +396,6 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
             let tx = tx_details_from_item(item)?;
             res.push(tx);
         }
-        drop_mutability!(res);
         Ok(res)
     }
 
@@ -441,7 +437,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
             Ok(Some(tx_details_from_item(item)?))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -469,7 +465,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         for mut tx in txs {
             tx.token_uri = tx_meta.token_uri.clone();
             tx.collection_name = tx_meta.collection_name.clone();
-            tx.image = tx_meta.image.clone();
+            tx.image_url = tx_meta.image_url.clone();
             tx.token_name = tx_meta.token_name.clone();
             drop_mutability!(tx);
 
@@ -503,7 +499,7 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         {
             if item.token_uri.is_none()
                 && item.collection_name.is_none()
-                && item.image.is_none()
+                && item.image_url.is_none()
                 && item.token_name.is_none()
             {
                 res.insert(NftTokenAddrId {
@@ -512,7 +508,6 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
                 });
             }
         }
-        drop_mutability!(res);
         Ok(res.into_iter().collect())
     }
 }
@@ -618,7 +613,7 @@ pub(crate) struct NftTxHistoryTable {
     amount: String,
     token_uri: Option<String>,
     collection_name: Option<String>,
-    image: Option<String>,
+    image_url: Option<String>,
     token_name: Option<String>,
     details_json: Json,
 }
@@ -644,7 +639,7 @@ impl NftTxHistoryTable {
             amount: tx.amount.to_string(),
             token_uri: tx.token_uri.clone(),
             collection_name: tx.collection_name.clone(),
-            image: tx.image.clone(),
+            image_url: tx.image_url.clone(),
             token_name: tx.token_name.clone(),
             details_json,
         })

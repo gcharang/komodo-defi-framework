@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
 #[cfg(any(test, target_arch = "wasm32"))]
-pub(crate) mod for_db_tests;
+pub(crate) mod db_test_helpers;
 #[cfg(not(target_arch = "wasm32"))] pub(crate) mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub(crate) mod wasm;
 
@@ -173,6 +173,7 @@ impl<'a> NftStorageBuilder<'a> {
     }
 }
 
+/// `get_offset_limit` function calculates offset and limit for final result if we use pagination.
 fn get_offset_limit(max: bool, limit: usize, page_number: Option<NonZeroUsize>, total_count: usize) -> (usize, usize) {
     if max {
         return (0, total_count);
