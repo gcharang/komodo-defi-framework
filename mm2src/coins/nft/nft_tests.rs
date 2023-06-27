@@ -51,37 +51,37 @@ mod native_tests {
     }
 
     #[test]
-    fn test_add_get_nfts() { test_add_get_nfts_impl() }
+    fn test_add_get_nfts() { block_on(test_add_get_nfts_impl()) }
 
     #[test]
-    fn test_last_nft_blocks() { test_last_nft_blocks_impl() }
+    fn test_last_nft_blocks() { block_on(test_last_nft_blocks_impl()) }
 
     #[test]
-    fn test_nft_list() { test_nft_list_impl() }
+    fn test_nft_list() { block_on(test_nft_list_impl()) }
 
     #[test]
-    fn test_remove_nft() { test_remove_nft_impl() }
+    fn test_remove_nft() { block_on(test_remove_nft_impl()) }
 
     #[test]
-    fn test_refresh_metadata() { test_refresh_metadata_impl() }
+    fn test_refresh_metadata() { block_on(test_refresh_metadata_impl()) }
 
     #[test]
-    fn test_nft_amount() { test_nft_amount_impl() }
+    fn test_nft_amount() { block_on(test_nft_amount_impl()) }
 
     #[test]
-    fn test_add_get_txs() { test_add_get_txs_impl() }
+    fn test_add_get_txs() { block_on(test_add_get_txs_impl()) }
 
     #[test]
-    fn test_last_tx_block() { test_last_tx_block_impl() }
+    fn test_last_tx_block() { block_on(test_last_tx_block_impl()) }
 
     #[test]
-    fn test_tx_history() { test_tx_history_impl() }
+    fn test_tx_history() { block_on(test_tx_history_impl()) }
 
     #[test]
-    fn test_tx_history_filters() { test_tx_history_filters_impl() }
+    fn test_tx_history_filters() { block_on(test_tx_history_filters_impl()) }
 
     #[test]
-    fn test_get_update_tx_meta() { test_get_update_tx_meta_impl() }
+    fn test_get_update_tx_meta() { block_on(test_get_update_tx_meta_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -122,35 +122,35 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_add_get_nfts() { test_add_get_nfts_impl() }
+    async fn test_add_get_nfts() { test_add_get_nfts_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_last_nft_blocks() { test_last_nft_blocks_impl() }
+    async fn test_last_nft_blocks() { test_last_nft_blocks_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_nft_list() { test_nft_list_impl() }
+    async fn test_nft_list() { test_nft_list_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_remove_nft() { test_remove_nft_impl() }
+    async fn test_remove_nft() { test_remove_nft_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_nft_amount() { test_nft_amount_impl() }
+    async fn test_nft_amount() { test_nft_amount_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_refresh_metadata() { test_refresh_metadata_impl() }
+    async fn test_refresh_metadata() { test_refresh_metadata_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_add_get_txs() { test_add_get_txs_impl() }
+    async fn test_add_get_txs() { test_add_get_txs_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_last_tx_block() { test_last_tx_block_impl() }
+    async fn test_last_tx_block() { test_last_tx_block_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_tx_history() { test_tx_history_impl() }
+    async fn test_tx_history() { test_tx_history_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_tx_history_filters() { test_tx_history_filters_impl() }
+    async fn test_tx_history_filters() { test_tx_history_filters_impl().await }
 
     #[wasm_bindgen_test]
-    fn test_get_update_tx_meta() { test_get_update_tx_meta_impl() }
+    async fn test_get_update_tx_meta() { test_get_update_tx_meta_impl().await }
 }

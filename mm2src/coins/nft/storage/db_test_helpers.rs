@@ -278,293 +278,271 @@ async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + Nft
     storage
 }
 
-pub(crate) fn test_add_get_nfts_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_list_storage(&chain).await;
-        let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+pub(crate) async fn test_add_get_nfts_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
-        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
-        let nft = storage
-            .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(nft.block_number, 28056721);
-    });
+    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let nft = storage
+        .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(nft.block_number, 28056721);
 }
 
-pub(crate) fn test_last_nft_blocks_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_list_storage(&chain).await;
-        let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+pub(crate) async fn test_last_nft_blocks_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
-        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
-        let nft = storage
-            .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(nft.block_number, 28056721);
-    });
+    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let nft = storage
+        .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(nft.block_number, 28056721);
 }
 
-pub(crate) fn test_nft_list_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_list_storage(&chain).await;
-        let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+pub(crate) async fn test_nft_list_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
-        let nft_list = storage
-            .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()))
-            .await
-            .unwrap();
-        assert_eq!(nft_list.nfts.len(), 1);
-        let nft = nft_list.nfts.get(0).unwrap();
-        assert_eq!(nft.block_number, 28056721);
-        assert_eq!(nft_list.skipped, 1);
-        assert_eq!(nft_list.total, 3);
-    });
+    let nft_list = storage
+        .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()))
+        .await
+        .unwrap();
+    assert_eq!(nft_list.nfts.len(), 1);
+    let nft = nft_list.nfts.get(0).unwrap();
+    assert_eq!(nft.block_number, 28056721);
+    assert_eq!(nft_list.skipped, 1);
+    assert_eq!(nft_list.total, 3);
 }
 
-pub(crate) fn test_remove_nft_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_list_storage(&chain).await;
-        let nft_list = nft_list();
-        storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+pub(crate) async fn test_remove_nft_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
-        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
-        let remove_rslt = storage
-            .remove_nft_from_list(&chain, TOKEN_ADD.to_string(), token_id, 28056800)
-            .await
-            .unwrap();
-        assert_eq!(remove_rslt, RemoveNftResult::NftRemoved);
-        let list_len = storage
-            .get_nft_list(vec![chain], true, 1, None)
-            .await
-            .unwrap()
-            .nfts
-            .len();
-        assert_eq!(list_len, 2);
-        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
-        assert_eq!(last_scanned_block, 28056800);
-    });
+    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let remove_rslt = storage
+        .remove_nft_from_list(&chain, TOKEN_ADD.to_string(), token_id, 28056800)
+        .await
+        .unwrap();
+    assert_eq!(remove_rslt, RemoveNftResult::NftRemoved);
+    let list_len = storage
+        .get_nft_list(vec![chain], true, 1, None)
+        .await
+        .unwrap()
+        .nfts
+        .len();
+    assert_eq!(list_len, 2);
+    let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+    assert_eq!(last_scanned_block, 28056800);
 }
 
-pub(crate) fn test_nft_amount_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_list_storage(&chain).await;
-        let mut nft = nft();
-        storage
-            .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
-            .await
-            .unwrap();
+pub(crate) async fn test_nft_amount_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let mut nft = nft();
+    storage
+        .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
+        .await
+        .unwrap();
 
-        nft.amount -= BigDecimal::from(1);
-        storage.update_nft_amount(&chain, nft.clone(), 25919800).await.unwrap();
-        let amount = storage
-            .get_nft_amount(&chain, nft.token_address.clone(), nft.token_id.clone())
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(amount, "1");
-        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
-        assert_eq!(last_scanned_block, 25919800);
+    nft.amount -= BigDecimal::from(1);
+    storage.update_nft_amount(&chain, nft.clone(), 25919800).await.unwrap();
+    let amount = storage
+        .get_nft_amount(&chain, nft.token_address.clone(), nft.token_id.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(amount, "1");
+    let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+    assert_eq!(last_scanned_block, 25919800);
 
-        nft.amount += BigDecimal::from(1);
-        nft.block_number = 25919900;
-        storage
-            .update_nft_amount_and_block_number(&chain, nft.clone())
-            .await
-            .unwrap();
-        let amount = storage
-            .get_nft_amount(&chain, nft.token_address, nft.token_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(amount, "2");
-        let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
-        assert_eq!(last_scanned_block, 25919900);
-    });
+    nft.amount += BigDecimal::from(1);
+    nft.block_number = 25919900;
+    storage
+        .update_nft_amount_and_block_number(&chain, nft.clone())
+        .await
+        .unwrap();
+    let amount = storage
+        .get_nft_amount(&chain, nft.token_address, nft.token_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(amount, "2");
+    let last_scanned_block = storage.get_last_scanned_block(&chain).await.unwrap().unwrap();
+    assert_eq!(last_scanned_block, 25919900);
 }
 
-pub(crate) fn test_refresh_metadata_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_list_storage(&chain).await;
-        let new_symbol = "NEW_SYMBOL";
-        let mut nft = nft();
-        storage
-            .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
-            .await
-            .unwrap();
-        nft.symbol = Some(new_symbol.to_string());
-        drop_mutability!(nft);
-        let token_add = nft.token_address.clone();
-        let token_id = nft.token_id.clone();
-        storage.refresh_nft_metadata(&chain, nft).await.unwrap();
-        let nft_upd = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
-        assert_eq!(new_symbol.to_string(), nft_upd.symbol.unwrap());
-    });
+pub(crate) async fn test_refresh_metadata_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let new_symbol = "NEW_SYMBOL";
+    let mut nft = nft();
+    storage
+        .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
+        .await
+        .unwrap();
+    nft.symbol = Some(new_symbol.to_string());
+    drop_mutability!(nft);
+    let token_add = nft.token_address.clone();
+    let token_id = nft.token_id.clone();
+    storage.refresh_nft_metadata(&chain, nft).await.unwrap();
+    let nft_upd = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
+    assert_eq!(new_symbol.to_string(), nft_upd.symbol.unwrap());
 }
 
-pub(crate) fn test_add_get_txs_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_history_storage(&chain).await;
-        let txs = nft_tx_historty();
-        storage.add_txs_to_history(&chain, txs).await.unwrap();
+pub(crate) async fn test_add_get_txs_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let txs = nft_tx_historty();
+    storage.add_txs_to_history(&chain, txs).await.unwrap();
 
-        let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
-        let tx1 = storage
-            .get_txs_by_token_addr_id(&chain, TOKEN_ADD.to_string(), token_id)
-            .await
-            .unwrap()
-            .get(0)
-            .unwrap()
-            .clone();
-        assert_eq!(tx1.block_number, 28056721);
-        let tx2 = storage
-            .get_tx_by_tx_hash(&chain, TX_HASH.to_string())
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(tx2.block_number, 28056726);
-        let tx_from = storage.get_txs_from_block(&chain, 28056721).await.unwrap();
-        assert_eq!(tx_from.len(), 2);
-    });
+    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let tx1 = storage
+        .get_txs_by_token_addr_id(&chain, TOKEN_ADD.to_string(), token_id)
+        .await
+        .unwrap()
+        .get(0)
+        .unwrap()
+        .clone();
+    assert_eq!(tx1.block_number, 28056721);
+    let tx2 = storage
+        .get_tx_by_tx_hash(&chain, TX_HASH.to_string())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(tx2.block_number, 28056726);
+    let tx_from = storage.get_txs_from_block(&chain, 28056721).await.unwrap();
+    assert_eq!(tx_from.len(), 2);
 }
 
-pub(crate) fn test_last_tx_block_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_history_storage(&chain).await;
-        let txs = nft_tx_historty();
-        storage.add_txs_to_history(&chain, txs).await.unwrap();
+pub(crate) async fn test_last_tx_block_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let txs = nft_tx_historty();
+    storage.add_txs_to_history(&chain, txs).await.unwrap();
 
-        let last_block = NftTxHistoryStorageOps::get_last_block_number(&storage, &chain)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(last_block, 28056726);
-    });
+    let last_block = NftTxHistoryStorageOps::get_last_block_number(&storage, &chain)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(last_block, 28056726);
 }
 
-pub(crate) fn test_tx_history_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_history_storage(&chain).await;
-        let txs = nft_tx_historty();
-        storage.add_txs_to_history(&chain, txs).await.unwrap();
+pub(crate) async fn test_tx_history_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let txs = nft_tx_historty();
+    storage.add_txs_to_history(&chain, txs).await.unwrap();
 
-        let tx_history = storage
-            .get_tx_history(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()), None)
-            .await
-            .unwrap();
-        assert_eq!(tx_history.transfer_history.len(), 1);
-        let tx = tx_history.transfer_history.get(0).unwrap();
-        assert_eq!(tx.block_number, 28056721);
-        assert_eq!(tx_history.skipped, 1);
-        assert_eq!(tx_history.total, 3);
-    });
+    let tx_history = storage
+        .get_tx_history(vec![chain], false, 1, Some(NonZeroUsize::new(2).unwrap()), None)
+        .await
+        .unwrap();
+    assert_eq!(tx_history.transfer_history.len(), 1);
+    let tx = tx_history.transfer_history.get(0).unwrap();
+    assert_eq!(tx.block_number, 28056721);
+    assert_eq!(tx_history.skipped, 1);
+    assert_eq!(tx_history.total, 3);
 }
 
-pub(crate) fn test_tx_history_filters_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_history_storage(&chain).await;
-        let txs = nft_tx_historty();
-        storage.add_txs_to_history(&chain, txs).await.unwrap();
+pub(crate) async fn test_tx_history_filters_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let txs = nft_tx_historty();
+    storage.add_txs_to_history(&chain, txs).await.unwrap();
 
-        let filters = NftTxHistoryFilters {
-            receive: true,
-            send: false,
-            from_date: None,
-            to_date: None,
-        };
+    let filters = NftTxHistoryFilters {
+        receive: true,
+        send: false,
+        from_date: None,
+        to_date: None,
+    };
 
-        let filters1 = NftTxHistoryFilters {
-            receive: false,
-            send: false,
-            from_date: None,
-            to_date: Some(1677166110),
-        };
+    let filters1 = NftTxHistoryFilters {
+        receive: false,
+        send: false,
+        from_date: None,
+        to_date: Some(1677166110),
+    };
 
-        let filters2 = NftTxHistoryFilters {
-            receive: false,
-            send: false,
-            from_date: Some(1677166110),
-            to_date: Some(1683627417),
-        };
+    let filters2 = NftTxHistoryFilters {
+        receive: false,
+        send: false,
+        from_date: Some(1677166110),
+        to_date: Some(1683627417),
+    };
 
-        let tx_history = storage
-            .get_tx_history(vec![chain], true, 1, None, Some(filters))
-            .await
-            .unwrap();
-        assert_eq!(tx_history.transfer_history.len(), 3);
-        let tx = tx_history.transfer_history.get(0).unwrap();
-        assert_eq!(tx.block_number, 28056726);
+    let tx_history = storage
+        .get_tx_history(vec![chain], true, 1, None, Some(filters))
+        .await
+        .unwrap();
+    assert_eq!(tx_history.transfer_history.len(), 3);
+    let tx = tx_history.transfer_history.get(0).unwrap();
+    assert_eq!(tx.block_number, 28056726);
 
-        let tx_history1 = storage
-            .get_tx_history(vec![chain], true, 1, None, Some(filters1))
-            .await
-            .unwrap();
-        assert_eq!(tx_history1.transfer_history.len(), 1);
-        let tx1 = tx_history1.transfer_history.get(0).unwrap();
-        assert_eq!(tx1.block_number, 25919780);
+    let tx_history1 = storage
+        .get_tx_history(vec![chain], true, 1, None, Some(filters1))
+        .await
+        .unwrap();
+    assert_eq!(tx_history1.transfer_history.len(), 1);
+    let tx1 = tx_history1.transfer_history.get(0).unwrap();
+    assert_eq!(tx1.block_number, 25919780);
 
-        let tx_history2 = storage
-            .get_tx_history(vec![chain], true, 1, None, Some(filters2))
-            .await
-            .unwrap();
-        assert_eq!(tx_history2.transfer_history.len(), 2);
-        let tx_0 = tx_history2.transfer_history.get(0).unwrap();
-        assert_eq!(tx_0.block_number, 28056721);
-        let tx_1 = tx_history2.transfer_history.get(1).unwrap();
-        assert_eq!(tx_1.block_number, 25919780);
-    });
+    let tx_history2 = storage
+        .get_tx_history(vec![chain], true, 1, None, Some(filters2))
+        .await
+        .unwrap();
+    assert_eq!(tx_history2.transfer_history.len(), 2);
+    let tx_0 = tx_history2.transfer_history.get(0).unwrap();
+    assert_eq!(tx_0.block_number, 28056721);
+    let tx_1 = tx_history2.transfer_history.get(1).unwrap();
+    assert_eq!(tx_1.block_number, 25919780);
 }
 
-pub(crate) fn test_get_update_tx_meta_impl() {
-    futures::executor::block_on(async {
-        let chain = Chain::Bsc;
-        let storage = init_nft_history_storage(&chain).await;
-        let txs = nft_tx_historty();
-        storage.add_txs_to_history(&chain, txs).await.unwrap();
+pub(crate) async fn test_get_update_tx_meta_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let txs = nft_tx_historty();
+    storage.add_txs_to_history(&chain, txs).await.unwrap();
 
-        let vec_token_add_id = storage.get_txs_with_empty_meta(&chain).await.unwrap();
-        assert_eq!(vec_token_add_id.len(), 2);
+    let vec_token_add_id = storage.get_txs_with_empty_meta(&chain).await.unwrap();
+    assert_eq!(vec_token_add_id.len(), 2);
 
-        let token_add = "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string();
-        let tx_meta = TxMeta {
-            token_address: token_add.clone(),
-            token_id: Default::default(),
-            token_uri: None,
-            collection_name: None,
-            image_url: None,
-            token_name: Some("Tiki box".to_string()),
-        };
-        storage.update_txs_meta_by_token_addr_id(&chain, tx_meta).await.unwrap();
-        let tx_upd = storage
-            .get_txs_by_token_addr_id(&chain, token_add, Default::default())
-            .await
-            .unwrap();
-        let tx_upd = tx_upd.get(0).unwrap();
-        assert_eq!(tx_upd.token_name, Some("Tiki box".to_string()));
+    let token_add = "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string();
+    let tx_meta = TxMeta {
+        token_address: token_add.clone(),
+        token_id: Default::default(),
+        token_uri: None,
+        collection_name: None,
+        image_url: None,
+        token_name: Some("Tiki box".to_string()),
+    };
+    storage.update_txs_meta_by_token_addr_id(&chain, tx_meta).await.unwrap();
+    let tx_upd = storage
+        .get_txs_by_token_addr_id(&chain, token_add, Default::default())
+        .await
+        .unwrap();
+    let tx_upd = tx_upd.get(0).unwrap();
+    assert_eq!(tx_upd.token_name, Some("Tiki box".to_string()));
 
-        let tx_meta = tx();
-        storage.update_tx_meta_by_hash(&chain, tx_meta).await.unwrap();
-        let tx_by_hash = storage
-            .get_tx_by_tx_hash(&chain, TX_HASH.to_string())
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(tx_by_hash.token_name, Some("Nebula Nodes".to_string()))
-    });
+    let tx_meta = tx();
+    storage.update_tx_meta_by_hash(&chain, tx_meta).await.unwrap();
+    let tx_by_hash = storage
+        .get_tx_by_tx_hash(&chain, TX_HASH.to_string())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(tx_by_hash.token_name, Some("Nebula Nodes".to_string()))
 }
