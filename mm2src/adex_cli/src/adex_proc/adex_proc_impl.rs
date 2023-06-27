@@ -137,7 +137,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(command, Mm2RpcResult<Status>, self, on_stop_response)
     }
 
-    pub(crate) async fn get_version(self) -> Result<()> {
+    pub(crate) async fn get_version(&self) -> Result<()> {
         info!("Request for mm2 version");
         let command = Command::<Dummy>::builder().method(Method::Version).build()?;
         request_legacy!(command, MmVersionResponse, self, on_version_response)
