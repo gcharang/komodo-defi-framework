@@ -251,11 +251,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .map(|pair| format!("{}/{}", pair.0, pair.1))
                 .join(", ")
         );
-        let orderboo_depth = Command::builder()
+        let orderbook_depth = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(orderboo_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
+        request_legacy!(orderbook_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
     }
 
     pub(crate) async fn orders_history(
