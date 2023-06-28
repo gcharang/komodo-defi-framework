@@ -1,16 +1,17 @@
 use anyhow::{bail, Result};
 use itertools::Itertools;
 use log::{error, info, warn};
-use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
-                            CoinInitResponse, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult, MmVersionResponse,
-                            MyBalanceRequest, MyBalanceResponse, MyOrdersResponse, OrderStatusRequest,
-                            OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
-                            OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyRequest,
-                            SellBuyResponse, SetPriceReq, Status, UpdateMakerOrderRequest};
+use mm2_rpc::data::legacy::{BuyRequest, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
+                            CoinInitResponse, GetEnabledRequest, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
+                            MmVersionResponse, MyBalanceRequest, MyBalanceResponse, MyOrdersRequest, MyOrdersResponse,
+                            OrderStatusRequest, OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest,
+                            OrderbookResponse, OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth,
+                            SellBuyRequest, SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest,
+                            UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 use serde_json::Value as Json;
 
-use super::command::{Command, Dummy, Method};
+use super::command::{Command, V2Method};
 use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
@@ -56,7 +57,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn get_balance(&self, request: MyBalanceRequest) -> Result<()> {
         info!("Getting balance, coin: {}", request.coin);
         let command = Command::builder()
-            .method(Method::GetBalance)
             .flatten_data(request)
             .userpass(self.config.rpc_password()?)
             .build()?;
@@ -65,8 +65,8 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins");
-        let command = Command::<i32>::builder()
-            .method(Method::GetEnabledCoins)
+        let command = Command::builder()
+            .flatten_data(GetEnabledRequest::default())
             .userpass(self.config.rpc_password()?)
             .build()?;
 
@@ -75,10 +75,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, ob_settings: OrderbookSettings) -> Result<()> {
         info!("Getting orderbook, base: {}, rel: {}", request.base, request.rel);
-        let command = Command::builder()
-            .method(Method::GetOrderbook)
-            .flatten_data(request)
-            .build()?;
+        let command = Command::builder().flatten_data(request).build()?;
         request_legacy!(
             command,
             OrderbookResponse,
@@ -100,9 +97,9 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             request.rel,
             request.base,
         );
+        let request = SellRequest { delegate: request };
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::Sell)
             .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
@@ -119,9 +116,9 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             request.rel,
             request.base,
         );
+        let request = BuyRequest { delegate: request };
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::Buy)
             .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
@@ -129,16 +126,16 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command");
-        let command = Command::<Dummy>::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::Stop)
+            .flatten_data(StopRequest::default())
             .build()?;
         request_legacy!(command, Mm2RpcResult<Status>, self, on_stop_response)
     }
 
     pub(crate) async fn get_version(&self) -> Result<()> {
         info!("Request for mm2 version");
-        let command = Command::<Dummy>::builder().method(Method::Version).build()?;
+        let command = Command::builder().flatten_data(VersionRequest::default()).build()?;
         request_legacy!(command, MmVersionResponse, self, on_version_response)
     }
 
@@ -146,7 +143,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Cancelling order: {}", request.uuid);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::CancelOrder)
             .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<Status>, self, on_cancel_order_response)
@@ -175,7 +171,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     async fn cancel_all_orders_impl(&self, request: CancelAllOrdersRequest) -> Result<()> {
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::CancelAllOrders)
             .flatten_data(request)
             .build()?;
         request_legacy!(
@@ -190,7 +185,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Getting order status: {}", request.uuid);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::OrderStatus)
             .flatten_data(request)
             .build()?;
         request_legacy!(command, OrderStatusResponse, self, on_order_status)
@@ -198,9 +192,9 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn my_orders(&self) -> Result<()> {
         info!("Getting my orders");
-        let command = Command::<Dummy>::builder()
+        let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::MyOrders)
+            .flatten_data(MyOrdersRequest::default())
             .build()?;
         request_legacy!(command, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
     }
@@ -209,7 +203,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Getting best orders: {} {}", request.action, request.coin);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::BestOrders)
+            .v2_method(V2Method::BestOrders)
             .flatten_data(request)
             .build_v2()?;
 
@@ -239,7 +233,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Setting price for pair: {} {}", request.base, request.rel);
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::SetPrice)
             .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)
@@ -256,7 +249,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         );
         let request = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::OrderbookDepth)
             .flatten_data(request)
             .build()?;
         request_legacy!(request, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
@@ -270,7 +262,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Getting order history");
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::OrdersHistory)
             .flatten_data(request)
             .build()?;
         request_legacy!(
@@ -286,7 +277,6 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         info!("Updating maker order");
         let command = Command::builder()
             .userpass(self.config.rpc_password()?)
-            .method(Method::UpdateMakerOrder)
             .flatten_data(request)
             .build()?;
         request_legacy!(command, Mm2RpcResult<MakerOrderForRpc>, self, on_update_maker_order)

@@ -20,7 +20,16 @@ impl<T> Deref for Mm2RpcResult<T> {
     fn deref(&self) -> &Self::Target { &self.result }
 }
 
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "stop")]
+pub struct StopRequest{}
+
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "version")]
+pub struct VersionRequest{}
+
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "my_balance")]
 pub struct MyBalanceRequest {
     pub coin: String,
 }
@@ -34,6 +43,7 @@ pub struct MyBalanceResponse {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "orderbook")]
 pub struct OrderbookRequest {
     pub base: String,
     pub rel: String,
@@ -118,7 +128,21 @@ pub struct AggregatedOrderbookEntry {
 construct_detailed!(AggregatedBaseVol, base_max_volume_aggr);
 construct_detailed!(AggregatedRelVol, rel_max_volume_aggr);
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "sell")]
+pub struct SellRequest {
+    #[serde(flatten)]
+    pub delegate: SellBuyRequest
+}
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "buy")]
+pub struct BuyRequest {
+    #[serde(flatten)]
+    pub delegate: SellBuyRequest
+}
+
+#[derive(Deserialize, Serialize)]
 pub struct SellBuyRequest {
     pub base: String,
     pub rel: String,
@@ -245,6 +269,10 @@ pub struct EnabledCoin {
     pub address: String,
 }
 
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "get_enabled_coins")]
+pub struct GetEnabledRequest {}
+
 pub type GetEnabledResponse = Vec<EnabledCoin>;
 
 #[derive(Serialize, Deserialize, Display)]
@@ -260,11 +288,13 @@ pub struct MmVersionResponse {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "cancel_order")]
 pub struct CancelOrderRequest {
     pub uuid: Uuid,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "cancel_all_orders")]
 pub struct CancelAllOrdersRequest {
     pub cancel_by: CancelBy,
 }
@@ -287,6 +317,7 @@ pub enum CancelBy {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "order_status")]
 pub struct OrderStatusRequest {
     pub uuid: Uuid,
 }
@@ -412,6 +443,10 @@ pub struct MakerConnectedForRpc {
     pub dest_pub_key: H256Json,
 }
 
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "my_orders")]
+pub struct MyOrdersRequest {}
+
 #[derive(Serialize, Deserialize)]
 pub struct MyOrdersResponse {
     pub maker_orders: HashMap<Uuid, MakerOrderForMyOrdersRpc>,
@@ -419,6 +454,7 @@ pub struct MyOrdersResponse {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "setprice")]
 pub struct SetPriceReq {
     pub base: String,
     pub rel: String,
@@ -443,6 +479,7 @@ pub struct SetPriceReq {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "method", rename = "orderbook_depth")]
 pub struct OrderbookDepthRequest {
     pub pairs: Vec<(String, String)>,
 }
@@ -460,6 +497,7 @@ pub struct PairDepth {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "method", rename = "orders_history_by_filter")]
 pub struct OrdersHistoryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_type: Option<String>,
@@ -518,6 +556,7 @@ pub struct UuidParseError {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "update_maker_order")]
 pub struct UpdateMakerOrderRequest {
     pub uuid: Uuid,
     pub new_price: Option<MmNumber>,

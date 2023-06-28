@@ -15,38 +15,13 @@ where
     pub(self) flatten_data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(self) userpass: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(self) method: Option<Method>,
 }
 
 #[derive(Serialize, Clone, Display)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum Method {
-    Stop,
-    Version,
-    #[serde(rename = "my_balance")]
-    GetBalance,
-    #[serde(rename = "get_enabled_coins")]
-    GetEnabledCoins,
-    #[serde(rename = "orderbook")]
-    GetOrderbook,
-    Sell,
-    Buy,
-    CancelOrder,
-    CancelAllOrders,
-    OrderStatus,
+pub(super) enum V2Method {
     BestOrders,
-    #[serde(rename = "setprice")]
-    SetPrice,
-    MyOrders,
-    OrderbookDepth,
-    #[serde(rename = "orders_history_by_filter")]
-    OrdersHistory,
-    UpdateMakerOrder,
 }
-
-#[derive(Serialize, Clone, Copy, Display)]
-pub(super) struct Dummy {}
 
 impl<T> Command<T>
 where
@@ -57,7 +32,7 @@ where
 
 pub(super) struct CommandBuilder<T> {
     userpass: Option<String>,
-    method: Option<Method>,
+    method: Option<V2Method>,
     flatten_data: Option<T>,
 }
 
@@ -78,7 +53,7 @@ where
         self
     }
 
-    pub(super) fn method(&mut self, method: Method) -> &mut Self {
+    pub(super) fn v2_method(&mut self, method: V2Method) -> &mut Self {
         self.method = Some(method);
         self
     }
@@ -91,12 +66,11 @@ where
     pub(super) fn build(&mut self) -> Result<Command<T>> {
         Ok(Command {
             userpass: self.userpass.take(),
-            method: self.method.take(),
             flatten_data: self.flatten_data.take(),
         })
     }
 
-    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<Method, T>> {
+    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<V2Method, T>> {
         let mm2_rpc_request = MmRpcRequest {
             mmrpc: MmRpcVersion::V2,
             userpass: Some(
