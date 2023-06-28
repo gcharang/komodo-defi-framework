@@ -27,7 +27,7 @@ pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, 
 
 macro_rules! request_legacy {
     ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
-        let transport = $self.transport.ok_or_else(|| warn_anyhow!("Failed to send, transport is not set"))?;
+        let transport = $self.transport.ok_or_else(|| warn_anyhow!("Failed to send, transport is not available"))?;
         match transport.send::<_, $response_ty, Json>($request).await {
             Ok(Ok(ok)) => $self.response_handler.$handle_method(ok, $($opt),*),
             Ok(Err(error)) => $self.response_handler.print_response(error),

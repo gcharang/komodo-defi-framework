@@ -56,7 +56,7 @@ pub(super) trait AdexConfig {
     fn orderbook_volume_precision(&self) -> &SmartFractPrecision;
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(super) struct AdexConfigImpl {
     #[serde(skip_serializing_if = "Option::is_none")]
     rpc_password: Option<String>,

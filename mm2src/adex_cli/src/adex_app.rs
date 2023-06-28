@@ -12,7 +12,7 @@ pub(super) struct AdexApp {
 
 impl AdexApp {
     pub(super) fn new() -> Result<AdexApp> {
-        let config = AdexConfigImpl::read_config()?;
+        let config = AdexConfigImpl::read_config().unwrap_or_default();
         Ok(AdexApp { config })
     }
 
