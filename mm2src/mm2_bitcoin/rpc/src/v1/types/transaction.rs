@@ -163,7 +163,7 @@ impl SignedTransactionOutput {
     pub fn is_empty(&self) -> bool { self.value == Some(0.0) && self.script.is_empty() }
 }
 
-fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     T: Default + Deserialize<'de>,
     D: Deserializer<'de>,
