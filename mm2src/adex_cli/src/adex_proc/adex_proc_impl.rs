@@ -29,7 +29,7 @@ macro_rules! request_legacy {
     ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
         let transport = $self.transport.ok_or_else(|| warn_anyhow!( concat!("Failed to send: `", stringify!($request), "`, transport is not available")))?;
         match transport.send::<_, $response_ty, Json>($request).await {
-            Ok(Ok(ok)) => $self.response_handler.$handle_method(&ok, $($opt),*),
+            Ok(Ok(ok)) => $self.response_handler.$handle_method(ok, $($opt),*),
             Ok(Err(error)) => $self.response_handler.print_response(error),
             Err(error) => error_bail!(
                 concat!("Failed to send: `", stringify!($request), "`, error: {}"),
@@ -75,7 +75,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, ob_settings: OrderbookSettings) -> Result<()> {
-        info!("Getting orderbook, base: {base}, rel: {rel} ...");
+        info!("Getting orderbook, base: {}, rel: {}", request.base, request.rel);
 
         let get_orderbook = Command::builder().flatten_data(request).build()?;
         request_legacy!(
@@ -143,11 +143,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn cancel_order(&self, request: CancelOrderRequest) -> Result<()> {
         info!("Cancelling order: {}", request.uuid);
-        let command = Command::builder()
+        let cancel_order = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(command, Mm2RpcResult<Status>, self, on_cancel_order_response)
+        request_legacy!(cancel_order, Mm2RpcResult<Status>, self, on_cancel_order_response)
     }
 
     pub(crate) async fn cancel_all_orders(&self) -> Result<()> {
@@ -171,12 +171,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     async fn cancel_all_orders_impl(&self, request: CancelAllOrdersRequest) -> Result<()> {
-        let command = Command::builder()
+        let cancel_all_orders = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
         request_legacy!(
-            command,
+            cancel_all_orders,
             Mm2RpcResult<CancelAllOrdersResponse>,
             self,
             on_cancel_all_response
@@ -185,20 +185,20 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn order_status(&self, request: OrderStatusRequest) -> Result<()> {
         info!("Getting order status: {}", request.uuid);
-        let command = Command::builder()
+        let order_status = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(command, OrderStatusResponse, self, on_order_status)
+        request_legacy!(order_status, OrderStatusResponse, self, on_order_status)
     }
 
     pub(crate) async fn my_orders(&self) -> Result<()> {
         info!("Getting my orders");
-        let command = Command::builder()
+        let my_orders = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(MyOrdersRequest::default())
             .build()?;
-        request_legacy!(command, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
+        request_legacy!(my_orders, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
     }
 
     pub(crate) async fn best_orders(&self, request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
@@ -235,11 +235,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn set_price(&self, request: SetPriceReq) -> Result<()> {
         info!("Setting price for pair: {} {}", request.base, request.rel);
-        let command = Command::builder()
+        let set_price = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(command, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)
+        request_legacy!(set_price, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)
     }
 
     pub(crate) async fn orderbook_depth(&self, request: OrderbookDepthRequest) -> Result<()> {
@@ -251,11 +251,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .map(|pair| format!("{}/{}", pair.0, pair.1))
                 .join(", ")
         );
-        let request = Command::builder()
+        let orderboo_depth = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(request, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
+        request_legacy!(orderboo_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
     }
 
     pub(crate) async fn orders_history(
@@ -264,12 +264,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         settings: OrdersHistorySettings,
     ) -> Result<()> {
         info!("Getting order history");
-        let command = Command::builder()
+        let get_history = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
         request_legacy!(
-            command,
+            get_history,
             Mm2RpcResult<OrdersHistoryResponse>,
             self,
             on_orders_history,
@@ -279,11 +279,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn update_maker_order(&self, request: UpdateMakerOrderRequest) -> Result<()> {
         info!("Updating maker order");
-        let command = Command::builder()
+        let update_maker_order = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(command, Mm2RpcResult<MakerOrderForRpc>, self, on_update_maker_order)
+        request_legacy!(update_maker_order, Mm2RpcResult<MakerOrderForRpc>, self, on_update_maker_order)
     }
 
     fn get_rpc_password(&self) -> Result<String> {
