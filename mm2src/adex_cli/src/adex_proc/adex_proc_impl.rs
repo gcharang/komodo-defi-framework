@@ -142,6 +142,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version");
         let get_version = Command::<Dummy>::builder()
+            .userpass(self.get_rpc_password()?)
             .method(Method::Version)
             .build();
         request_legacy!(get_version, MmVersionResponse, self, on_version_response)
