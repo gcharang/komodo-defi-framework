@@ -20,12 +20,12 @@ pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, 
 
 macro_rules! request_legacy {
     ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
-        let transport = $self.transport.ok_or_else(|| warn_anyhow!("Failed to send, transport is not available"))?;
+        let transport = $self.transport.ok_or_else(|| warn_anyhow!( concat!("Failed to send: `", stringify!($request), "`, transport is not available")))?;
         match transport.send::<_, $response_ty, Json>($request).await {
             Ok(Ok(ok)) => $self.response_handler.$handle_method(&ok, $($opt),*),
             Ok(Err(error)) => $self.response_handler.print_response(error),
             Err(error) => error_bail!(
-                concat!("Failed to send ", stringify!($response_ty), " request: {}"),
+                concat!("Failed to send: `", stringify!($request), "`, error: {}"),
                 error
             ),
         }
@@ -41,38 +41,38 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             warn_bail!("Asset is not known: {asset}")
         };
 
-        let command = Command::builder()
+        let enable = Command::builder()
             .flatten_data(activation_method)
             .userpass(self.get_rpc_password()?)
             .build();
 
-        request_legacy!(command, CoinInitResponse, self, on_enable_response)
+        request_legacy!(enable, CoinInitResponse, self, on_enable_response)
     }
 
     pub(crate) async fn get_balance(&self, asset: &str) -> Result<()> {
         info!("Getting balance, coin: {asset} ...");
-        let command = Command::builder()
+        let get_balance = Command::builder()
             .method(Method::GetBalance)
             .flatten_data(json!({ "coin": asset }))
             .userpass(self.get_rpc_password()?)
             .build();
-        request_legacy!(command, BalanceResponse, self, on_balance_response)
+        request_legacy!(get_balance, BalanceResponse, self, on_balance_response)
     }
 
     pub(crate) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
 
-        let command = Command::<i32>::builder()
+        let get_enabled = Command::<i32>::builder()
             .method(Method::GetEnabledCoins)
             .userpass(self.get_rpc_password()?)
             .build();
-        request_legacy!(command, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
+        request_legacy!(get_enabled, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
     pub(crate) async fn get_orderbook(&self, base: &str, rel: &str, orderbook_config: OrderbookConfig) -> Result<()> {
         info!("Getting orderbook, base: {base}, rel: {rel} ...");
 
-        let command = Command::builder()
+        let get_orderbook = Command::builder()
             .userpass(self.get_rpc_password()?)
             .method(Method::GetOrderbook)
             .flatten_data(OrderbookRequest {
@@ -82,7 +82,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .build();
 
         request_legacy!(
-            command,
+            get_orderbook,
             OrderbookResponse,
             self,
             on_orderbook_response,
@@ -103,12 +103,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             order.base,
         );
 
-        let command = Command::builder()
+        let sell = Command::builder()
             .userpass(self.get_rpc_password()?)
             .method(Method::Sell)
             .flatten_data(order)
             .build();
-        request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
+        request_legacy!(sell, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
     }
 
     pub(crate) async fn buy(&self, order: SellBuyRequest) -> Result<()> {
@@ -123,12 +123,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             order.base,
         );
 
-        let command = Command::builder()
+        let buy = Command::builder()
             .userpass(self.get_rpc_password()?)
             .method(Method::Buy)
             .flatten_data(order)
             .build();
-        request_legacy!(command, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
+        request_legacy!(buy, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
     }
 
     pub(crate) async fn send_stop(&self) -> Result<()> {
@@ -142,11 +142,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn get_version(self) -> Result<()> {
         info!("Request for mm2 version");
-        let version_command = Command::<Dummy>::builder()
+        let get_version = Command::<Dummy>::builder()
             .userpass(self.get_rpc_password()?)
             .method(Method::Version)
             .build();
-        request_legacy!(version_command, MmVersionResponse, self, on_version_response)
+        request_legacy!(get_version, MmVersionResponse, self, on_version_response)
     }
 
     fn get_rpc_password(&self) -> Result<String> {
