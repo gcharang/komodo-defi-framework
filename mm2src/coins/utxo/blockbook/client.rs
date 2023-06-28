@@ -1,6 +1,7 @@
-use crate::utxo::blockbook::structures::{BlockBookAddress, BlockBookBlock, BlockBookTickers, BlockBookTickersList,
-                                         BlockBookTransaction, BlockBookTransactionSpecific, BlockBookUtxo,
-                                         XpubTransactions};
+use crate::utxo::blockbook::structures::{BalanceHistoryParams, BlockBookAddress, BlockBookBalanceHistory,
+                                         BlockBookBlock, BlockBookTickers, BlockBookTickersList, BlockBookTransaction,
+                                         BlockBookTransactionSpecific, BlockBookUtxo, GetAddressParams,
+                                         GetBlockByHashHeight, XpubTransactions};
 use crate::utxo::rpc_clients::{BlockHashOrHeight, EstimateFeeMethod, EstimateFeeMode, JsonRpcPendingRequestsShared,
                                SpentOutputInfo, UnspentInfo, UnspentMap, UtxoJsonRpcClientInfo, UtxoRpcClientOps,
                                UtxoRpcError, UtxoRpcFut};
@@ -37,41 +38,31 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use tonic::IntoRequest;
 
-const BTC_BLOCKBOOK_ENPOINT: &str = "https://btc1.trezor.io";
-const ETH_BLOCKBOOK_ENPOINT: &str = "https://eth1.trezor.io";
+// const BTC_BLOCKBOOK_ENPOINT: &str = "https://btc1.trezor.io";
+// const ETH_BLOCKBOOK_ENPOINT: &str = "https://eth1.trezor.io";
 
 pub type BlockBookResult<T> = MmResult<T, BlockBookClientError>;
 
-#[derive(Debug)]
 pub struct BlockBookClientImpl {
     pub endpoint: String,
-    pub ticker: String,
+    pub chain: Box<dyn BlockBookClientOps>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BlockBookClient(pub Arc<BlockBookClientImpl>);
 
 impl BlockBookClient {
-    pub fn new(ticker: &str) -> BlockBookResult<Self> {
-        let endpoint = match ticker {
-            BTC => BTC_BLOCKBOOK_ENPOINT,
-            ETH => ETH_BLOCKBOOK_ENPOINT,
-            _ => {
-                return Err(MmError::new(BlockBookClientError::NotSupported {
-                    coin: ticker.to_string(),
-                }))
-            },
-        };
-
-        let client = BlockBookClientImpl {
+    pub fn new(endpoint: &str, chain: impl BlockBookClientOps) -> BlockBookResult<Self> {
+        Ok(Self(Arc::new(BlockBookClientImpl {
             endpoint: endpoint.to_string(),
-            ticker: ticker.to_string(),
-        };
-
-        Ok(Self(Arc::new(client)))
+            chain: Box::new((chain)),
+        })))
     }
+}
 
-    pub async fn query(&self, path: String) -> BlockBookResult<Json> {
+#[async_trait]
+pub trait BlockBookClientTransport: Send + Sync + 'static {
+    async fn query(&self, path: String) -> BlockBookResult<Json> {
         use http::header::HeaderValue;
 
         let uri = format!("{}{path}", self.0.endpoint);
@@ -101,21 +92,53 @@ impl BlockBookClient {
 }
 
 #[async_trait]
-trait BlockBookClientClientOps {
+pub trait BlockBookClientOps: BlockBookClientTransport + Send + Sync + 'static {
+    /// Status page returns current status of Blockbook and connected backend.
+    async fn status(&self, height: u64) -> BlockBookResult<H256>;
+
+    /// Get current block of a given height.
     async fn block_hash(&self, height: u64) -> BlockBookResult<H256>;
-    async fn transaction(&self, txid: &str) -> BlockBookResult<BlockBookTransaction> {
-        let tx = self.query(format!("/api/v2/tx/{txid}")).await?;
-        let json = serde_json::from_value::<BlockBookTransaction>(tx).unwrap();
-        Ok(json)
-    }
-    async fn transaction_specific(&self, txid: &str) -> BlockBookResult<BlockBookTransactionSpecific>;
-    async fn address(&self, address: &str) -> BlockBookResult<BlockBookAddress>;
-    async fn xpub(&self, address: &str) -> BlockBookResult<XpubTransactions>;
-    async fn utxo(&self, address: &str) -> BlockBookResult<Vec<BlockBookUtxo>>;
-    async fn block(&self, address: &str) -> BlockBookResult<BlockBookBlock>;
-    async fn send_transaction(&self, address: &str) -> BlockBookResult<H256>;
-    async fn tickers_list(&self, address: &str) -> BlockBookResult<BlockBookTickersList>;
-    async fn tickers(&self, address: &str) -> BlockBookResult<BlockBookTickers>;
+
+    /// Get transaction returns "normalized" data about transaction, which has the same general structure for all
+    /// supported coins. It does not return coin specific fields.
+    async fn get_transaction(&self, txid: &str) -> BlockBookResult<BlockBookTransaction>;
+
+    /// Get transaction data in the exact format as returned by backend, including all coin specific fields:
+    async fn get_transaction_specific(&self, txid: &str) -> BlockBookResult<BlockBookTransactionSpecific>;
+
+    /// Get balances and transactions of an address. The returned transactions are sorted by block height, newest
+    /// blocks first. see `[strutures::GetAddressParams]` for extra query arguments.
+    async fn address(&self, address: &str, query_params: Option<GetAddressParams>)
+        -> BlockBookResult<BlockBookAddress>;
+
+    /// Get balances and transactions of an xpub or output descriptor, applicable only for Bitcoin-type coins. see
+    /// `[strutures::GetAddressParams]` for extra query arguments.
+    async fn xpub(&self, xpub: &str, query_params: Option<GetAddressParams>) -> BlockBookResult<XpubTransactions>;
+
+    // Get array of unspent transaction outputs of address or xpub, applicable only for Bitcoin-type coins. By default,
+    // the list contains both confirmed and unconfirmed transactions. The query parameter confirmed=true disables return of unconfirmed transactions. The returned utxos are sorted by block height, newest blocks first. For xpubs or output descriptors, the response also contains address and derivation path of the utxo.
+    async fn utxo(&self, address: &str, confirmed: bool) -> BlockBookResult<Vec<BlockBookUtxo>>;
+
+    /// Get information about block with transactions, either by height or hash
+    async fn block(&self, block_by: &GetBlockByHashHeight) -> BlockBookResult<BlockBookBlock>;
+
+    /// Sends new transaction to backend.
+    async fn send_transaction(&self, hex: &RawTransaction) -> BlockBookResult<H256>;
+
+    /// Get a list of available currency rate tickers (secondary currencies) for the specified date, along with an
+    /// actual data timestamp.
+    async fn tickers_list(&self, timestamp: Option<u32>) -> BlockBookResult<BlockBookTickersList>;
+
+    /// Get currency rate for the specified currency and date. If the currency is not available for that specific
+    /// timestamp, the next closest rate will be returned. All responses contain an actual rate timestamp.
+    async fn tickers(&self, currency: Option<&str>, timestamp: Option<u32>) -> BlockBookResult<BlockBookTickers>;
+
+    /// Returns a balance history for the specified XPUB or address.
+    async fn balance_history(
+        &self,
+        address: &str,
+        query_params: BalanceHistoryParams,
+    ) -> BlockBookResult<BlockBookBalanceHistory>;
 }
 
 #[derive(Debug, Display)]
