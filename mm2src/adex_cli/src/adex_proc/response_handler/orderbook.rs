@@ -100,7 +100,7 @@ impl<'a> AskBidRow<'a> {
         entry: &AggregatedOrderbookEntry,
         vol_prec: &SmartFractPrecision,
         price_prec: &SmartFractPrecision,
-        config: &'a OrderbookSettings,
+        settings: &'a OrderbookSettings,
     ) -> Self {
         AskBidRow {
             is_mine: AskBidRowVal::Value((if entry.entry.is_mine { "*" } else { "" }).to_string()),
@@ -139,7 +139,7 @@ impl<'a> AskBidRow<'a> {
                     .as_ref()
                     .map_or("none".to_string(), format_confirmation_settings),
             ),
-            config,
+            config: settings, //TODO: @rozhkovdmitrii
         }
     }
 }
