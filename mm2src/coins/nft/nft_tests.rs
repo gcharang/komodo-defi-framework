@@ -8,7 +8,8 @@ mod native_tests {
     use crate::nft::nft_structs::{NftTransferHistoryWrapper, NftWrapper, UriMeta};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
-    use crate::nft::{check_moralis_ipfs_bafy, send_request_to_uri};
+    use crate::nft::{check_and_redact_if_spam, check_moralis_ipfs_bafy, check_nft_metadata_for_spam,
+                     send_request_to_uri};
     use common::block_on;
 
     #[test]
@@ -18,6 +19,26 @@ mod native_tests {
         let res_uri = check_moralis_ipfs_bafy(Some(uri));
         let expected = "https://ipfs.io/ipfs/bafybeifnek24coy5xj5qabdwh24dlp5omq34nzgvazkfyxgnqms4eidsiq/1.json";
         assert_eq!(expected, res_uri.unwrap());
+    }
+
+    #[test]
+    fn test_invalid_moralis_ipfs_link() {
+        let uri = "example.com/bafy?1=ipfs.moralis.io&e=https://";
+        let res_uri = check_moralis_ipfs_bafy(Some(uri));
+        assert_eq!(uri, res_uri.unwrap());
+    }
+
+    #[test]
+    fn test_check_for_spam() {
+        let mut spam_text = Some("https://arweave.net".to_string());
+        assert!(check_and_redact_if_spam(&mut spam_text));
+        let url_redacted = "URL redacted for user protection";
+        assert_eq!(url_redacted, spam_text.unwrap());
+
+        let mut nft = nft();
+        assert!(check_nft_metadata_for_spam(&mut nft).unwrap());
+        let meta_redacted = "{\"name\":\"URL redacted for user protection\",\"image\":\"https://tikimetadata.s3.amazonaws.com/tiki_box.png\"}";
+        assert_eq!(meta_redacted, nft.metadata.unwrap())
     }
 
     #[test]

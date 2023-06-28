@@ -16,7 +16,7 @@ const TOKEN_ADD: &str = "0xfd913a305d70a60aac4faac70c739563738e1f81";
 const TOKEN_ID: &str = "214300044414";
 const TX_HASH: &str = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe";
 
-fn nft() -> Nft {
+pub(crate) fn nft() -> Nft {
     Nft {
         chain: Chain::Bsc,
         token_address: "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string(),
@@ -30,7 +30,10 @@ fn nft() -> Nft {
         collection_name: None,
         symbol: None,
         token_uri: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.json".to_string()),
-        metadata: Some("{\"name\":\"Tiki box\"}".to_string()),
+        metadata: Some(
+            "{\"name\":\"https://arweave.net\",\"image\":\"https://tikimetadata.s3.amazonaws.com/tiki_box.png\"}"
+                .to_string(),
+        ),
         last_token_uri_sync: Some("2023-02-07T17:10:08.402Z".to_string()),
         last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
         minter_address: Some("ERC1155 tokens don't have a single minter".to_string()),

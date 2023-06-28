@@ -466,11 +466,22 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
     Ok(response)
 }
 
+/// `check_moralis_ipfs_bafy` inspects a given token URI and modifies it if certain conditions are met.
+///
+/// It checks if the URI points to the Moralis IPFS domain `"ipfs.moralis.io"` and starts with a specific path prefix `"/ipfs/bafy"`.
+/// If these conditions are satisfied, it modifies the URI to point to the `"ipfs.io"` domain.
+/// This is due to certain "bafy"-prefixed hashes being banned on Moralis IPFS gateway due to abuse.
+///
+/// If the URI does not meet these conditions or cannot be parsed, it is returned unchanged.
 fn check_moralis_ipfs_bafy(token_uri: Option<&str>) -> Option<String> {
     token_uri.map(|uri| {
-        if uri.contains("https://ipfs.moralis.io") && uri.contains("bafy") {
-            let parts: Vec<&str> = uri.splitn(2, "/ipfs/").collect();
-            format!("https://ipfs.io/ipfs/{}", parts[1])
+        if let Ok(parsed_url) = Url::parse(uri) {
+            if parsed_url.host_str() == Some("ipfs.moralis.io") && parsed_url.path().starts_with("/ipfs/bafy") {
+                let parts: Vec<&str> = parsed_url.path().splitn(2, "/ipfs/").collect();
+                format!("https://ipfs.io/ipfs/{}", parts[1])
+            } else {
+                uri.to_string()
+            }
         } else {
             uri.to_string()
         }
@@ -800,12 +811,17 @@ where
     Ok(())
 }
 
+/// `contains_disallowed_scheme` function checks if the text contains some link.
+fn contains_disallowed_scheme(text: &str) -> bool {
+    text.contains("http://") || text.contains("https://") || text.contains("ftp://") || text.contains("file://")
+}
+
 /// `check_and_redact_if_spam` checks if the text contains any links.///
 /// It doesn't matter if the link is valid or not, as this is a spam check.
 /// If text contains some link, then it is a spam.
 fn check_and_redact_if_spam(text: &mut Option<String>) -> bool {
     match text {
-        Some(s) if s.contains("http://") || s.contains("https://") => {
+        Some(s) if contains_disallowed_scheme(s) => {
             *text = Some("URL redacted for user protection".to_string());
             true
         },
@@ -863,7 +879,7 @@ fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Erro
 /// The function returns `true` if it detected spam link, or `false` otherwise.
 fn check_spam_and_redact_metadata_field(metadata: &mut serde_json::Map<String, Json>, field: &str) -> bool {
     match metadata.get(field).and_then(|v| v.as_str()) {
-        Some(text) if text.contains("http://") || text.contains("https://") => {
+        Some(text) if contains_disallowed_scheme(text) => {
             metadata.insert(
                 field.to_string(),
                 serde_json::Value::String("URL redacted for user protection".to_string()),

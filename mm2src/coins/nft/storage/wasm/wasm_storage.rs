@@ -6,6 +6,7 @@ use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorag
                           NftTxHistoryFilters, NftTxHistoryStorageOps, RemoveNftResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
+use common::is_initial_upgrade;
 use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{BeBigUint, DbTable, DbUpgrader, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::map_mm_error::MapMmError;
@@ -585,7 +586,7 @@ impl TableSignature for NftListTable {
     fn table_name() -> &'static str { "nft_list_cache_table" }
 
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
+        if is_initial_upgrade(old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_multi_index(
                 Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
@@ -650,7 +651,7 @@ impl TableSignature for NftTxHistoryTable {
     fn table_name() -> &'static str { "nft_tx_history_cache_table" }
 
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
+        if is_initial_upgrade(old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_multi_index(
                 Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
@@ -676,7 +677,7 @@ impl TableSignature for LastScannedBlockTable {
     fn table_name() -> &'static str { "last_scanned_block_table" }
 
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
+        if is_initial_upgrade(old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_index("chain", true)?;
         }
