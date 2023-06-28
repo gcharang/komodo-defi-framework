@@ -11,6 +11,7 @@ use rpc::v1::types::{deserialize_null_default, Bytes, RawTransaction, SignedTran
 use serde::{Deserialize, Deserializer};
 use serde_json::{self as json, Value as Json};
 use serialization::CoinVariant;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Signed transaction output
@@ -45,7 +46,6 @@ pub struct BlockBookTransaction {
     pub version: i32,
     /// Hash of the block this transaction is included in
     #[serde(default)]
-    #[serde(deserialize_with = "deserialize_hex_string")]
     #[serde(rename = "blockHash")]
     pub block_hash: H256,
     /// The block time in seconds since epoch (Jan 1 1970 GMT)
@@ -186,4 +186,119 @@ pub struct BlockBookAddress {
     pub unconfirmed_txs: u32,
     pub txs: u32,
     pub txids: Vec<H256>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "test", serde(deny_unknown_fields))]
+pub struct Tokens {
+    #[serde(rename = "type")]
+    pub token_type: String,
+    pub name: String,
+    pub path: String,
+    pub decimals: u8,
+    pub transfers: u32,
+    #[serde(deserialize_with = "deserialize_amount")]
+    pub balance: Option<f64>,
+    #[serde(deserialize_with = "deserialize_amount")]
+    #[serde(rename = "totalReceived")]
+    pub total_received: Option<f64>,
+    #[serde(deserialize_with = "deserialize_amount")]
+    #[serde(rename = "totalSent")]
+    pub total_sent: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "test", serde(deny_unknown_fields))]
+pub struct XpubTransactions {
+    pub page: u32,
+    #[serde(rename = "totalPages")]
+    pub total_pages: u32,
+    #[serde(rename = "itemsOnPge")]
+    pub items_on_page: u32,
+    pub address: String,
+    #[serde(deserialize_with = "deserialize_amount")]
+    pub balance: Option<f64>,
+    #[serde(deserialize_with = "deserialize_amount")]
+    #[serde(rename = "totalReceived")]
+    pub total_received: Option<f64>,
+    #[serde(deserialize_with = "deserialize_amount")]
+    #[serde(rename = "totalSent")]
+    pub total_sent: Option<f64>,
+    #[serde(deserialize_with = "deserialize_amount")]
+    #[serde(rename = "unconfirmedBalance")]
+    pub unconfirmed_balance: Option<f64>,
+    #[serde(rename = "unconfirmedTxs")]
+    pub unconfirmed_txs: u32,
+    pub txs: u32,
+    pub txids: Vec<H256>,
+    #[serde(rename = "usedTokens")]
+    pub used_tokens: u16,
+    #[serde(default)]
+    pub tokens: Vec<Tokens>,
+    #[serde(default)]
+    pub secondary_value: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "test", serde(deny_unknown_fields))]
+pub struct BlockBookUtxo {
+    pub txid: H256,
+    pub vout: u32,
+    #[serde(deserialize_with = "deserialize_amount")]
+    pub value: Option<f64>,
+    pub confirmations: u32,
+    #[serde(rename = "locktime")]
+    pub lock_time: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "test", serde(deny_unknown_fields))]
+pub struct BlockBookBlock {
+    pub page: u32,
+    #[serde(rename = "totalPages")]
+    pub total_pages: u32,
+    #[serde(rename = "itemsOnPge")]
+    pub items_on_page: u32,
+    #[serde(default)]
+    #[serde(rename = "blockHash")]
+    pub block_hash: H256,
+    #[serde(default)]
+    #[serde(rename = "previousBlockHash")]
+    pub previous_block_hash: H256,
+    #[serde(default)]
+    #[serde(rename = "nextBlockHash")]
+    pub next_block_hash: H256,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "blockHeight")]
+    pub height: Option<u64>,
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_null_default")]
+    pub confirmations: u32,
+    pub size: Option<usize>,
+    pub time: u32,
+    /// The version
+    pub version: i32,
+    #[serde(default)]
+    #[serde(rename = "merkleRoot")]
+    pub merkle_root: H256,
+    pub nounce: u32,
+    pub bits: String,
+    pub difficulty: String,
+    pub tx_count: u32,
+    pub txs: Vec<BlockBookTransaction>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "test", serde(deny_unknown_fields))]
+pub struct BlockBookTickersList {
+    pub ts: u64,
+    pub available_currencies: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "test", serde(deny_unknown_fields))]
+pub struct BlockBookTickers {
+    pub ts: u64,
+    pub rates: HashMap<String, f64>,
 }

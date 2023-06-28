@@ -1,4 +1,6 @@
-use crate::utxo::blockbook::structures::{BlockBookAddress, BlockBookTransaction, BlockBookTransactionSpecific};
+use crate::utxo::blockbook::structures::{BlockBookAddress, BlockBookBlock, BlockBookTickers, BlockBookTickersList,
+                                         BlockBookTransaction, BlockBookTransactionSpecific, BlockBookUtxo,
+                                         XpubTransactions};
 use crate::utxo::rpc_clients::{BlockHashOrHeight, EstimateFeeMethod, EstimateFeeMode, JsonRpcPendingRequestsShared,
                                SpentOutputInfo, UnspentInfo, UnspentMap, UtxoJsonRpcClientInfo, UtxoRpcClientOps,
                                UtxoRpcError, UtxoRpcFut};
@@ -108,6 +110,12 @@ trait BlockBookClientClientOps {
     }
     async fn transaction_specific(&self, txid: &str) -> BlockBookResult<BlockBookTransactionSpecific>;
     async fn address(&self, address: &str) -> BlockBookResult<BlockBookAddress>;
+    async fn xpub(&self, address: &str) -> BlockBookResult<XpubTransactions>;
+    async fn utxo(&self, address: &str) -> BlockBookResult<Vec<BlockBookUtxo>>;
+    async fn block(&self, address: &str) -> BlockBookResult<BlockBookBlock>;
+    async fn send_transaction(&self, address: &str) -> BlockBookResult<H256>;
+    async fn tickers_list(&self, address: &str) -> BlockBookResult<BlockBookTickersList>;
+    async fn tickers(&self, address: &str) -> BlockBookResult<BlockBookTickers>;
 }
 
 #[derive(Debug, Display)]
