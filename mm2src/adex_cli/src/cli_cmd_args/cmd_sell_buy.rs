@@ -1,7 +1,7 @@
 use clap::{Args, ValueEnum};
 use common::serde_derive::Serialize;
 use mm2_number::MmNumber;
-use mm2_rpc::data::legacy::{MatchBy, OrderType, SellBuyRequest};
+use mm2_rpc::data::legacy::{BuyRequest, MatchBy, OrderType, SellBuyRequest, SellRequest};
 use rpc::v1::types::H256 as H256Json;
 use std::collections::HashSet;
 use std::mem::take;
@@ -14,69 +14,69 @@ use super::parse_mm_number;
 #[command(about = "Puts a selling coins request")]
 pub struct SellOrderArgs {
     #[command(flatten)]
-    pub order_cli: OrderArgs,
+    order_cli: OrderArgs,
 }
 
 #[derive(Args)]
 #[command(about = "Puts a buying coins request")]
 pub struct BuyOrderArgs {
     #[command(flatten)]
-    pub order_cli: OrderArgs,
+    order_cli: OrderArgs,
 }
 
 #[derive(Args, Serialize, Debug)]
-pub struct OrderArgs {
+struct OrderArgs {
     #[arg(help = "Base currency of a pair")]
-    pub base: String,
+    base: String,
     #[arg(help = "Related currency")]
-    pub rel: String,
+    rel: String,
     #[arg(help = "Amount of coins the user is willing to sell/buy of the base coin", value_parser=parse_mm_number )]
-    pub volume: MmNumber,
+    volume: MmNumber,
     #[arg(help = "Price in rel the user is willing to receive/pay per one unit of the base coin", value_parser=parse_mm_number)]
-    pub price: MmNumber,
+    price: MmNumber,
     #[arg(long, value_enum, default_value_t = OrderTypeCli::GoodTillCancelled, help="The GoodTillCancelled order is automatically converted to a maker order if not matched in 30 seconds, and this maker order stays in the orderbook until explicitly cancelled. On the other hand, a FillOrKill is cancelled if not matched within 30 seconds")]
-    pub order_type: OrderTypeCli,
+    order_type: OrderTypeCli,
     #[arg(long,
           help = "Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker", 
           value_parser=parse_mm_number
     )]
-    pub min_volume: Option<MmNumber>,
+    min_volume: Option<MmNumber>,
     #[arg(
         short = 'u',
         long = "uuid",
         help = "The created order is matched using a set of uuid"
     )]
-    pub match_uuids: Vec<Uuid>,
+    match_uuids: Vec<Uuid>,
     #[arg(short='p',
           long="public",
           value_parser=H256Json::from_str,
           help="The created order is matched using a set of publics to select specific nodes (ignored if uuids not empty)")]
-    pub match_publics: Vec<H256Json>,
+    match_publics: Vec<H256Json>,
     #[arg(
         long,
         help = "Number of required blockchain confirmations for base coin atomic swap transaction"
     )]
-    pub base_confs: Option<u64>,
+    base_confs: Option<u64>,
     #[arg(
         long,
         help = "Whether dPoW notarization is required for base coin atomic swap transaction"
     )]
-    pub base_nota: Option<bool>,
+    base_nota: Option<bool>,
     #[arg(
         long,
         help = "Number of required blockchain confirmations for rel coin atomic swap transaction"
     )]
-    pub rel_confs: Option<u64>,
+    rel_confs: Option<u64>,
     #[arg(
         long,
         help = "Whether dPoW notarization is required for rel coin atomic swap transaction"
     )]
-    pub rel_nota: Option<bool>,
+    rel_nota: Option<bool>,
     #[arg(
         long,
         help = "If true, each order's short record history is stored else the only order status will be temporarily stored while in progress"
     )]
-    pub save_in_history: bool,
+    save_in_history: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum, Serialize)]
@@ -90,6 +90,22 @@ impl From<OrderTypeCli> for OrderType {
         match value {
             OrderTypeCli::GoodTillCancelled => OrderType::GoodTillCancelled,
             OrderTypeCli::FillOrKill => OrderType::FillOrKill,
+        }
+    }
+}
+
+impl From<&mut SellOrderArgs> for SellRequest {
+    fn from(value: &mut SellOrderArgs) -> Self {
+        SellRequest {
+            delegate: SellBuyRequest::from(&mut value.order_cli),
+        }
+    }
+}
+
+impl From<&mut BuyOrderArgs> for BuyRequest {
+    fn from(value: &mut BuyOrderArgs) -> Self {
+        BuyRequest {
+            delegate: SellBuyRequest::from(&mut value.order_cli),
         }
     }
 }

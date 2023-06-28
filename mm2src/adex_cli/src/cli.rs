@@ -113,8 +113,8 @@ impl Cli {
             Command::Orderbook(ref orderbook_args) => {
                 proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
             },
-            Command::Sell(SellOrderArgs { order_cli }) => proc.sell(order_cli.into()).await?,
-            Command::Buy(BuyOrderArgs { order_cli }) => proc.buy(order_cli.into()).await?,
+            Command::Sell(sell_args) => proc.sell(sell_args.into()).await?,
+            Command::Buy(buy_args) => proc.buy(buy_args.into()).await?,
             Command::Cancel(CancelSubcommand::Order(args)) => proc.cancel_order(args.into()).await?,
             Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
             Command::Cancel(CancelSubcommand::ByPair(args)) => proc.cancel_by_pair(args.into()).await?,

@@ -152,6 +152,7 @@ pub struct SellBuyRequest {
     /// Not used. Deprecated.
     #[allow(dead_code)]
     pub duration: Option<u32>,
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub method: String,
     #[allow(dead_code)]
     pub gui: Option<String>,

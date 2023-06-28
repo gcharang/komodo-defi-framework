@@ -6,8 +6,8 @@ use mm2_rpc::data::legacy::{BuyRequest, CancelAllOrdersRequest, CancelAllOrdersR
                             MmVersionResponse, MyBalanceRequest, MyBalanceResponse, MyOrdersRequest, MyOrdersResponse,
                             OrderStatusRequest, OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest,
                             OrderbookResponse, OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth,
-                            SellBuyRequest, SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest,
-                            UpdateMakerOrderRequest, VersionRequest};
+                            SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest, UpdateMakerOrderRequest,
+                            VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 use serde_json::Value as Json;
 
@@ -71,7 +71,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .flatten_data(GetEnabledRequest::default())
             .userpass(self.get_rpc_password()?)
             .build()?;
-        request_legacy!(get_enabled, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
+        request_legacy!(
+            get_enabled,
+            Mm2RpcResult<GetEnabledResponse>,
+            self,
+            on_get_enabled_response
+        )
     }
 
     pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, ob_settings: OrderbookSettings) -> Result<()> {
@@ -88,18 +93,17 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         )
     }
 
-    pub(crate) async fn sell(&self, request: SellBuyRequest) -> Result<()> {
+    pub(crate) async fn sell(&self, request: SellRequest) -> Result<()> {
         info!(
             "Selling: {} {} for: {} {} at the price of {} {} per {}",
-            request.volume,
-            request.base,
-            request.volume.clone() * request.price.clone(),
-            request.rel,
-            request.price,
-            request.rel,
-            request.base,
+            request.delegate.volume,
+            request.delegate.base,
+            request.delegate.volume.clone() * request.delegate.price.clone(),
+            request.delegate.rel,
+            request.delegate.price,
+            request.delegate.rel,
+            request.delegate.base,
         );
-        let request = SellRequest { delegate: request };
         let sell = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
@@ -107,18 +111,17 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(sell, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
     }
 
-    pub(crate) async fn buy(&self, request: SellBuyRequest) -> Result<()> {
+    pub(crate) async fn buy(&self, request: BuyRequest) -> Result<()> {
         info!(
             "Buying: {} {} with: {} {} at the price of {} {} per {}",
-            request.volume,
-            request.base,
-            request.volume.clone() * request.price.clone(),
-            request.rel,
-            request.price,
-            request.rel,
-            request.base,
+            request.delegate.volume,
+            request.delegate.base,
+            request.delegate.volume.clone() * request.delegate.price.clone(),
+            request.delegate.rel,
+            request.delegate.price,
+            request.delegate.rel,
+            request.delegate.base,
         );
-        let request = BuyRequest { delegate: request };
         let buy = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
@@ -255,7 +258,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(orderbook_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
+        request_legacy!(
+            orderbook_depth,
+            Mm2RpcResult<Vec<PairWithDepth>>,
+            self,
+            on_orderbook_depth
+        )
     }
 
     pub(crate) async fn orders_history(
@@ -283,7 +291,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(update_maker_order, Mm2RpcResult<MakerOrderForRpc>, self, on_update_maker_order)
+        request_legacy!(
+            update_maker_order,
+            Mm2RpcResult<MakerOrderForRpc>,
+            self,
+            on_update_maker_order
+        )
     }
 
     fn get_rpc_password(&self) -> Result<String> {
