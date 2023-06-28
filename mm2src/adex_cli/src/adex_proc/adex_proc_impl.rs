@@ -67,16 +67,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
 
-        let get_enabled = Command::builder()
+        let enabled = Command::builder()
             .flatten_data(GetEnabledRequest::default())
             .userpass(self.get_rpc_password()?)
             .build()?;
-        request_legacy!(
-            get_enabled,
-            Mm2RpcResult<GetEnabledResponse>,
-            self,
-            on_get_enabled_response
-        )
+        request_legacy!(enabled, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
     pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, ob_settings: OrderbookSettings) -> Result<()> {
@@ -174,12 +169,12 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     }
 
     async fn cancel_all_orders_impl(&self, request: CancelAllOrdersRequest) -> Result<()> {
-        let cancel_all_orders = Command::builder()
+        let cancel_all = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
         request_legacy!(
-            cancel_all_orders,
+            cancel_all,
             Mm2RpcResult<CancelAllOrdersResponse>,
             self,
             on_cancel_all_response
@@ -254,16 +249,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
                 .map(|pair| format!("{}/{}", pair.0, pair.1))
                 .join(", ")
         );
-        let orderbook_depth = Command::builder()
+        let ob_depth = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(
-            orderbook_depth,
-            Mm2RpcResult<Vec<PairWithDepth>>,
-            self,
-            on_orderbook_depth
-        )
+        request_legacy!(ob_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
     }
 
     pub(crate) async fn orders_history(
