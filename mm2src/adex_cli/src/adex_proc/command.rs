@@ -1,12 +1,13 @@
 use anyhow::{anyhow, Result};
 use derive_more::Display;
 use log::error;
-use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 use serde::Serialize;
+
+use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 
 use crate::error_anyhow;
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, Serialize)]
 pub(super) struct Command<T>
 where
     T: Serialize + Sized,
@@ -17,7 +18,7 @@ where
     userpass: Option<String>,
 }
 
-#[derive(Serialize, Clone, Display)]
+#[derive(Clone, Display, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum V2Method {
     BestOrders,
@@ -90,17 +91,5 @@ where
         };
 
         Ok(mm2_rpc_request)
-    }
-}
-
-impl<T: Serialize + Clone> std::fmt::Display for Command<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut cmd: Self = self.clone();
-        cmd.userpass = self.userpass.as_ref().map(|_| "***********".to_string());
-        writeln!(
-            f,
-            "{}",
-            serde_json::to_string(&cmd).unwrap_or_else(|_| "Unknown".to_string())
-        )
     }
 }
