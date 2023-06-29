@@ -65,7 +65,7 @@ mod native_tests {
     fn test_moralis_nft_metadata() {
         let response = block_on(send_request_to_uri(NFT_METADATA_URL_TEST)).unwrap();
         let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string()).unwrap();
-        assert_eq!(41237364, *nft_wrapper.block_number_minted);
+        assert_eq!(41237364, *nft_wrapper.block_number_minted.unwrap());
         let token_uri = nft_wrapper.token_uri.unwrap();
         let uri_response = block_on(send_request_to_uri(token_uri.as_str())).unwrap();
         serde_json::from_str::<UriMeta>(&uri_response.to_string()).unwrap();
@@ -139,7 +139,7 @@ mod wasm_tests {
     async fn test_moralis_nft_metadata() {
         let response = send_request_to_uri(NFT_METADATA_URL_TEST).await.unwrap();
         let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string()).unwrap();
-        assert_eq!(41237364, *nft_wrapper.block_number_minted);
+        assert_eq!(41237364, *nft_wrapper.block_number_minted.unwrap());
     }
 
     #[wasm_bindgen_test]
