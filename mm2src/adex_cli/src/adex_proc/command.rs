@@ -77,16 +77,16 @@ where
             userpass: Some(
                 self.userpass
                     .take()
-                    .ok_or_else(|| error_anyhow!("Build command failed, no userpass"))?,
+                    .ok_or_else(|| error_anyhow!("Failed to build v2 request, password is not set"))?,
             ),
             method: self
                 .method
                 .take()
-                .ok_or_else(|| error_anyhow!("Failed to get method, not set"))?,
+                .ok_or_else(|| error_anyhow!("Failed to build v2 request, method is not set"))?,
             params: self
                 .flatten_data
                 .take()
-                .ok_or_else(|| error_anyhow!("Failed to get flatten_data, not set"))?,
+                .ok_or_else(|| error_anyhow!("Failed to build v2 request, flatten_data is not set"))?,
             id: None,
         };
 

@@ -1,6 +1,8 @@
 use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
 use log::{error, info, warn};
+use serde_json::Value as Json;
+
 use mm2_rpc::data::legacy::{BuyRequest, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
                             CoinInitResponse, GetEnabledRequest, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
                             MmVersionResponse, MyBalanceRequest, MyBalanceResponse, MyOrdersRequest, MyOrdersResponse,
@@ -9,7 +11,6 @@ use mm2_rpc::data::legacy::{BuyRequest, CancelAllOrdersRequest, CancelAllOrdersR
                             SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest, UpdateMakerOrderRequest,
                             VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
-use serde_json::Value as Json;
 
 use super::command::{Command, V2Method};
 use super::response_handler::ResponseHandler;
