@@ -590,24 +590,52 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     url: &Url,
     my_address: &str,
 ) -> MmResult<(), UpdateNftError> {
-    let mut nft = get_moralis_metadata(tx.token_address, tx.token_id, chain, url).await?;
-    // sometimes moralis updates Get All NFTs (which also affects Get Metadata) later
-    // than History by Wallet update
-    nft.owner_of = my_address.to_string();
-    nft.block_number = tx.block_number;
-    drop_mutability!(nft);
-    storage
-        .add_nfts_to_list(chain, vec![nft.clone()], tx.block_number)
-        .await?;
-    let tx_meta = TxMeta {
-        token_address: nft.token_address,
-        token_id: nft.token_id,
-        token_uri: nft.token_uri,
-        collection_name: nft.collection_name,
-        image_url: nft.uri_meta.image_url,
-        token_name: nft.uri_meta.token_name,
-    };
-    storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
+    // If token isn't in NFT LIST table then add nft to the table.
+    if let Some(mut nft_db) = storage
+        .get_nft(chain, tx.token_address.clone(), tx.token_id.clone())
+        .await?
+    {
+        // An error is raised if user tries to receive an identical ERC-721 token they already own
+        // and if owner address != from address
+        if my_address != tx.from_address {
+            return MmError::err(UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 {
+                tx_hash: tx.transaction_hash,
+            });
+        }
+        nft_db.block_number = tx.block_number;
+        drop_mutability!(nft_db);
+        storage
+            .update_nft_amount_and_block_number(chain, nft_db.clone())
+            .await?;
+        let tx_meta = TxMeta {
+            token_address: nft_db.token_address,
+            token_id: nft_db.token_id,
+            token_uri: nft_db.token_uri,
+            collection_name: nft_db.collection_name,
+            image_url: nft_db.uri_meta.image_url,
+            token_name: nft_db.uri_meta.token_name,
+        };
+        storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
+    } else {
+        let mut nft = get_moralis_metadata(tx.token_address, tx.token_id, chain, url).await?;
+        // sometimes moralis updates Get All NFTs (which also affects Get Metadata) later
+        // than History by Wallet update
+        nft.owner_of = my_address.to_string();
+        nft.block_number = tx.block_number;
+        drop_mutability!(nft);
+        storage
+            .add_nfts_to_list(chain, vec![nft.clone()], tx.block_number)
+            .await?;
+        let tx_meta = TxMeta {
+            token_address: nft.token_address,
+            token_id: nft.token_id,
+            token_uri: nft.token_uri,
+            collection_name: nft.collection_name,
+            image_url: nft.uri_meta.image_url,
+            token_name: nft.uri_meta.token_name,
+        };
+        storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
+    }
     Ok(())
 }
 

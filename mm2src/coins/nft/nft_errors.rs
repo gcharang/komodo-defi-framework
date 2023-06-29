@@ -156,6 +156,10 @@ pub enum UpdateNftError {
     LastScannedBlockNotFound {
         last_nft_block: String,
     },
+    #[display(fmt = "Attempt to receive duplicate ERC721 token in transaction hash: {}", tx_hash)]
+    AttemptToReceiveAlreadyOwnedErc721 {
+        tx_hash: String,
+    },
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -189,6 +193,7 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::InsufficientAmountInCache { .. }
             | UpdateNftError::InvalidBlockOrder { .. }
             | UpdateNftError::LastScannedBlockNotFound { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
