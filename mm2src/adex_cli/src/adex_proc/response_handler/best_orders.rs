@@ -4,12 +4,12 @@ use std::cell::RefMut;
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
-                 Table as TermTable, TableStyle};
+                 TableStyle};
 
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
-use super::formatters::{format_confirmation_settings, format_ratio, COMMON_PRECISION};
+use super::formatters::{format_confirmation_settings, format_ratio, term_table_blank, COMMON_PRECISION};
 use super::macros::writeln_field;
 
 pub(super) fn on_best_orders(
@@ -25,17 +25,9 @@ pub(super) fn on_best_orders(
         return Ok(());
     }
 
-    let mut term_table = TermTable::with_rows(vec![Row::new(vec![
-        TableCell::new(""),
-        TableCell::new("Price"),
-        TableCell::new("Uuid"),
-        TableCell::new("Base vol(min:max)"),
-        TableCell::new("Rel vol(min:max)"),
-        TableCell::new("Address"),
-        TableCell::new("Confirmation"),
-    ])]);
-    term_table.style = TableStyle::thin();
-    term_table.separate_rows = false;
+    let mut term_table = term_table_blank(TableStyle::thin(), false, true, true);
+    term_table.add_row(best_orders_table_header_row());
+
     for (coin, data) in response.orders.iter().sorted_by_key(|p| p.0) {
         term_table.add_row(Row::new(vec![TableCell::new_with_alignment(coin, 7, Alignment::Left)]));
         for order in data.iter().sorted_by_key(|o| o.uuid) {
@@ -66,4 +58,16 @@ pub(super) fn on_best_orders(
     write_safe_io!(writer, "{}", term_table.render());
 
     Ok(())
+}
+
+fn best_orders_table_header_row() -> Row<'static> {
+    Row::new(vec![
+        TableCell::new(""),
+        TableCell::new("Price"),
+        TableCell::new("Uuid"),
+        TableCell::new("Base vol(min:max)"),
+        TableCell::new("Rel vol(min:max)"),
+        TableCell::new("Address"),
+        TableCell::new("Confirmation"),
+    ])
 }

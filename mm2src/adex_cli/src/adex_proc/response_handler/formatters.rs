@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::DerefMut;
-use term_table::{row::Row, table_cell::TableCell};
+use term_table::{row::Row, table_cell::TableCell, Table as TermTable, TableStyle};
 use uuid::Uuid;
 
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
@@ -298,4 +298,18 @@ pub(super) fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid
         write_maker_match(writer, uuid, m)?
     }
     Ok(())
+}
+
+pub(super) fn term_table_blank(
+    style: TableStyle,
+    sep_row: bool,
+    bottom_border: bool,
+    top_border: bool,
+) -> TermTable<'static> {
+    let mut term_table = TermTable::new();
+    term_table.style = style;
+    term_table.separate_rows = sep_row;
+    term_table.has_bottom_boarder = bottom_border;
+    term_table.has_top_boarder = top_border;
+    term_table
 }

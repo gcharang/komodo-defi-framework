@@ -4,13 +4,13 @@ use std::cell::RefMut;
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
-                 Table as TermTable, TableStyle};
+                 TableStyle};
 
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{FilteringOrder, MakerOrderForRpc, Mm2RpcResult, OrderForRpc, OrdersHistoryResponse,
                             UuidParseError};
 
-use super::formatters::write_maker_match;
+use super::formatters::{term_table_blank, write_maker_match};
 use crate::adex_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
                                                      format_historical_changes, format_ratio, taker_order_header_row,
                                                      taker_order_rows, COMMON_PRECISION};
@@ -205,13 +205,4 @@ fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
         )]));
     }
     Ok(rows)
-}
-
-fn term_table_blank(style: TableStyle, sep_row: bool, bottom_border: bool, top_border: bool) -> TermTable<'static> {
-    let mut term_table = TermTable::new();
-    term_table.style = style;
-    term_table.separate_rows = sep_row;
-    term_table.has_bottom_boarder = bottom_border;
-    term_table.has_top_boarder = top_border;
-    term_table
 }

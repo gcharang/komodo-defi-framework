@@ -1,7 +1,5 @@
 use std::cell::Cell;
 
-use super::formatters::COMMON_PRECISION;
-
 pub(crate) type SmartFractPrecision = (usize, usize);
 
 pub(in super::super) struct SmartFractionFmt {
@@ -59,6 +57,8 @@ fn test_construct_smart_fraction_fmt() {
 
 #[test]
 fn test_smart_fraction_fmt() {
+    use crate::adex_proc::response_handler::formatters::COMMON_PRECISION;
+
     let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.0).unwrap();
     assert_eq!(num.to_string(), "0");
     let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.1).unwrap();
