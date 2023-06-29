@@ -6,15 +6,21 @@ use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
                  Table as TermTable, TableStyle};
 
-use crate::adex_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
-                                                     format_historical_changes, format_ratio, taker_order_header_row,
-                                                     taker_order_rows};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{FilteringOrder, MakerOrderForRpc, Mm2RpcResult, OrderForRpc, OrdersHistoryResponse,
                             UuidParseError};
 
-use super::super::OrdersHistorySettings;
 use super::formatters::write_maker_match;
+use crate::adex_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
+                                                     format_historical_changes, format_ratio, taker_order_header_row,
+                                                     taker_order_rows};
+
+pub(crate) struct OrdersHistorySettings {
+    pub(crate) takers_detailed: bool,
+    pub(crate) makers_detailed: bool,
+    pub(crate) warnings: bool,
+    pub(crate) common: bool,
+}
 
 pub(super) fn on_orders_history(
     mut writer: RefMut<'_, dyn Write>,

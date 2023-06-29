@@ -9,10 +9,21 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookResponse};
 
+use super::formatters::format_confirmation_settings;
 use super::smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt};
 use crate::adex_config::AdexConfig;
-use crate::adex_proc::response_handler::formatters::format_confirmation_settings;
-use crate::adex_proc::OrderbookSettings;
+
+pub(crate) struct OrderbookSettings {
+    pub(crate) uuids: bool,
+    pub(crate) min_volume: bool,
+    pub(crate) max_volume: bool,
+    pub(crate) publics: bool,
+    pub(crate) address: bool,
+    pub(crate) age: bool,
+    pub(crate) conf_settings: bool,
+    pub(crate) asks_limit: Option<usize>,
+    pub(crate) bids_limit: Option<usize>,
+}
 
 pub(super) fn on_orderbook_response<Cfg: AdexConfig + 'static>(
     mut writer: RefMut<'_, dyn Write>,

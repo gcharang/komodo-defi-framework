@@ -11,6 +11,8 @@ mod orders_history;
 #[path = "response_handler/smart_fraction_fmt.rs"]
 mod smart_fraction_fmt;
 
+pub(crate) use orderbook::OrderbookSettings;
+pub(crate) use orders_history::OrdersHistorySettings;
 pub(crate) use smart_fraction_fmt::SmartFractPrecision;
 
 use anyhow::{anyhow, Result};
@@ -27,7 +29,6 @@ use mm2_rpc::data::legacy::{CancelAllOrdersResponse, CoinInitResponse, GetEnable
                             OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
-use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::adex_config::AdexConfig;
 use crate::logging::error_anyhow;
 
