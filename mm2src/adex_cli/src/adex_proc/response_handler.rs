@@ -22,7 +22,6 @@ use log::error;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::Write;
-use std::ops::DerefMut;
 
 use mm2_rpc::data::legacy::{CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc,
                             Mm2RpcResult, MmVersionResponse, MyBalanceResponse, MyOrdersResponse, OrderStatusResponse,
@@ -69,8 +68,7 @@ pub(crate) struct ResponseHandlerImpl<'a> {
 
 impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn print_response(&self, result: Json) -> Result<()> {
-        let mut binding = self.writer.borrow_mut();
-        let writer = binding.deref_mut();
+        let mut writer = self.writer.borrow_mut();
         let object = result
             .as_object()
             .ok_or_else(|| error_anyhow!("Failed to cast result as object"))?;
