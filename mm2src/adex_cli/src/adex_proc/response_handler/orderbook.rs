@@ -1,13 +1,89 @@
-use mm2_number::bigdecimal::ToPrimitive;
-use mm2_rpc::data::legacy::AggregatedOrderbookEntry;
+use anyhow::Result;
+use itertools::Itertools;
+use std::cell::RefMut;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
+use std::io::Write;
 
-use super::{format_confirmation_settings,
-            smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt},
-            OrderbookSettings};
+use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
+use mm2_number::bigdecimal::ToPrimitive;
+use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookResponse};
 
-pub(super) fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
+use super::smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt};
+use crate::adex_config::AdexConfig;
+use crate::adex_proc::response_handler::formatters::format_confirmation_settings;
+use crate::adex_proc::OrderbookSettings;
+
+pub(super) fn on_orderbook_response<Cfg: AdexConfig + 'static>(
+    mut writer: RefMut<'_, dyn Write>,
+    response: OrderbookResponse,
+    config: &Cfg,
+    settings: OrderbookSettings,
+) -> Result<()> {
+    let base_vol_head = format!("Volume: {}", response.base);
+    let rel_price_head = format!("Price: {}", response.rel);
+    writeln_safe_io!(
+        writer,
+        "{}",
+        AskBidRow::new(
+            base_vol_head.as_str(),
+            rel_price_head.as_str(),
+            "Uuid",
+            "Min volume",
+            "Max volume",
+            "Age(sec.)",
+            "Public",
+            "Address",
+            "Order conf (bc,bn:rc,rn)",
+            &settings
+        )
+    );
+
+    let price_prec = config.orderbook_price_precision();
+    let vol_prec = config.orderbook_volume_precision();
+
+    if response.asks.is_empty() {
+        writeln_safe_io!(
+            writer,
+            "{}",
+            AskBidRow::new("", "No asks found", "", "", "", "", "", "", "", &settings)
+        );
+    } else {
+        let skip = response
+            .asks
+            .len()
+            .checked_sub(settings.asks_limit.unwrap_or(usize::MAX))
+            .unwrap_or_default();
+
+        response
+            .asks
+            .iter()
+            .sorted_by(cmp_asks)
+            .skip(skip)
+            .map(|entry| AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings))
+            .for_each(|row: AskBidRow| writeln_safe_io!(writer, "{}", row));
+    }
+    writeln_safe_io!(writer, "{}", AskBidRow::new_delimiter(&settings));
+
+    if response.bids.is_empty() {
+        writeln_safe_io!(
+            writer,
+            "{}",
+            AskBidRow::new("", "No bids found", "", "", "", "", "", "", "", &settings)
+        );
+    } else {
+        response
+            .bids
+            .iter()
+            .sorted_by(cmp_bids)
+            .take(settings.bids_limit.unwrap_or(usize::MAX))
+            .map(|entry| AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings))
+            .for_each(|row: AskBidRow| writeln_safe_io!(writer, "{}", row));
+    }
+    Ok(())
+}
+
+fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
     let cmp = left.entry.price.cmp(&right.entry.price).reverse();
     if cmp.is_eq() {
         return left
@@ -20,7 +96,7 @@ pub(super) fn cmp_bids(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrde
     cmp
 }
 
-pub(super) fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
+fn cmp_asks(left: &&AggregatedOrderbookEntry, right: &&AggregatedOrderbookEntry) -> Ordering {
     let cmp = left.entry.price.cmp(&right.entry.price).reverse();
     if cmp.is_eq() {
         return left
@@ -37,7 +113,7 @@ enum AskBidRowVal {
     Delim,
 }
 
-pub(super) struct AskBidRow<'a> {
+struct AskBidRow<'a> {
     volume: AskBidRowVal,
     price: AskBidRowVal,
     uuid: AskBidRowVal,
@@ -53,7 +129,7 @@ pub(super) struct AskBidRow<'a> {
 
 impl<'a> AskBidRow<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+    fn new(
         volume: &str,
         price: &str,
         uuid: &str,
@@ -80,7 +156,7 @@ impl<'a> AskBidRow<'a> {
         }
     }
 
-    pub(super) fn new_delimiter(config: &'a OrderbookSettings) -> Self {
+    fn new_delimiter(config: &'a OrderbookSettings) -> Self {
         Self {
             is_mine: AskBidRowVal::Delim,
             volume: AskBidRowVal::Delim,
@@ -96,7 +172,7 @@ impl<'a> AskBidRow<'a> {
         }
     }
 
-    pub(super) fn from_orderbook_entry(
+    fn from_orderbook_entry(
         entry: &AggregatedOrderbookEntry,
         vol_prec: &SmartFractPrecision,
         price_prec: &SmartFractPrecision,

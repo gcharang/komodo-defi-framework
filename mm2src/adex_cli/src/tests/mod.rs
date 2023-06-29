@@ -256,7 +256,7 @@ async fn test_history_common() {
         writer: (&mut buffer as &mut dyn Write).into(),
     };
     let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7796");
-    let args = vec!["adex-cli", "history", "--common"];
+    let args = vec!["adex-cli", "history", "--all"];
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();
@@ -276,7 +276,7 @@ async fn test_history_takers_detailed() {
         writer: (&mut buffer as &mut dyn Write).into(),
     };
     let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7797");
-    let args = vec!["adex-cli", "history", "--takers-detailed"];
+    let args = vec!["adex-cli", "history", "--takers"];
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();
@@ -296,7 +296,7 @@ async fn test_history_makers_detailed() {
         writer: (&mut buffer as &mut dyn Write).into(),
     };
     let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7798");
-    let args = vec!["adex-cli", "history", "--makers-detailed"];
+    let args = vec!["adex-cli", "history", "--makers"];
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();

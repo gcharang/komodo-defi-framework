@@ -22,11 +22,11 @@ impl<T> Deref for Mm2RpcResult<T> {
 
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "stop")]
-pub struct StopRequest{}
+pub struct StopRequest {}
 
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "version")]
-pub struct VersionRequest{}
+pub struct VersionRequest {}
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", rename = "my_balance")]
@@ -132,14 +132,14 @@ construct_detailed!(AggregatedRelVol, rel_max_volume_aggr);
 #[serde(tag = "method", rename = "sell")]
 pub struct SellRequest {
     #[serde(flatten)]
-    pub delegate: SellBuyRequest
+    pub delegate: SellBuyRequest,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "buy")]
 pub struct BuyRequest {
     #[serde(flatten)]
-    pub delegate: SellBuyRequest
+    pub delegate: SellBuyRequest,
 }
 
 #[derive(Deserialize, Serialize)]
