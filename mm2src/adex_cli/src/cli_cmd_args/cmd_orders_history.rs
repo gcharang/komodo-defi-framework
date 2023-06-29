@@ -31,6 +31,8 @@ enum StatusFilter {
 
 #[derive(Args)]
 pub struct OrdersHistoryArgs {
+    #[command(flatten)]
+    settings: OrdersHistorySettings,
     #[arg(long = "type", value_enum, help = "Return only orders that match the type")]
     order_type: Option<OrderTypeFilter>,
     #[arg(
@@ -70,8 +72,6 @@ pub struct OrdersHistoryArgs {
     was_taker: bool,
     #[arg(long, value_enum, help = "Return only orders that match the status")]
     status: Option<StatusFilter>,
-    #[command(flatten)]
-    settings: OrdersHistorySettings,
 }
 
 impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
@@ -89,7 +89,7 @@ impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
             to_timestamp: value.to_dt.map(|dt| dt.timestamp() as u64),
             was_taker: Some(value.was_taker),
             status: value.status.as_ref().map(StatusFilter::to_string),
-            include_details: value.settings.takers_detailed || value.settings.makers_detailed,
+            include_details: value.settings.takers || value.settings.makers,
         }
     }
 }
@@ -102,26 +102,26 @@ struct OrdersHistorySettings {
         default_value_t = false,
         help = "Whether to show taker orders detailed history"
     )]
-    takers_detailed: bool,
+    takers: bool,
     #[arg(
         long,
         default_value_t = false,
         help = "Whether to show maker orders detailed history"
     )]
-    makers_detailed: bool,
+    makers: bool,
     #[arg(long, default_value_t = false, help = "Whether to show warnings")]
     warnings: bool,
     #[arg(long, default_value_t = false, help = "Whether to show common history data")]
-    common: bool,
+    all: bool,
 }
 
 impl From<&OrdersHistorySettings> for adex_proc::OrdersHistorySettings {
     fn from(value: &OrdersHistorySettings) -> Self {
         adex_proc::OrdersHistorySettings {
-            takers_detailed: value.takers_detailed,
-            makers_detailed: value.makers_detailed,
+            takers_detailed: value.takers,
+            makers_detailed: value.makers,
             warnings: value.warnings,
-            common: value.common,
+            common: value.all,
         }
     }
 }
