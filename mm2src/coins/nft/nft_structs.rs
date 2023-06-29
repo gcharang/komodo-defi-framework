@@ -156,11 +156,11 @@ pub(crate) struct UriMeta {
 }
 
 impl UriMeta {
-    /// `merge_from` function doesnt change `raw_image_url` field.
+    /// `try_to_fill_missing_fields_from` function doesnt change `raw_image_url` field.
     /// It tries to update `image_url` field instead, if it is None.
     /// As `image` is the original name of `raw_image_url` field in data from `token_uri` or `metadata`,
     /// try to find **Some()** in this field first.
-    pub(crate) fn merge_from(&mut self, other: UriMeta) {
+    pub(crate) fn try_to_fill_missing_fields_from(&mut self, other: UriMeta) {
         if self.image_url.is_none() {
             self.image_url = other.raw_image_url.or(other.image_url);
         }

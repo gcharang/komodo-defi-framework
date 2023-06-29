@@ -499,7 +499,7 @@ async fn get_uri_meta(token_uri: Option<&str>, metadata: Option<&str>) -> UriMet
     }
     if let Some(metadata) = metadata {
         if let Ok(meta_from_meta) = serde_json::from_str::<UriMeta>(metadata) {
-            uri_meta.merge_from(meta_from_meta)
+            uri_meta.try_to_fill_missing_fields_from(meta_from_meta)
         }
     }
     uri_meta.image_url = check_moralis_ipfs_bafy(uri_meta.image_url.as_deref());
