@@ -5,7 +5,6 @@ mod response_handler;
 pub(super) use adex_proc_impl::AdexProc;
 pub(super) use response_handler::{ResponseHandler, ResponseHandlerImpl, SmartFractPrecision};
 
-#[derive(Clone)]
 pub(super) struct OrderbookSettings {
     pub(super) uuids: bool,
     pub(super) min_volume: bool,
