@@ -103,8 +103,8 @@ impl Cli {
             Command::Kill => stop_process(),
             Command::Status => get_status(),
             Command::Stop => proc.send_stop().await?,
-            Command::Config(ConfigSubcommand::Set(SetConfigArgs { set_password, adex_uri })) => {
-                set_config(*set_password, adex_uri.take())?
+            Command::Config(ConfigSubcommand::Set(SetConfigArgs { password, uri })) => {
+                set_config(*password, uri.take())?
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Enable { coin } => proc.enable(coin).await?,
