@@ -150,9 +150,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_cancel_order_response(&self, response: Mm2RpcResult<Status>) -> Result<()> {
-        match response.result {
-            Status::Success => writeln_safe_io!(self.writer.borrow_mut(), "Order cancelled"),
-        }
+        writeln_safe_io!(self.writer.borrow_mut(), "Order cancelled: {}", response.result);
         Ok(())
     }
 
