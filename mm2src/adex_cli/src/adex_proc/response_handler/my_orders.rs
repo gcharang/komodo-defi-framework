@@ -11,7 +11,7 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, Mm2RpcResult, MyOrdersResponse, TakerOrderForRpc};
 
 use super::formatters::{format_confirmation_settings, format_datetime, format_historical_changes, format_ratio,
-                        taker_order_header_row, taker_order_rows, write_maker_match, COMMON_INDENT};
+                        taker_order_header_row, taker_order_rows, write_maker_match, COMMON_INDENT, COMMON_PRECISION};
 use super::macros::writeln_field;
 use crate::logging::error_anyhow;
 
@@ -88,7 +88,7 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
     let order = &maker_order.order;
     let mut rows = vec![Row::new(vec![
         TableCell::new(format!("{},{}", order.base, order.rel)),
-        TableCell::new(format_ratio(&order.price_rat, 2, 5)?),
+        TableCell::new(format_ratio(&order.price_rat, COMMON_PRECISION)?),
         TableCell::new(order.uuid),
         TableCell::new(format!(
             "{},\n{}",
@@ -97,11 +97,11 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
         )),
         TableCell::new(format!(
             "{},\n{}",
-            format_ratio(&order.min_base_vol_rat, 2, 5)?,
-            format_ratio(&order.max_base_vol_rat, 2, 5)?
+            format_ratio(&order.min_base_vol_rat, COMMON_PRECISION)?,
+            format_ratio(&order.max_base_vol_rat, COMMON_PRECISION)?
         )),
         TableCell::new(maker_order.cancellable),
-        TableCell::new(format_ratio(&maker_order.available_amount, 2, 5)?),
+        TableCell::new(format_ratio(&maker_order.available_amount, COMMON_PRECISION)?),
         TableCell::new(if order.started_swaps.is_empty() {
             "empty".to_string()
         } else {

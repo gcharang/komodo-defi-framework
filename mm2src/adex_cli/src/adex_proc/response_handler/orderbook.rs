@@ -192,27 +192,23 @@ impl<'a> AskBidRow<'a> {
         AskBidRow {
             is_mine: AskBidRowVal::Value((if entry.entry.is_mine { "*" } else { "" }).to_string()),
             volume: AskBidRowVal::Value(
-                SmartFractionFmt::new(
-                    vol_prec.0,
-                    vol_prec.1,
-                    entry.entry.base_max_volume.base_max_volume.to_f64().unwrap(),
-                )
-                .expect("volume smart fraction should be constructed properly")
-                .to_string(),
+                SmartFractionFmt::new(vol_prec, entry.entry.base_max_volume.base_max_volume.to_f64().unwrap())
+                    .expect("volume smart fraction should be constructed properly")
+                    .to_string(),
             ),
             price: AskBidRowVal::Value(
-                SmartFractionFmt::new(price_prec.0, price_prec.1, entry.entry.price.to_f64().unwrap())
+                SmartFractionFmt::new(price_prec, entry.entry.price.to_f64().unwrap())
                     .expect("price smart fraction should be constructed properly")
                     .to_string(),
             ),
             uuid: AskBidRowVal::Value(entry.entry.uuid.to_string()),
             min_volume: AskBidRowVal::Value(
-                SmartFractionFmt::new(vol_prec.0, vol_prec.1, entry.entry.min_volume.to_f64().unwrap())
+                SmartFractionFmt::new(vol_prec, entry.entry.min_volume.to_f64().unwrap())
                     .expect("min_volume smart fraction should be constructed properly")
                     .to_string(),
             ),
             max_volume: AskBidRowVal::Value(
-                SmartFractionFmt::new(vol_prec.0, vol_prec.1, entry.entry.max_volume.to_f64().unwrap())
+                SmartFractionFmt::new(vol_prec, entry.entry.max_volume.to_f64().unwrap())
                     .expect("max_volume smart fraction should be constructed properly")
                     .to_string(),
             ),

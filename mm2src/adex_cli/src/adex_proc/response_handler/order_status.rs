@@ -9,7 +9,7 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, OrderStatusResponse, TakerMatchForRpc, TakerOrderForRpc};
 
 use super::formatters::{format_confirmation_settings, format_datetime, format_match_by, format_ratio,
-                        write_maker_matches, write_maker_order, write_taker_match, COMMON_INDENT};
+                        write_maker_matches, write_maker_order, write_taker_match, COMMON_INDENT, COMMON_PRECISION};
 use super::macros::{write_base_rel, write_confirmation_settings, write_field_option, writeln_field};
 
 pub(super) fn on_order_status(mut writer: RefMut<'_, dyn Write>, response: OrderStatusResponse) -> Result<()> {
@@ -27,7 +27,7 @@ fn write_maker_order_for_my_orders(writer: &mut dyn Write, maker_status: &MakerO
     writeln_field!(
         writer,
         "available_amount",
-        format_ratio(&maker_status.available_amount, 2, 5)?,
+        format_ratio(&maker_status.available_amount, COMMON_PRECISION)?,
         COMMON_INDENT
     );
 

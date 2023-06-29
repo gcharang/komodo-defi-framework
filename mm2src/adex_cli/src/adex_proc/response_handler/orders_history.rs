@@ -13,7 +13,7 @@ use mm2_rpc::data::legacy::{FilteringOrder, MakerOrderForRpc, Mm2RpcResult, Orde
 use super::formatters::write_maker_match;
 use crate::adex_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
                                                      format_historical_changes, format_ratio, taker_order_header_row,
-                                                     taker_order_rows};
+                                                     taker_order_rows, COMMON_PRECISION};
 
 pub(crate) struct OrdersHistorySettings {
     pub(crate) takers_detailed: bool,
@@ -96,8 +96,18 @@ fn filtering_order_row(order: FilteringOrder) -> Result<Row<'static>> {
         TableCell::new_with_alignment_and_padding(&order.initial_action, 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding(&order.base, 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding(&order.rel, 1, Alignment::Left, false),
-        TableCell::new_with_alignment_and_padding(format_f64(order.volume, 2, 5)?, 1, Alignment::Left, false),
-        TableCell::new_with_alignment_and_padding(format_f64(order.price, 2, 5)?, 1, Alignment::Left, false),
+        TableCell::new_with_alignment_and_padding(
+            format_f64(order.volume, COMMON_PRECISION)?,
+            1,
+            Alignment::Left,
+            false,
+        ),
+        TableCell::new_with_alignment_and_padding(
+            format_f64(order.price, COMMON_PRECISION)?,
+            1,
+            Alignment::Left,
+            false,
+        ),
         TableCell::new_with_alignment_and_padding(&order.status, 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding(format_datetime(order.created_at as u64)?, 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding(
@@ -136,7 +146,7 @@ fn maker_order_header_row() -> Row<'static> {
 fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
     let mut rows = vec![Row::new(vec![
         TableCell::new(format!("{},{}", order.base, order.rel)),
-        TableCell::new(format_ratio(&order.price_rat, 2, 5)?),
+        TableCell::new(format_ratio(&order.price_rat, COMMON_PRECISION)?),
         TableCell::new(order.uuid),
         TableCell::new(format!(
             "{},\n{}",
@@ -145,8 +155,8 @@ fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
         )),
         TableCell::new(format!(
             "{},\n{}",
-            format_ratio(&order.min_base_vol_rat, 2, 5)?,
-            format_ratio(&order.max_base_vol_rat, 2, 5)?
+            format_ratio(&order.min_base_vol_rat, COMMON_PRECISION)?,
+            format_ratio(&order.max_base_vol_rat, COMMON_PRECISION)?
         )),
         TableCell::new(if order.started_swaps.is_empty() {
             "empty".to_string()

@@ -9,7 +9,7 @@ use term_table::{row::Row,
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
-use super::formatters::{format_confirmation_settings, format_ratio};
+use super::formatters::{format_confirmation_settings, format_ratio, COMMON_PRECISION};
 use super::macros::writeln_field;
 
 pub(super) fn on_best_orders(
@@ -41,17 +41,17 @@ pub(super) fn on_best_orders(
         for order in data.iter().sorted_by_key(|o| o.uuid) {
             term_table.add_row(Row::new(vec![
                 TableCell::new(if order.is_mine { "*" } else { "" }),
-                TableCell::new(format_ratio(&order.price.rational, 2, 5)?),
+                TableCell::new(format_ratio(&order.price.rational, COMMON_PRECISION)?),
                 TableCell::new(order.uuid),
                 TableCell::new(format!(
                     "{}:{}",
-                    format_ratio(&order.base_min_volume.rational, 2, 5)?,
-                    format_ratio(&order.base_max_volume.rational, 2, 5)?
+                    format_ratio(&order.base_min_volume.rational, COMMON_PRECISION)?,
+                    format_ratio(&order.base_max_volume.rational, COMMON_PRECISION)?
                 )),
                 TableCell::new(format!(
                     "{}:{}",
-                    format_ratio(&order.rel_min_volume.rational, 2, 5)?,
-                    format_ratio(&order.rel_max_volume.rational, 2, 5)?
+                    format_ratio(&order.rel_min_volume.rational, COMMON_PRECISION)?,
+                    format_ratio(&order.rel_max_volume.rational, COMMON_PRECISION)?
                 )),
                 TableCell::new(&order.address),
                 TableCell::new(

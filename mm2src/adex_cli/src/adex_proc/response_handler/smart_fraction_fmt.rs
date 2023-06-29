@@ -1,5 +1,7 @@
 use std::cell::Cell;
 
+use super::formatters::COMMON_PRECISION;
+
 pub(crate) type SmartFractPrecision = (usize, usize);
 
 pub(in super::super) struct SmartFractionFmt {
@@ -14,17 +16,13 @@ pub(in super::super) enum SmartFractionTrimErr {
 }
 
 impl SmartFractionFmt {
-    pub(in super::super) fn new(
-        precision_min: usize,
-        precision_max: usize,
-        num: f64,
-    ) -> Result<Self, SmartFractionTrimErr> {
-        if precision_min == 0 || precision_min > precision_max {
+    pub(in super::super) fn new(precision: &SmartFractPrecision, num: f64) -> Result<Self, SmartFractionTrimErr> {
+        if precision.0 == 0 || precision.0 > precision.1 {
             return Err(SmartFractionTrimErr::WrongParams);
         }
         Ok(Self {
-            precision_min: precision_min as i32,
-            precision_max: precision_max as i32,
+            precision_min: precision.0 as i32,
+            precision_max: precision.1 as i32,
             num: Cell::new(num),
         })
     }
@@ -55,46 +53,46 @@ impl ToString for SmartFractionFmt {
 
 #[test]
 fn test_construct_smart_fraction_fmt() {
-    assert!(SmartFractionFmt::new(0, 5, 0.0).is_err());
-    assert!(SmartFractionFmt::new(5, 2, 0.0).is_err());
+    assert!(SmartFractionFmt::new(&(0, 5), 0.0).is_err());
+    assert!(SmartFractionFmt::new(&(5, 2), 0.0).is_err());
 }
 
 #[test]
 fn test_smart_fraction_fmt() {
-    let num = SmartFractionFmt::new(2, 5, 0.0).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.0).unwrap();
     assert_eq!(num.to_string(), "0");
-    let num = SmartFractionFmt::new(2, 5, 0.1).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.1).unwrap();
     assert_eq!(num.to_string(), "0.10");
-    let num = SmartFractionFmt::new(2, 5, 0.19909).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.19909).unwrap();
     assert_eq!(num.to_string(), "0.19");
-    let num = SmartFractionFmt::new(2, 5, 0.10001).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.10001).unwrap();
     assert_eq!(num.to_string(), "0.10");
-    let num = SmartFractionFmt::new(2, 5, 0.10991).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.10991).unwrap();
     assert_eq!(num.to_string(), "0.10");
-    let num = SmartFractionFmt::new(2, 5, 0.0011991).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.0011991).unwrap();
     assert_eq!(num.to_string(), "0.0011");
-    let num = SmartFractionFmt::new(2, 5, 0.001110000001).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.001110000001).unwrap();
     assert_eq!(num.to_string(), "0.0011");
-    let num = SmartFractionFmt::new(2, 5, 0.00001700445).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.00001700445).unwrap();
     assert_eq!(num.to_string(), "0.000017");
-    let num = SmartFractionFmt::new(2, 5, 0.00000199).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.00000199).unwrap();
     assert_eq!(num.to_string(), "0.00000");
-    let num = SmartFractionFmt::new(2, 5, 1.0).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 1.0).unwrap();
     assert_eq!(num.to_string(), "1.00");
-    let num = SmartFractionFmt::new(2, 5, 1.00001).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 1.00001).unwrap();
     assert_eq!(num.to_string(), "1.00");
-    let num = SmartFractionFmt::new(2, 5, 1.00000000001).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 1.00000000001).unwrap();
     assert_eq!(num.to_string(), "1.00");
-    let num = SmartFractionFmt::new(2, 5, 1.99001).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 1.99001).unwrap();
     assert_eq!(num.to_string(), "1.99");
-    let num = SmartFractionFmt::new(2, 5, 5000.0).unwrap();
+    let num = SmartFractionFmt::new(&COMMON_PRECISION, 5000.0).unwrap();
     assert_eq!(num.to_string(), "5000.00");
 
-    let num = SmartFractionFmt::new(1, 5, 0.10991).unwrap();
+    let num = SmartFractionFmt::new(&(1, 5), 0.10991).unwrap();
     assert_eq!(num.to_string(), "0.1");
 
-    let num = SmartFractionFmt::new(2, 2, 0.001110000001).unwrap();
+    let num = SmartFractionFmt::new(&(2, 2), 0.001110000001).unwrap();
     assert_eq!(num.to_string(), "0.00");
-    let num = SmartFractionFmt::new(2, 2, 0.101110000001).unwrap();
+    let num = SmartFractionFmt::new(&(2, 2), 0.101110000001).unwrap();
     assert_eq!(num.to_string(), "0.10");
 }

@@ -15,12 +15,14 @@ use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy,
                             OrderConfirmationsSettings, TakerMatchForRpc, TakerOrderForRpc};
 
+use super::super::SmartFractPrecision;
 use super::macros::{write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
 use super::smart_fraction_fmt::SmartFractionFmt;
 use crate::logging::error_anyhow;
 
 pub(super) const COMMON_INDENT: usize = 20;
 const NESTED_INDENT: usize = 26;
+pub(super) const COMMON_PRECISION: SmartFractPrecision = (2, 5);
 
 pub(super) fn on_maker_order_response(mut writer: RefMut<'_, dyn Write>, order: MakerOrderForRpc) -> Result<()> {
     writeln_field!(writer, "Maker order", "", 0);
@@ -33,7 +35,12 @@ pub(super) fn on_maker_order_response(mut writer: RefMut<'_, dyn Write>, order: 
 pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc) -> Result<()> {
     writeln_field!(writer, "base", order.base, COMMON_INDENT);
     writeln_field!(writer, "rel", order.rel, COMMON_INDENT);
-    writeln_field!(writer, "price", format_ratio(&order.price_rat, 2, 5)?, COMMON_INDENT);
+    writeln_field!(
+        writer,
+        "price",
+        format_ratio(&order.price_rat, COMMON_PRECISION)?,
+        COMMON_INDENT
+    );
     writeln_field!(writer, "uuid", order.uuid, COMMON_INDENT);
     writeln_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
 
@@ -43,13 +50,13 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
     writeln_field!(
         writer,
         "max_base_vol",
-        format_ratio(&order.max_base_vol_rat, 2, 5)?,
+        format_ratio(&order.max_base_vol_rat, COMMON_PRECISION)?,
         COMMON_INDENT
     );
     writeln_field!(
         writer,
         "min_base_vol",
-        format_ratio(&order.min_base_vol_rat, 2, 5)?,
+        format_ratio(&order.min_base_vol_rat, COMMON_PRECISION)?,
         COMMON_INDENT
     );
     writeln_field!(
@@ -93,18 +100,20 @@ pub(super) fn format_datetime(datetime: u64) -> Result<String> {
     Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
 }
 
-pub(super) fn format_ratio<T: ToPrimitive + Debug>(rational: &T, min_fract: usize, max_fract: usize) -> Result<String> {
+pub(super) fn format_ratio<T: ToPrimitive + Debug>(
+    rational: &T,
+    fract_precision: SmartFractPrecision,
+) -> Result<String> {
     format_f64(
         rational
             .to_f64()
             .ok_or_else(|| error_anyhow!("Failed to cast rational to f64: {rational:?}"))?,
-        min_fract,
-        max_fract,
+        fract_precision,
     )
 }
 
-pub(super) fn format_f64(rational: f64, min_fract: usize, max_fract: usize) -> Result<String> {
-    Ok(SmartFractionFmt::new(min_fract, max_fract, rational)
+pub(super) fn format_f64(rational: f64, fract_precision: SmartFractPrecision) -> Result<String> {
+    Ok(SmartFractionFmt::new(&fract_precision, rational)
         .map_err(|_| error_anyhow!("Failed to create smart_fraction_fmt"))?
         .to_string())
 }
@@ -164,9 +173,9 @@ pub(super) fn taker_order_rows(taker_order: &TakerOrderForRpc) -> Result<Vec<Row
             "{}\n{}({}),{}({})",
             req.action,
             req.base,
-            format_ratio(&req.base_amount, 2, 5)?,
+            format_ratio(&req.base_amount, COMMON_PRECISION)?,
             req.rel,
-            format_ratio(&req.rel_amount, 2, 5)?
+            format_ratio(&req.rel_amount, COMMON_PRECISION)?
         )),
         TableCell::new(format!("{}\n{}\n{}", req.uuid, req.sender_pubkey, req.dest_pub_key)),
         TableCell::new(format!(
@@ -215,13 +224,19 @@ pub(super) fn format_historical_changes(historical_order: &HistoricalOrder, deli
     let mut result = vec![];
 
     if let Some(ref min_base_vol) = historical_order.min_base_vol {
-        result.push(format!("min_base_vol: {}", format_ratio(min_base_vol, 2, 5)?,))
+        result.push(format!(
+            "min_base_vol: {}",
+            format_ratio(min_base_vol, COMMON_PRECISION)?,
+        ))
     }
     if let Some(ref max_base_vol) = historical_order.max_base_vol {
-        result.push(format!("max_base_vol: {}", format_ratio(max_base_vol, 2, 5)?,))
+        result.push(format!(
+            "max_base_vol: {}",
+            format_ratio(max_base_vol, COMMON_PRECISION)?,
+        ))
     }
     if let Some(ref price) = historical_order.price {
-        result.push(format!("price: {}", format_ratio(price, 2, 5)?));
+        result.push(format!("price: {}", format_ratio(price, COMMON_PRECISION)?));
     }
     if let Some(updated_at) = historical_order.updated_at {
         result.push(format!("updated_at: {}", format_datetime(updated_at)?));
