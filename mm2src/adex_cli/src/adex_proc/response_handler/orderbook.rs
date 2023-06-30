@@ -134,7 +134,7 @@ struct AskBidRow<'a> {
     address: AskBidRowVal,
     is_mine: AskBidRowVal,
     conf_settings: AskBidRowVal,
-    config: &'a OrderbookSettings,
+    settings: &'a OrderbookSettings,
 }
 
 impl<'a> AskBidRow<'a> {
@@ -149,7 +149,7 @@ impl<'a> AskBidRow<'a> {
         public: &str,
         address: &str,
         conf_settings: &str,
-        config: &'a OrderbookSettings,
+        settings: &'a OrderbookSettings,
     ) -> Self {
         Self {
             is_mine: AskBidRowVal::Value(String::new()),
@@ -162,11 +162,11 @@ impl<'a> AskBidRow<'a> {
             public: AskBidRowVal::Value(public.to_string()),
             address: AskBidRowVal::Value(address.to_string()),
             conf_settings: AskBidRowVal::Value(conf_settings.to_string()),
-            config,
+            settings,
         }
     }
 
-    fn new_delimiter(config: &'a OrderbookSettings) -> Self {
+    fn new_delimiter(settings: &'a OrderbookSettings) -> Self {
         Self {
             is_mine: AskBidRowVal::Delim,
             volume: AskBidRowVal::Delim,
@@ -178,7 +178,7 @@ impl<'a> AskBidRow<'a> {
             public: AskBidRowVal::Delim,
             address: AskBidRowVal::Delim,
             conf_settings: AskBidRowVal::Delim,
-            config,
+            settings,
         }
     }
 
@@ -221,7 +221,7 @@ impl<'a> AskBidRow<'a> {
                     .as_ref()
                     .map_or("none".to_string(), format_confirmation_settings),
             ),
-            config: settings, //TODO: @rozhkovdmitrii
+            settings,
         }
     }
 }
@@ -236,22 +236,22 @@ impl Display for AskBidRow<'_> {
                     write!(f, "{:-<width$} ", "", width = $width)?;
                 };
             };
-            ($config: expr, $value: expr, $width: expr, $alignment: literal) => {
-                if $config {
+            ($settings: expr, $value: expr, $width: expr, $alignment: literal) => {
+                if $settings {
                     write_ask_bid_row!($value, $width, $alignment);
                 }
             };
         }
         write_ask_bid_row!(self.is_mine, 1, "<");
         write_ask_bid_row!(self.volume, 15, ">");
-        write_ask_bid_row!(self.price, 13, "<");
-        write_ask_bid_row!(self.config.uuids, self.uuid, 36, "<");
-        write_ask_bid_row!(self.config.min_volume, self.min_volume, 10, "<");
-        write_ask_bid_row!(self.config.max_volume, self.max_volume, 10, "<");
-        write_ask_bid_row!(self.config.age, self.age, 10, "<");
-        write_ask_bid_row!(self.config.publics, self.public, 66, "<");
-        write_ask_bid_row!(self.config.address, self.address, 34, "<");
-        write_ask_bid_row!(self.config.conf_settings, self.conf_settings, 24, "<");
+        write_ask_bid_row!(self.price, 16, "<");
+        write_ask_bid_row!(self.settings.uuids, self.uuid, 36, "<");
+        write_ask_bid_row!(self.settings.min_volume, self.min_volume, 10, "<");
+        write_ask_bid_row!(self.settings.max_volume, self.max_volume, 10, "<");
+        write_ask_bid_row!(self.settings.age, self.age, 10, "<");
+        write_ask_bid_row!(self.settings.publics, self.public, 66, "<");
+        write_ask_bid_row!(self.settings.address, self.address, 34, "<");
+        write_ask_bid_row!(self.settings.conf_settings, self.conf_settings, 24, "<");
         Ok(())
     }
 }
