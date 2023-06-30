@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
-use common::log::error;
 use itertools::Itertools;
 use std::cell::RefMut;
 use std::collections::HashMap;
@@ -10,6 +9,7 @@ use std::ops::DerefMut;
 use term_table::{row::Row, table_cell::TableCell, Table as TermTable, TableStyle};
 use uuid::Uuid;
 
+use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy,
@@ -21,8 +21,8 @@ use super::smart_fraction_fmt::SmartFractionFmt;
 use crate::logging::error_anyhow;
 
 pub(super) const COMMON_INDENT: usize = 20;
-const NESTED_INDENT: usize = 26;
 pub(super) const COMMON_PRECISION: SmartFractPrecision = (2, 5);
+const NESTED_INDENT: usize = 26;
 
 pub(super) fn on_maker_order_response(mut writer: RefMut<'_, dyn Write>, order: MakerOrderForRpc) -> Result<()> {
     writeln_field!(writer, "Maker order", "", 0);
@@ -92,37 +92,14 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
     Ok(())
 }
 
-pub(super) fn format_datetime(datetime: u64) -> Result<String> {
-    let datetime = Utc
-        .timestamp_opt((datetime / 1000) as i64, 0)
-        .single()
-        .ok_or_else(|| error_anyhow!("Failed to get datetime formatted datetime"))?;
-    Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
-}
-
-pub(super) fn format_ratio<T: ToPrimitive + Debug>(
-    rational: &T,
-    fract_precision: SmartFractPrecision,
-) -> Result<String> {
-    format_f64(
-        rational
-            .to_f64()
-            .ok_or_else(|| error_anyhow!("Failed to cast rational to f64: {rational:?}"))?,
-        fract_precision,
-    )
-}
-
-pub(super) fn format_f64(rational: f64, fract_precision: SmartFractPrecision) -> Result<String> {
-    Ok(SmartFractionFmt::new(&fract_precision, rational)
-        .map_err(|_| error_anyhow!("Failed to create smart_fraction_fmt"))?
-        .to_string())
-}
-
-pub(super) fn format_confirmation_settings(settings: &OrderConfirmationsSettings) -> String {
-    format!(
-        "{},{}:{},{}",
-        settings.base_confs, settings.base_nota, settings.rel_confs, settings.rel_nota
-    )
+pub(super) fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<()> {
+    if matches.is_empty() {
+        return Ok(());
+    }
+    for (uuid, m) in matches {
+        write_maker_match(writer, uuid, m)?
+    }
+    Ok(())
 }
 
 pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMatchForRpc) -> Result<()> {
@@ -158,12 +135,32 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
     Ok(())
 }
 
-pub(super) fn format_match_by(match_by: &MatchBy, delimiter: &str) -> String {
-    match match_by {
-        MatchBy::Any => "Any".to_string(),
-        MatchBy::Orders(orders) => orders.iter().sorted().join(delimiter),
-        MatchBy::Pubkeys(pubkeys) => pubkeys.iter().sorted().join(delimiter),
-    }
+fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) {
+    write_base_rel!(writer, reserved, NESTED_INDENT);
+    writeln_field!(
+        writer,
+        "reserved.(taker, maker)",
+        format!("{},{}", reserved.taker_order_uuid, reserved.maker_order_uuid),
+        NESTED_INDENT
+    );
+    writeln_field!(
+        writer,
+        "reserved.(sender, dest)",
+        format!("{},{}", reserved.sender_pubkey, reserved.dest_pub_key),
+        NESTED_INDENT
+    );
+    write_confirmation_settings!(writer, reserved, NESTED_INDENT);
+}
+
+pub(super) fn taker_order_header_row() -> Row<'static> {
+    Row::new(vec![
+        TableCell::new("action\nbase(vol),rel(vol)"),
+        TableCell::new("uuid, sender, dest"),
+        TableCell::new("type,created_at\nconfirmation"),
+        TableCell::new("match_by"),
+        TableCell::new("base,rel\norderbook ticker"),
+        TableCell::new("cancellable"),
+    ])
 }
 
 pub(super) fn taker_order_rows(taker_order: &TakerOrderForRpc) -> Result<Vec<Row<'static>>> {
@@ -220,6 +217,18 @@ pub(super) fn taker_order_rows(taker_order: &TakerOrderForRpc) -> Result<Vec<Row
     Ok(rows)
 }
 
+pub(super) fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<()> {
+    let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
+    writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
+    write_maker_reserved_for_rpc(writer, reserved);
+    writeln_field!(writer, "last_updated", m.last_updated, NESTED_INDENT);
+    write_connected!(writer, connect, NESTED_INDENT);
+    if let Some(ref connected) = connected {
+        write_connected!(writer, connected, NESTED_INDENT);
+    }
+    Ok(())
+}
+
 pub(super) fn format_historical_changes(historical_order: &HistoricalOrder, delimiter: &str) -> Result<String> {
     let mut result = vec![];
 
@@ -250,56 +259,6 @@ pub(super) fn format_historical_changes(historical_order: &HistoricalOrder, deli
     Ok(result.join(delimiter))
 }
 
-pub(super) fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<()> {
-    let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
-    writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
-    write_maker_reserved_for_rpc(writer, reserved);
-    writeln_field!(writer, "last_updated", m.last_updated, NESTED_INDENT);
-    write_connected!(writer, connect, NESTED_INDENT);
-    if let Some(ref connected) = connected {
-        write_connected!(writer, connected, NESTED_INDENT);
-    }
-    Ok(())
-}
-
-pub(super) fn taker_order_header_row() -> Row<'static> {
-    Row::new(vec![
-        TableCell::new("action\nbase(vol),rel(vol)"),
-        TableCell::new("uuid, sender, dest"),
-        TableCell::new("type,created_at\nconfirmation"),
-        TableCell::new("match_by"),
-        TableCell::new("base,rel\norderbook ticker"),
-        TableCell::new("cancellable"),
-    ])
-}
-
-fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) {
-    write_base_rel!(writer, reserved, NESTED_INDENT);
-    writeln_field!(
-        writer,
-        "reserved.(taker, maker)",
-        format!("{},{}", reserved.taker_order_uuid, reserved.maker_order_uuid),
-        NESTED_INDENT
-    );
-    writeln_field!(
-        writer,
-        "reserved.(sender, dest)",
-        format!("{},{}", reserved.sender_pubkey, reserved.dest_pub_key),
-        NESTED_INDENT
-    );
-    write_confirmation_settings!(writer, reserved, NESTED_INDENT);
-}
-
-pub(super) fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid, MakerMatchForRpc>) -> Result<()> {
-    if matches.is_empty() {
-        return Ok(());
-    }
-    for (uuid, m) in matches {
-        write_maker_match(writer, uuid, m)?
-    }
-    Ok(())
-}
-
 pub(super) fn term_table_blank(
     style: TableStyle,
     sep_row: bool,
@@ -312,4 +271,45 @@ pub(super) fn term_table_blank(
     term_table.has_bottom_boarder = bottom_border;
     term_table.has_top_boarder = top_border;
     term_table
+}
+
+pub(super) fn format_match_by(match_by: &MatchBy, delimiter: &str) -> String {
+    match match_by {
+        MatchBy::Any => "Any".to_string(),
+        MatchBy::Orders(orders) => orders.iter().sorted().join(delimiter),
+        MatchBy::Pubkeys(pubkeys) => pubkeys.iter().sorted().join(delimiter),
+    }
+}
+
+pub(super) fn format_datetime(datetime: u64) -> Result<String> {
+    let datetime = Utc
+        .timestamp_opt((datetime / 1000) as i64, 0)
+        .single()
+        .ok_or_else(|| error_anyhow!("Failed to get datetime formatted datetime"))?;
+    Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
+}
+
+pub(super) fn format_ratio<T: ToPrimitive + Debug>(
+    rational: &T,
+    fract_precision: SmartFractPrecision,
+) -> Result<String> {
+    format_f64(
+        rational
+            .to_f64()
+            .ok_or_else(|| error_anyhow!("Failed to cast rational to f64: {rational:?}"))?,
+        fract_precision,
+    )
+}
+
+pub(super) fn format_f64(rational: f64, fract_precision: SmartFractPrecision) -> Result<String> {
+    Ok(SmartFractionFmt::new(&fract_precision, rational)
+        .map_err(|_| error_anyhow!("Failed to create smart_fraction_fmt"))?
+        .to_string())
+}
+
+pub(super) fn format_confirmation_settings(settings: &OrderConfirmationsSettings) -> String {
+    format!(
+        "{},{}:{},{}",
+        settings.base_confs, settings.base_nota, settings.rel_confs, settings.rel_nota
+    )
 }
