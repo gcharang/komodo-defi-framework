@@ -14,7 +14,7 @@ use mm2_rpc::data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForRpc,
                             OrderConfirmationsSettings, TakerMatchForRpc, TakerOrderForRpc};
 
 use super::super::SmartFractPrecision;
-use super::macros::{write_base_rel, write_confirmation_settings, write_connected, write_field, writeln_field};
+use super::macros::{write_base_rel, write_confirmation_settings, write_connected, writeln_field};
 use super::smart_fraction_fmt::SmartFractionFmt;
 use crate::logging::error_anyhow;
 
@@ -94,8 +94,10 @@ pub(super) fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid
     if matches.is_empty() {
         return Ok(());
     }
+    writeln_field!(writer, "matches", "", COMMON_INDENT);
     for (uuid, m) in matches {
-        write_maker_match(writer, uuid, m)?
+        write_maker_match(writer, uuid, m)?;
+        writeln_safe_io!(writer, "");
     }
     Ok(())
 }
@@ -129,7 +131,7 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
         write_connected!(writer, connect, NESTED_INDENT);
     }
 
-    write_field!(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
+    writeln_field!(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
     Ok(())
 }
 
