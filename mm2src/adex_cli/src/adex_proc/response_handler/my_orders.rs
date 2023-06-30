@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use common::log::error;
 use itertools::Itertools;
 use std::cell::RefMut;
 use std::collections::HashMap;
@@ -7,6 +6,7 @@ use std::io::Write;
 use term_table::{row::Row, table_cell::TableCell, Table as TermTable, TableStyle};
 use uuid::Uuid;
 
+use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, Mm2RpcResult, MyOrdersResponse, TakerOrderForRpc};
 

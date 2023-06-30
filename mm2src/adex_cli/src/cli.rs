@@ -21,7 +21,7 @@ enum Command {
         mm_conf_path: String,
     },
     #[command(about = "Start mm2 instance")]
-    Start {
+    StartService {
         #[arg(long, help = "mm2 configuration file path")]
         mm_conf_path: Option<String>,
         #[arg(long, help = "coin set file path")]
@@ -30,40 +30,42 @@ enum Command {
         mm_log: Option<String>,
     },
     #[command(about = "Stop mm2 using API")]
-    Stop,
+    StopService,
     #[command(about = "Kill mm2 process")]
-    Kill,
+    KillService,
     #[command(about = "Get mm2 running status")]
-    Status,
-    #[command(about = "Gets version of intermediary mm2 service")]
+    ServiceStatus,
+    #[command(about = "Get version of intermediary mm2 service")]
     Version,
-    #[command(subcommand, about = "To manage rpc_password and mm2 RPC URL")]
+    #[command(subcommand, about = "Manage rpc_password and mm2 RPC URL")]
     Config(ConfigSubcommand),
-    #[command(about = "Puts a coin to the trading index")]
+    #[command(about = "Put a coin to the trading index")]
     Enable {
         #[arg(name = "COIN", help = "Coin to be included into the trading index")]
         coin: String,
     },
-    #[command(about = "Gets balance of a coin")]
+    #[command(about = "Get balance of a coin")]
     Balance(BalanceArgs),
-    #[command(about = "Lists activated coins")]
+    #[command(about = "List activated coins")]
     GetEnabled,
-    #[command(about = "Gets orderbook")]
+    #[command(about = "Get orderbook")]
     Orderbook(OrderbookArgs),
-    #[command(about = "Gets orderbook depth")]
+    #[command(about = "Get orderbook depth")]
     OrderbookDepth(OrderbookDepthArgs),
     Sell(SellOrderArgs),
     Buy(BuyOrderArgs),
     SetPrice(SetPriceArgs),
-    #[command(subcommand, about = "To cancel one or a group of orders")]
+    #[command(subcommand, about = "Cancel one or a group of orders")]
     Cancel(CancelSubcommand),
-    OrderStatus(OrderStatusArgs),
+    #[command(about = "Return the data of the order with the selected uuid created by the AtomicDEX API node")]
+    Status(OrderStatusArgs),
+    #[command(about = "Return the best priced trades available on the orderbook", name = "best")]
     BestOrders(BestOrderArgs),
-    #[command(about = "Get my orders")]
+    #[command(about = "Get my orders", name = "mine")]
     MyOrders,
-    #[command(about = "Returns all orders whether active or inactive that match the selected filters")]
+    #[command(about = "Return all orders whether active or inactive that match the selected filters")]
     History(OrdersHistoryArgs),
-    #[command(about = "Updates an active order on the orderbook created before by setprice")]
+    #[command(about = "Update an active order on the orderbook created before by setprice")]
     UpdateMakerOrder(UpdateMakerOrderArgs),
 }
 
@@ -94,15 +96,15 @@ impl Cli {
                 mm_coins_path: coins_file,
                 mm_conf_path: mm2_cfg_file,
             } => init(mm2_cfg_file, coins_file).await,
-            Command::Start {
+            Command::StartService {
                 mm_conf_path: mm2_cfg_file,
                 mm_coins_path: coins_file,
                 mm_log: log_file,
             } => start_process(mm2_cfg_file, coins_file, log_file),
             Command::Version => proc.get_version().await?,
-            Command::Kill => stop_process(),
-            Command::Status => get_status(),
-            Command::Stop => proc.send_stop().await?,
+            Command::KillService => stop_process(),
+            Command::ServiceStatus => get_status(),
+            Command::StopService => proc.send_stop().await?,
             Command::Config(ConfigSubcommand::Set(SetConfigArgs { password, uri })) => {
                 set_config(*password, uri.take())?
             },
@@ -119,7 +121,7 @@ impl Cli {
             Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
             Command::Cancel(CancelSubcommand::ByPair(args)) => proc.cancel_by_pair(args.into()).await?,
             Command::Cancel(CancelSubcommand::ByCoin(args)) => proc.cancel_by_coin(args.into()).await?,
-            Command::OrderStatus(order_status_args) => proc.order_status(order_status_args.into()).await?,
+            Command::Status(order_status_args) => proc.order_status(order_status_args.into()).await?,
             Command::BestOrders(best_orders_args) => {
                 let show_orig_tickets = best_orders_args.show_orig_tickets;
                 proc.best_orders(best_orders_args.into(), show_orig_tickets).await?
@@ -136,8 +138,8 @@ impl Cli {
 
 #[derive(Subcommand)]
 enum ConfigSubcommand {
-    #[command(about = "Sets komodo adex cli configuration")]
+    #[command(about = "Set komodo adex cli configuration")]
     Set(SetConfigArgs),
-    #[command(about = "Gets komodo adex cli configuration")]
+    #[command(about = "Get komodo adex cli configuration")]
     Get,
 }

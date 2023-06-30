@@ -11,14 +11,14 @@ use uuid::Uuid;
 use super::parse_mm_number;
 
 #[derive(Args)]
-#[command(about = "Puts a selling coins request")]
+#[command(about = "Puts a selling request")]
 pub struct SellOrderArgs {
     #[command(flatten)]
     order_cli: OrderArgs,
 }
 
 #[derive(Args)]
-#[command(about = "Puts a buying coins request")]
+#[command(about = "Puts a buying request")]
 pub struct BuyOrderArgs {
     #[command(flatten)]
     order_cli: OrderArgs,
