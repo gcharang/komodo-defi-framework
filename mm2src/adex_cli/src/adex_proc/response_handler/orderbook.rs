@@ -1,6 +1,5 @@
 use anyhow::Result;
 use itertools::Itertools;
-use std::cell::RefMut;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -26,7 +25,7 @@ pub(crate) struct OrderbookSettings {
 }
 
 pub(super) fn on_orderbook_response<Cfg: AdexConfig + 'static>(
-    mut writer: RefMut<'_, dyn Write>,
+    writer: &mut dyn Write,
     response: OrderbookResponse,
     config: &Cfg,
     settings: OrderbookSettings,

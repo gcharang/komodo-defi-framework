@@ -1,9 +1,8 @@
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::io::Write;
-use term_table::{row::Row, table_cell::TableCell, Table as TermTable, TableStyle};
+use term_table::{row::Row, table_cell::TableCell, TableStyle};
 use uuid::Uuid;
 
 use common::log::error;
@@ -11,11 +10,12 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, Mm2RpcResult, MyOrdersResponse, TakerOrderForRpc};
 
 use super::formatters::{format_confirmation_settings, format_datetime, format_historical_changes, format_ratio,
-                        taker_order_header_row, taker_order_rows, write_maker_match, COMMON_INDENT, COMMON_PRECISION};
+                        taker_order_header_row, taker_order_rows, term_table_blank, write_maker_match, COMMON_INDENT,
+                        COMMON_PRECISION};
 use super::macros::writeln_field;
 use crate::logging::error_anyhow;
 
-pub(super) fn on_my_orders(mut writer: RefMut<'_, dyn Write>, response: Mm2RpcResult<MyOrdersResponse>) -> Result<()> {
+pub(super) fn on_my_orders(writer: &mut dyn Write, response: Mm2RpcResult<MyOrdersResponse>) -> Result<()> {
     let result = response.result;
     writeln_safe_io!(writer, "{}", format_taker_orders_table(&result.taker_orders)?);
     writeln_safe_io!(writer, "{}", format_maker_orders_table(&result.maker_orders)?);
@@ -30,9 +30,7 @@ fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> 
         writeln_field!(writer, "Taker orders", "empty", COMMON_INDENT);
     } else {
         writeln_field!(writer, "Taker orders", "", COMMON_INDENT);
-        let mut table = TermTable::new();
-        table.style = TableStyle::thin();
-        table.separate_rows = false;
+        let mut table = term_table_blank(TableStyle::thin(), false, true, true);
         table.add_row(taker_order_header_row());
         for (_, taker_order) in taker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
             for row in taker_order_rows(taker_order)? {
@@ -53,9 +51,7 @@ fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersR
         writeln_field!(writer, "Maker orders", "empty", COMMON_INDENT);
     } else {
         writeln_field!(writer, "Maker orders", "", COMMON_INDENT);
-        let mut table = TermTable::new();
-        table.style = TableStyle::thin();
-        table.separate_rows = false;
+        let mut table = term_table_blank(TableStyle::thin(), false, true, true);
         table.add_row(maker_order_for_my_orders_header_row());
 
         for (_, maker_order) in maker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
@@ -117,7 +113,7 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
             || "none".to_string(),
             |val| {
                 val.iter()
-                    .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".into()))
+                    .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".to_string()))
                     .join(",\n")
             },
         )),

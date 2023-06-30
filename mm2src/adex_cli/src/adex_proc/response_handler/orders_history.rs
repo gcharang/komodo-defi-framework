@@ -1,6 +1,5 @@
 use anyhow::Result;
 use itertools::Itertools;
-use std::cell::RefMut;
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
@@ -23,7 +22,7 @@ pub(crate) struct OrdersHistorySettings {
 }
 
 pub(super) fn on_orders_history(
-    mut writer: RefMut<'_, dyn Write>,
+    writer: &mut dyn Write,
     mut response: Mm2RpcResult<OrdersHistoryResponse>,
     settings: OrdersHistorySettings,
 ) -> Result<()> {
@@ -173,7 +172,7 @@ fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
             || "none".to_string(),
             |val| {
                 val.iter()
-                    .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".into()))
+                    .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".to_string()))
                     .join(",\n")
             },
         )),

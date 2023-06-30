@@ -1,4 +1,3 @@
-use std::cell::RefMut;
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
@@ -8,7 +7,7 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io};
 use mm2_rpc::data::legacy::{Mm2RpcResult, PairWithDepth};
 
 pub(super) fn on_orderbook_depth(
-    mut writer: RefMut<'_, dyn Write>,
+    writer: &mut dyn Write,
     mut response: Mm2RpcResult<Vec<PairWithDepth>>,
 ) -> anyhow::Result<()> {
     let mut term_table = TermTable::with_rows(vec![Row::new(vec![

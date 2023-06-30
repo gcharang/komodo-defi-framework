@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::io::Write;
 use std::ops::DerefMut;
@@ -12,7 +11,7 @@ use super::formatters::{format_confirmation_settings, format_datetime, format_ma
                         write_maker_matches, write_maker_order, write_taker_match, COMMON_INDENT, COMMON_PRECISION};
 use super::macros::{write_base_rel, write_confirmation_settings, write_field_option, writeln_field};
 
-pub(super) fn on_order_status(mut writer: RefMut<'_, dyn Write>, response: OrderStatusResponse) -> Result<()> {
+pub(super) fn on_order_status(mut writer: &mut dyn Write, response: OrderStatusResponse) -> Result<()> {
     match response {
         OrderStatusResponse::Maker(maker_status) => write_maker_order_for_my_orders(writer.deref_mut(), &maker_status),
         OrderStatusResponse::Taker(taker_status) => write_taker_order(writer.deref_mut(), &taker_status),

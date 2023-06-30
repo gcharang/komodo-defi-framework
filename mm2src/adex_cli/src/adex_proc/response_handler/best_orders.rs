@@ -1,6 +1,5 @@
 use anyhow::Result;
 use itertools::Itertools;
-use std::cell::RefMut;
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
@@ -13,7 +12,7 @@ use super::formatters::{format_confirmation_settings, format_ratio, term_table_b
 use super::macros::writeln_field;
 
 pub(super) fn on_best_orders(
-    mut writer: RefMut<'_, dyn Write>,
+    writer: &mut dyn Write,
     response: BestOrdersV2Response,
     show_orig_tickets: bool,
 ) -> Result<()> {

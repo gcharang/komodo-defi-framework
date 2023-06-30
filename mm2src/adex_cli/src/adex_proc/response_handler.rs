@@ -86,7 +86,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         config: &Cfg,
         settings: OrderbookSettings,
     ) -> Result<()> {
-        orderbook::on_orderbook_response(self.writer.borrow_mut(), response, config, settings)
+        orderbook::on_orderbook_response(self.writer.borrow_mut().deref_mut(), response, config, settings)
     }
 
     fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()> {
@@ -172,15 +172,15 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_order_status(&self, response: OrderStatusResponse) -> Result<()> {
-        order_status::on_order_status(self.writer.borrow_mut(), response)
+        order_status::on_order_status(self.writer.borrow_mut().deref_mut(), response)
     }
 
     fn on_best_orders(&self, response: BestOrdersV2Response, show_orig_tickets: bool) -> Result<()> {
-        best_orders::on_best_orders(self.writer.borrow_mut(), response, show_orig_tickets)
+        best_orders::on_best_orders(self.writer.borrow_mut().deref_mut(), response, show_orig_tickets)
     }
 
     fn on_my_orders(&self, response: Mm2RpcResult<MyOrdersResponse>) -> Result<()> {
-        my_orders::on_my_orders(self.writer.borrow_mut(), response)
+        my_orders::on_my_orders(self.writer.borrow_mut().deref_mut(), response)
     }
 
     fn on_set_price(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
@@ -188,7 +188,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_orderbook_depth(&self, response: Mm2RpcResult<Vec<PairWithDepth>>) -> Result<()> {
-        orderbook_depth::on_orderbook_depth(self.writer.borrow_mut(), response)
+        orderbook_depth::on_orderbook_depth(self.writer.borrow_mut().deref_mut(), response)
     }
 
     fn on_orders_history(
@@ -196,7 +196,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         response: Mm2RpcResult<OrdersHistoryResponse>,
         settings: OrdersHistorySettings,
     ) -> Result<()> {
-        orders_history::on_orders_history(self.writer.borrow_mut(), response, settings)
+        orders_history::on_orders_history(self.writer.borrow_mut().deref_mut(), response, settings)
     }
 
     fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
