@@ -83,7 +83,7 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
             changes_history
                 .iter()
                 .map(|val| format_historical_changes(val, ", ").unwrap_or_else(|_| "error".to_string()))
-                .join(", "),
+                .join("; "),
             COMMON_INDENT
         );
     }
