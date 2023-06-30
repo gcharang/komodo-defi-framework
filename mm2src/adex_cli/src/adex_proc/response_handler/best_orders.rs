@@ -1,33 +1,30 @@
 use anyhow::Result;
 use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
                  TableStyle};
 
-use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
+use common::{write_safe::io::WriteSafeIO, write_safe_io};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use super::formatters::{format_confirmation_settings, format_ratio, term_table_blank, COMMON_PRECISION};
-use super::macros::writeln_field;
 
 pub(super) fn on_best_orders(
     writer: &mut dyn Write,
     response: BestOrdersV2Response,
     show_orig_tickets: bool,
 ) -> Result<()> {
-    if show_orig_tickets {
-        writeln_field!(writer, "Original tickers", "", 0);
-        for (coin, ticker) in response.original_tickers {
-            writeln_field!(writer, coin, ticker.iter().join(","), 8);
-        }
-        return Ok(());
-    }
-
     let mut term_table = term_table_blank(TableStyle::thin(), false, true, true);
     term_table.add_row(best_orders_table_header_row());
 
     for (coin, data) in response.orders.iter().sorted_by_key(|p| p.0) {
+        let coin = if show_orig_tickets {
+            get_original_ticker(coin, &response.original_tickers)
+        } else {
+            coin.clone()
+        };
         term_table.add_row(Row::new(vec![TableCell::new_with_alignment(coin, 7, Alignment::Left)]));
         for order in data.iter().sorted_by_key(|o| o.uuid) {
             term_table.add_row(Row::new(vec![
@@ -69,4 +66,10 @@ fn best_orders_table_header_row() -> Row<'static> {
         TableCell::new("Address"),
         TableCell::new("Confirmation"),
     ])
+}
+
+fn get_original_ticker(coin: &String, original_tickers: &HashMap<String, HashSet<String>>) -> String {
+    original_tickers
+        .get(coin)
+        .map_or_else(|| format!("!{}!", coin), |set| set.iter().join(", "))
 }

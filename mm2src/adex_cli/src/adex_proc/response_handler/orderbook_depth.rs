@@ -1,24 +1,23 @@
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
-                 Table as TermTable, TableStyle};
+                 TableStyle};
 
 use common::{write_safe::io::WriteSafeIO, write_safe_io};
 use mm2_rpc::data::legacy::{Mm2RpcResult, PairWithDepth};
+
+use super::formatters::term_table_blank;
 
 pub(super) fn on_orderbook_depth(
     writer: &mut dyn Write,
     mut response: Mm2RpcResult<Vec<PairWithDepth>>,
 ) -> anyhow::Result<()> {
-    let mut term_table = TermTable::with_rows(vec![Row::new(vec![
+    let mut term_table = term_table_blank(TableStyle::empty(), false, false, false);
+    term_table.add_row(Row::new(vec![
         TableCell::new(""),
         TableCell::new_with_alignment_and_padding("Bids", 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding("Asks", 1, Alignment::Left, false),
-    ])]);
-    term_table.style = TableStyle::empty();
-    term_table.separate_rows = false;
-    term_table.has_bottom_boarder = false;
-    term_table.has_top_boarder = false;
+    ]));
     response.result.drain(..).for_each(|data| {
         term_table.add_row(Row::new(vec![
             TableCell::new_with_alignment_and_padding(
