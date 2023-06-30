@@ -192,8 +192,8 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::TokenNotFoundInWallet { .. }
             | UpdateNftError::InsufficientAmountInCache { .. }
             | UpdateNftError::InvalidBlockOrder { .. }
-            | UpdateNftError::LastScannedBlockNotFound { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::LastScannedBlockNotFound { .. }
+            | UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
