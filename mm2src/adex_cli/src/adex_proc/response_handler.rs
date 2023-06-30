@@ -20,6 +20,7 @@ use itertools::Itertools;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::Write;
+use std::ops::DerefMut;
 
 use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
@@ -183,7 +184,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_set_price(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
-        formatters::on_maker_order_response(self.writer.borrow_mut(), response.result)
+        formatters::on_maker_order_response(self.writer.borrow_mut().deref_mut(), response.result)
     }
 
     fn on_orderbook_depth(&self, response: Mm2RpcResult<Vec<PairWithDepth>>) -> Result<()> {
@@ -199,6 +200,6 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     }
 
     fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
-        formatters::on_maker_order_response(self.writer.borrow_mut(), response.result)
+        formatters::on_maker_order_response(self.writer.borrow_mut().deref_mut(), response.result)
     }
 }

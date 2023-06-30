@@ -1,11 +1,9 @@
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use itertools::Itertools;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Write;
-use std::ops::DerefMut;
 use term_table::{row::Row, table_cell::TableCell, Table as TermTable, TableStyle};
 use uuid::Uuid;
 
@@ -24,10 +22,10 @@ pub(super) const COMMON_INDENT: usize = 20;
 pub(super) const COMMON_PRECISION: SmartFractPrecision = (2, 5);
 const NESTED_INDENT: usize = 26;
 
-pub(super) fn on_maker_order_response(mut writer: RefMut<'_, dyn Write>, order: MakerOrderForRpc) -> Result<()> {
+pub(super) fn on_maker_order_response(writer: &mut dyn Write, order: MakerOrderForRpc) -> Result<()> {
     writeln_field!(writer, "Maker order", "", 0);
-    write_maker_order(writer.deref_mut(), &order)?;
-    write_maker_matches(writer.deref_mut(), &order.matches)?;
+    write_maker_order(writer, &order)?;
+    write_maker_matches(writer, &order.matches)?;
     writeln_safe_io!(writer, "");
     Ok(())
 }
