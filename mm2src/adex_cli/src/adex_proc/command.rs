@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use derive_more::Display;
-use log::error;
 use serde::Serialize;
 
 use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};

@@ -75,7 +75,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(enabled, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
-    pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, ob_settings: OrderbookSettings) -> Result<()> {
+    pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, settings: OrderbookSettings) -> Result<()> {
         info!("Getting orderbook, base: {}, rel: {}", request.base, request.rel);
 
         let get_orderbook = Command::builder().flatten_data(request).build()?;
@@ -85,7 +85,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             self,
             on_orderbook_response,
             self.config,
-            ob_settings
+            settings
         )
     }
 
