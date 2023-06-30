@@ -71,5 +71,5 @@ fn best_orders_table_header_row() -> Row<'static> {
 fn get_original_ticker(coin: &String, original_tickers: &HashMap<String, HashSet<String>>) -> String {
     original_tickers
         .get(coin)
-        .map_or_else(|| format!("!{}!", coin), |set| set.iter().join(", "))
+        .map_or_else(|| coin.clone(), |set| set.iter().join(", "))
 }
