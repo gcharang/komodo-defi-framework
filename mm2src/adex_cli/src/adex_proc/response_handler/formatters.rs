@@ -82,7 +82,7 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
             "changes_history",
             changes_history
                 .iter()
-                .map(|val| format_historical_changes(val, ", ").unwrap_or_else(|_| "error".into()))
+                .map(|val| format_historical_changes(val, ", ").unwrap_or_else(|_| "error".to_string()))
                 .join(", "),
             COMMON_INDENT
         );
@@ -287,15 +287,12 @@ pub(super) fn format_datetime(datetime: u64) -> Result<String> {
     Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
 }
 
-pub(super) fn format_ratio<T: ToPrimitive + Debug>(
-    rational: &T,
-    fract_precision: SmartFractPrecision,
-) -> Result<String> {
+pub(super) fn format_ratio<T: ToPrimitive + Debug>(rational: &T, precision: SmartFractPrecision) -> Result<String> {
     format_f64(
         rational
             .to_f64()
             .ok_or_else(|| error_anyhow!("Failed to cast rational to f64: {rational:?}"))?,
-        fract_precision,
+        precision,
     )
 }
 
