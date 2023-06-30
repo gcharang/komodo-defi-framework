@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use derive_more::Display;
 use serde::Serialize;
 
+use common::log::error;
 use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 
 use crate::error_anyhow;

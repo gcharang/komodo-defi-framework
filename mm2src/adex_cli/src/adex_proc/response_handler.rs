@@ -16,13 +16,13 @@ pub(crate) use orders_history::OrdersHistorySettings;
 pub(crate) use smart_fraction_fmt::SmartFractPrecision;
 
 use anyhow::{anyhow, Result};
-use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use itertools::Itertools;
-use log::error;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::Write;
 
+use common::log::error;
+use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc,
                             Mm2RpcResult, MmVersionResponse, MyBalanceResponse, MyOrdersResponse, OrderStatusResponse,
                             OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status};

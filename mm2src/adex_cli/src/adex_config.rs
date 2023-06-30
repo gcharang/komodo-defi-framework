@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
+use common::log::{error, info, warn};
 use directories::ProjectDirs;
 use inquire::Password;
-use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::fs;

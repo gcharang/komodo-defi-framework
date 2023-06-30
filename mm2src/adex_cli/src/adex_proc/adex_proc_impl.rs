@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
+use common::log::{error, info, warn};
 use itertools::Itertools;
-use log::{error, info, warn};
 use serde_json::Value as Json;
 
 use mm2_rpc::data::legacy::{BuyRequest, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,

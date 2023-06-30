@@ -4,9 +4,9 @@ mod inquire_extentions;
 mod mm2_proc_mng;
 
 use anyhow::Result;
+use common::log::info;
 use init_coins::init_coins;
 use init_mm2_cfg::init_mm2_cfg;
-use log::info;
 
 use super::activation_scheme_db::init_activation_scheme;
 

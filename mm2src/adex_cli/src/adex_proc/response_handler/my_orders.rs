@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
+use common::log::error;
 use itertools::Itertools;
-use log::error;
 use std::cell::RefMut;
 use std::collections::HashMap;
 use std::io::Write;

@@ -1,5 +1,5 @@
 #[cfg(not(any(test, target_arch = "wasm32")))]
-use log::LevelFilter;
+use common::log::LevelFilter;
 #[cfg(not(any(test, target_arch = "wasm32")))]
 use std::io::Write;
 

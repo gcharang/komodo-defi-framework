@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Result};
-use log::{debug, error};
+use common::log::{debug, error};
 use serde_json::Value as Json;
 use std::collections::HashMap;
 
