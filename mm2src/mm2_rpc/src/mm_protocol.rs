@@ -14,7 +14,7 @@ pub struct MmRpcBuilder<T: Serialize, E: SerMmErrorType> {
 }
 
 impl<T: Serialize, E: SerMmErrorType> MmRpcBuilder<T, E> {
-    fn ok(r: T) -> Self {
+    pub fn ok(r: T) -> Self {
         MmRpcBuilder {
             version: MmRpcVersion::V2,
             result: MmRpcResult::Ok { result: r },
@@ -74,6 +74,13 @@ where
             MmRpcResult::Err(e) => e.status_code(),
         }
     }
+}
+
+impl<T: Serialize, E: SerMmErrorType> MmRpcResult<T, E> {
+    pub fn ok(result: T) -> MmRpcResult<T, E> { MmRpcResult::Ok { result } }
+
+    #[track_caller]
+    pub fn mm_err(error: E) -> MmRpcResult<T, E> { MmRpcResult::Err(MmError::new(error)) }
 }
 
 impl<T, E1> MmRpcResult<T, E1>
