@@ -6,7 +6,7 @@ use std::mem::take;
 use super::parse_mm_number;
 
 #[derive(Args)]
-#[command(about = "Places an order on the orderbook, and it relies on this node acting as a maker")]
+#[command(about = "Place an order on the orderbook, and if relies on this node acting as a maker")]
 pub struct SetPriceArgs {
     #[arg(help = "The name of the coin the user desires to sell")]
     base: String,
@@ -17,9 +17,10 @@ pub struct SetPriceArgs {
     #[command(flatten)]
     delegate: SetPriceVolumeGroup,
     #[arg(
-    long,
-    help = "The minimum amount of base coin available for the order; it must be less or equal than volume param; the following values must be greater than or equal to the min_trading_vol of the corresponding coin",
-    value_parser = parse_mm_number
+        long,
+        help = "The minimum amount of base coin available for the order; it must be less or equal than volume param; \
+                the following values must be greater than or equal to the min_trading_vol of the corresponding coin",
+        value_parser = parse_mm_number
     )]
     min_volume: Option<MmNumber>,
     #[arg(long, help = "Cancel all existing orders for the selected pair")]
@@ -46,7 +47,9 @@ pub struct SetPriceArgs {
     rel_nota: Option<bool>,
     #[arg(
         long,
-        help = "If true, each order's short record history is stored in a local SQLite database table, and when the order is cancelled or fully matched, it's history will be saved as a json file",
+        visible_alias = "save",
+        help = "If true, each order's short record history is stored in a local SQLite database table, \
+                and when the order is cancelled or fully matched, it's history will be saved as a json file",
         default_value_t = true
     )]
     save_in_history: bool,

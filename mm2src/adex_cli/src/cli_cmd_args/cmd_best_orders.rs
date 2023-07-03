@@ -13,11 +13,13 @@ pub(crate) struct BestOrderArgs {
     pub(crate) action: OrderActionArg,
     #[arg(
         long,
+        short = 'o',
+        visible_aliases = ["show-origin", "origin-tickers", "origin"],
         help = "Whether to show the original tickers if they are configured for the queried coin",
         default_value = "false"
     )]
     pub(crate) show_orig_tickets: bool,
-    #[arg(long, help = "Exclude orders that is mine", default_value = "false")]
+    #[arg(long, short, help = "Exclude orders that is mine", default_value = "false")]
     pub(crate) exclude_mine: bool,
     #[command(flatten)]
     pub(crate) delegate: BestOrdersByArg,
@@ -26,10 +28,17 @@ pub(crate) struct BestOrderArgs {
 #[derive(Args)]
 #[group(required = true, multiple = false)]
 pub(crate) struct BestOrdersByArg {
-    #[arg(long, group = "best-orders", value_parser=parse_mm_number, help="The returned results will show the best prices for trades that can fill the requested volume")]
+    #[arg(
+        long,
+        short,
+        group = "best-orders",
+        value_parser=parse_mm_number,
+        help="The returned results will show the best prices for trades that can fill the requested volume"
+    )]
     pub(crate) volume: Option<MmNumber>,
     #[arg(
         long,
+        short,
         group = "best-orders",
         help = "The returned results will show a list of the best prices"
     )]

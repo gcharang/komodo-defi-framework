@@ -8,31 +8,45 @@ use crate::cli_cmd_args::parse_mm_number;
 
 #[derive(Args, Clone)]
 pub(crate) struct UpdateMakerOrderArgs {
-    #[arg(long, help = "Uuid of the order the user desires to update")]
+    #[arg(long, short, help = "Uuid of the order the user desires to update")]
     uuid: Uuid,
-    #[arg(long, value_parser = parse_mm_number, help = "Price in rel the user is willing to receive per one unit of the base coin")]
+    #[arg(
+        long,
+        short,
+        value_parser = parse_mm_number,
+        help = "Price in rel the user is willing to receive per one unit of the base coin"
+    )]
     price: Option<MmNumber>,
     #[command(flatten)]
     volume: UpdateMakerVolumeArg,
-    #[arg(long, value_parser = parse_mm_number, help = "Minimum amount of base coin available for the order; it must be less or equal than the new volume; the following values must be greater than or equal to the min_trading_vol of the corresponding coin")]
+    #[arg(
+        long,
+        value_parser = parse_mm_number,
+        visible_alias = "mv",
+        help = "Minimum amount of base coin available for the order; it must be less or equal than the new volume; the following values must be greater than or equal to the min_trading_vol of the corresponding coin"
+    )]
     min_volume: Option<MmNumber>,
     #[arg(
         long,
+        visible_alias = "bc",
         help = "Number of required blockchain confirmations for base coin atomic swap transaction"
     )]
     base_confs: Option<u64>,
     #[arg(
         long,
+        visible_alias = "bn",
         help = "Whether dPoW notarization is required for base coin atomic swap transaction"
     )]
     base_nota: Option<bool>,
     #[arg(
         long,
+        visible_alias = "rc",
         help = "Number of required blockchain confirmations for rel coin atomic swap transaction"
     )]
     rel_confs: Option<u64>,
     #[arg(
         long,
+        visible_alias = "rn",
         help = "Whether dPoW notarization is required for rel coin atomic swap transaction"
     )]
     rel_nota: Option<bool>,
@@ -43,12 +57,14 @@ pub(crate) struct UpdateMakerOrderArgs {
 struct UpdateMakerVolumeArg {
     #[arg(
         long,
+        short,
         help = "Whether to use the entire coin balance for the order, taking 0.001 coins into reserve to account for fees",
         default_value_t = false
     )]
     max_volume: bool,
     #[arg(
         long,
+        short,
         value_parser = parse_mm_number, help = "Volume added to or subtracted from the max_base_vol of the order to be updated, resulting in the new volume which is the maximum amount of base coin available for the order, ignored if max is true"
     )]
     volume_delta: Option<MmNumber>,

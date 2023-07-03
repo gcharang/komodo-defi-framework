@@ -15,24 +15,24 @@ const COINS_FILE_DEFAULT: &str = "coins";
 enum Command {
     #[command(about = "Initialize a predefined coin set and configuration to start mm2 instance with")]
     Init {
-        #[arg(long, help = "coin set file path", default_value = COINS_FILE_DEFAULT)]
+        #[arg(long, visible_alias = "coins", help = "coin set file path", default_value = COINS_FILE_DEFAULT)]
         mm_coins_path: String,
-        #[arg(long, help = "mm2 configuration file path", default_value = MM2_CONFIG_FILE_DEFAULT)]
+        #[arg(long, visible_alias = "conf", help = "mm2 configuration file path", default_value = MM2_CONFIG_FILE_DEFAULT)]
         mm_conf_path: String,
     },
     #[command(about = "Start mm2 instance")]
-    StartService {
-        #[arg(long, help = "mm2 configuration file path")]
+    Start {
+        #[arg(long, visible_alias = "conf", help = "mm2 configuration file path")]
         mm_conf_path: Option<String>,
-        #[arg(long, help = "coin set file path")]
+        #[arg(long, visible_alias = "coins", help = "coin set file path")]
         mm_coins_path: Option<String>,
-        #[arg(long, help = "log file path")]
+        #[arg(long, visible_alias = "log", help = "log file path")]
         mm_log: Option<String>,
     },
     #[command(about = "Stop mm2 using API")]
-    StopService,
+    Stop,
     #[command(about = "Kill mm2 process")]
-    KillService,
+    Kill,
     #[command(about = "Get mm2 running status")]
     ServiceStatus,
     #[command(about = "Get version of intermediary mm2 service")]
@@ -44,11 +44,11 @@ enum Command {
         #[arg(name = "COIN", help = "Coin to be included into the trading index")]
         coin: String,
     },
-    #[command(about = "Get balance of a coin")]
-    Balance(BalanceArgs),
-    #[command(about = "List activated coins")]
+    #[command(visible_alias = "balance", about = "Get balance of a coin")]
+    MyBalance(BalanceArgs),
+    #[command(visible_alias = "enabled", about = "List activated coins")]
     GetEnabled,
-    #[command(about = "Get orderbook")]
+    #[command(visible_aliases = ["obook", "ob"], about = "Get orderbook")]
     Orderbook(OrderbookArgs),
     #[command(about = "Get orderbook depth")]
     OrderbookDepth(OrderbookDepthArgs),
@@ -57,15 +57,27 @@ enum Command {
     SetPrice(SetPriceArgs),
     #[command(subcommand, about = "Cancel one or a group of orders")]
     Cancel(CancelSubcommand),
-    #[command(about = "Return the data of the order with the selected uuid created by the AtomicDEX API node")]
-    Status(OrderStatusArgs),
-    #[command(about = "Return the best priced trades available on the orderbook", name = "best")]
+    #[command(
+        visible_alias = "status",
+        about = "Return the data of the order with the selected uuid created by the AtomicDEX API node"
+    )]
+    OrderStatus(OrderStatusArgs),
+    #[command(
+        visible_alias = "best",
+        about = "Return the best priced trades available on the orderbook"
+    )]
     BestOrders(BestOrderArgs),
-    #[command(about = "Get my orders", name = "mine")]
+    #[command(about = "Get my orders", visible_aliases = ["my", "mine"])]
     MyOrders,
-    #[command(about = "Return all orders whether active or inactive that match the selected filters")]
-    History(OrdersHistoryArgs),
-    #[command(about = "Update an active order on the orderbook created before by setprice")]
+    #[command(
+        visible_alias = "history",
+        about = "Return all orders whether active or inactive that match the selected filters"
+    )]
+    OrdersHistory(OrdersHistoryArgs),
+    #[command(
+        visible_alias = "update",
+        about = "Update an active order on the orderbook created before by setprice"
+    )]
     UpdateMakerOrder(UpdateMakerOrderArgs),
 }
 
@@ -96,21 +108,21 @@ impl Cli {
                 mm_coins_path: coins_file,
                 mm_conf_path: mm2_cfg_file,
             } => init(mm2_cfg_file, coins_file).await,
-            Command::StartService {
+            Command::Start {
                 mm_conf_path: mm2_cfg_file,
                 mm_coins_path: coins_file,
                 mm_log: log_file,
             } => start_process(mm2_cfg_file, coins_file, log_file),
             Command::Version => proc.get_version().await?,
-            Command::KillService => stop_process(),
+            Command::Kill => stop_process(),
             Command::ServiceStatus => get_status(),
-            Command::StopService => proc.send_stop().await?,
+            Command::Stop => proc.send_stop().await?,
             Command::Config(ConfigSubcommand::Set(SetConfigArgs { password, uri })) => {
                 set_config(*password, uri.take())?
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Enable { coin } => proc.enable(coin).await?,
-            Command::Balance(balance_args) => proc.get_balance(balance_args.into()).await?,
+            Command::MyBalance(balance_args) => proc.get_balance(balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
             Command::Orderbook(ref orderbook_args) => {
                 proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
@@ -121,7 +133,7 @@ impl Cli {
             Command::Cancel(CancelSubcommand::All) => proc.cancel_all_orders().await?,
             Command::Cancel(CancelSubcommand::ByPair(args)) => proc.cancel_by_pair(args.into()).await?,
             Command::Cancel(CancelSubcommand::ByCoin(args)) => proc.cancel_by_coin(args.into()).await?,
-            Command::Status(order_status_args) => proc.order_status(order_status_args.into()).await?,
+            Command::OrderStatus(order_status_args) => proc.order_status(order_status_args.into()).await?,
             Command::BestOrders(best_orders_args) => {
                 let show_orig_tickets = best_orders_args.show_orig_tickets;
                 proc.best_orders(best_orders_args.into(), show_orig_tickets).await?
@@ -129,7 +141,9 @@ impl Cli {
             Command::MyOrders => proc.my_orders().await?,
             Command::SetPrice(set_price_args) => proc.set_price(set_price_args.into()).await?,
             Command::OrderbookDepth(orderbook_depth_args) => proc.orderbook_depth(orderbook_depth_args.into()).await?,
-            Command::History(history_args) => proc.orders_history(history_args.into(), history_args.into()).await?,
+            Command::OrdersHistory(history_args) => {
+                proc.orders_history(history_args.into(), history_args.into()).await?
+            },
             Command::UpdateMakerOrder(update_maker_args) => proc.update_maker_order(update_maker_args.into()).await?,
         }
         Ok(())

@@ -100,19 +100,21 @@ impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
 struct OrdersHistorySettings {
     #[arg(
         long,
+        short,
         default_value_t = false,
         help = "Whether to show taker orders detailed history"
     )]
     takers: bool,
     #[arg(
         long,
+        short,
         default_value_t = false,
         help = "Whether to show maker orders detailed history"
     )]
     makers: bool,
-    #[arg(long, default_value_t = false, help = "Whether to show warnings")]
+    #[arg(long, short, default_value_t = false, help = "Whether to show warnings")]
     warnings: bool,
-    #[arg(long, default_value_t = false, help = "Whether to show common history data")]
+    #[arg(long, short, default_value_t = false, help = "Whether to show common history data")]
     all: bool,
 }
 
