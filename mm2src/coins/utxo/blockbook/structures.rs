@@ -361,10 +361,10 @@ pub struct BlockBookBlock {
     pub block_hash: H256,
     #[serde(default)]
     #[serde(rename = "previousBlockHash")]
-    pub previous_block_hash: H256,
+    pub previous_block_hash: Option<H256>,
     #[serde(default)]
     #[serde(rename = "nextBlockHash")]
-    pub next_block_hash: H256,
+    pub next_block_hash: Option<H256>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "blockHeight")]

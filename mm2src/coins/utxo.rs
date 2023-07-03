@@ -27,7 +27,7 @@ pub(crate) mod bchd_grpc;
 #[rustfmt::skip]
 #[path = "utxo/pb.rs"]
 mod bchd_pb;
-#[allow(unused)] mod blockbook;
+#[allow(unused)] pub mod blockbook;
 pub mod qtum;
 pub mod rpc_clients;
 pub mod slp;
@@ -108,6 +108,7 @@ use crate::coin_balance::{EnableCoinScanPolicy, EnabledCoinBalanceParams, HDAddr
 use crate::hd_wallet::{HDAccountOps, HDAccountsMutex, HDAddress, HDAddressId, HDWalletCoinOps, HDWalletOps,
                        InvalidBip44ChainError};
 use crate::hd_wallet_storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletStorageError, HDWalletStorageResult};
+use crate::utxo::blockbook::client::BlockBookClient;
 use crate::utxo::tx_cache::UtxoVerboseCacheShared;
 
 pub mod tx_cache;
@@ -566,6 +567,8 @@ pub struct UtxoCoinConf {
     pub derivation_path: Option<StandardHDPathToCoin>,
     /// The average time in seconds needed to mine a new block for this coin.
     pub avg_blocktime: Option<u64>,
+    /// blockbook client url to be used for this coin
+    pub blockbook_url: Option<String>,
 }
 
 pub struct UtxoCoinFields {
@@ -582,6 +585,8 @@ pub struct UtxoCoinFields {
     pub dust_amount: u64,
     /// RPC client
     pub rpc_client: UtxoRpcClientEnum,
+    ///BlockBook Client
+    pub blockbook_client: Option<BlockBookClient>,
     /// Either ECDSA key pair or a Hardware Wallet info.
     pub priv_key_policy: PrivKeyPolicy<KeyPair>,
     /// Either an Iguana address or an info about last derived account/address.

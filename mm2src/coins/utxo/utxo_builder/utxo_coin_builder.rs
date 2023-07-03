@@ -1,5 +1,6 @@
 use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
 use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
+use crate::utxo::blockbook::client::BlockBookClient;
 use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumRpcRequest, EstimateFeeMethod,
                                UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
@@ -208,12 +209,14 @@ where
     let tx_cache = builder.tx_cache();
     let (block_headers_status_notifier, block_headers_status_watcher) =
         builder.block_header_status_channel(&conf.spv_conf);
+    let blockbook_client = builder.blockbook_client();
 
     let coin = UtxoCoinFields {
         conf,
         decimals,
         dust_amount,
         rpc_client,
+        blockbook_client,
         priv_key_policy,
         derivation_method,
         history_sync_state: Mutex::new(initial_history_state),
@@ -281,12 +284,14 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
         let tx_cache = self.tx_cache();
         let (block_headers_status_notifier, block_headers_status_watcher) =
             self.block_header_status_channel(&conf.spv_conf);
+        let blockbook_client = self.blockbook_client();
 
         let coin = UtxoCoinFields {
             conf,
             decimals,
             dust_amount,
             rpc_client,
+            blockbook_client,
             priv_key_policy: PrivKeyPolicy::Trezor,
             derivation_method: DerivationMethod::HDWallet(hd_wallet),
             history_sync_state: Mutex::new(initial_history_state),
@@ -666,6 +671,14 @@ pub trait UtxoCoinBuilderCommonOps {
         };
 
         (None, None)
+    }
+
+    fn blockbook_client(&self) -> Option<BlockBookClient> {
+        if let Some(url) = self.conf()["blockbook_url"].as_str() {
+            return Some(BlockBookClient::new(url, self.ticker()));
+        }
+
+        None
     }
 }
 

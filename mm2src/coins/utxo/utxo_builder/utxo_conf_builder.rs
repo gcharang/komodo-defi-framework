@@ -92,6 +92,7 @@ impl<'a> UtxoConfBuilder<'a> {
         let derivation_path = self.derivation_path()?;
         let avg_blocktime = self.avg_blocktime();
         let spv_conf = self.spv_conf()?;
+        let blockbook_url = self.blockbook_url();
 
         Ok(UtxoCoinConf {
             ticker: self.ticker.to_owned(),
@@ -127,6 +128,7 @@ impl<'a> UtxoConfBuilder<'a> {
             spv_conf,
             derivation_path,
             avg_blocktime,
+            blockbook_url,
         })
     }
 
@@ -295,4 +297,6 @@ impl<'a> UtxoConfBuilder<'a> {
     }
 
     fn avg_blocktime(&self) -> Option<u64> { self.conf["avg_blocktime"].as_u64() }
+
+    fn blockbook_url(&self) -> Option<String> { self.conf["blockbook_url"].as_str().map(|url| url.to_string()) }
 }

@@ -1,3 +1,3 @@
-mod client;
-mod serde_helper;
-mod structures;
+pub mod client;
+pub mod serde_helper;
+pub mod structures;
