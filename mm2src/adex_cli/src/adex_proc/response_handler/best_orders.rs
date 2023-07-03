@@ -17,7 +17,7 @@ pub(super) fn on_best_orders(
     show_orig_tickers: bool,
 ) -> Result<()> {
     let mut term_table = term_table_blank(TableStyle::thin(), false, false, false);
-    term_table.add_row(best_orders_table_header_row());
+    term_table.add_row(best_orders_header_row());
 
     for (coin, data) in response.orders.iter().sorted_by_key(|p| p.0) {
         let coin = if show_orig_tickers {
@@ -56,7 +56,7 @@ pub(super) fn on_best_orders(
     Ok(())
 }
 
-fn best_orders_table_header_row() -> Row<'static> {
+fn best_orders_header_row() -> Row<'static> {
     Row::new(vec![
         TableCell::new(""),
         TableCell::new("Price"),
