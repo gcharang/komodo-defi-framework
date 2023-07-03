@@ -303,10 +303,10 @@ pub(crate) fn stop_process() {
 
 #[cfg(target_os = "macos")]
 pub(crate) fn get_status() {
-    let output = Command::new("launchctl")
-        .args(["list", LAUNCHCTL_MM2_ID])
-        .output()
-        .unwrap();
+    let output = match Command::new("launchctl").args(["list", LAUNCHCTL_MM2_ID]).output() {
+        Err(error) => error!("Failed to `launchctl list`, error: {error}"),
+        Ok(output) => output,
+    };
 
     if !output.status.success() {
         info!("Service '{LAUNCHCTL_MM2_ID}' is not running");

@@ -30,7 +30,7 @@ fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> 
         writeln_field!(writer, "Taker orders", "empty", COMMON_INDENT);
     } else {
         writeln_field!(writer, "Taker orders", "", COMMON_INDENT);
-        let mut table = term_table_blank(TableStyle::thin(), false, true, true);
+        let mut table = term_table_blank(TableStyle::thin(), false, false, false);
         table.add_row(taker_order_header_row());
         for (_, taker_order) in taker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
             for row in taker_order_rows(taker_order)? {
@@ -51,7 +51,7 @@ fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersR
         writeln_field!(writer, "Maker orders", "empty", COMMON_INDENT);
     } else {
         writeln_field!(writer, "Maker orders", "", COMMON_INDENT);
-        let mut table = term_table_blank(TableStyle::thin(), false, true, true);
+        let mut table = term_table_blank(TableStyle::thin(), false, false, false);
         table.add_row(maker_order_for_my_orders_header_row());
 
         for (_, maker_order) in maker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
@@ -129,7 +129,8 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
         write_maker_match(bbox.as_mut(), uuid, m)?;
         drop(bbox);
         rows.push(Row::new(vec![TableCell::new_with_col_span(
-            String::from_utf8(matches_str).unwrap(),
+            String::from_utf8(matches_str)
+                .map_err(|error| error_anyhow!("Failed to get matches_str from buffer: {error}"))?,
             10,
         )]));
     }
@@ -267,7 +268,6 @@ mod test {
     }
 
     const MAKER_WITH_MATCHES_OUT: &str = "        Maker orders: 
-┌───────────────┬───────────────┬──────────────────────────────────────┬────────────────────┬───────────────┬───────────────┬───────────────┬───────────────────────────────────────┬──────────────────┬───────────────────────────────┐
 │ base,rel      │ price         │ uuid                                 │ created at,        │ min base vol, │ cancellable   │ available     │ swaps                                 │ conf_settings    │ history changes               │
 │               │               │                                      │ updated at         │ max base vol  │               │ amount        │                                       │                  │                               │
 │ AAA,BBB       │ 11.22         │ 99777af6-eb5c-4550-a1d3-15bf4dc8727d │ 08-10-04 09:25:11, │ 0.50,         │ true          │ 18828.12      │ 8f4ebdec-4d86-467f-ba8e-94256783eb17, │ 87,true:78,false │ min_base_vol: 0.00040         │
@@ -287,6 +287,6 @@ mod test {
 │    reserved.(sender, dest): 022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c8508346,022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c8508348                                                                        │
 │     reserved.conf_settings: 1,true:11,false                                                                                                                                                                                          │
 │               last_updated: 08-10-04 09:25:11                                                                                                                                                                                        │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│                                                                                                                                                                                                                                      │
 ";
 }

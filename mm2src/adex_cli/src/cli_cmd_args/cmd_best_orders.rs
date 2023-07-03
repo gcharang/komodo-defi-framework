@@ -7,17 +7,17 @@ use super::parse_mm_number;
 
 #[derive(Args)]
 pub(crate) struct BestOrderArgs {
-    #[arg(help = "Whether to buy or sell the selected coin")]
-    pub(crate) coin: String,
     #[arg(value_enum, help = "The ticker of the coin to get best orders")]
+    pub(crate) coin: String,
+    #[arg(help = "Whether to buy or sell the selected coin")]
     pub(crate) action: OrderActionArg,
     #[arg(
         long,
-        help = "Tickers included in response when orderbook_ticker is configured for the queried coin in coins file",
+        help = "Whether to show the original tickers if they are configured for the queried coin",
         default_value = "false"
     )]
     pub(crate) show_orig_tickets: bool,
-    #[arg(long, help = "Excludes orders that is mine", default_value = "false")]
+    #[arg(long, help = "Exclude orders that is mine", default_value = "false")]
     pub(crate) exclude_mine: bool,
     #[command(flatten)]
     pub(crate) delegate: BestOrdersByArg,

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
-use mm2_number::bigdecimal::ToPrimitive;
+use mm2_number::bigdecimal::{ToPrimitive, Zero};
 use mm2_rpc::data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy,
                             OrderConfirmationsSettings, TakerMatchForRpc, TakerOrderForRpc};
 
@@ -221,7 +221,12 @@ pub(super) fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMa
     let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
     writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
     write_maker_reserved_for_rpc(writer, reserved);
-    writeln_field!(writer, "last_updated", m.last_updated, NESTED_INDENT);
+    let last_updated = if m.last_updated.is_zero() {
+        "none".to_string()
+    } else {
+        format_datetime(m.last_updated)?
+    };
+    writeln_field!(writer, "last_updated", last_updated, NESTED_INDENT);
     write_connected!(writer, connect, NESTED_INDENT);
     if let Some(ref connected) = connected {
         write_connected!(writer, connected, NESTED_INDENT);

@@ -14,13 +14,13 @@ use super::formatters::{format_confirmation_settings, format_ratio, term_table_b
 pub(super) fn on_best_orders(
     writer: &mut dyn Write,
     response: BestOrdersV2Response,
-    show_orig_tickets: bool,
+    show_orig_tickers: bool,
 ) -> Result<()> {
-    let mut term_table = term_table_blank(TableStyle::thin(), false, true, true);
+    let mut term_table = term_table_blank(TableStyle::thin(), false, false, false);
     term_table.add_row(best_orders_table_header_row());
 
     for (coin, data) in response.orders.iter().sorted_by_key(|p| p.0) {
-        let coin = if show_orig_tickets {
+        let coin = if show_orig_tickers {
             get_original_ticker(coin, &response.original_tickers)
         } else {
             coin.clone()

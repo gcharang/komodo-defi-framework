@@ -181,7 +181,7 @@ async fn test_order_status() {
         writer: (&mut buffer as &mut dyn Write).into(),
     };
     let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7792");
-    let args = vec!["adex-cli", "order-status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
+    let args = vec!["adex-cli", "status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();
@@ -199,7 +199,7 @@ async fn test_my_orders() {
         writer: (&mut buffer as &mut dyn Write).into(),
     };
     let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7793");
-    let args = vec!["adex-cli", "my-orders"];
+    let args = vec!["adex-cli", "mine"];
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();
@@ -216,7 +216,7 @@ async fn test_best_orders() {
         writer: (&mut buffer as &mut dyn Write).into(),
     };
     let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7794");
-    let args = vec!["adex-cli", "best-orders", "--number", "2", "RICK", "buy"];
+    let args = vec!["adex-cli", "best", "--number", "2", "RICK", "buy"];
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();
@@ -321,49 +321,49 @@ async fn handle_connection(mut stream: TcpStream, predefined_response: &'static 
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_COOLDOWN_TIMEOUT_MS)).await;
 }
 
-const RICK_AND_MORTY_ORDERBOOK: &str = r"     Volume: RICK Price: MORTY  
-             0.23 1.00000000    
-        340654.03 1.00000000    
-             2.00 0.99999999    
-             2.00 0.99999999    
-             2.00 0.99999999    
-- --------------- ------------- 
-             0.96 1.02438024    
-             1.99 1.00000001    
-             1.99 1.00000001    
-             1.99 1.00000001    
-         32229.14 1.00000000    
-             0.22 1.00000000    
+const RICK_AND_MORTY_ORDERBOOK: &str = r"     Volume: RICK Price: MORTY     
+             0.23 1.00000000       
+        340654.03 1.00000000       
+             2.00 0.99999999       
+             2.00 0.99999999       
+             2.00 0.99999999       
+- --------------- ---------------- 
+             0.96 1.02438024       
+             1.99 1.00000001       
+             1.99 1.00000001       
+             1.99 1.00000001       
+         32229.14 1.00000000       
+             0.22 1.00000000       
 ";
 
-const RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS: &str = r"     Volume: RICK Price: MORTY  Uuid                                 
-             0.23 1.00000000    c7585a1b-6060-4319-9da6-c67321628a06 
-        340654.03 1.00000000    d69fe2a9-51ca-4d69-96ad-b141a01d8bb4 
-             2.00 0.99999999    a2337218-7f6f-46a1-892e-6febfb7f5403 
-             2.00 0.99999999    c172c295-7fe3-4131-9c81-c3a7182f0617 
-             2.00 0.99999999    fbbc44d2-fb50-4b4b-8ac3-d9857cae16b6 
-- --------------- ------------- ------------------------------------ 
-             0.96 1.02438024    c480675b-3352-4159-9b3c-55cb2b1329de 
-             1.99 1.00000001    fdb0de9c-e283-48c3-9de6-8117fecf0aff 
-             1.99 1.00000001    6a3bb75d-8e91-4192-bf50-d8190a69600d 
-             1.99 1.00000001    b24b40de-e93d-4218-8d93-1940ceadce7f 
-         32229.14 1.00000000    652a7e97-f42c-4f87-bc26-26bd1a0fea24 
-             0.22 1.00000000    1082c93c-8c23-4944-b8f1-a92ec703b03a 
+const RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS: &str = r"     Volume: RICK Price: MORTY     Uuid                                 
+             0.23 1.00000000       c7585a1b-6060-4319-9da6-c67321628a06 
+        340654.03 1.00000000       d69fe2a9-51ca-4d69-96ad-b141a01d8bb4 
+             2.00 0.99999999       a2337218-7f6f-46a1-892e-6febfb7f5403 
+             2.00 0.99999999       c172c295-7fe3-4131-9c81-c3a7182f0617 
+             2.00 0.99999999       fbbc44d2-fb50-4b4b-8ac3-d9857cae16b6 
+- --------------- ---------------- ------------------------------------ 
+             0.96 1.02438024       c480675b-3352-4159-9b3c-55cb2b1329de 
+             1.99 1.00000001       fdb0de9c-e283-48c3-9de6-8117fecf0aff 
+             1.99 1.00000001       6a3bb75d-8e91-4192-bf50-d8190a69600d 
+             1.99 1.00000001       b24b40de-e93d-4218-8d93-1940ceadce7f 
+         32229.14 1.00000000       652a7e97-f42c-4f87-bc26-26bd1a0fea24 
+             0.22 1.00000000       1082c93c-8c23-4944-b8f1-a92ec703b03a 
 ";
 
-const RICK_AND_MORTY_ORDERBOOK_WITH_PUBLICS: &str = r"     Volume: RICK Price: MORTY  Public                                                             
-             0.23 1.00000000    022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846 
-        340654.03 1.00000000    0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732 
-             2.00 0.99999999    037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
-             2.00 0.99999999    037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
-             2.00 0.99999999    037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
-- --------------- ------------- ------------------------------------------------------------------ 
-             0.96 1.02438024    02d6c3e22a419a4034272acb215f1d39cd6a0413cfd83ac0c68f482db80accd89a 
-             1.99 1.00000001    037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
-             1.99 1.00000001    037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
-             1.99 1.00000001    037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
-         32229.14 1.00000000    0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732 
-             0.22 1.00000000    022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846 
+const RICK_AND_MORTY_ORDERBOOK_WITH_PUBLICS: &str = r"     Volume: RICK Price: MORTY     Public                                                             
+             0.23 1.00000000       022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846 
+        340654.03 1.00000000       0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732 
+             2.00 0.99999999       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
+             2.00 0.99999999       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
+             2.00 0.99999999       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
+- --------------- ---------------- ------------------------------------------------------------------ 
+             0.96 1.02438024       02d6c3e22a419a4034272acb215f1d39cd6a0413cfd83ac0c68f482db80accd89a 
+             1.99 1.00000001       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
+             1.99 1.00000001       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
+             1.99 1.00000001       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
+         32229.14 1.00000000       0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732 
+             0.22 1.00000000       022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846 
 ";
 
 const ENABLED_COINS: &str = "\
@@ -405,13 +405,12 @@ const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-beb
    reserved.(taker, maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000
     reserved.conf_settings: 1,false:1,false
-              last_updated: 0
+              last_updated: none
      connect.(taker,maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5
 ";
 
 const MY_ORDERS_OUTPUT: &str = "        Taker orders: 
-┌──────────────────────────┬──────────────────────────────────────────────────────────────────┬──────────────────────────┬──────────────────────────┬──────────────────────────┬───────────────────────────┐
 │ action                   │ uuid, sender, dest                                               │ type,created_at          │ match_by                 │ base,rel                 │ cancellable               │
 │ base(vol),rel(vol)       │                                                                  │ confirmation             │                          │ orderbook ticker         │                           │
 │ Buy                      │ 2739152a-3f87-4f6d-a199-3659aa1e864f                             │ GoodTillCancelled        │ Any                      │ none                     │ true                      │
@@ -426,26 +425,22 @@ const MY_ORDERS_OUTPUT: &str = "        Taker orders:
 │    reserved.(taker, maker): ce90f89f-8074-4e9f-8649-7f7689c56fa9,09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                    │
 │    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
 │     reserved.conf_settings: 1,false:1,false                                                                                                                                                              │
-│               last_updated: 0                                                                                                                                                                            │
+│               last_updated: none                                                                                                                                                                         │
 │      connect.(taker,maker): ce90f89f-8074-4e9f-8649-7f7689c56fa9,09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                    │
 │     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5                                            │
 │                                                                                                                                                                                                          │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
         Maker orders: 
-┌────────────┬───────┬──────────────────────────────────────┬────────────────────┬───────────────┬─────────────┬───────────┬───────┬─────────────────┬─────────────────┐
 │ base,rel   │ price │ uuid                                 │ created at,        │ min base vol, │ cancellable │ available │ swaps │ conf_settings   │ history changes │
 │            │       │                                      │ updated at         │ max base vol  │             │ amount    │       │                 │                 │
 │ RICK,MORTY │ 1.11  │ 28315c31-4fd7-4847-9873-352924252fbe │ 23-05-29 12:17:46, │ 0.000100,     │ true        │ 0.09      │ empty │ 1,false:1,false │ none            │
 │            │       │                                      │ 23-05-29 12:17:46  │ 0.09          │             │           │       │                 │                 │
 │ RICK,MORTY │ 1.11  │ 7f097435-f482-415b-9bdf-6780f4be4828 │ 23-05-29 12:17:49, │ 0.000100,     │ true        │ 0.09      │ empty │ 1,false:1,false │ none            │
 │            │       │                                      │ 23-05-29 12:17:49  │ 0.09          │             │           │       │                 │                 │
-└────────────┴───────┴──────────────────────────────────────┴────────────────────┴───────────────┴─────────────┴───────────┴───────┴─────────────────┴─────────────────┘
 
 ";
 
 const BEST_ORDERS_OUTPUT:&str = "\
-┌──┬────────┬──────────────────────────────────────┬────────────────────┬────────────────────┬────────────────────────────────────┬─────────────────┐
 │  │ Price  │ Uuid                                 │ Base vol(min:max)  │ Rel vol(min:max)   │ Address                            │ Confirmation    │
 │ KMD                                                                                                                                               │
 │  │ 0.0050 │ 7c643319-52ea-4323-b0d2-1c448cfc007d │ 0.02:9730.65       │ 0.00010:48.65      │ REbPB4qfrB2D5KAnJJK1RTC1CLGa8hVEcM │ 1,false:2,true  │
@@ -454,7 +449,6 @@ const BEST_ORDERS_OUTPUT:&str = "\
 │  │ 0.99   │ e52246a2-f9b2-4145-9aa6-53b96bfabe9f │ 0.00010:2.00       │ 0.000100:1.99      │ RMaprYNUp8ErJ9ZAKcxMfpC4ioVycYCCCc │ 1,false:1,false │
 │ ZOMBIE                                                                                                                                            │
 │  │ 1.00   │ 2536e0d8-0a8b-4393-913b-d74543733e5e │ 0.000100:0.23      │ 0.000100:0.23      │ Shielded                           │ 1,false:1,false │
-└──┴────────┴──────────────────────────────────────┴────────────────────┴────────────────────┴────────────────────────────────────┴─────────────────┘
 ";
 
 const ORDERBOOK_DEPTH_OUTPUT: &str = "             Bids Asks 
@@ -465,7 +459,6 @@ const ORDERBOOK_DEPTH_OUTPUT: &str = "             Bids Asks
 
 const HISTORY_COMMON_OUTPUT: &str = "\
 Orders history:
-┌────────────────────────────────────┬─────┬──────┬────┬─────┬───────┬───────┬─────────┬─────────────────┬─────────────────┬─────────┐
 │uuid                                │Type │Action│Base│Rel  │Volume │Price  │Status   │Created          │Updated          │Was taker│
 │                                    │     │      │    │     │       │       │         │                 │                 │         │
 │010a224e-a946-4726-bf6d-e521701053a2│Maker│Sell  │RICK│MORTY│8.16   │1.23   │Cancelled│23-06-06 15:41:33│23-06-07 10:37:47│false    │
@@ -498,12 +491,10 @@ Orders history:
 │23d2c04b-6fa5-4e76-bde9-4a8fe0b7a144│Maker│Sell  │RICK│MORTY│8.16   │1.10   │Cancelled│23-06-06 14:51:40│23-06-06 14:52:20│false    │
 │4e365431-4db0-4365-a67d-1e39820090a2│Taker│Buy   │RICK│MORTY│0.05   │1.10   │TimedOut │23-05-05 14:35:31│23-05-05 14:36:02│false    │
 │601bfc00-9033-45d8-86b2-3dbd54881212│Taker│Buy   │RICK│MORTY│0.05   │1.10   │Fulfilled│23-05-05 14:34:55│23-05-05 14:34:58│false    │
-└────────────────────────────────────┴─────┴──────┴────┴─────┴───────┴───────┴─────────┴─────────────────┴─────────────────┴─────────┘
 ";
 
 const HISTORY_TAKERS_DETAILED_OUTPUT: &str = "\
 Taker orders history detailed:
-┌──────────────────────────┬──────────────────────────────────────────────────────────────────┬──────────────────────────┬──────────────────────────┬──────────────────────────┬───────────────────────────┐
 │ action                   │ uuid, sender, dest                                               │ type,created_at          │ match_by                 │ base,rel                 │ cancellable               │
 │ base(vol),rel(vol)       │                                                                  │ confirmation             │                          │ orderbook ticker         │                           │
 │                          │                                                                  │                          │                          │                          │                           │
@@ -516,7 +507,7 @@ Taker orders history detailed:
 │    reserved.(taker, maker): 4e365431-4db0-4365-a67d-1e39820090a2,efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                    │
 │    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
 │     reserved.conf_settings: 0,false:0,false                                                                                                                                                              │
-│               last_updated: 1683297334735                                                                                                                                                                │
+│               last_updated: 23-05-05 14:35:34                                                                                                                                                            │
 │      connect.(taker,maker): 4e365431-4db0-4365-a67d-1e39820090a2,efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                    │
 │     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5                                            │
 │                                                                                                                                                                                                          │
@@ -529,16 +520,14 @@ Taker orders history detailed:
 │    reserved.(taker, maker): 601bfc00-9033-45d8-86b2-3dbd54881212,e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                    │
 │    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
 │     reserved.conf_settings: 0,false:0,false                                                                                                                                                              │
-│               last_updated: 1683297298668                                                                                                                                                                │
+│               last_updated: 23-05-05 14:34:58                                                                                                                                                            │
 │      connect.(taker,maker): 601bfc00-9033-45d8-86b2-3dbd54881212,e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                    │
 │     connect.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5                                            │
 │                                                                                                                                                                                                          │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ";
 
 const HISTORY_MAKERS_DETAILED_OUTPUT: &str = "\
 Maker orders history detailed:
-┌────────────┬─────────┬──────────────────────────────────────┬────────────────────┬───────────────┬───────┬─────────────────┬─────────────────┬──────────────────┐
 │ base,rel   │ price   │ uuid                                 │ created at,        │ min base vol, │ swaps │ conf_settings   │ history changes │ orderbook ticker │
 │            │         │                                      │ updated at         │ max base vol  │       │                 │                 │ base, rel        │
 │            │         │                                      │                    │               │       │                 │                 │                  │
@@ -598,5 +587,4 @@ Maker orders history detailed:
 │            │         │                                      │ 23-06-06 14:52:20  │ 8.16          │       │                 │                 │ none             │
 │ RICK,MORTY │ 1.10    │ 23d2c04b-6fa5-4e76-bde9-4a8fe0b7a144 │ 23-06-06 14:51:40, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
 │            │         │                                      │ 23-06-06 14:51:40  │ 8.16          │       │                 │                 │ none             │
-└────────────┴─────────┴──────────────────────────────────────┴────────────────────┴───────────────┴───────┴─────────────────┴─────────────────┴──────────────────┘
 ";
