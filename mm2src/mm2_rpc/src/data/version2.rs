@@ -1,8 +1,9 @@
 use derive_more::Display;
-use mm2_number::{MmNumber, MmNumberMultiRepr};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+use mm2_number::{MmNumber, MmNumberMultiRepr};
 
 use super::legacy::OrderConfirmationsSettings;
 
@@ -17,14 +18,13 @@ pub struct MmRpcRequest<M, T> {
     pub id: Option<usize>,
 }
 
-/// Please note there is no standardized `1.0` version, so this enumeration should not be used in the legacy protocol context.
 #[derive(Clone, Deserialize, Serialize)]
 pub enum MmRpcVersion {
     #[serde(rename = "2.0")]
     V2,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct MmRpcErrorV2 {
     pub error: String,
     pub error_path: String,
@@ -41,14 +41,14 @@ pub struct MmRpcResponseV2<T> {
     pub id: Option<usize>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum MmRpcResultV2<T> {
     Ok { result: T },
     Err(MmRpcErrorV2),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BestOrdersRequestV2 {
     pub coin: String,
     pub action: BestOrdersAction,
@@ -57,7 +57,7 @@ pub struct BestOrdersRequestV2 {
     pub exclude_mine: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
 #[serde(rename_all = "lowercase")]
 pub enum RequestBestOrdersBy {
@@ -65,14 +65,14 @@ pub enum RequestBestOrdersBy {
     Number(usize),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
+#[derive(Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BestOrdersAction {
     Buy,
     Sell,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcOrderbookEntryV2 {
     pub uuid: Uuid,
     pub coin: String,
@@ -87,13 +87,13 @@ pub struct RpcOrderbookEntryV2 {
     pub conf_settings: Option<OrderConfirmationsSettings>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct BestOrdersV2Response {
     pub orders: HashMap<String, Vec<RpcOrderbookEntryV2>>,
     pub original_tickers: HashMap<String, HashSet<String>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Display)]
+#[derive(Clone, Debug, Deserialize, Display, Serialize)]
 #[serde(tag = "address_type", content = "address_data")]
 pub enum OrderbookAddress {
     Transparent(String),
