@@ -57,14 +57,8 @@ struct OrderArgs {
         help = "Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker",
     )]
     min_volume: Option<MmNumber>,
-    #[arg(long = "uuid", help = "The created order is matched using a set of uuid")]
-    match_uuids: Vec<Uuid>,
-    #[arg(
-        long = "public",
-        value_parser = H256Json::from_str,
-        help = "The created order is matched using a set of publics to select specific nodes (ignored if uuids not empty)"
-    )]
-    match_publics: Vec<H256Json>,
+    #[command(flatten)]
+    matching: OrderMatchingGroup,
     #[arg(
         long,
         visible_alias = "bc",
@@ -96,6 +90,23 @@ struct OrderArgs {
         help = "If true, each order's short record history is stored else the only order status will be temporarily stored while in progress"
     )]
     save_in_history: bool,
+}
+
+#[derive(Args, Debug, Serialize)]
+#[group(required = false, multiple = false)]
+struct OrderMatchingGroup {
+    #[arg(
+        long = "uuid",
+        group = "order-matching",
+        help = "The created order is matched using a set of uuid"
+    )]
+    match_uuids: Vec<Uuid>,
+    #[arg(
+        long = "public",
+        value_parser = H256Json::from_str,
+        help = "The created order is matched using a set of publics to select specific nodes (ignored if uuids not empty)"
+    )]
+    match_publics: Vec<H256Json>,
 }
 
 #[derive(Debug, Clone, ValueEnum, Serialize)]
@@ -131,10 +142,10 @@ impl From<&mut BuyOrderArgs> for BuyRequest {
 
 impl From<&mut OrderArgs> for SellBuyRequest {
     fn from(value: &mut OrderArgs) -> Self {
-        let match_by = if !value.match_uuids.is_empty() {
-            MatchBy::Orders(HashSet::from_iter(value.match_uuids.drain(..)))
-        } else if !value.match_publics.is_empty() {
-            MatchBy::Pubkeys(HashSet::from_iter(value.match_publics.drain(..)))
+        let match_by = if !value.matching.match_uuids.is_empty() {
+            MatchBy::Orders(HashSet::from_iter(value.matching.match_uuids.drain(..)))
+        } else if !value.matching.match_publics.is_empty() {
+            MatchBy::Pubkeys(HashSet::from_iter(value.matching.match_publics.drain(..)))
         } else {
             MatchBy::Any
         };

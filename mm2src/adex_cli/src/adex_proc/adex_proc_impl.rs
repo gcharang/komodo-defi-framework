@@ -32,10 +32,7 @@ macro_rules! request_legacy {
         match transport.send::<_, $response_ty, Json>($request).await {
             Ok(Ok(ok)) => $self.response_handler.$handle_method(ok, $($opt),*),
             Ok(Err(error)) => $self.response_handler.print_response(error),
-            Err(error) => error_bail!(
-                concat!("Failed to send: `", stringify!($request), "`, error: {}"),
-                error
-            ),
+            Err(_) => error_bail!(concat!("Failed to send: `", stringify!($request), "`"))
         }
     }};
 }

@@ -74,7 +74,10 @@ impl Response for (StatusCode, HeaderMap, Vec<u8>) {
                 },
             },
             _ => {
-                warn_bail!("Bad http status: {status}, data: {data:?}")
+                warn_bail!(
+                    "Bad http status: {status}, data: {}",
+                    String::from_utf8(data).unwrap_or_else(|error| hex::encode(error.as_bytes()))
+                )
             },
         }
     }
