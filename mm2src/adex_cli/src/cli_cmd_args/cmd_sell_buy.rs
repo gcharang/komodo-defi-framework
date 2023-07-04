@@ -1,12 +1,13 @@
 use clap::{Args, ValueEnum};
-use common::serde_derive::Serialize;
-use mm2_number::MmNumber;
-use mm2_rpc::data::legacy::{BuyRequest, MatchBy, OrderType, SellBuyRequest, SellRequest};
 use rpc::v1::types::H256 as H256Json;
 use std::collections::HashSet;
 use std::mem::take;
 use std::str::FromStr;
 use uuid::Uuid;
+
+use common::serde_derive::Serialize;
+use mm2_number::MmNumber;
+use mm2_rpc::data::legacy::{BuyRequest, MatchBy, OrderType, SellBuyRequest, SellRequest};
 
 use super::parse_mm_number;
 
@@ -24,20 +25,20 @@ pub(crate) struct BuyOrderArgs {
     order_cli: OrderArgs,
 }
 
-#[derive(Args, Serialize, Debug)]
+#[derive(Args, Debug, Serialize)]
 struct OrderArgs {
     #[arg(help = "Base currency of a pair")]
     base: String,
     #[arg(help = "Related currency")]
     rel: String,
     #[arg(
+        value_parser = parse_mm_number,
         help = "Amount of coins the user is willing to sell/buy of the base coin",
-        value_parser = parse_mm_number
     )]
     volume: MmNumber,
     #[arg(
+        value_parser = parse_mm_number,
         help = "Price in rel the user is willing to receive/pay per one unit of the base coin",
-        value_parser = parse_mm_number
     )]
     price: MmNumber,
     #[arg(
@@ -46,13 +47,15 @@ struct OrderArgs {
         value_enum,
         visible_alias = "type",
         default_value_t = OrderTypeCli::GoodTillCancelled,
-        help = "The GoodTillCancelled order is automatically converted to a maker order if not matched in 30 seconds, and this maker order stays in the orderbook until explicitly cancelled. On the other hand, a FillOrKill is cancelled if not matched within 30 seconds"
+        help = "The GoodTillCancelled order is automatically converted to a maker order if not matched in \
+                30 seconds, and this maker order stays in the orderbook until explicitly cancelled. \
+                On the other hand, a FillOrKill is cancelled if not matched within 30 seconds"
     )]
     order_type: OrderTypeCli,
     #[arg(
         long,
+        value_parser=parse_mm_number,
         help = "Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker",
-        value_parser=parse_mm_number
     )]
     min_volume: Option<MmNumber>,
     #[arg(long = "uuid", help = "The created order is matched using a set of uuid")]
