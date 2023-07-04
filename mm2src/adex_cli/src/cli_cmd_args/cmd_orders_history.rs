@@ -31,7 +31,7 @@ enum StatusFilter {
 }
 
 #[derive(Args)]
-pub struct OrdersHistoryArgs {
+pub(crate) struct OrdersHistoryArgs {
     #[command(flatten)]
     settings: OrdersHistorySettings,
     #[arg(long = "type", value_enum, help = "Return only orders that match the type")]

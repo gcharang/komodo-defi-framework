@@ -8,11 +8,11 @@ const ORDERBOOK_BIDS_LIMIT: &str = "20";
 const ORDERBOOK_ASKS_LIMIT: &str = "20";
 
 #[derive(Args, Serialize, Debug)]
-pub struct OrderbookArgs {
+pub(crate) struct OrderbookArgs {
     #[arg(help = "Base currency of a pair")]
-    pub base: String,
+    base: String,
     #[arg(help = "Related currency, also can be called \"quote currency\" according to exchange terms")]
-    pub rel: String,
+    rel: String,
     #[arg(long, help = "Orderbook asks count limitation", default_value = ORDERBOOK_ASKS_LIMIT)]
     asks_limit: Option<usize>,
     #[arg(long, help = "Orderbook bids count limitation", default_value = ORDERBOOK_BIDS_LIMIT)]

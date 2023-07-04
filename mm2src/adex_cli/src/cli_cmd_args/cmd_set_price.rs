@@ -7,7 +7,7 @@ use super::parse_mm_number;
 
 #[derive(Args)]
 #[command(about = "Place an order on the orderbook, and if relies on this node acting as a maker")]
-pub struct SetPriceArgs {
+pub(crate) struct SetPriceArgs {
     #[arg(help = "The name of the coin the user desires to sell")]
     base: String,
     #[arg(help = "The name of the coin the user desires to receive")]

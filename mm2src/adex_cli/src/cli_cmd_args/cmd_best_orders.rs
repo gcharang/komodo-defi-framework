@@ -9,11 +9,11 @@ use super::parse_mm_number;
 #[derive(Args)]
 pub(crate) struct BestOrderArgs {
     #[arg(value_enum, help = "The coin to get best orders")]
-    pub(crate) coin: String,
+    coin: String,
     #[arg(help = "Whether to buy or sell the selected coin")]
-    pub(crate) action: OrderActionArg,
+    action: OrderActionArg,
     #[command(flatten)]
-    pub(crate) delegate: BestOrdersByArg,
+    delegate: BestOrdersByArg,
     #[arg(
         long,
         short = 'o',
@@ -23,12 +23,12 @@ pub(crate) struct BestOrderArgs {
     )]
     pub(crate) show_orig_tickets: bool,
     #[arg(long, short, help = "Exclude orders that is mine", default_value = "false")]
-    pub(crate) exclude_mine: bool,
+    exclude_mine: bool,
 }
 
 #[derive(Args)]
 #[group(required = true, multiple = false)]
-pub(crate) struct BestOrdersByArg {
+struct BestOrdersByArg {
     #[arg(
         long,
         short,
@@ -36,18 +36,18 @@ pub(crate) struct BestOrdersByArg {
         value_parser=parse_mm_number,
         help="The returned results will show the best prices for trades that can fill the requested volume"
     )]
-    pub(crate) volume: Option<MmNumber>,
+    volume: Option<MmNumber>,
     #[arg(
         long,
         short,
         group = "best-orders",
         help = "The returned results will show a list of the best prices"
     )]
-    pub(crate) number: Option<usize>,
+    number: Option<usize>,
 }
 
 #[derive(Clone, ValueEnum)]
-pub(crate) enum OrderActionArg {
+enum OrderActionArg {
     Buy,
     Sell,
 }

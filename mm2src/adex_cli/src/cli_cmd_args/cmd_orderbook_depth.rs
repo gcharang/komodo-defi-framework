@@ -6,13 +6,13 @@ use std::str::FromStr;
 
 #[derive(Args)]
 #[command(about = "Returns the number of asks and bids for the specified trading pairs")]
-pub struct OrderbookDepthArgs {
+pub(crate) struct OrderbookDepthArgs {
     #[arg(required = true, value_name = "BASE/REL")]
     pairs: Vec<BaseRel>,
 }
 
 #[derive(Clone)]
-pub struct BaseRel(String, String);
+struct BaseRel(String, String);
 
 impl From<&mut OrderbookDepthArgs> for OrderbookDepthRequest {
     fn from(value: &mut OrderbookDepthArgs) -> Self {

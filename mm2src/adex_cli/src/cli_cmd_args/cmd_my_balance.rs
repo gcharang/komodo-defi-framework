@@ -4,7 +4,7 @@ use std::mem::take;
 use mm2_rpc::data::legacy::MyBalanceRequest;
 
 #[derive(Args)]
-pub struct MyBalanceArgs {
+pub(crate) struct MyBalanceArgs {
     #[arg(name = "COIN", help = "Coin to get balance")]
     coin: String,
 }

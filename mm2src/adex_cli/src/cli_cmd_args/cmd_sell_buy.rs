@@ -12,14 +12,14 @@ use super::parse_mm_number;
 
 #[derive(Args)]
 #[command(about = "Put a selling request")]
-pub struct SellOrderArgs {
+pub(crate) struct SellOrderArgs {
     #[command(flatten)]
     order_cli: OrderArgs,
 }
 
 #[derive(Args)]
 #[command(about = "Put a buying request")]
-pub struct BuyOrderArgs {
+pub(crate) struct BuyOrderArgs {
     #[command(flatten)]
     order_cli: OrderArgs,
 }
@@ -96,7 +96,7 @@ struct OrderArgs {
 }
 
 #[derive(Debug, Clone, ValueEnum, Serialize)]
-pub enum OrderTypeCli {
+enum OrderTypeCli {
     FillOrKill,
     GoodTillCancelled,
 }
