@@ -5,11 +5,10 @@ use std::fmt::{Display, Formatter};
 use std::io::Write;
 
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
-use mm2_number::bigdecimal::ToPrimitive;
 use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookResponse};
 
-use super::formatters::format_confirmation_settings;
-use super::smart_fraction_fmt::{SmartFractPrecision, SmartFractionFmt};
+use super::formatters::{format_confirmation_settings, format_ratio};
+use super::smart_fraction_fmt::SmartFractPrecision;
 use crate::adex_config::AdexConfig;
 
 pub(crate) struct OrderbookSettings {
@@ -65,13 +64,10 @@ pub(super) fn on_orderbook_response<Cfg: AdexConfig + 'static>(
             .checked_sub(settings.asks_limit.unwrap_or(usize::MAX))
             .unwrap_or_default();
 
-        response
-            .asks
-            .iter()
-            .sorted_by(cmp_asks)
-            .skip(skip)
-            .map(|entry| AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings))
-            .for_each(|row: AskBidRow| writeln_safe_io!(writer, "{}", row));
+        response.asks.iter().sorted_by(cmp_asks).skip(skip).for_each(|entry| {
+            let Ok(row) = AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings) else {return};
+            writeln_safe_io!(writer, "{}", row)
+        });
     }
     writeln_safe_io!(writer, "{}", AskBidRow::new_delimiter(&settings));
 
@@ -87,8 +83,10 @@ pub(super) fn on_orderbook_response<Cfg: AdexConfig + 'static>(
             .iter()
             .sorted_by(cmp_bids)
             .take(settings.bids_limit.unwrap_or(usize::MAX))
-            .map(|entry| AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings))
-            .for_each(|row: AskBidRow| writeln_safe_io!(writer, "{}", row));
+            .for_each(|entry| {
+                let Ok(row) = AskBidRow::from_orderbook_entry(entry, vol_prec, price_prec, &settings) else {return};
+                writeln_safe_io!(writer, "{}", row)
+            });
     }
     Ok(())
 }
@@ -187,30 +185,14 @@ impl<'a> AskBidRow<'a> {
         vol_prec: &SmartFractPrecision,
         price_prec: &SmartFractPrecision,
         settings: &'a OrderbookSettings,
-    ) -> Self {
-        AskBidRow {
+    ) -> Result<Self> {
+        Ok(AskBidRow {
             is_mine: AskBidRowVal::Value((if entry.entry.is_mine { "*" } else { "" }).to_string()),
-            volume: AskBidRowVal::Value(
-                SmartFractionFmt::new(vol_prec, entry.entry.base_max_volume.base_max_volume.to_f64().unwrap())
-                    .expect("volume smart fraction should be constructed properly")
-                    .to_string(),
-            ),
-            price: AskBidRowVal::Value(
-                SmartFractionFmt::new(price_prec, entry.entry.price.to_f64().unwrap())
-                    .expect("price smart fraction should be constructed properly")
-                    .to_string(),
-            ),
+            volume: AskBidRowVal::Value(format_ratio(&entry.entry.base_max_volume.base_max_volume, *vol_prec)?),
+            price: AskBidRowVal::Value(format_ratio(&entry.entry.price, *price_prec)?),
             uuid: AskBidRowVal::Value(entry.entry.uuid.to_string()),
-            min_volume: AskBidRowVal::Value(
-                SmartFractionFmt::new(vol_prec, entry.entry.min_volume.to_f64().unwrap())
-                    .expect("min_volume smart fraction should be constructed properly")
-                    .to_string(),
-            ),
-            max_volume: AskBidRowVal::Value(
-                SmartFractionFmt::new(vol_prec, entry.entry.max_volume.to_f64().unwrap())
-                    .expect("max_volume smart fraction should be constructed properly")
-                    .to_string(),
-            ),
+            min_volume: AskBidRowVal::Value(format_ratio(&entry.entry.min_volume, *vol_prec)?),
+            max_volume: AskBidRowVal::Value(format_ratio(&entry.entry.max_volume, *vol_prec)?),
             age: AskBidRowVal::Value(entry.entry.age.to_string()),
             public: AskBidRowVal::Value(entry.entry.pubkey.clone()),
             address: AskBidRowVal::Value(entry.entry.address.clone()),
@@ -222,7 +204,7 @@ impl<'a> AskBidRow<'a> {
                     .map_or("none".to_string(), format_confirmation_settings),
             ),
             settings,
-        }
+        })
     }
 }
 
