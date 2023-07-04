@@ -1,6 +1,6 @@
-mod cmd_balance;
 mod cmd_best_orders;
 mod cmd_cancel;
+mod cmd_my_balance;
 mod cmd_order_status;
 mod cmd_orderbook;
 mod cmd_orderbook_depth;
@@ -15,9 +15,9 @@ use mm2_number::bigdecimal::ParseBigDecimalError;
 use mm2_number::{BigDecimal, MmNumber};
 use std::str::FromStr;
 
-pub(crate) use cmd_balance::*;
 pub(crate) use cmd_best_orders::*;
 pub(crate) use cmd_cancel::*;
+pub(crate) use cmd_my_balance::*;
 pub(crate) use cmd_order_status::*;
 pub(crate) use cmd_orderbook::*;
 pub(crate) use cmd_orderbook_depth::*;

@@ -45,7 +45,7 @@ enum Command {
         coin: String,
     },
     #[command(visible_alias = "balance", about = "Get coin balance")]
-    MyBalance(BalanceArgs),
+    MyBalance(MyBalanceArgs),
     #[command(visible_alias = "enabled", about = "List activated coins")]
     GetEnabled,
     #[command(visible_aliases = ["obook", "ob"], about = "Get orderbook")]
@@ -119,7 +119,7 @@ impl Cli {
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Enable { coin } => proc.enable(coin).await?,
-            Command::MyBalance(balance_args) => proc.get_balance(balance_args.into()).await?,
+            Command::MyBalance(my_balance_args) => proc.get_balance(my_balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
             Command::Orderbook(ref orderbook_args) => {
                 proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
