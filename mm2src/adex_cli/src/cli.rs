@@ -44,7 +44,7 @@ enum Command {
         #[arg(name = "COIN", help = "Coin to be included into the trading index")]
         coin: String,
     },
-    #[command(visible_alias = "balance", about = "Get balance of a coin")]
+    #[command(visible_alias = "balance", about = "Get coin balance")]
     MyBalance(BalanceArgs),
     #[command(visible_alias = "enabled", about = "List activated coins")]
     GetEnabled,
@@ -55,11 +55,11 @@ enum Command {
     Sell(SellOrderArgs),
     Buy(BuyOrderArgs),
     SetPrice(SetPriceArgs),
-    #[command(subcommand, about = "Cancel one or a group of orders")]
+    #[command(subcommand, about = "Cancel one or many orders")]
     Cancel(CancelSubcommand),
     #[command(
         visible_alias = "status",
-        about = "Return the data of the order with the selected uuid created by the AtomicDEX API node"
+        about = "Return the data of the order with the selected uuid created by the current node"
     )]
     OrderStatus(OrderStatusArgs),
     #[command(
@@ -74,10 +74,7 @@ enum Command {
         about = "Return all orders whether active or inactive that match the selected filters"
     )]
     OrdersHistory(OrdersHistoryArgs),
-    #[command(
-        visible_alias = "update",
-        about = "Update an active order on the orderbook created before by setprice"
-    )]
+    #[command(visible_alias = "update", about = "Update order on the orderbook")]
     UpdateMakerOrder(UpdateMakerOrderArgs),
 }
 
