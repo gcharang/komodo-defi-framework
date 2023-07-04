@@ -21,9 +21,10 @@ use crate::logging::error_anyhow;
 pub(super) const COMMON_INDENT: usize = 20;
 pub(super) const COMMON_PRECISION: SmartFractPrecision = (2, 5);
 const NESTED_INDENT: usize = 26;
+const ZERO_INDENT: usize = 0;
 
 pub(super) fn on_maker_order_response(writer: &mut dyn Write, order: MakerOrderForRpc) -> Result<()> {
-    writeln_field!(writer, "Maker order", "", 0);
+    writeln_field!(writer, "Maker order", "", ZERO_INDENT);
     write_maker_order(writer, &order)?;
     write_maker_matches(writer, &order.matches)?;
     writeln_safe_io!(writer, "");
@@ -197,23 +198,31 @@ pub(super) fn taker_order_rows(taker_order: &TakerOrderForRpc) -> Result<Vec<Row
         )),
         TableCell::new(taker_order.cancellable),
     ])];
+    rows.append(get_matches_rows(&taker_order.matches, 6, write_taker_match)?.as_mut());
+    Ok(rows)
+}
 
-    if taker_order.matches.is_empty() {
+pub(super) fn get_matches_rows<M, F: Fn(&mut dyn Write, &Uuid, &M) -> Result<()>>(
+    matches: &HashMap<Uuid, M>,
+    collspan: usize,
+    write_match: F,
+) -> Result<Vec<Row<'static>>> {
+    let mut rows = vec![];
+    if matches.is_empty() {
         return Ok(rows);
     }
-    rows.push(Row::new(vec![TableCell::new_with_col_span("matches", 6)]));
-    for (uuid, m) in taker_order.matches.iter() {
+    rows.push(Row::new(vec![TableCell::new_with_col_span("matches", collspan)]));
+    for (uuid, m) in matches.iter() {
         let mut matches_str = Vec::new();
         let mut buf: Box<dyn Write> = Box::new(&mut matches_str);
-        write_taker_match(buf.as_mut(), uuid, m)?;
+        write_match(buf.as_mut(), uuid, m)?;
         drop(buf);
         rows.push(Row::new(vec![TableCell::new_with_col_span(
             String::from_utf8(matches_str)
-                .map_err(|err| error_anyhow!("Failed to get string from taker order matches_str: {err}"))?,
-            6,
+                .map_err(|err| error_anyhow!("Failed to get string from taker order matches_str buffer: {err}"))?,
+            collspan,
         )]));
     }
-
     Ok(rows)
 }
 

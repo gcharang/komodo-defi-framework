@@ -10,8 +10,8 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, Mm2RpcResult, MyOrdersResponse, TakerOrderForRpc};
 
 use super::formatters::{format_confirmation_settings, format_datetime, format_historical_changes, format_ratio,
-                        taker_order_header_row, taker_order_rows, term_table_blank, write_maker_match, COMMON_INDENT,
-                        COMMON_PRECISION};
+                        get_matches_rows, taker_order_header_row, taker_order_rows, term_table_blank,
+                        write_maker_match, COMMON_INDENT, COMMON_PRECISION};
 use super::macros::writeln_field;
 use crate::logging::error_anyhow;
 
@@ -118,22 +118,7 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
             },
         )),
     ])];
-
-    if order.matches.is_empty() {
-        return Ok(rows);
-    }
-    rows.push(Row::new(vec![TableCell::new_with_col_span("matches", 10)]));
-    for (uuid, m) in &order.matches {
-        let mut matches_str = Vec::new();
-        let mut bbox: Box<dyn Write> = Box::new(&mut matches_str);
-        write_maker_match(bbox.as_mut(), uuid, m)?;
-        drop(bbox);
-        rows.push(Row::new(vec![TableCell::new_with_col_span(
-            String::from_utf8(matches_str)
-                .map_err(|error| error_anyhow!("Failed to get matches_str from buffer: {error}"))?,
-            10,
-        )]));
-    }
+    rows.append(get_matches_rows(&order.matches, 10, write_maker_match)?.as_mut());
     Ok(rows)
 }
 

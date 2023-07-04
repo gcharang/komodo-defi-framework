@@ -1,20 +1,18 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use itertools::Itertools;
 use std::io::Write;
 use term_table::{row::Row,
                  table_cell::{Alignment, TableCell},
                  TableStyle};
 
-use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{FilteringOrder, MakerOrderForRpc, Mm2RpcResult, OrderForRpc, OrdersHistoryResponse,
                             UuidParseError};
 
 use super::formatters::{term_table_blank, write_maker_match};
 use crate::adex_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
-                                                     format_historical_changes, format_ratio, taker_order_header_row,
-                                                     taker_order_rows, COMMON_PRECISION};
-use crate::error_anyhow;
+                                                     format_historical_changes, format_ratio, get_matches_rows,
+                                                     taker_order_header_row, taker_order_rows, COMMON_PRECISION};
 
 pub(crate) struct OrdersHistorySettings {
     pub(crate) takers_detailed: bool,
@@ -190,21 +188,6 @@ fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
                 .map_or_else(|| "none".to_string(), String::clone)
         )),
     ])];
-
-    if order.matches.is_empty() {
-        return Ok(rows);
-    }
-    rows.push(Row::new(vec![TableCell::new_with_col_span("matches", 10)]));
-    for (uuid, m) in &order.matches {
-        let mut matches_str = Vec::new();
-        let mut bbox: Box<dyn Write> = Box::new(&mut matches_str);
-        write_maker_match(bbox.as_mut(), uuid, m)?;
-        drop(bbox);
-        rows.push(Row::new(vec![TableCell::new_with_col_span(
-            String::from_utf8(matches_str)
-                .map_err(|error| error_anyhow!("Failed to get matches_str from buffer: {error}"))?,
-            10,
-        )]));
-    }
+    rows.append(get_matches_rows(&order.matches, 10, write_maker_match)?.as_mut());
     Ok(rows)
 }
