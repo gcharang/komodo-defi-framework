@@ -1,17 +1,26 @@
 use clap::{Args, Subcommand};
-use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelBy, CancelOrderRequest};
 use std::mem::take;
 use uuid::Uuid;
 
+use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelBy, CancelOrderRequest};
+
 #[derive(Subcommand)]
 pub(crate) enum CancelSubcommand {
-    #[command(about = "Cancels certain order by uuid")]
+    #[command(short_flag = 'o', about = "Cancels certain order by uuid")]
     Order(CancelOrderArgs),
-    #[command(about = "Cancels all orders of current node")]
+    #[command(short_flag = 'a', about = "Cancels all orders of current node")]
     All,
-    #[command(about = "Cancels all orders of specific pair")]
+    #[command(
+        short_flag = 'p',
+        visible_alias = "pair",
+        about = "Cancels all orders of specific pair"
+    )]
     ByPair(CancelByPairArgs),
-    #[command(about = "Cancels all orders using the coin ticker as base or rel")]
+    #[command(
+        short_flag = 'c',
+        visible_alias = "coin",
+        about = "Cancels all orders using the coin ticker as base or rel"
+    )]
     ByCoin(CancelByCoinArgs),
 }
 
