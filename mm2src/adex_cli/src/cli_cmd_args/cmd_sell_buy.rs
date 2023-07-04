@@ -43,7 +43,6 @@ struct OrderArgs {
     price: MmNumber,
     #[arg(
         long,
-        short = 't',
         value_enum,
         visible_alias = "type",
         default_value_t = OrderTypeCli::GoodTillCancelled,
@@ -93,6 +92,7 @@ struct OrderArgs {
     #[arg(
         long,
         visible_alias = "save",
+        short,
         help = "If true, each order's short record history is stored else the only order status will be temporarily stored while in progress"
     )]
     save_in_history: bool,
