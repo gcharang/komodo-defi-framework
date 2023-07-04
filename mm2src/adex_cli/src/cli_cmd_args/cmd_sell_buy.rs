@@ -95,14 +95,14 @@ struct OrderArgs {
     save_in_history: bool,
 }
 
-#[derive(Debug, Copy, Clone, ValueEnum, Serialize)]
+#[derive(Debug, Clone, ValueEnum, Serialize)]
 pub enum OrderTypeCli {
     FillOrKill,
     GoodTillCancelled,
 }
 
-impl From<OrderTypeCli> for OrderType {
-    fn from(value: OrderTypeCli) -> Self {
+impl From<&OrderTypeCli> for OrderType {
+    fn from(value: &OrderTypeCli) -> Self {
         match value {
             OrderTypeCli::GoodTillCancelled => OrderType::GoodTillCancelled,
             OrderTypeCli::FillOrKill => OrderType::FillOrKill,
@@ -148,7 +148,7 @@ impl From<&mut OrderArgs> for SellBuyRequest {
             gui: None,
             dest_pub_key: H256Json::default(),
             match_by,
-            order_type: value.order_type.into(),
+            order_type: (&value.order_type).into(),
             base_confs: value.base_confs,
             base_nota: value.base_nota,
             rel_confs: value.rel_confs,

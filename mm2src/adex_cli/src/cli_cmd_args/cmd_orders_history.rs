@@ -95,7 +95,7 @@ impl From<&mut OrdersHistoryArgs> for OrdersHistoryRequest {
     }
 }
 
-#[derive(Args, Copy, Clone)]
+#[derive(Args, Clone)]
 #[group(required = true, multiple = true)]
 struct OrdersHistorySettings {
     #[arg(
