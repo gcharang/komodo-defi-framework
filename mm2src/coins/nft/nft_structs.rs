@@ -4,7 +4,7 @@ use ethereum_types::Address;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
-use serde_json::Value as Json;
+use serde_json::{Value as Json, Value};
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
@@ -207,27 +207,41 @@ pub struct Nft {
     pub(crate) uri_meta: UriMeta,
 }
 
-/// This structure is for deserializing NFT json to struct.
-/// Its needed to convert fields properly, because all fields in json have string type.
-#[derive(Debug, Deserialize)]
-pub(crate) struct NftWrapper {
-    pub(crate) token_address: String,
-    pub(crate) token_id: SerdeStringWrap<BigDecimal>,
-    pub(crate) amount: SerdeStringWrap<BigDecimal>,
-    pub(crate) owner_of: String,
-    pub(crate) token_hash: Option<String>,
-    pub(crate) block_number_minted: Option<SerdeStringWrap<u64>>,
-    pub(crate) block_number: SerdeStringWrap<u64>,
-    pub(crate) contract_type: Option<SerdeStringWrap<ContractType>>,
-    pub(crate) name: Option<String>,
-    pub(crate) symbol: Option<String>,
-    pub(crate) token_uri: Option<String>,
-    pub(crate) metadata: Option<String>,
-    pub(crate) last_token_uri_sync: Option<String>,
-    pub(crate) last_metadata_sync: Option<String>,
-    pub(crate) minter_address: Option<String>,
-    #[serde(default)]
-    pub(crate) possible_spam: bool,
+fn value_to_str_opt(value: &Value) -> Option<String> { value.as_str().map(String::from) }
+
+impl Nft {
+    pub fn from_value(chain: Chain, value: &Value) -> Result<Option<Nft>, serde_json::Error> {
+        let contract_type_value = value["contract_type"].clone();
+        if contract_type_value.is_null() {
+            return Ok(None);
+        }
+        let contract_type: ContractType = serde_json::from_value(contract_type_value)?;
+        let possible_spam: bool = value["possible_spam"].as_bool().unwrap_or(false);
+
+        Ok(Some(Nft {
+            chain,
+            token_address: serde_json::from_str(&value["token_address"].to_string())?,
+            token_id: serde_json::from_str::<SerdeStringWrap<BigDecimal>>(&value["token_id"].to_string())?.0,
+            amount: serde_json::from_str::<SerdeStringWrap<BigDecimal>>(&value["amount"].to_string())?.0,
+            owner_of: serde_json::from_str(&value["owner_of"].to_string())?,
+            token_hash: value_to_str_opt(&value["token_hash"]),
+            block_number_minted: serde_json::from_str::<Option<SerdeStringWrap<u64>>>(
+                &value["block_number_minted"].to_string(),
+            )?
+            .map(|v| v.0),
+            block_number: serde_json::from_str::<SerdeStringWrap<u64>>(&value["block_number"].to_string())?.0,
+            contract_type,
+            collection_name: value_to_str_opt(&value["name"]),
+            symbol: value_to_str_opt(&value["symbol"]),
+            token_uri: value_to_str_opt(&value["token_uri"]),
+            metadata: value_to_str_opt(&value["metadata"]),
+            last_token_uri_sync: value_to_str_opt(&value["last_token_uri_sync"]),
+            last_metadata_sync: value_to_str_opt(&value["last_metadata_sync"]),
+            minter_address: value_to_str_opt(&value["minter_address"]),
+            possible_spam,
+            uri_meta: UriMeta::default(),
+        }))
+    }
 }
 
 #[derive(Debug)]

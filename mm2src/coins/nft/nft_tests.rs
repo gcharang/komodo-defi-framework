@@ -5,7 +5,7 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod native_tests {
-    use crate::nft::nft_structs::{NftTransferHistoryWrapper, NftWrapper, UriMeta};
+    use crate::nft::nft_structs::{Chain, Nft, NftTransferHistoryWrapper, UriMeta};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
     use crate::nft::{check_and_redact_if_spam, check_moralis_ipfs_bafy, check_nft_metadata_for_spam,
@@ -46,8 +46,8 @@ mod native_tests {
         let response = block_on(send_request_to_uri(NFT_LIST_URL_TEST)).unwrap();
         let nfts_list = response["result"].as_array().unwrap();
         for nft_json in nfts_list {
-            let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string()).unwrap();
-            assert_eq!(TEST_WALLET_ADDR_EVM, nft_wrapper.owner_of);
+            let nft = Nft::from_value(Chain::Bsc, nft_json).unwrap().unwrap();
+            assert_eq!(TEST_WALLET_ADDR_EVM, nft.owner_of);
         }
     }
 
@@ -64,9 +64,9 @@ mod native_tests {
     #[test]
     fn test_moralis_nft_metadata() {
         let response = block_on(send_request_to_uri(NFT_METADATA_URL_TEST)).unwrap();
-        let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string()).unwrap();
-        assert_eq!(41237364, *nft_wrapper.block_number_minted.unwrap());
-        let token_uri = nft_wrapper.token_uri.unwrap();
+        let nft = Nft::from_value(Chain::Bsc, &response).unwrap().unwrap();
+        assert_eq!(41237364, nft.block_number_minted.unwrap());
+        let token_uri = nft.token_uri.unwrap();
         let uri_response = block_on(send_request_to_uri(token_uri.as_str())).unwrap();
         serde_json::from_str::<UriMeta>(&uri_response.to_string()).unwrap();
     }
@@ -107,7 +107,7 @@ mod native_tests {
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_tests {
-    use crate::nft::nft_structs::{NftTransferHistoryWrapper, NftWrapper};
+    use crate::nft::nft_structs::{Chain, Nft, NftTransferHistoryWrapper};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::send_request_to_uri;
     use crate::nft::storage::db_test_helpers::*;
@@ -120,8 +120,8 @@ mod wasm_tests {
         let response = send_request_to_uri(NFT_LIST_URL_TEST).await.unwrap();
         let nfts_list = response["result"].as_array().unwrap();
         for nft_json in nfts_list {
-            let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string()).unwrap();
-            assert_eq!(TEST_WALLET_ADDR_EVM, nft_wrapper.owner_of);
+            let nft = Nft::from_value(Chain::Bsc, nft_json).unwrap().unwrap();
+            assert_eq!(TEST_WALLET_ADDR_EVM, nft.owner_of);
         }
     }
 
@@ -138,8 +138,8 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn test_moralis_nft_metadata() {
         let response = send_request_to_uri(NFT_METADATA_URL_TEST).await.unwrap();
-        let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string()).unwrap();
-        assert_eq!(41237364, *nft_wrapper.block_number_minted.unwrap());
+        let nft = Nft::from_value(Chain::Bsc, &response).unwrap().unwrap();
+        assert_eq!(41237364, nft.block_number_minted.unwrap());
     }
 
     #[wasm_bindgen_test]

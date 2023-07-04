@@ -11,8 +11,8 @@ pub(crate) mod storage;
 use crate::{get_my_address, MyAddressReq, WithdrawError};
 use nft_errors::{GetInfoFromUriError, GetNftInfoError, UpdateNftError};
 use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftList, NftListReq, NftMetadataReq, NftTransferHistory,
-                  NftTransferHistoryWrapper, NftTransfersReq, NftWrapper, NftsTransferHistoryList,
-                  TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
+                  NftTransferHistoryWrapper, NftTransfersReq, NftsTransferHistoryList, TransactionNftDetails,
+                  UpdateNftReq, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_structs::{RefreshMetadataReq, TransferStatus, TxMeta, UriMeta};
@@ -216,33 +216,12 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
         let response = send_request_to_uri(uri.as_str()).await?;
         if let Some(nfts_list) = response["result"].as_array() {
             for nft_json in nfts_list {
-                let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string())?;
-                let contract_type = match nft_wrapper.contract_type {
-                    Some(contract_type) => contract_type.0,
+                let mut nft = match Nft::from_value(*chain, nft_json)? {
+                    Some(nft) => nft,
                     None => continue,
                 };
-                let token_uri = check_moralis_ipfs_bafy(nft_wrapper.token_uri.as_deref());
-                let uri_meta = get_uri_meta(token_uri.as_deref(), nft_wrapper.metadata.as_deref()).await;
-                let nft = Nft {
-                    chain: *chain,
-                    token_address: nft_wrapper.token_address,
-                    token_id: nft_wrapper.token_id.0,
-                    amount: nft_wrapper.amount.0,
-                    owner_of: nft_wrapper.owner_of,
-                    token_hash: nft_wrapper.token_hash,
-                    block_number_minted: nft_wrapper.block_number_minted.map(|v| v.0),
-                    block_number: *nft_wrapper.block_number,
-                    contract_type,
-                    collection_name: nft_wrapper.name,
-                    symbol: nft_wrapper.symbol,
-                    token_uri,
-                    metadata: nft_wrapper.metadata,
-                    last_token_uri_sync: nft_wrapper.last_token_uri_sync,
-                    last_metadata_sync: nft_wrapper.last_metadata_sync,
-                    minter_address: nft_wrapper.minter_address,
-                    possible_spam: nft_wrapper.possible_spam,
-                    uri_meta,
-                };
+                nft.token_uri = check_moralis_ipfs_bafy(nft.token_uri.as_deref());
+                nft.uri_meta = get_uri_meta(nft.token_uri.as_deref(), nft.metadata.as_deref()).await;
                 // collect NFTs from the page
                 res_list.push(nft);
             }
@@ -368,33 +347,12 @@ async fn get_moralis_metadata(
     drop_mutability!(uri);
 
     let response = send_request_to_uri(uri.as_str()).await?;
-    let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string())?;
-    let contract_type = match nft_wrapper.contract_type {
-        Some(contract_type) => contract_type.0,
+    let mut nft_metadata = match Nft::from_value(*chain, &response)? {
+        Some(nft) => nft,
         None => return MmError::err(GetNftInfoError::ContractTypeIsNull),
     };
-    let token_uri = check_moralis_ipfs_bafy(nft_wrapper.token_uri.as_deref());
-    let uri_meta = get_uri_meta(token_uri.as_deref(), nft_wrapper.metadata.as_deref()).await;
-    let nft_metadata = Nft {
-        chain: *chain,
-        token_address: nft_wrapper.token_address,
-        token_id: nft_wrapper.token_id.0,
-        amount: nft_wrapper.amount.0,
-        owner_of: nft_wrapper.owner_of,
-        token_hash: nft_wrapper.token_hash,
-        block_number_minted: nft_wrapper.block_number_minted.map(|v| v.0),
-        block_number: *nft_wrapper.block_number,
-        contract_type,
-        collection_name: nft_wrapper.name,
-        symbol: nft_wrapper.symbol,
-        token_uri,
-        metadata: nft_wrapper.metadata,
-        last_token_uri_sync: nft_wrapper.last_token_uri_sync,
-        last_metadata_sync: nft_wrapper.last_metadata_sync,
-        minter_address: nft_wrapper.minter_address,
-        possible_spam: nft_wrapper.possible_spam,
-        uri_meta,
-    };
+    nft_metadata.token_uri = check_moralis_ipfs_bafy(nft_metadata.token_uri.as_deref());
+    nft_metadata.uri_meta = get_uri_meta(nft_metadata.token_uri.as_deref(), nft_metadata.metadata.as_deref()).await;
     Ok(nft_metadata)
 }
 
