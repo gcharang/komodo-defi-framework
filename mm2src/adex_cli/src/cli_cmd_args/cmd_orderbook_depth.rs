@@ -1,11 +1,15 @@
 use anyhow::anyhow;
 use clap::Args;
-use mm2_rpc::data::legacy::OrderbookDepthRequest;
 use std::mem::take;
 use std::str::FromStr;
 
+use mm2_rpc::data::legacy::OrderbookDepthRequest;
+
 #[derive(Args)]
-#[command(about = "Returns the number of asks and bids for the specified trading pairs")]
+#[command(
+    about = "Return the number of asks and bids for the specified pairs",
+    visible_alias = "depth"
+)]
 pub(crate) struct OrderbookDepthArgs {
     #[arg(required = true, value_name = "BASE/REL")]
     pairs: Vec<BaseRel>,
