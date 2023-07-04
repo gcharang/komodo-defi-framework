@@ -451,3 +451,16 @@ pub struct TxMeta {
     pub(crate) image_url: Option<String>,
     pub(crate) token_name: Option<String>,
 }
+
+impl From<Nft> for TxMeta {
+    fn from(nft_db: Nft) -> Self {
+        TxMeta {
+            token_address: nft_db.token_address,
+            token_id: nft_db.token_id,
+            token_uri: nft_db.token_uri,
+            collection_name: nft_db.collection_name,
+            image_url: nft_db.uri_meta.image_url,
+            token_name: nft_db.uri_meta.token_name,
+        }
+    }
+}

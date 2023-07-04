@@ -187,14 +187,7 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     storage
         .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
         .await?;
-    let tx_meta = TxMeta {
-        token_address: nft_db.token_address,
-        token_id: nft_db.token_id,
-        token_uri: nft_db.token_uri,
-        collection_name: nft_db.collection_name,
-        image_url: nft_db.uri_meta.image_url,
-        token_name: nft_db.uri_meta.token_name,
-    };
+    let tx_meta = TxMeta::from(nft_db.clone());
     storage.update_txs_meta_by_token_addr_id(&nft_db.chain, tx_meta).await?;
     Ok(())
 }
@@ -568,14 +561,7 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
             token_address: tx.token_address.clone(),
             token_id: tx.token_id.to_string(),
         })?;
-    let tx_meta = TxMeta {
-        token_address: nft_db.token_address,
-        token_id: nft_db.token_id,
-        token_uri: nft_db.token_uri,
-        collection_name: nft_db.collection_name,
-        image_url: nft_db.uri_meta.image_url,
-        token_name: nft_db.uri_meta.token_name,
-    };
+    let tx_meta = TxMeta::from(nft_db);
     storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     storage
         .remove_nft_from_list(chain, tx.token_address, tx.token_id, tx.block_number)
@@ -623,14 +609,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
             nft
         },
     };
-    let tx_meta = TxMeta {
-        token_address: nft.token_address,
-        token_id: nft.token_id,
-        token_uri: nft.token_uri,
-        collection_name: nft.collection_name,
-        image_url: nft.uri_meta.image_url,
-        token_name: nft.uri_meta.token_name,
-    };
+    let tx_meta = TxMeta::from(nft);
     storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     Ok(())
 }
@@ -666,14 +645,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             });
         },
     }
-    let tx_meta = TxMeta {
-        token_address: nft_db.token_address,
-        token_id: nft_db.token_id,
-        token_uri: nft_db.token_uri,
-        collection_name: nft_db.collection_name,
-        image_url: nft_db.uri_meta.image_url,
-        token_name: nft_db.uri_meta.token_name,
-    };
+    let tx_meta = TxMeta::from(nft_db);
     storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     Ok(())
 }
@@ -731,14 +703,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             nft
         },
     };
-    let tx_meta = TxMeta {
-        token_address: nft.token_address,
-        token_id: nft.token_id,
-        token_uri: nft.token_uri,
-        collection_name: nft.collection_name,
-        image_url: nft.uri_meta.image_url,
-        token_name: nft.uri_meta.token_name,
-    };
+    let tx_meta = TxMeta::from(nft);
     storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     Ok(())
 }
@@ -787,14 +752,7 @@ where
     T: NftListStorageOps + NftTxHistoryStorageOps,
 {
     for nft in nfts.into_iter() {
-        let tx_meta = TxMeta {
-            token_address: nft.token_address,
-            token_id: nft.token_id,
-            token_uri: nft.token_uri,
-            collection_name: nft.collection_name,
-            image_url: nft.uri_meta.image_url,
-            token_name: nft.uri_meta.token_name,
-        };
+        let tx_meta = TxMeta::from(nft);
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     }
     Ok(())
@@ -808,14 +766,7 @@ where
     let nft_token_addr_id = storage.get_txs_with_empty_meta(chain).await?;
     for addr_id_pair in nft_token_addr_id.into_iter() {
         let nft_meta = get_moralis_metadata(addr_id_pair.token_address, addr_id_pair.token_id, chain, url).await?;
-        let tx_meta = TxMeta {
-            token_address: nft_meta.token_address,
-            token_id: nft_meta.token_id,
-            token_uri: nft_meta.token_uri,
-            collection_name: nft_meta.collection_name,
-            image_url: nft_meta.uri_meta.image_url,
-            token_name: nft_meta.uri_meta.token_name,
-        };
+        let tx_meta = TxMeta::from(nft_meta);
         storage.update_txs_meta_by_token_addr_id(chain, tx_meta).await?;
     }
     Ok(())
@@ -838,6 +789,7 @@ fn check_and_redact_if_spam(text: &mut Option<String>) -> bool {
         _ => false,
     }
 }
+
 /// `protect_from_history_spam` function checks and redact spam in `NftTransferHistory`.
 ///
 /// `collection_name` and `token_name` in `NftTransferHistory` shouldn't contain any links,
@@ -870,12 +822,14 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), serde_json::Error> {
 ///
 /// **note:** `token_name` is usually called `name` in `metadata`.
 fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, serde_json::Error> {
-    if let Some(metadata_str) = &nft.metadata {
-        if let Ok(mut metadata) = serde_json::from_str::<serde_json::Map<String, Json>>(metadata_str) {
-            if check_spam_and_redact_metadata_field(&mut metadata, "name") {
-                nft.metadata = Some(serde_json::to_string(&metadata)?);
-                return Ok(true);
-            }
+    if let Some(Ok(mut metadata)) = nft
+        .metadata
+        .as_ref()
+        .map(|t| serde_json::from_str::<serde_json::Map<String, Json>>(t))
+    {
+        if check_spam_and_redact_metadata_field(&mut metadata, "name") {
+            nft.metadata = Some(serde_json::to_string(&metadata)?);
+            return Ok(true);
         }
     }
     Ok(false)
