@@ -15,7 +15,7 @@ pub(crate) struct BestOrderArgs {
     #[arg(
         long,
         short = 'o',
-        visible_aliases = ["show-origin", "origin-tickers", "origin"],
+        visible_aliases = ["show-origin", "original-tickers", "origin"],
         help = "Whether to show the original tickers if they are configured for the queried coin",
         default_value = "false"
     )]
