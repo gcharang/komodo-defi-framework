@@ -10,7 +10,7 @@ use super::formatters::term_table_blank;
 
 pub(super) fn on_orderbook_depth(
     writer: &mut dyn Write,
-    mut response: Mm2RpcResult<Vec<PairWithDepth>>,
+    response: Mm2RpcResult<Vec<PairWithDepth>>,
 ) -> anyhow::Result<()> {
     let mut term_table = term_table_blank(TableStyle::empty(), false, false, false);
     term_table.add_row(Row::new(vec![
@@ -18,7 +18,7 @@ pub(super) fn on_orderbook_depth(
         TableCell::new_with_alignment_and_padding("Bids", 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding("Asks", 1, Alignment::Left, false),
     ]));
-    response.result.drain(..).for_each(|data| {
+    for data in response.result {
         term_table.add_row(Row::new(vec![
             TableCell::new_with_alignment_and_padding(
                 format!("{}/{}:", data.pair.0, data.pair.1),
@@ -29,7 +29,7 @@ pub(super) fn on_orderbook_depth(
             TableCell::new_with_alignment_and_padding(data.depth.bids, 1, Alignment::Left, false),
             TableCell::new_with_alignment_and_padding(data.depth.asks, 1, Alignment::Left, false),
         ]))
-    });
+    }
     write_safe_io!(writer, "{}", term_table.render().replace('\0', ""));
     Ok(())
 }
