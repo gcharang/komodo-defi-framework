@@ -29,8 +29,8 @@ async fn test_mm2_stops_impl(
 ) {
     let coins = json!([rick_conf(), morty_conf()]);
 
-    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
-    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
 
     let bob_conf = Mm2TestConf::seednode(&bob_passphrase, &coins);
     let mut mm_bob = MarketMakerIt::start_async(bob_conf.conf, bob_conf.rpc_password, Some(wasm_start))

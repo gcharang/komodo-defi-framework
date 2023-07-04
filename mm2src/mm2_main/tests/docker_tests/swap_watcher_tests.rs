@@ -972,7 +972,7 @@ fn test_watcher_validate_taker_fee_erc20() {
     let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
     let lock_duration = get_payment_locktime();
 
-    let seed = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let seed = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
     let taker_coin = generate_jst_with_seed(&seed);
     let taker_keypair = taker_coin.derive_htlc_key_pair(&[]);
     let taker_pubkey = taker_keypair.public();
@@ -1289,7 +1289,7 @@ fn test_watcher_validate_taker_payment_eth() {
     let taker_keypair = taker_coin.derive_htlc_key_pair(&[]);
     let taker_pub = taker_keypair.public();
 
-    let maker_seed = get_passphrase!(".env.client", "BOB_PASSPHRASE").unwrap();
+    let maker_seed = get_passphrase!("../../.env.client", "BOB_PASSPHRASE").unwrap();
     let maker_keypair = key_pair_from_seed(&maker_seed).unwrap();
     let maker_pub = maker_keypair.public();
 
@@ -1528,12 +1528,12 @@ fn test_watcher_validate_taker_payment_eth() {
 fn test_watcher_validate_taker_payment_erc20() {
     let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
 
-    let seed = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let seed = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
     let taker_coin = generate_jst_with_seed(&seed);
     let taker_keypair = taker_coin.derive_htlc_key_pair(&[]);
     let taker_pub = taker_keypair.public();
 
-    let maker_seed = get_passphrase!(".env.client", "BOB_PASSPHRASE").unwrap();
+    let maker_seed = get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
     let maker_keypair = key_pair_from_seed(&maker_seed).unwrap();
     let maker_pub = maker_keypair.public();
 

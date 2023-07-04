@@ -3367,8 +3367,8 @@ fn test_taker_should_match_with_best_price_sell() {
 #[test]
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/1074
 fn test_match_utxo_with_eth_taker_sell() {
-    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
-    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
     let alice_priv_key = key_pair_from_seed(&alice_passphrase).unwrap().private().secret;
     let bob_priv_key = key_pair_from_seed(&bob_passphrase).unwrap().private().secret;
 
@@ -3445,8 +3445,8 @@ fn test_match_utxo_with_eth_taker_sell() {
 #[test]
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/1074
 fn test_match_utxo_with_eth_taker_buy() {
-    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
-    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
     let alice_priv_key = key_pair_from_seed(&alice_passphrase).unwrap().private().secret;
     let bob_priv_key = key_pair_from_seed(&bob_passphrase).unwrap().private().secret;
 

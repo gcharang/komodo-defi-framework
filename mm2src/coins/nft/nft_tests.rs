@@ -11,27 +11,24 @@ mod native_tests {
     use common::block_on;
 
     #[test]
-    fn test_moralis_nft_list() {
+    fn test_moralis_nft_apis() {
+        // NFT list
         let response = block_on(send_request_to_uri(NFT_LIST_URL_TEST)).unwrap();
         let nfts_list = response["result"].as_array().unwrap();
         for nft_json in nfts_list {
             let nft_wrapper: NftWrapper = serde_json::from_str(&nft_json.to_string()).unwrap();
             assert_eq!(TEST_WALLET_ADDR_EVM, nft_wrapper.owner_of);
         }
-    }
 
-    #[test]
-    fn test_moralis_nft_transfer_history() {
+        // NFT transfer history
         let response = block_on(send_request_to_uri(NFT_HISTORY_URL_TEST)).unwrap();
         let mut transfer_list = response["result"].as_array().unwrap().clone();
         assert!(!transfer_list.is_empty());
         let first_tx = transfer_list.remove(transfer_list.len() - 1);
         let transfer_wrapper: NftTransferHistoryWrapper = serde_json::from_str(&first_tx.to_string()).unwrap();
         assert_eq!(TEST_WALLET_ADDR_EVM, transfer_wrapper.to_address);
-    }
 
-    #[test]
-    fn test_moralis_nft_metadata() {
+        // NFT metadata
         let response = block_on(send_request_to_uri(NFT_METADATA_URL_TEST)).unwrap();
         let nft_wrapper: NftWrapper = serde_json::from_str(&response.to_string()).unwrap();
         assert_eq!(41237364, *nft_wrapper.block_number_minted);

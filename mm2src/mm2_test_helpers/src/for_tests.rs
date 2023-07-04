@@ -278,7 +278,7 @@ impl Mm2TestConfForSwap {
     pub fn bob_conf_with_policy(priv_key_policy: Mm2InitPrivKeyPolicy, coins: &Json) -> Mm2TestConf {
         match priv_key_policy {
             Mm2InitPrivKeyPolicy::Iguana => {
-                let bob_passphrase = crate::get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
+                let bob_passphrase = crate::get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
                 Mm2TestConf::seednode(&bob_passphrase, coins)
             },
             Mm2InitPrivKeyPolicy::GlobalHDAccount(hd_account_id) => {
@@ -290,7 +290,7 @@ impl Mm2TestConfForSwap {
     pub fn alice_conf_with_policy(priv_key_policy: Mm2InitPrivKeyPolicy, coins: &Json, bob_ip: &str) -> Mm2TestConf {
         match priv_key_policy {
             Mm2InitPrivKeyPolicy::Iguana => {
-                let alice_passphrase = crate::get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+                let alice_passphrase = crate::get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
                 Mm2TestConf::light_node(&alice_passphrase, coins, &[bob_ip])
             },
             Mm2InitPrivKeyPolicy::GlobalHDAccount(hd_account_id) => {

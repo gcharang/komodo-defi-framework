@@ -232,7 +232,7 @@ fn alice_can_see_the_active_order_after_connection() {
 
 #[test]
 fn alice_can_see_the_active_order_after_orderbook_sync_segwit() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let bob_coins_config = json!([
         {"coin":"RICK","asset":"RICK","rpcport":8923,"txversion":4,"overwintered":1,"protocol":{"type":"UTXO"}},
@@ -432,7 +432,7 @@ fn alice_can_see_the_active_order_after_orderbook_sync_segwit() {
 
 #[test]
 fn test_orderbook_segwit() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let bob_coins_config = json!([
         {"coin":"RICK","asset":"RICK","rpcport":8923,"txversion":4,"overwintered":1,"protocol":{"type":"UTXO"}},
@@ -1101,7 +1101,7 @@ fn orderbook_should_display_base_rel_volumes() {
 #[test]
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/670
 fn orderbook_should_work_without_coins_activation() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -1261,7 +1261,7 @@ fn test_all_orders_per_pair_per_node_must_be_displayed_in_orderbook() {
 #[test]
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/473
 fn setprice_min_volume_should_be_displayed_in_orderbook() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -1377,8 +1377,8 @@ fn setprice_min_volume_should_be_displayed_in_orderbook() {
 #[test]
 #[ignore]
 fn zhtlc_orders_sync_alice_connected_before_creation() {
-    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
-    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), zombie_conf()]);
 
@@ -1445,8 +1445,8 @@ fn zhtlc_orders_sync_alice_connected_before_creation() {
 #[test]
 #[ignore]
 fn zhtlc_orders_sync_alice_connected_after_creation() {
-    let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
-    let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase!("../../.env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), zombie_conf()]);
 

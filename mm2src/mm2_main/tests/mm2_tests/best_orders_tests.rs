@@ -18,7 +18,7 @@ use uuid::Uuid;
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf()]);
 
     // start bob and immediately place the orders
@@ -182,7 +182,7 @@ fn test_best_orders() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders_v2_by_number() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf()]);
 
@@ -305,7 +305,7 @@ fn test_best_orders_v2_by_number() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders_v2_by_volume() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf()]);
 
@@ -426,7 +426,7 @@ fn test_best_orders_v2_by_volume() {
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders_v2_exclude_mine() {
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf()]);
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
     let mm_bob = MarketMakerIt::start(
         json! ({
             "gui": "nogui",
@@ -468,7 +468,7 @@ fn test_best_orders_v2_exclude_mine() {
         assert!(status.is_success(), "!setprice: {}", data);
     }
 
-    let alice_passphrase = get_passphrase(&".env.seed", "ALICE_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase(&"../../.env.seed", "ALICE_PASSPHRASE").unwrap();
     let mm_alice = MarketMakerIt::start(
         json! ({
             "gui": "nogui",
@@ -523,7 +523,7 @@ fn test_best_orders_v2_exclude_mine() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders_no_duplicates_after_update() {
-    let eve_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let eve_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf()]);
 
@@ -670,7 +670,7 @@ fn test_best_orders_no_duplicates_after_update() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders_filter_response() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let bob_coins_config = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf()]);
 
@@ -782,7 +782,7 @@ fn test_best_orders_filter_response() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_best_orders_address_and_confirmations() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
 
     let bob_coins_config = json!([
         {"coin":"RICK","asset":"RICK","rpcport":8923,"txversion":4,"overwintered":1,"required_confirmations":10,"requires_notarization":true,"protocol":{"type":"UTXO"}},
@@ -982,8 +982,8 @@ fn test_best_orders_address_and_confirmations() {
 
 #[test]
 fn best_orders_must_return_duplicate_for_orderbook_tickers() {
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
-    let alice_passphrase = get_passphrase(&".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase(&"../../.env.client", "ALICE_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), tbtc_conf(), tbtc_segwit_conf()]);
 
@@ -1116,8 +1116,8 @@ fn zhtlc_best_orders() {
 
     use mm2_test_helpers::electrums::rick_electrums;
 
-    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
-    let alice_passphrase = get_passphrase(&".env.client", "ALICE_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&"../../.env.seed", "BOB_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase(&"../../.env.client", "ALICE_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), zombie_conf()]);
 
