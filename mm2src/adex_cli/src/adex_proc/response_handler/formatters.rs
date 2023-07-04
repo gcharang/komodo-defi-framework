@@ -42,7 +42,6 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
     );
     writeln_field!(writer, "uuid", order.uuid, COMMON_INDENT);
     writeln_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
-
     if let Some(updated_at) = order.updated_at {
         writeln_field!(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
     }
@@ -68,7 +67,6 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
         },
         COMMON_INDENT
     );
-
     if let Some(ref conf_settings) = order.conf_settings {
         writeln_field!(
             writer,
@@ -123,15 +121,12 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
         NESTED_INDENT
     );
     write_maker_reserved_for_rpc(writer, reserved);
-
     if let Some(ref connected) = connected {
         write_connected!(writer, connected, NESTED_INDENT);
     }
-
     if let Some(ref connect) = connect {
         write_connected!(writer, connect, NESTED_INDENT);
     }
-
     writeln_field!(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
     Ok(())
 }
