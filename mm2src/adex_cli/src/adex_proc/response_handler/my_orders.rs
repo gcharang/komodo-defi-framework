@@ -107,7 +107,7 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
             |val| {
                 val.iter()
                     .map(|val| format_historical_changes(val, "\n").unwrap_or_else(|_| "error".to_string()))
-                    .join(",\n")
+                    .join("\n")
             },
         )),
     ])];
