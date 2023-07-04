@@ -109,7 +109,10 @@ pub(crate) fn start_process(mm2_cfg_file: &Option<String>, coins_file: &Option<S
 #[cfg(all(unix, not(target_os = "macos")))]
 fn start_process_impl(mm2_binary: PathBuf) {
     let mut command = Command::new(&mm2_binary);
-    let file_name = mm2_binary.file_name().expect("No file_name in mm2_binary");
+    let Some(file_name) = mm2_binary.file_name() else {
+        error!("No file_name in mm2_binary path: {mm2_binary:?}");
+        return;
+    };
     let process = match command.stdout(Stdio::null()).stdout(Stdio::null()).spawn() {
         Ok(process) => process,
         Err(error) => {
