@@ -32,7 +32,8 @@ impl Transport for SlurpTransport {
         OkT: for<'a> Deserialize<'a>,
         ErrT: for<'a> Deserialize<'a>,
     {
-        let data = serde_json::to_string(&req).expect("Failed to serialize enable request");
+        let data = serde_json::to_string(&req)
+            .map_err(|error| error_anyhow!("Failed to serialize data being sent: {error}"))?;
         match slurp_post_json(&self.rpc_uri, data).await {
             Err(error) => error_bail!("Failed to send json: {error}"),
             Ok(resp) => resp.process::<OkT, ErrT>(),
