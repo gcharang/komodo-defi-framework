@@ -8,7 +8,7 @@ use crate::adex_proc::OrderbookSettings;
 const ORDERBOOK_BIDS_LIMIT: &str = "20";
 const ORDERBOOK_ASKS_LIMIT: &str = "20";
 
-#[derive(Args, Serialize, Debug)]
+#[derive(Args, Debug, Serialize)]
 pub(crate) struct OrderbookArgs {
     #[arg(help = "Base currency of a pair")]
     base: String,
