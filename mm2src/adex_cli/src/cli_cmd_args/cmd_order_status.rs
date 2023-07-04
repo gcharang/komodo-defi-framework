@@ -1,7 +1,8 @@
 use clap::Args;
-use mm2_rpc::data::legacy::OrderStatusRequest;
 use std::mem::take;
 use uuid::Uuid;
+
+use mm2_rpc::data::legacy::OrderStatusRequest;
 
 #[derive(Args)]
 pub(crate) struct OrderStatusArgs {
