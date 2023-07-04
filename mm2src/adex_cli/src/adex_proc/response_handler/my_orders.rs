@@ -23,7 +23,7 @@ pub(super) fn on_my_orders(writer: &mut dyn Write, response: Mm2RpcResult<MyOrde
 }
 
 fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> Result<String> {
-    let mut buff = Vec::new();
+    let mut buff = vec![];
     let mut writer: Box<dyn Write> = Box::new(&mut buff);
 
     if taker_orders.is_empty() {
@@ -32,10 +32,8 @@ fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> 
         writeln_field!(writer, "Taker orders", "", COMMON_INDENT);
         let mut table = term_table_blank(TableStyle::thin(), false, false, false);
         table.add_row(taker_order_header_row());
-        for (_, taker_order) in taker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
-            for row in taker_order_rows(taker_order)? {
-                table.add_row(row);
-            }
+        for (_, taker_order) in taker_orders.iter().sorted_by_key(|(_, o)| o.created_at) {
+            table.rows.append(taker_order_rows(taker_order)?.as_mut());
         }
         write_safe_io!(writer, "{}", table.render());
     }
@@ -44,7 +42,7 @@ fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> 
 }
 
 fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersRpc>) -> Result<String> {
-    let mut buff = Vec::new();
+    let mut buff = vec![];
     let mut writer: Box<dyn Write> = Box::new(&mut buff);
 
     if maker_orders.is_empty() {
@@ -54,10 +52,8 @@ fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersR
         let mut table = term_table_blank(TableStyle::thin(), false, false, false);
         table.add_row(maker_order_for_my_orders_header_row());
 
-        for (_, maker_order) in maker_orders.iter().sorted_by_key(|(uuid, _)| *uuid) {
-            for row in maker_order_for_my_orders_row(maker_order)? {
-                table.add_row(row);
-            }
+        for (_, maker_order) in maker_orders.iter().sorted_by_key(|(_, o)| o.order.created_at) {
+            table.rows.append(maker_order_for_my_orders_row(maker_order)?.as_mut());
         }
         write_safe_io!(writer, "{}", table.render());
     }
