@@ -124,7 +124,7 @@ impl From<&OrdersHistorySettings> for adex_proc::OrdersHistorySettings {
             takers_detailed: value.takers,
             makers_detailed: value.makers,
             warnings: value.warnings,
-            common: value.all,
+            all: value.all,
         }
     }
 }

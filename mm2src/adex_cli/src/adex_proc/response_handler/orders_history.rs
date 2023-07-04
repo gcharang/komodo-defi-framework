@@ -18,7 +18,7 @@ pub(crate) struct OrdersHistorySettings {
     pub(crate) takers_detailed: bool,
     pub(crate) makers_detailed: bool,
     pub(crate) warnings: bool,
-    pub(crate) common: bool,
+    pub(crate) all: bool,
 }
 
 pub(super) fn on_orders_history(
@@ -26,53 +26,64 @@ pub(super) fn on_orders_history(
     mut response: Mm2RpcResult<OrdersHistoryResponse>,
     settings: OrdersHistorySettings,
 ) -> Result<()> {
-    macro_rules! write_result {
-        ($rows: ident, $header_fn: ident, $legend: literal) => {
+    macro_rules! write_history_filtered_result {
+        ($writer: expr, $rows: ident, $header_fn: ident, $legend: literal) => {
             if $rows.is_empty() {
-                writeln_safe_io!(writer, concat!($legend, " not found"));
+                writeln_safe_io!($writer, concat!($legend, " not found"));
             } else {
                 let mut table = term_table_blank(TableStyle::thin(), false, false, false);
                 table.add_row($header_fn());
                 table.add_row(Row::new(vec![TableCell::new("")]));
                 table.rows.extend($rows.drain(..));
-                write_safe_io!(writer, concat!($legend, "\n{}"), table.render().replace('\0', ""))
+                write_safe_io!(
+                    $writer,
+                    concat!($legend, "\n{}"),
+                    table.render().replace('\0', "")
+                )
             }
         };
     }
-    if settings.common {
-        let orders = response.result.orders.drain(..);
-        let mut rows: Vec<Row> = orders.map(filtering_order_row).try_collect()?;
-        write_result!(rows, filtering_order_header_row, "Orders history:");
+
+    if settings.all {
+        let mut rows: Vec<Row> = response.result.orders.drain(..).map(order_row).try_collect()?;
+        write_history_filtered_result!(writer, rows, order_header_row, "Orders history:");
     }
 
     let mut maker_rows = vec![];
     let mut taker_rows = vec![];
-
     if settings.makers_detailed || settings.takers_detailed {
         for order in response.result.details.drain(..) {
             match order {
-                OrderForRpc::Maker(order) => maker_order_rows(&order)?.drain(..).for_each(|row| maker_rows.push(row)),
-                OrderForRpc::Taker(order) => taker_order_rows(&order)?.drain(..).for_each(|row| taker_rows.push(row)),
+                OrderForRpc::Maker(order) => maker_rows.append(maker_order_rows(&order)?.as_mut()),
+                OrderForRpc::Taker(order) => taker_rows.append(taker_order_rows(&order)?.as_mut()),
             }
         }
     }
-
     if settings.takers_detailed {
-        write_result!(taker_rows, taker_order_header_row, "Taker orders history detailed:");
+        write_history_filtered_result!(
+            writer,
+            taker_rows,
+            taker_order_header_row,
+            "Taker orders history detailed:"
+        );
     }
     if settings.makers_detailed {
-        write_result!(maker_rows, maker_order_header_row, "Maker orders history detailed:");
+        write_history_filtered_result!(
+            writer,
+            maker_rows,
+            maker_order_header_row,
+            "Maker orders history detailed:"
+        );
     }
     if settings.warnings {
         let warnings = response.result.warnings.drain(..);
         let mut rows: Vec<Row> = warnings.map(uuid_parse_error_row).collect();
-        write_result!(rows, uuid_parse_error_header_row, "Uuid parse errors:");
+        write_history_filtered_result!(writer, rows, uuid_parse_error_header_row, "Uuid parse errors:");
     }
-
     Ok(())
 }
 
-fn filtering_order_header_row() -> Row<'static> {
+fn order_header_row() -> Row<'static> {
     Row::new(vec![
         TableCell::new_with_alignment_and_padding("uuid", 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding("Type", 1, Alignment::Left, false),
@@ -88,7 +99,7 @@ fn filtering_order_header_row() -> Row<'static> {
     ])
 }
 
-fn filtering_order_row(order: FilteringOrder) -> Result<Row<'static>> {
+fn order_row(order: FilteringOrder) -> Result<Row<'static>> {
     Ok(Row::new(vec![
         TableCell::new_with_alignment_and_padding(&order.uuid, 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding(&order.order_type, 1, Alignment::Left, false),
