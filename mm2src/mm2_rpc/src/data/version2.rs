@@ -52,7 +52,7 @@ pub enum MmRpcResultV2<T> {
 pub struct BestOrdersRequestV2 {
     pub coin: String,
     pub action: BestOrdersAction,
-    pub request_by: RequestBestOrdersBy,
+    pub request_by: BestOrdersByRequest,
     #[serde(default)]
     pub exclude_mine: bool,
 }
@@ -60,7 +60,7 @@ pub struct BestOrdersRequestV2 {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
 #[serde(rename_all = "lowercase")]
-pub enum RequestBestOrdersBy {
+pub enum BestOrdersByRequest {
     Volume(MmNumber),
     Number(usize),
 }

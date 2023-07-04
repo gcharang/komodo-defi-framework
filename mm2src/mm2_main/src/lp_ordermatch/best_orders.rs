@@ -6,7 +6,7 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigRational, MmNumber};
 use mm2_rpc::data::legacy::OrderConfirmationsSettings;
-use mm2_rpc::data::version2::{BestOrdersAction, BestOrdersRequestV2, BestOrdersV2Response, RequestBestOrdersBy};
+use mm2_rpc::data::version2::{BestOrdersAction, BestOrdersByRequest, BestOrdersRequestV2, BestOrdersV2Response};
 use num_traits::Zero;
 use serde_json::{self as json, Value as Json};
 use std::collections::HashMap;
@@ -289,12 +289,12 @@ pub async fn best_orders_rpc_v2(
     }
     let ordermatch_ctx = OrdermatchContext::from_ctx(&ctx).unwrap();
     let p2p_request = match req.request_by {
-        RequestBestOrdersBy::Volume(mm_number) => OrdermatchRequest::BestOrders {
+        BestOrdersByRequest::Volume(mm_number) => OrdermatchRequest::BestOrders {
             coin: ordermatch_ctx.orderbook_ticker_bypass(&req.coin),
             action: req.action.clone(),
             volume: mm_number.into(),
         },
-        RequestBestOrdersBy::Number(size) => OrdermatchRequest::BestOrdersByNumber {
+        BestOrdersByRequest::Number(size) => OrdermatchRequest::BestOrdersByNumber {
             coin: ordermatch_ctx.orderbook_ticker_bypass(&req.coin),
             action: req.action.clone(),
             number: size,

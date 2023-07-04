@@ -2,7 +2,7 @@ use clap::{Args, ValueEnum};
 use std::mem::take;
 
 use mm2_number::MmNumber;
-use mm2_rpc::data::version2::{BestOrdersAction, BestOrdersRequestV2, RequestBestOrdersBy};
+use mm2_rpc::data::version2::{BestOrdersAction, BestOrdersByRequest, BestOrdersRequestV2};
 
 use super::parse_mm_number;
 
@@ -52,14 +52,14 @@ pub(crate) enum OrderActionArg {
     Sell,
 }
 
-impl From<&mut BestOrdersByArg> for RequestBestOrdersBy {
+impl From<&mut BestOrdersByArg> for BestOrdersByRequest {
     fn from(value: &mut BestOrdersByArg) -> Self {
         if let Some(number) = value.number {
-            RequestBestOrdersBy::Number(number)
+            BestOrdersByRequest::Number(number)
         } else if let Some(ref mut volume) = value.volume {
-            RequestBestOrdersBy::Volume(take(volume))
+            BestOrdersByRequest::Volume(take(volume))
         } else {
-            panic!("Unreachable state during converting BestOrdersCli into RequestBestOrdersBy");
+            panic!("Unreachable state during converting BestOrdersCli into BestOrdersByRequest");
         }
     }
 }
