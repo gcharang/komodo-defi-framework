@@ -12,6 +12,8 @@ pub(crate) struct BestOrderArgs {
     pub(crate) coin: String,
     #[arg(help = "Whether to buy or sell the selected coin")]
     pub(crate) action: OrderActionArg,
+    #[command(flatten)]
+    pub(crate) delegate: BestOrdersByArg,
     #[arg(
         long,
         short = 'o',
@@ -22,8 +24,6 @@ pub(crate) struct BestOrderArgs {
     pub(crate) show_orig_tickets: bool,
     #[arg(long, short, help = "Exclude orders that is mine", default_value = "false")]
     pub(crate) exclude_mine: bool,
-    #[command(flatten)]
-    pub(crate) delegate: BestOrdersByArg,
 }
 
 #[derive(Args)]
