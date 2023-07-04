@@ -121,9 +121,7 @@ impl Cli {
             Command::Enable { coin } => proc.enable(coin).await?,
             Command::MyBalance(my_balance_args) => proc.get_balance(my_balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
-            Command::Orderbook(ref orderbook_args) => {
-                proc.get_orderbook(orderbook_args.into(), orderbook_args.into()).await?
-            },
+            Command::Orderbook(obook_args) => proc.get_orderbook(obook_args.into(), obook_args.into()).await?,
             Command::Sell(sell_args) => proc.sell(sell_args.into()).await?,
             Command::Buy(buy_args) => proc.buy(buy_args.into()).await?,
             Command::Cancel(CancelSubcommand::Order(args)) => proc.cancel_order(args.into()).await?,

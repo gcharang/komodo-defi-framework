@@ -1,4 +1,5 @@
 use clap::Args;
+use std::mem::take;
 
 use common::serde_derive::Serialize;
 use mm2_rpc::data::legacy::OrderbookRequest;
@@ -34,8 +35,8 @@ pub(crate) struct OrderbookArgs {
     conf_settings: bool,
 }
 
-impl From<&OrderbookArgs> for OrderbookSettings {
-    fn from(value: &OrderbookArgs) -> Self {
+impl From<&mut OrderbookArgs> for OrderbookSettings {
+    fn from(value: &mut OrderbookArgs) -> Self {
         OrderbookSettings {
             uuids: value.uuids,
             min_volume: value.min_volume,
@@ -50,11 +51,11 @@ impl From<&OrderbookArgs> for OrderbookSettings {
     }
 }
 
-impl From<&OrderbookArgs> for OrderbookRequest {
-    fn from(value: &OrderbookArgs) -> Self {
+impl From<&mut OrderbookArgs> for OrderbookRequest {
+    fn from(value: &mut OrderbookArgs) -> Self {
         OrderbookRequest {
-            rel: value.rel.clone(),
-            base: value.base.clone(),
+            rel: take(&mut value.rel),
+            base: take(&mut value.base),
         }
     }
 }
