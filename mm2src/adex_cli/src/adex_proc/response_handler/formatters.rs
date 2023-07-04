@@ -208,13 +208,11 @@ pub(super) fn get_matches_rows<M, F: Fn(&mut dyn Write, &Uuid, &M) -> Result<()>
     }
     rows.push(Row::new(vec![TableCell::new_with_col_span("matches", collspan)]));
     for (uuid, m) in matches.iter() {
-        let mut matches_str = Vec::new();
-        let mut buf: Box<dyn Write> = Box::new(&mut matches_str);
-        write_match(buf.as_mut(), uuid, m)?;
-        drop(buf);
+        let mut buff = vec![];
+        write_match(&mut buff as &mut dyn Write, uuid, m)?;
         rows.push(Row::new(vec![TableCell::new_with_col_span(
-            String::from_utf8(matches_str)
-                .map_err(|err| error_anyhow!("Failed to get string from taker order matches_str buffer: {err}"))?,
+            String::from_utf8(buff)
+                .map_err(|error| error_anyhow!("Failed to get string from taker order matches_str buffer: {error}"))?,
             collspan,
         )]));
     }

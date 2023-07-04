@@ -23,9 +23,8 @@ pub(super) fn on_my_orders(writer: &mut dyn Write, response: Mm2RpcResult<MyOrde
 }
 
 fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> Result<String> {
-    let mut buff = vec![];
-    let mut writer: Box<dyn Write> = Box::new(&mut buff);
-
+    let mut buff: Vec<u8> = vec![];
+    let writer: &mut dyn Write = &mut buff;
     if taker_orders.is_empty() {
         writeln_field!(writer, "Taker orders", "empty", COMMON_INDENT);
     } else {
@@ -37,13 +36,12 @@ fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> 
         }
         write_safe_io!(writer, "{}", table.render());
     }
-    drop(writer);
     String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format maker orders table: {error}"))
 }
 
 fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersRpc>) -> Result<String> {
     let mut buff = vec![];
-    let mut writer: Box<dyn Write> = Box::new(&mut buff);
+    let writer: &mut dyn Write = &mut buff;
 
     if maker_orders.is_empty() {
         writeln_field!(writer, "Maker orders", "empty", COMMON_INDENT);
@@ -57,7 +55,6 @@ fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersR
         }
         write_safe_io!(writer, "{}", table.render());
     }
-    drop(writer);
     String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format maker orders table: {error}"))
 }
 
