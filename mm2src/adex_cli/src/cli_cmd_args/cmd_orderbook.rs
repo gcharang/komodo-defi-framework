@@ -1,4 +1,5 @@
 use clap::Args;
+
 use common::serde_derive::Serialize;
 use mm2_rpc::data::legacy::OrderbookRequest;
 
