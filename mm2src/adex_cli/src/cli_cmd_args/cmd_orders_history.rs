@@ -8,19 +8,19 @@ use mm2_rpc::data::legacy::OrdersHistoryRequest;
 use super::parse_mm_number;
 use crate::adex_proc;
 
-#[derive(Clone, ValueEnum, Display)]
+#[derive(Clone, Display, ValueEnum)]
 enum OrderTypeFilter {
     Taker,
     Maker,
 }
 
-#[derive(Clone, ValueEnum, Display)]
+#[derive(Clone, Display, ValueEnum)]
 enum InitialActionFilter {
     Sell,
     Buy,
 }
 
-#[derive(Clone, ValueEnum, Display)]
+#[derive(Clone, Display, ValueEnum)]
 enum StatusFilter {
     Created,
     Updated,
