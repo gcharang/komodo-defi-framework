@@ -33,8 +33,8 @@ enum Command {
     Stop,
     #[command(about = "Kill mm2 process")]
     Kill,
-    #[command(about = "Get mm2 running status")]
-    ServiceStatus,
+    #[command(about = "Check if mm2 is running")]
+    Check,
     #[command(about = "Get version of intermediary mm2 service")]
     Version,
     #[command(subcommand, about = "Manage rpc_password and mm2 RPC URL")]
@@ -115,7 +115,7 @@ impl Cli {
             } => start_process(mm2_cfg_file, coins_file, log_file),
             Command::Version => proc.get_version().await?,
             Command::Kill => stop_process(),
-            Command::ServiceStatus => get_status(),
+            Command::Check => get_status(),
             Command::Stop => proc.send_stop().await?,
             Command::Config(ConfigSubcommand::Set(SetConfigArgs { password, uri })) => {
                 set_config(*password, uri.take())?
