@@ -50,7 +50,7 @@ fn write_taker_order(writer: &mut dyn Write, taker_status: &TakerOrderForRpc) ->
     writeln_field!(
         writer,
         "req.match_by",
-        format_match_by(&req.match_by, "\n"),
+        format_match_by(&req.match_by, ", "),
         COMMON_INDENT
     );
     write_confirmation_settings!(writer, req, COMMON_INDENT);
