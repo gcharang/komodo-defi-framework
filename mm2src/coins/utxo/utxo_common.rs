@@ -1214,6 +1214,7 @@ where
         args.amount
     ));
     let send_fut = match &coin.as_ref().rpc_client {
+        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
         UtxoRpcClientEnum::Electrum(_) => Either::A(send_outputs_from_my_address(coin, outputs)),
         UtxoRpcClientEnum::Native(client) => {
             let addr_string = try_tx_fus!(payment_address.display_address());
@@ -1251,6 +1252,7 @@ where
     ));
 
     let send_fut = match &coin.as_ref().rpc_client {
+        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
         UtxoRpcClientEnum::Electrum(_) => Either::A(send_outputs_from_my_address(coin, outputs)),
         UtxoRpcClientEnum::Native(client) => {
             let addr_string = try_tx_fus!(payment_address.display_address());
@@ -2100,6 +2102,7 @@ pub fn check_if_my_payment_sent<T: UtxoCommonOps + SwapOps>(
     let script_hash = electrum_script_hash(&p2sh);
     let fut = async move {
         match &coin.as_ref().rpc_client {
+            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
             UtxoRpcClientEnum::Electrum(client) => {
                 let history = try_s!(client.scripthash_get_history(&hex::encode(script_hash)).compat().await);
                 match history.first() {
@@ -2984,6 +2987,7 @@ where
     };
 
     let tx_ids = match &coin.as_ref().rpc_client {
+        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
         UtxoRpcClientEnum::Native(client) => {
             let mut from = 0;
             let mut all_transactions = vec![];

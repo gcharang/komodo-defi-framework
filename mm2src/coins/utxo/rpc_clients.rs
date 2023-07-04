@@ -1,6 +1,7 @@
 #![cfg_attr(target_arch = "wasm32", allow(unused_macros))]
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
+use crate::utxo::blockbook::client::BlockBookClient;
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::{output_script, sat_from_big_decimal, GetBlockHeaderError, GetConfirmedTxError, GetTxError,
                   GetTxHeightError};
@@ -108,8 +109,13 @@ impl rustls::client::ServerCertVerifier for NoCertificateVerification {
 
 #[derive(Debug)]
 pub enum UtxoRpcClientEnum {
+    BlockBook(BlockBookClient),
     Native(NativeClient),
     Electrum(ElectrumClient),
+}
+
+impl From<BlockBookClient> for UtxoRpcClientEnum {
+    fn from(client: BlockBookClient) -> UtxoRpcClientEnum { UtxoRpcClientEnum::BlockBook(client) }
 }
 
 impl From<ElectrumClient> for UtxoRpcClientEnum {
@@ -124,6 +130,7 @@ impl Deref for UtxoRpcClientEnum {
     type Target = dyn UtxoRpcClientOps;
     fn deref(&self) -> &dyn UtxoRpcClientOps {
         match self {
+            UtxoRpcClientEnum::BlockBook(ref c) => c,
             UtxoRpcClientEnum::Native(ref c) => c,
             UtxoRpcClientEnum::Electrum(ref c) => c,
         }
@@ -133,6 +140,7 @@ impl Deref for UtxoRpcClientEnum {
 impl Clone for UtxoRpcClientEnum {
     fn clone(&self) -> Self {
         match self {
+            UtxoRpcClientEnum::BlockBook(c) => UtxoRpcClientEnum::BlockBook(c.clone()),
             UtxoRpcClientEnum::Native(c) => UtxoRpcClientEnum::Native(c.clone()),
             UtxoRpcClientEnum::Electrum(c) => UtxoRpcClientEnum::Electrum(c.clone()),
         }
@@ -227,6 +235,7 @@ impl UtxoRpcClientEnum {
     #[inline]
     pub fn is_native(&self) -> bool {
         match self {
+            UtxoRpcClientEnum::BlockBook(_blockbook) => false,
             UtxoRpcClientEnum::Native(_) => true,
             UtxoRpcClientEnum::Electrum(_) => false,
         }

@@ -289,7 +289,8 @@ where
     Coin: UtxoCommonOps + MarketCoinOps,
 {
     let ticker = coin.ticker();
-    match coin.as_ref().rpc_client {
+    match &coin.as_ref().rpc_client {
+        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
         UtxoRpcClientEnum::Native(ref native) => {
             request_tx_history_with_native(ticker, native, metrics, for_addresses).await
         },

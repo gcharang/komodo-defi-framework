@@ -6,7 +6,7 @@ use crate::utxo::rpc_clients::{BlockHashOrHeight, EstimateFeeMethod, EstimateFee
                                SpentOutputInfo, UnspentInfo, UnspentMap, UtxoJsonRpcClientInfo, UtxoRpcClientOps,
                                UtxoRpcError, UtxoRpcFut};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
-use crate::utxo::{GetBlockHeaderError, NonZeroU64};
+use crate::utxo::{GetBlockHeaderError, NonZeroU64, UtxoTx};
 use crate::{RpcTransportEventHandler, RpcTransportEventHandlerShared};
 use async_trait::async_trait;
 use bitcoin::Amount;
@@ -29,7 +29,7 @@ use mm2_err_handle::prelude::{MapToMmFutureExt, MapToMmResult, MmResult};
 use mm2_net::transport::slurp_req_body;
 use mm2_number::BigDecimal;
 use rpc::v1::types::{deserialize_null_default, Bytes, CoinbaseTransactionInput, RawTransaction,
-                     SignedTransactionOutput, TransactionInputEnum, TransactionOutputScript, H256};
+                     SignedTransactionOutput, Transaction, TransactionInputEnum, TransactionOutputScript, H256};
 use serde::{Deserialize, Deserializer};
 use serde_json::{self as json, Value as Json};
 use serialization::CoinVariant;
@@ -43,13 +43,13 @@ const BTC_BLOCKBOOK_ENPOINT: &str = "https://btc1.trezor.io";
 
 pub type BlockBookResult<T> = MmResult<T, BlockBookClientError>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockBookClientImpl {
     pub ticker: String,
     pub url: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockBookClient(pub Arc<BlockBookClientImpl>);
 
 impl BlockBookClient {
@@ -165,6 +165,64 @@ impl BlockBookClient {
     ) -> BlockBookResult<BlockBookBalanceHistory> {
         todo!()
     }
+}
+
+#[async_trait]
+impl UtxoRpcClientOps for BlockBookClient {
+    fn list_unspent(&self, _address: &Address, _decimals: u8) -> UtxoRpcFut<Vec<UnspentInfo>> { todo!() }
+
+    fn list_unspent_group(&self, _addresses: Vec<Address>, _decimals: u8) -> UtxoRpcFut<UnspentMap> { todo!() }
+
+    fn send_transaction(&self, _tx: &UtxoTx) -> UtxoRpcFut<H256> { todo!() }
+
+    fn send_raw_transaction(&self, _tx: Bytes) -> UtxoRpcFut<H256> { todo!() }
+
+    fn get_transaction_bytes(&self, _txid: &H256) -> UtxoRpcFut<Bytes> { todo!() }
+
+    fn get_verbose_transaction(&self, _txid: &H256) -> UtxoRpcFut<Transaction> { todo!() }
+
+    fn get_verbose_transactions(&self, _tx_ids: &[H256]) -> UtxoRpcFut<Vec<Transaction>> { todo!() }
+
+    fn get_block_count(&self) -> UtxoRpcFut<u64> { todo!() }
+
+    fn display_balance(&self, _address: Address, _decimals: u8) -> RpcRes<BigDecimal> { todo!() }
+
+    fn display_balances(&self, _addresses: Vec<Address>, _decimals: u8) -> UtxoRpcFut<Vec<(Address, BigDecimal)>> {
+        todo!()
+    }
+
+    fn estimate_fee_sat(
+        &self,
+        _decimals: u8,
+        _fee_method: &EstimateFeeMethod,
+        _mode: &Option<EstimateFeeMode>,
+        _n_blocks: u32,
+    ) -> UtxoRpcFut<u64> {
+        todo!()
+    }
+
+    fn get_relay_fee(&self) -> RpcRes<BigDecimal> { todo!() }
+
+    fn find_output_spend(
+        &self,
+        _tx_hash: primitives::hash::H256,
+        _script_pubkey: &[u8],
+        _vout: usize,
+        _from_block: BlockHashOrHeight,
+    ) -> Box<dyn Future<Item = Option<SpentOutputInfo>, Error = String> + Send> {
+        todo!()
+    }
+
+    fn get_median_time_past(
+        &self,
+        _starting_block: u64,
+        _count: NonZeroU64,
+        _coin_variant: CoinVariant,
+    ) -> UtxoRpcFut<u32> {
+        todo!()
+    }
+
+    async fn get_block_timestamp(&self, _height: u64) -> Result<u64, MmError<GetBlockHeaderError>> { todo!() }
 }
 
 #[derive(Debug, Display)]

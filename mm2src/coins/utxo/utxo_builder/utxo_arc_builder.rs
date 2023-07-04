@@ -668,6 +668,7 @@ fn spawn_block_header_utxo_loop(
     spv_conf: SPVConf,
 ) {
     let client = match &utxo_arc.rpc_client {
+        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
         UtxoRpcClientEnum::Native(_) => return,
         UtxoRpcClientEnum::Electrum(client) => client,
     };

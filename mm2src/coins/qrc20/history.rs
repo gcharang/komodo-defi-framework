@@ -650,6 +650,7 @@ trait BuildTransferHistory {
 impl BuildTransferHistory for UtxoRpcClientEnum {
     async fn build(&self, params: TransferHistoryParams) -> Result<Vec<TxReceipt>, MmError<UtxoRpcError>> {
         match self {
+            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
             UtxoRpcClientEnum::Native(native) => native.build(params).await,
             UtxoRpcClientEnum::Electrum(electrum) => electrum.build(params).await,
         }
@@ -660,6 +661,7 @@ impl BuildTransferHistory for UtxoRpcClientEnum {
         params: TransferHistoryParams,
     ) -> Result<Vec<(H256Json, u64)>, MmError<UtxoRpcError>> {
         match self {
+            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
             UtxoRpcClientEnum::Native(native) => native.build_tx_idents(params).await,
             UtxoRpcClientEnum::Electrum(electrum) => electrum.build_tx_idents(params).await,
         }

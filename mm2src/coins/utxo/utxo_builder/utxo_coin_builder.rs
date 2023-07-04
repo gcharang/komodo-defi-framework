@@ -425,6 +425,7 @@ pub trait UtxoCoinBuilderCommonOps {
             None => TxFee::FixedPerKb(1000),
             Some(0) => {
                 let fee_method = match &rpc_client {
+                    UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
                     UtxoRpcClientEnum::Electrum(_) => EstimateFeeMethod::Standard,
                     UtxoRpcClientEnum::Native(client) => client
                         .detect_fee_method()

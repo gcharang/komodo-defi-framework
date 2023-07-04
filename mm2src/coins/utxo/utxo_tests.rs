@@ -4381,6 +4381,7 @@ fn test_block_header_utxo_loop() {
     let client = match &arc.rpc_client {
         UtxoRpcClientEnum::Electrum(electrum) => electrum.clone(),
         UtxoRpcClientEnum::Native(_) => unreachable!(),
+        UtxoRpcClientEnum::BlockBook(_) => todo!(),
     };
 
     let (sync_status_notifier, _) = channel::<UtxoSyncStatus>(1);
@@ -4600,6 +4601,7 @@ fn test_block_header_utxo_loop_with_reorg() {
     let client = match &arc.rpc_client {
         UtxoRpcClientEnum::Electrum(electrum) => electrum.clone(),
         UtxoRpcClientEnum::Native(_) => unreachable!(),
+        UtxoRpcClientEnum::BlockBook(_) => todo!(),
     };
 
     let (sync_status_notifier, _) = channel::<UtxoSyncStatus>(1);

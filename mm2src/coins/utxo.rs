@@ -878,6 +878,7 @@ impl HDAddressBalanceScanner for UtxoAddressScanner {
 impl UtxoAddressScanner {
     pub async fn init(rpc_client: UtxoRpcClientEnum) -> UtxoRpcResult<UtxoAddressScanner> {
         match rpc_client {
+            UtxoRpcClientEnum::BlockBook(_c) => todo!(),
             UtxoRpcClientEnum::Native(native) => UtxoAddressScanner::init_with_native_client(&native).await,
             UtxoRpcClientEnum::Electrum(electrum) => Ok(UtxoAddressScanner::Electrum(electrum)),
         }

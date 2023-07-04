@@ -137,6 +137,7 @@ impl QtumCoin {
         let utxo = self.as_ref();
         let contract_address = contract_addr_into_rpc_format(&QTUM_DELEGATE_CONTRACT_ADDRESS);
         let client = match &utxo.rpc_client {
+            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
             UtxoRpcClientEnum::Native(_) => {
                 return MmError::err(StakingInfosError::Internal("Native not supported".to_string()))
             },

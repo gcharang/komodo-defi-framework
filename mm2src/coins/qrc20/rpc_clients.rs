@@ -381,6 +381,7 @@ pub trait Qrc20RpcOps {
 impl Qrc20RpcOps for UtxoRpcClientEnum {
     fn get_transaction_receipts(&self, tx_hash: &H256) -> RpcRes<Vec<TxReceipt>> {
         match self {
+            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
             UtxoRpcClientEnum::Electrum(electrum) => electrum.blockchain_transaction_get_receipt(tx_hash),
             UtxoRpcClientEnum::Native(native) => native.get_transaction_receipt(tx_hash),
         }
@@ -399,6 +400,7 @@ impl Qrc20RpcOps for UtxoRpcClientEnum {
         let rpc_client = self.clone();
         let fut = async move {
             let fut = match rpc_client {
+                UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
                 UtxoRpcClientEnum::Native(native) => native.call_contract(&contract_addr, params.into()),
                 UtxoRpcClientEnum::Electrum(electrum) => {
                     electrum.blockchain_contract_call(&contract_addr, params.into())
