@@ -2169,18 +2169,6 @@ impl From<TakerConnect> for new_protocol::OrdermatchMessage {
     }
 }
 
-impl<'a> From<&'a TakerConnect> for TakerConnectForRpc {
-    fn from(connect: &'a TakerConnect) -> TakerConnectForRpc {
-        TakerConnectForRpc {
-            taker_order_uuid: connect.taker_order_uuid,
-            maker_order_uuid: connect.maker_order_uuid,
-            method: "connect".to_string(),
-            sender_pubkey: connect.sender_pubkey,
-            dest_pub_key: connect.dest_pub_key,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(test, derive(Default))]
 pub struct MakerReserved {
@@ -4294,6 +4282,18 @@ impl OrderbookItem {
 }
 
 fn get_true() -> bool { true }
+
+impl<'a> From<&'a TakerConnect> for TakerConnectForRpc {
+    fn from(connect: &'a TakerConnect) -> TakerConnectForRpc {
+        TakerConnectForRpc {
+            taker_order_uuid: connect.taker_order_uuid,
+            maker_order_uuid: connect.maker_order_uuid,
+            method: "connect".to_string(),
+            sender_pubkey: connect.sender_pubkey,
+            dest_pub_key: connect.dest_pub_key,
+        }
+    }
+}
 
 impl<'a> From<&'a MakerConnected> for MakerConnectedForRpc {
     fn from(connected: &'a MakerConnected) -> MakerConnectedForRpc {
