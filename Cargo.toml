@@ -57,7 +57,7 @@ codegen-units = 1
 # lto = true
 panic = "abort"
 
-[profile.test]
+[profile.test.package.zcash_client_backend]
 # required to avoid a long running process of librustcash additional chain validation that is enabled with debug assertions
 debug-assertions = false
 
