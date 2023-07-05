@@ -1575,25 +1575,6 @@ pub struct TakerOrder {
     p2p_privkey: Option<SerializableSecp256k1Keypair>,
 }
 
-#[allow(clippy::needless_borrow)]
-impl<'a> From<&'a TakerOrder> for TakerOrderForRpc {
-    fn from(order: &'a TakerOrder) -> TakerOrderForRpc {
-        TakerOrderForRpc {
-            created_at: order.created_at,
-            request: (&order.request).into(),
-            matches: order
-                .matches
-                .iter()
-                .map(|(uuid, taker_match)| (*uuid, taker_match.into()))
-                .collect(),
-            cancellable: order.is_cancellable(),
-            order_type: order.order_type.clone(),
-            base_orderbook_ticker: order.base_orderbook_ticker.as_ref().map(|val| val.to_string()),
-            rel_orderbook_ticker: order.rel_orderbook_ticker.as_ref().map(|val| val.to_string()),
-        }
-    }
-}
-
 /// Result of match_reserved function
 #[derive(Debug, PartialEq)]
 enum MatchReservedResult {
@@ -1723,16 +1704,6 @@ pub struct MakerOrder {
     /// A custom priv key for more privacy to prevent linking orders of the same node between each other
     /// Commonly used with privacy coins (ARRR, ZCash, etc.)
     p2p_privkey: Option<SerializableSecp256k1Keypair>,
-}
-
-impl<'a> From<&'a MakerOrder> for MakerOrderForMyOrdersRpc {
-    fn from(order: &'a MakerOrder) -> MakerOrderForMyOrdersRpc {
-        MakerOrderForMyOrdersRpc {
-            order: order.into(),
-            cancellable: order.is_cancellable(),
-            available_amount: order.available_amount().into(),
-        }
-    }
 }
 
 pub struct MakerOrderBuilder<'a> {
@@ -4996,6 +4967,35 @@ pub async fn cancel_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
         .status(404)
         .body(json::to_vec(&res).expect("Serialization failed"))
         .map_err(|e| ERRL!("{}", e))
+}
+
+impl<'a> From<&'a MakerOrder> for MakerOrderForMyOrdersRpc {
+    fn from(order: &'a MakerOrder) -> MakerOrderForMyOrdersRpc {
+        MakerOrderForMyOrdersRpc {
+            order: order.into(),
+            cancellable: order.is_cancellable(),
+            available_amount: order.available_amount().into(),
+        }
+    }
+}
+
+#[allow(clippy::needless_borrow)]
+impl<'a> From<&'a TakerOrder> for TakerOrderForRpc {
+    fn from(order: &'a TakerOrder) -> TakerOrderForRpc {
+        TakerOrderForRpc {
+            created_at: order.created_at,
+            request: (&order.request).into(),
+            matches: order
+                .matches
+                .iter()
+                .map(|(uuid, taker_match)| (*uuid, taker_match.into()))
+                .collect(),
+            cancellable: order.is_cancellable(),
+            order_type: order.order_type.clone(),
+            base_orderbook_ticker: order.base_orderbook_ticker.as_ref().map(|val| val.to_string()),
+            rel_orderbook_ticker: order.rel_orderbook_ticker.as_ref().map(|val| val.to_string()),
+        }
+    }
 }
 
 pub async fn my_orders(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
