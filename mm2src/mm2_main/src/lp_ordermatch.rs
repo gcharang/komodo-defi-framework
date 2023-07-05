@@ -4330,8 +4330,8 @@ impl<'a> From<&'a MakerMatch> for MakerMatchForRpc {
 impl<'a> From<&'a MakerOrder> for MakerOrderForRpc {
     fn from(order: &'a MakerOrder) -> MakerOrderForRpc {
         MakerOrderForRpc {
-            base: order.base.to_string(),
-            rel: order.rel.to_string(),
+            base: order.base.clone(),
+            rel: order.rel.clone(),
             price: order.price.to_decimal(),
             price_rat: order.price.clone().into(),
             max_base_vol: order.max_base_vol.to_decimal(),
