@@ -309,11 +309,8 @@ pub struct CancelAllOrdersResponse {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum CancelBy {
-    /// All orders of current node
     All,
-    /// All orders of specific pair
     Pair { base: String, rel: String },
-    /// All orders using the coin ticker as base or rel
     Coin { ticker: String },
 }
 
