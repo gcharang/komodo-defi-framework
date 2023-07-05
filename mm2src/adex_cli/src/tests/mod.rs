@@ -13,132 +13,66 @@ const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;
 
 #[tokio::test]
 async fn test_get_version() {
-    tokio::spawn(fake_mm2_server(7784, include_bytes!("http_mock_data/version.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7784");
-    let args = vec!["adex-cli", "version"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(
-        "Version: 1.0.1-beta_824ca36f3\nDatetime: 2023-04-06T22:35:43+05:00\n",
-        result
-    );
+    let mock_resp = include_bytes!("http_mock_data/version.http");
+    let command = &["adex-cli", "version"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7784).await;
+    assert_eq!(VERSION_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_get_orderbook() {
-    tokio::spawn(fake_mm2_server(7785, include_bytes!("http_mock_data/orderbook.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7785");
-    let args = vec!["adex-cli", "orderbook", "RICK", "MORTY"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(RICK_AND_MORTY_ORDERBOOK, result);
+    let mock_resp = include_bytes!("http_mock_data/orderbook.http");
+    let command = &["adex-cli", "orderbook", "RICK", "MORTY"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7785).await;
+    assert_eq!(RICK_AND_MORTY_ORDERBOOK, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_get_orderbook_with_uuids() {
-    tokio::spawn(fake_mm2_server(7786, include_bytes!("http_mock_data/orderbook.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7786");
-    let args = vec!["adex-cli", "orderbook", "RICK", "MORTY", "--uuids"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS, result);
+    let mock_resp = include_bytes!("http_mock_data/orderbook.http");
+    let command = &["adex-cli", "orderbook", "RICK", "MORTY", "--uuids"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7786).await;
+    assert_eq!(RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_get_orderbook_with_publics() {
-    tokio::spawn(fake_mm2_server(7787, include_bytes!("http_mock_data/orderbook.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7787");
-    let args = vec!["adex-cli", "orderbook", "RICK", "MORTY", "--publics"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(RICK_AND_MORTY_ORDERBOOK_WITH_PUBLICS, result);
+    let mock_resp = include_bytes!("http_mock_data/orderbook.http");
+    let command = &["adex-cli", "orderbook", "RICK", "MORTY", "--publics"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7787).await;
+    assert_eq!(ORDERBOOK_WITH_PUBLICS, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_get_enabled() {
-    tokio::spawn(fake_mm2_server(7788, include_bytes!("http_mock_data/get_enabled.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7788");
-    let args = vec!["adex-cli", "get-enabled"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(ENABLED_COINS, result);
+    let mock_resp = include_bytes!("http_mock_data/get_enabled.http");
+    let command = &["adex-cli", "get-enabled"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7788).await;
+    assert_eq!(ENABLED_COINS, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_get_balance() {
-    tokio::spawn(fake_mm2_server(7789, include_bytes!("http_mock_data/balance.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7789");
-    let args = vec!["adex-cli", "balance", "RICK"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(RICK_BALANCE, result);
+    let mock_resp = include_bytes!("http_mock_data/balance.http");
+    let command = &["adex-cli", "balance", "RICK"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7789).await;
+    assert_eq!(RICK_BALANCE, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_enable() {
-    tokio::spawn(fake_mm2_server(7790, include_bytes!("http_mock_data/enable.http")));
     test_activation_scheme().await;
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7790");
-    let args = vec!["adex-cli", "enable", "ETH"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(ENABLE_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/enable.http");
+    let command = &["adex-cli", "enable", "ETH"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7790).await;
+    assert_eq!(ENABLE_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 async fn test_activation_scheme() {
@@ -153,155 +87,77 @@ async fn test_activation_scheme() {
 
 #[tokio::test]
 async fn test_buy_morty_for_rick() {
-    tokio::spawn(fake_mm2_server(7791, include_bytes!("http_mock_data/buy.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7791");
-    let args = vec!["adex-cli", "buy", "MORTY", "RICK", "0.01", "0.5"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!("4685e133-dfb3-4b31-8d4c-0ffa79933c8e\n", result);
+    let mock_resp = include_bytes!("http_mock_data/buy.http");
+    let command = &["adex-cli", "buy", "MORTY", "RICK", "0.01", "0.5"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7791).await;
+    assert_eq!(
+        "4685e133-dfb3-4b31-8d4c-0ffa79933c8e\n",
+        String::from_utf8(buffer).unwrap()
+    );
 }
 
 #[tokio::test]
 async fn test_order_status() {
-    tokio::spawn(fake_mm2_server(
-        7792,
-        include_bytes!("http_mock_data/taker_status.http"),
-    ));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7792");
-    let args = vec!["adex-cli", "status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(TAKER_STATUS_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/taker_status.http");
+    let command = &["adex-cli", "status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7792).await;
+    assert_eq!(TAKER_STATUS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_my_orders() {
-    tokio::spawn(fake_mm2_server(7793, include_bytes!("http_mock_data/my_orders.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7793");
-    let args = vec!["adex-cli", "mine"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(MY_ORDERS_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/my_orders.http");
+    let command = &["adex-cli", "my-orders"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7793).await;
+    assert_eq!(MY_ORDERS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_best_orders() {
-    tokio::spawn(fake_mm2_server(7794, include_bytes!("http_mock_data/best_orders.http")));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7794");
-    let args = vec!["adex-cli", "best", "--number", "2", "RICK", "buy"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(BEST_ORDERS_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/best_orders.http");
+    let command = &["adex-cli", "best", "--number", "2", "RICK", "buy"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7794).await;
+    assert_eq!(BEST_ORDERS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_orderbook_depth() {
-    tokio::spawn(fake_mm2_server(
-        7795,
-        include_bytes!("http_mock_data/orderbook_depth.http"),
-    ));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7795");
-    let args = vec!["adex-cli", "orderbook-depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(ORDERBOOK_DEPTH_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/orderbook_depth.http");
+    let command = &["adex-cli", "orderbook-depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7795).await;
+    assert_eq!(ORDERBOOK_DEPTH_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_history_common() {
-    tokio::spawn(fake_mm2_server(
-        7796,
-        include_bytes!("http_mock_data/history-common.http"),
-    ));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7796");
-    let args = vec!["adex-cli", "history", "--all"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(HISTORY_COMMON_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/history-common.http");
+    let command = &["adex-cli", "history", "--all"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7796).await;
+    assert_eq!(HISTORY_COMMON_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_history_takers_detailed() {
-    tokio::spawn(fake_mm2_server(
-        7797,
-        include_bytes!("http_mock_data/history-takers-detailed.http"),
-    ));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7797");
-    let args = vec!["adex-cli", "history", "--takers"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(HISTORY_TAKERS_DETAILED_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/history-takers-detailed.http");
+    let command = &["adex-cli", "history", "--takers"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7797).await;
+    assert_eq!(HISTORY_TAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 #[tokio::test]
 async fn test_history_makers_detailed() {
-    tokio::spawn(fake_mm2_server(
-        7798,
-        include_bytes!("http_mock_data/history-takers-detailed.http"),
-    ));
-    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
-    let response_handler = ResponseHandlerImpl {
-        writer: (&mut buffer as &mut dyn Write).into(),
-    };
-    let config = AdexConfigImpl::new("dummy", "http://127.0.0.1:7798");
-    let args = vec!["adex-cli", "history", "--makers"];
-    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
-        .await
-        .unwrap();
-    let result = String::from_utf8(buffer).unwrap();
-    assert_eq!(HISTORY_MAKERS_DETAILED_OUTPUT, result);
+    let mock_resp = include_bytes!("http_mock_data/history-makers-detailed.http");
+    let command = &["adex-cli", "history", "--makers"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7798).await;
+    assert_eq!(HISTORY_MAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
 async fn fake_mm2_server(port: u16, predefined_response: &'static [u8]) {
@@ -320,6 +176,22 @@ async fn handle_connection(mut stream: TcpStream, predefined_response: &'static 
     writer.write_all(predefined_response).await.unwrap();
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_COOLDOWN_TIMEOUT_MS)).await;
 }
+
+async fn start_server_and_do_command(args: &[&str], buf: &mut dyn Write, mock_resp: &'static [u8], port: u16) {
+    tokio::spawn(fake_mm2_server(port, mock_resp));
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
+
+    let response_handler = ResponseHandlerImpl { writer: buf.into() };
+    let config = AdexConfigImpl::new("dummy", format!("http://127.0.0.1:{port}").as_str());
+    Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
+        .await
+        .unwrap();
+}
+
+const VERSION_OUTPUT: &str = "\
+Version: 1.0.1-beta_824ca36f3
+Datetime: 2023-04-06T22:35:43+05:00
+";
 
 const RICK_AND_MORTY_ORDERBOOK: &str = r"     Volume: RICK Price: MORTY     
              0.23 1.00000000       
@@ -351,7 +223,7 @@ const RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS: &str = r"     Volume: RICK Price: MOR
              0.22 1.00000000       1082c93c-8c23-4944-b8f1-a92ec703b03a 
 ";
 
-const RICK_AND_MORTY_ORDERBOOK_WITH_PUBLICS: &str = r"     Volume: RICK Price: MORTY     Public                                                             
+const ORDERBOOK_WITH_PUBLICS: &str = r"     Volume: RICK Price: MORTY     Public                                                             
              0.23 1.00000000       022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846 
         340654.03 1.00000000       0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732 
              2.00 0.99999999       037310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5 
