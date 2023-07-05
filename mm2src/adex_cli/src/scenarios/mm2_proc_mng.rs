@@ -306,9 +306,10 @@ pub(crate) fn stop_process() {
 
 #[cfg(target_os = "macos")]
 pub(crate) fn get_status() {
-    let output = match Command::new("launchctl").args(["list", LAUNCHCTL_MM2_ID]).output() {
+    let command = Command::new("launchctl").args(["list", LAUNCHCTL_MM2_ID]);
+    let output = match command.output() {
         Err(error) => {
-            error!("Failed to `launchctl list`, error: {error}");
+            error!("Failed to `{command}`, error: {error}");
             return;
         },
         Ok(output) => output,
