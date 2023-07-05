@@ -175,7 +175,7 @@ async fn test_order_status() {
         7792,
         include_bytes!("http_mock_data/taker_status.http"),
     ));
-    tokio::time::sleep(Duration::from_micros(100)).await;
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
@@ -290,7 +290,7 @@ async fn test_history_makers_detailed() {
         7798,
         include_bytes!("http_mock_data/history-takers-detailed.http"),
     ));
-    tokio::time::sleep(Duration::from_micros(100)).await;
+    tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
     let mut buffer: Vec<u8> = vec![];
     let response_handler = ResponseHandlerImpl {
         writer: (&mut buffer as &mut dyn Write).into(),
