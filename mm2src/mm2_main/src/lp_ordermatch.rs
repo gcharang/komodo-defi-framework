@@ -4269,7 +4269,6 @@ impl OrderbookItem {
         let base_min_volume = (&min_vol_mm / &price_mm).into();
         let rel_max_volume = max_vol_mm.clone().into();
         let rel_min_volume = min_vol_mm.clone().into();
-        // TODO: @rozhkovdmitrii why lambda???
         let conf_settings = self.conf_settings.as_ref().map(|conf| conf.reversed());
 
         RpcOrderbookEntry {
@@ -4964,9 +4963,8 @@ pub async fn cancel_order_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
                 .await
                 .ok();
         }
-        return Response::builder()
-            .body(json::to_vec(&Mm2RpcResult::new(Status::Success)).expect("Serialization failed"))
-            .map_err(|e| ERRL!("{}", e)); // TODO: @rozhkovdmitrii provide panic free implementation
+        let data = json::to_vec(&Mm2RpcResult::new(Status::Success)).map_err(|e| ERRL!(e))?;
+        return Response::builder().body(data).map_err(|e| ERRL!("{}", e));
     }
 
     let mut taker_orders = ordermatch_ctx.my_taker_orders.lock().await;
@@ -5021,10 +5019,8 @@ pub async fn my_orders(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
             .map(|(uuid, order)| (*uuid, TakerOrderForRpc::from(order)))
             .collect(),
     });
-
-    Response::builder()
-        .body(json::to_vec(&response).expect("Serialization failed"))
-        .map_err(|e| ERRL!("{}", e)) // TODO: @rozhkovdmitrii provide a panic free implementations
+    let data = json::to_vec(&response).map_err(|e| ERRL!(e))?;
+    Response::builder().body(data).map_err(|e| ERRL!("{}", e))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -5241,9 +5237,8 @@ pub async fn cancel_all_orders_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec
         cancelled,
         currently_matching,
     });
-    Response::builder()
-        .body(json::to_vec(&response).expect("Serialization failed"))
-        .map_err(|e| ERRL!("{}", e))
+    let data = json::to_vec(&response).map_err(|e| ERRL!(e))?;
+    Response::builder().body(data).map_err(|e| ERRL!("{}", e))
 }
 
 /// Subscribe to an orderbook topic (see [`orderbook_topic`]).
