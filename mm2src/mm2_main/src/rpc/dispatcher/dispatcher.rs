@@ -289,7 +289,7 @@ async fn rpc_task_dispatcher(
 ///
 /// `gui_storage_method` is a method name with the `gui_storage::` prefix removed.
 async fn gui_storage_dispatcher(
-    request: MmRpcRequest<String, Json>, // TODO: check again why not MmRpcRequest,
+    request: MmRpcRequest<String, Json>,
     ctx: MmArc,
     gui_storage_method: &str,
 ) -> DispatcherResult<Response<Vec<u8>>> {
@@ -318,7 +318,7 @@ async fn gui_storage_dispatcher(
 /// `lightning_method` is a method name with the `lightning::` prefix removed.
 #[cfg(not(target_arch = "wasm32"))]
 async fn lightning_dispatcher(
-    request: MmRpcRequest<String, Json>, // TODO: check again why not MmRpcRequest,
+    request: MmRpcRequest<String, Json>,
     ctx: MmArc,
     lightning_method: &str,
 ) -> DispatcherResult<Response<Vec<u8>>> {
