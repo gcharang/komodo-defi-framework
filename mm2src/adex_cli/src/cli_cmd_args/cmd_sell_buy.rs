@@ -15,21 +15,21 @@ use super::parse_mm_number;
 #[command(about = "Put a selling request")]
 pub(crate) struct SellOrderArgs {
     #[command(flatten)]
-    order_cli: OrderArgs,
+    order_args: OrderArgs,
 }
 
 #[derive(Args)]
 #[command(about = "Put a buying request")]
 pub(crate) struct BuyOrderArgs {
     #[command(flatten)]
-    order_cli: OrderArgs,
+    order_args: OrderArgs,
 }
 
 #[derive(Args, Debug, Serialize)]
 struct OrderArgs {
     #[arg(help = "Base currency of a pair")]
     base: String,
-    #[arg(help = "Related currency")]
+    #[arg(help = "Related currency of a pair")]
     rel: String,
     #[arg(
         value_parser = parse_mm_number,
@@ -104,7 +104,7 @@ struct OrderMatchingGroup {
     #[arg(
         long = "public",
         value_parser = H256Json::from_str,
-        help = "The created order is matched using a set of publics to select specific nodes (ignored if uuids not empty)"
+        help = "The created order is matched using a set of publics to select specific nodes"
     )]
     match_publics: Vec<H256Json>,
 }
@@ -127,7 +127,7 @@ impl From<&OrderTypeCli> for OrderType {
 impl From<&mut SellOrderArgs> for SellRequest {
     fn from(value: &mut SellOrderArgs) -> Self {
         SellRequest {
-            delegate: SellBuyRequest::from(&mut value.order_cli),
+            delegate: SellBuyRequest::from(&mut value.order_args),
         }
     }
 }
@@ -135,7 +135,7 @@ impl From<&mut SellOrderArgs> for SellRequest {
 impl From<&mut BuyOrderArgs> for BuyRequest {
     fn from(value: &mut BuyOrderArgs) -> Self {
         BuyRequest {
-            delegate: SellBuyRequest::from(&mut value.order_cli),
+            delegate: SellBuyRequest::from(&mut value.order_args),
         }
     }
 }
@@ -150,7 +150,7 @@ impl From<&mut OrderArgs> for SellBuyRequest {
             MatchBy::Any
         };
 
-        let will_be_substituted = String::new();
+        let will_set_by_serde_tag = String::default();
         SellBuyRequest {
             base: take(&mut value.base),
             rel: take(&mut value.rel),
@@ -158,7 +158,7 @@ impl From<&mut OrderArgs> for SellBuyRequest {
             volume: take(&mut value.volume),
             timeout: None,
             duration: None,
-            method: will_be_substituted,
+            method: will_set_by_serde_tag,
             gui: None,
             dest_pub_key: H256Json::default(),
             match_by,
