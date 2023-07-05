@@ -4992,8 +4992,8 @@ impl<'a> From<&'a TakerOrder> for TakerOrderForRpc {
                 .collect(),
             cancellable: order.is_cancellable(),
             order_type: order.order_type.clone(),
-            base_orderbook_ticker: order.base_orderbook_ticker.as_ref().map(|val| val.to_string()),
-            rel_orderbook_ticker: order.rel_orderbook_ticker.as_ref().map(|val| val.to_string()),
+            base_orderbook_ticker: order.base_orderbook_ticker.clone(),
+            rel_orderbook_ticker: order.rel_orderbook_ticker.clone(),
         }
     }
 }
@@ -5006,18 +5006,20 @@ pub async fn my_orders(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
         let order = order_mutex.lock().await.clone();
         maker_orders_map.insert(uuid, order);
     }
+    let maker_orders_for_rpc: HashMap<_, _> = maker_orders_map
+        .iter()
+        .map(|(uuid, order)| (**uuid, MakerOrderForMyOrdersRpc::from(order)))
+        .collect();
 
     let taker_orders = ordermatch_ctx.my_taker_orders.lock().await;
+    let taker_orders_for_rpc: HashMap<_, _> = taker_orders
+        .iter()
+        .map(|(uuid, order)| (*uuid, TakerOrderForRpc::from(order)))
+        .collect();
 
     let response = Mm2RpcResult::new(MyOrdersResponse {
-        maker_orders: maker_orders_map
-            .iter()
-            .map(|(uuid, order)| (**uuid, MakerOrderForMyOrdersRpc::from(order)))
-            .collect(),
-        taker_orders: taker_orders
-            .iter()
-            .map(|(uuid, order)| (*uuid, TakerOrderForRpc::from(order)))
-            .collect(),
+        maker_orders: maker_orders_for_rpc,
+        taker_orders: taker_orders_for_rpc,
     });
     let data = json::to_vec(&response).map_err(|e| ERRL!("{}", e))?;
     Response::builder().body(data).map_err(|e| ERRL!("{}", e))
