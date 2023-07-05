@@ -3770,18 +3770,6 @@ impl<'a> From<&'a TakerRequest> for TakerRequestForRpc {
 }
 
 #[allow(clippy::needless_borrow)]
-impl<'a> From<&'a TakerMatch> for TakerMatchForRpc {
-    fn from(taker_match: &'a TakerMatch) -> TakerMatchForRpc {
-        TakerMatchForRpc {
-            reserved: (&taker_match.reserved).into(),
-            connect: (&taker_match.connect).into(),
-            connected: taker_match.connected.as_ref().map(|connected| connected.into()),
-            last_updated: taker_match.last_updated,
-        }
-    }
-}
-
-#[allow(clippy::needless_borrow)]
 pub async fn lp_auto_buy(
     ctx: &MmArc,
     base_coin: &MmCoinEnum,
@@ -4975,6 +4963,18 @@ impl<'a> From<&'a MakerOrder> for MakerOrderForMyOrdersRpc {
             order: order.into(),
             cancellable: order.is_cancellable(),
             available_amount: order.available_amount().into(),
+        }
+    }
+}
+
+#[allow(clippy::needless_borrow)]
+impl<'a> From<&'a TakerMatch> for TakerMatchForRpc {
+    fn from(taker_match: &'a TakerMatch) -> TakerMatchForRpc {
+        TakerMatchForRpc {
+            reserved: (&taker_match.reserved).into(),
+            connect: (&taker_match.connect).into(),
+            connected: taker_match.connected.as_ref().map(|connected| connected.into()),
+            last_updated: taker_match.last_updated,
         }
     }
 }
