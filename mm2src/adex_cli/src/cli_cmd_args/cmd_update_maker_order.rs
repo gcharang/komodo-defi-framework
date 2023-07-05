@@ -21,8 +21,8 @@ pub(crate) struct UpdateMakerOrderArgs {
     volume: UpdateMakerVolumeArg,
     #[arg(
         long,
+        short,
         value_parser = parse_mm_number,
-        visible_alias = "mv",
         help = "Minimum amount of base coin available for the order; it must be less or equal than the new volume; the following values must be greater than or equal to the min_trading_vol of the corresponding coin"
     )]
     min_volume: Option<MmNumber>,
@@ -57,14 +57,14 @@ pub(crate) struct UpdateMakerOrderArgs {
 struct UpdateMakerVolumeArg {
     #[arg(
         long,
-        short,
+        short = 'M',
         help = "Whether to use the entire coin balance for the order, taking 0.001 coins into reserve to account for fees",
         default_value_t = false
     )]
     max_volume: bool,
     #[arg(
         long,
-        short,
+        short = 'd',
         value_parser = parse_mm_number, help = "Volume added to or subtracted from the max_base_vol of the order to be updated, resulting in the new volume which is the maximum amount of base coin available for the order, ignored if max is true"
     )]
     volume_delta: Option<MmNumber>,

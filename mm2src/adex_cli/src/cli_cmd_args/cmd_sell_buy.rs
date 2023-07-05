@@ -42,6 +42,7 @@ struct OrderArgs {
     price: MmNumber,
     #[arg(
         long,
+        short = 't',
         value_enum,
         visible_alias = "type",
         default_value_t = OrderTypeCli::GoodTillCancelled,
@@ -52,6 +53,7 @@ struct OrderArgs {
     order_type: OrderTypeCli,
     #[arg(
         long,
+        short = 'm',
         value_parser=parse_mm_number,
         help = "Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker",
     )]
@@ -84,8 +86,8 @@ struct OrderArgs {
     rel_nota: Option<bool>,
     #[arg(
         long,
-        visible_alias = "save",
         short,
+        visible_alias = "save",
         help = "If true, each order's short record history is stored else the only order status will be temporarily stored while in progress"
     )]
     save_in_history: bool,
@@ -96,12 +98,14 @@ struct OrderArgs {
 struct OrderMatchingGroup {
     #[arg(
         long = "uuid",
+        short = 'u',
         group = "order-matching",
         help = "The created order is matched using a set of uuid"
     )]
     match_uuids: Vec<Uuid>,
     #[arg(
         long = "public",
+        short = 'p',
         value_parser = H256Json::from_str,
         help = "The created order is matched using a set of publics to select specific nodes"
     )]

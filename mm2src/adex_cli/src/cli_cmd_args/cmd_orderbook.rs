@@ -15,24 +15,24 @@ pub(crate) struct OrderbookArgs {
     base: String,
     #[arg(help = "Related currency, also can be called \"quote currency\" according to exchange terms")]
     rel: String,
+    #[arg(long, short, help = "Enable `uuid` column")]
+    uuids: bool,
+    #[arg(long, short, visible_alias = "min", help = "Enable `min_volume` column")]
+    min_volume: bool,
+    #[arg(long, short = 'M', visible_alias = "max", help = "Enable `max_volume` column")]
+    max_volume: bool,
+    #[arg(long, short, help = "Enable `public` column")]
+    publics: bool,
+    #[arg(long, short = 'a', help = "Enable `address` column")]
+    address: bool,
+    #[arg(long, short = 'A', help = "Enable `age` column")]
+    age: bool,
+    #[arg(long, short, help = "Enable order confirmation settings column")]
+    conf_settings: bool,
     #[arg(long, help = "Orderbook asks count limitation", default_value = ORDERBOOK_ASKS_LIMIT)]
     asks_limit: Option<usize>,
     #[arg(long, help = "Orderbook bids count limitation", default_value = ORDERBOOK_BIDS_LIMIT)]
     bids_limit: Option<usize>,
-    #[arg(long, short, help = "Enables `uuid` column")]
-    uuids: bool,
-    #[arg(long, visible_alias = "min", help = "Enables `min_volume` column")]
-    min_volume: bool,
-    #[arg(long, visible_alias = "max", help = "Enables `max_volume` column")]
-    max_volume: bool,
-    #[arg(long, short, help = "Enables `public` column")]
-    publics: bool,
-    #[arg(long, short, help = "Enables `address` column")]
-    address: bool,
-    #[arg(long, help = "Enables `age` column")]
-    age: bool,
-    #[arg(long, visible_alias = "cs", help = "Enables order confirmation settings column")]
-    conf_settings: bool,
 }
 
 impl From<&mut OrderbookArgs> for OrderbookSettings {

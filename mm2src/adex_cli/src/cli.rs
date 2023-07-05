@@ -70,7 +70,7 @@ enum Command {
     #[command(about = "Get my orders", visible_aliases = ["my", "mine"])]
     MyOrders,
     #[command(
-        visible_alias = "history",
+        visible_aliases = ["history", "filter"],
         about = "Return all orders whether active or inactive that match the selected filters"
     )]
     OrdersHistory(OrdersHistoryArgs),
