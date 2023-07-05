@@ -229,7 +229,7 @@ pub fn metrics(ctx: MmArc) -> HyRes {
 
 /// Get my_balance of a coin
 pub async fn my_balance(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let MyBalanceRequest { coin: ticker } = try_s!(json::from_value(req.clone()));
+    let MyBalanceRequest { coin: ticker } = try_s!(json::from_value(req));
 
     let coin = match lp_coinfind(&ctx, &ticker).await {
         Ok(Some(t)) => t,
