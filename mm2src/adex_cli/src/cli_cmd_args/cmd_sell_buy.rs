@@ -5,7 +5,6 @@ use std::mem::take;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use common::serde_derive::Serialize;
 use mm2_number::MmNumber;
 use mm2_rpc::data::legacy::{BuyRequest, MatchBy, OrderType, SellBuyRequest, SellRequest};
 
@@ -25,7 +24,7 @@ pub(crate) struct BuyOrderArgs {
     order_args: OrderArgs,
 }
 
-#[derive(Args, Debug, Serialize)]
+#[derive(Args)]
 struct OrderArgs {
     #[arg(help = "Base currency of a pair")]
     base: String,
@@ -92,7 +91,7 @@ struct OrderArgs {
     save_in_history: bool,
 }
 
-#[derive(Args, Debug, Serialize)]
+#[derive(Args)]
 #[group(required = false, multiple = false)]
 struct OrderMatchingGroup {
     #[arg(
@@ -109,7 +108,7 @@ struct OrderMatchingGroup {
     match_publics: Vec<H256Json>,
 }
 
-#[derive(Debug, Clone, ValueEnum, Serialize)]
+#[derive(Clone, ValueEnum)]
 enum OrderTypeCli {
     FillOrKill,
     GoodTillCancelled,
