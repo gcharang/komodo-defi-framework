@@ -165,6 +165,7 @@ pub fn fill_eth(to_addr: Address, amount: f64) {
         .send_to_address(to_addr, amount_in_wei.into())
         .wait()
         .unwrap();
+    std::thread::sleep(std::time::Duration::from_secs(2));
 }
 
 pub fn fill_jst(to_addr: Address, amount: f64) {
@@ -343,6 +344,8 @@ fn send_and_refund_erc20_payment() {
         abortable_system: AbortableQueue::default(),
     }));
 
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    println!("Balance {}", coin.my_spendable_balance().wait().unwrap());
     let time_lock = now_sec_u32() - 200;
     let secret_hash = &[1; 20];
     let maker_payment_args = SendPaymentArgs {
@@ -449,6 +452,7 @@ fn send_and_refund_eth_payment() {
     let payment = coin.send_maker_payment(send_maker_payment_args).wait().unwrap();
 
     log!("{:?}", payment);
+    std::thread::sleep(std::time::Duration::from_secs(2));
 
     let swap_id = coin.etomic_swap_id(time_lock, secret_hash);
     let status = block_on(
@@ -476,6 +480,7 @@ fn send_and_refund_eth_payment() {
         .unwrap();
 
     log!("{:?}", refund);
+    std::thread::sleep(std::time::Duration::from_secs(2));
 
     let status = block_on(
         coin.payment_status(

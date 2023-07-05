@@ -3618,7 +3618,7 @@ impl EthCoin {
                 EthCoinType::Eth => Ok(coin
                     .web3
                     .eth()
-                    .balance(coin.my_address, Some(BlockNumber::Latest))
+                    .balance(coin.my_address, Some(BlockNumber::Pending))
                     .await?),
                 EthCoinType::Erc20 { ref token_addr, .. } => {
                     let function = ERC20_CONTRACT.function("balanceOf")?;
