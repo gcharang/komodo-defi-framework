@@ -6,7 +6,7 @@ use crate::adex_proc::{AdexProc, ResponseHandler};
 use crate::scenarios::{get_status, init, start_process, stop_process};
 use crate::transport::SlurpTransport;
 
-use super::cli_cmd_args::*;
+use super::cli_cmd_args::prelude::*;
 
 const MM2_CONFIG_FILE_DEFAULT: &str = "MM2.json";
 const COINS_FILE_DEFAULT: &str = "coins";
