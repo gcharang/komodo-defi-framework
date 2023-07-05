@@ -4298,8 +4298,8 @@ impl<'a> From<&'a MakerConnected> for MakerConnectedForRpc {
 impl<'a> From<&'a MakerReserved> for MakerReservedForRpc {
     fn from(reserved: &'a MakerReserved) -> MakerReservedForRpc {
         MakerReservedForRpc {
-            base: reserved.base.to_string(),
-            rel: reserved.rel.to_string(),
+            base: reserved.base.clone(),
+            rel: reserved.rel.clone(),
             base_amount: reserved.base_amount.to_decimal(),
             base_amount_rat: reserved.base_amount.to_ratio(),
             rel_amount: reserved.rel_amount.to_decimal(),
