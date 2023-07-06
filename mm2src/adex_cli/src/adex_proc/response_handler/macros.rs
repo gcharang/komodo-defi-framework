@@ -6,13 +6,6 @@ macro_rules! writeln_field {
 }
 
 #[macro_export]
-macro_rules! write_field {
-    ($writer:expr, $name:expr, $value:expr, $width:expr) => {
-        write_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width);
-    };
-}
-
-#[macro_export]
 macro_rules! write_field_option {
     ($writer:expr, $name:expr, $value:expr, $width:expr) => {
         if let Some(ref value) = $value {
@@ -64,4 +57,4 @@ macro_rules! write_connected {
     };
 }
 
-pub use {write_base_rel, write_confirmation_settings, write_connected, write_field, write_field_option, writeln_field};
+pub(crate) use {write_base_rel, write_confirmation_settings, write_connected, write_field_option, writeln_field};
