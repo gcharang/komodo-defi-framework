@@ -1,11 +1,16 @@
 use anyhow::{anyhow, bail, Result};
 use directories::ProjectDirs;
 use inquire::Password;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::env::var_os;
+use std::ffi::OsStr;
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::mem::take;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::adex_proc::SmartFractPrecision;
 use crate::helpers::rewrite_json_file;
@@ -15,6 +20,7 @@ const PROJECT_QUALIFIER: &str = "com";
 const PROJECT_COMPANY: &str = "komodoplatform";
 const PROJECT_APP: &str = "adex-cli";
 const ADEX_CFG: &str = "adex_cfg.json";
+const RPC_PASSWORD_ENV: &str = "KOMODO_RPC_PASSWORD";
 
 const PRICE_PRECISION_MIN: usize = 8;
 const PRICE_PRECISION_MAX: usize = 8;
@@ -32,13 +38,6 @@ pub(super) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Res
     assert!(set_password || rpc_api_uri.is_some());
     let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|_| AdexConfigImpl::default());
 
-    if set_password {
-        let rpc_password = Password::new("Enter RPC API password:")
-            .prompt()
-            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
-        adex_cfg.set_rpc_password(rpc_password);
-    }
-
     if let Some(rpc_api_uri) = rpc_api_uri {
         adex_cfg.set_rpc_uri(rpc_api_uri);
     }
@@ -47,6 +46,12 @@ pub(super) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Res
     info!("Configuration has been set");
 
     Ok(())
+}
+
+fn inquire_password() -> Result<String> {
+    Password::new("Enter RPC API password:")
+        .prompt()
+        .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {}", error))
 }
 
 pub(super) trait AdexConfig {
@@ -65,7 +70,19 @@ pub(super) struct AdexConfigImpl {
 }
 
 impl AdexConfig for AdexConfigImpl {
-    fn rpc_password(&self) -> Option<String> { self.rpc_password.clone() }
+    fn rpc_password(&self) -> Option<String> {
+        match env::var(RPC_PASSWORD_ENV) {
+            Ok(rpc_password) => Some(rpc_password),
+            Err(_) => {
+                let rpc_password = inquire_password()
+                    .map_err(|error| error!("Failed to inquire rpc password: {}", error))
+                    .ok()?;
+                info!("asdfa");
+                Self::set_rpc_password(&rpc_password).ok()?;
+                Some(rpc_password)
+            },
+        }
+    }
     fn rpc_uri(&self) -> Option<String> { self.rpc_uri.clone() }
     fn orderbook_price_precision(&self) -> &SmartFractPrecision { &PRICE_PRECISION }
     fn orderbook_volume_precision(&self) -> &SmartFractPrecision { &VOLUME_PRECISION }
@@ -154,7 +171,97 @@ impl AdexConfigImpl {
         rewrite_json_file(self, adex_path_str)
     }
 
-    fn set_rpc_password(&mut self, rpc_password: String) { self.rpc_password.replace(rpc_password); }
+    fn set_rpc_password(rpc_password: &String) -> Result<()> {
+        env::set_var(RPC_PASSWORD_ENV, &rpc_password);
+        let mut command = Shell::get_shell().get_setenv_command(RPC_PASSWORD_ENV, rpc_password.as_str());
+        debug!("command: {:?}", command);
+        command
+            .status()
+            .map_err(|error| error_anyhow!("Failed to store: {}, error: {}", RPC_PASSWORD_ENV, error))?;
+        info!("Environment: {RPC_PASSWORD_ENV} has been set");
+        Ok(())
+    }
 
     fn set_rpc_uri(&mut self, rpc_uri: String) { self.rpc_uri.replace(rpc_uri); }
+}
+
+enum Shell {
+    Windows,
+    /// The default if we can't figure out the shell
+    Bash,
+    Tcsh,
+    Zsh,
+    Ksh,
+}
+
+impl Shell {
+    fn get_shell() -> Shell {
+        if cfg!(windows) {
+            Shell::Windows
+        } else {
+            if let Some(shell) = var_os("BASH") {
+                if shell.to_string_lossy().ends_with("/bash") {
+                    return Shell::Bash;
+                }
+            }
+
+            if let Some(zsh) = var_os("ZSH_NAME") {
+                if zsh.to_string_lossy() == "zsh" {
+                    return Shell::Zsh;
+                }
+            }
+
+            if let Some(shell) = var_os("shell") {
+                if shell.to_string_lossy().ends_with("/tcsh") {
+                    return Shell::Tcsh;
+                }
+            }
+            return match var_os("SHELL") {
+                None => Shell::Bash,
+                Some(oss) => {
+                    if oss.to_string_lossy().ends_with("/bash") {
+                        Shell::Bash
+                    } else if oss.to_string_lossy().ends_with("/ksh") {
+                        Shell::Ksh
+                    } else if oss.to_string_lossy().ends_with("/zsh") {
+                        Shell::Zsh
+                    } else if oss.to_string_lossy().ends_with("/tcsh") {
+                        Shell::Tcsh
+                    } else {
+                        Shell::Bash
+                    }
+                },
+            };
+        }
+    }
+
+    fn get_setenv_command<K: AsRef<OsStr>, V: AsRef<OsStr>>(&self, k: K, v: V) -> Command {
+        match *self {
+            Shell::Windows => {
+                let mut command = Command::new("set");
+                command.arg(format!(
+                    "{}={}",
+                    k.as_ref().to_string_lossy(),
+                    v.as_ref().to_string_lossy()
+                ));
+                command
+            },
+            Shell::Tcsh => {
+                let mut command = Command::new("setenv");
+                command
+                    .arg(format!("{}", k.as_ref().to_string_lossy()))
+                    .arg(format!("'{}'", v.as_ref().to_string_lossy()));
+                command
+            },
+            _ => {
+                let mut command = Command::new("declare");
+                std::os::unix::process::command.arg("-x").arg(format!(
+                    "{}='{}'",
+                    k.as_ref().to_string_lossy(),
+                    v.as_ref().to_string_lossy()
+                ));
+                command
+            },
+        }
+    }
 }
