@@ -13,7 +13,63 @@ use serde_json::{self as json, Value as Json};
 use serialization::CoinVariant;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::sync::Arc;
+use uuid::Timestamp;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BlookBookFrontendStatus {
+    coin: String,
+    host: String,
+    version: String,
+    git_commit: String,
+    #[serde(rename = "buildTime")]
+    build_time: String,
+    #[serde(rename = "syncMode")]
+    sync_mode: bool,
+    #[serde(rename = "initialSync")]
+    initial_sync: bool,
+    #[serde(rename = "inSync")]
+    in_sync: bool,
+    #[serde(rename = "bestHeight")]
+    best_height: u32,
+    #[serde(rename = "lastBlockTime")]
+    last_blocktime: String,
+    #[serde(rename = "inSycnMempool")]
+    in_sync_mempool: bool,
+    #[serde(rename = "lastMempoolTime")]
+    last_mempool_time: String,
+    #[serde(rename = "mempoolSize")]
+    mempool_size: u32,
+    decimals: u8,
+    #[serde(rename = "dbSize")]
+    db_size: u32,
+    about: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BlookBookBackendStatus {
+    chain: String,
+    blocks: u32,
+    headers: u32,
+    #[serde(rename = "bestBlockHash")]
+    best_block_hash: H256,
+    difficulty: String,
+    version: String,
+    #[serde(rename = "subVersion")]
+    sub_version: String,
+    #[serde(rename = "protocolVersion")]
+    protocol_verison: String,
+    #[serde(rename = "timeOffset")]
+    time_offset: u32,
+    warning: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BlookBookStatus {
+    backend: BlookBookBackendStatus,
+    frontend: BlookBookFrontendStatus,
+}
 
 /// Signed transaction output
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -343,9 +399,10 @@ pub struct BlockBookUtxo {
 }
 
 #[derive(Debug)]
-pub enum GetBlockByHashHeight {
-    Height(u64),
-    Hash(String),
+pub struct GetBlockByHashHeight<T: Clone>(T);
+
+impl<T: Clone + Display> GetBlockByHashHeight<T> {
+    pub fn get_inner(&self) -> T { self.0.clone() }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

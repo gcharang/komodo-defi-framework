@@ -1,7 +1,7 @@
 use crate::utxo::blockbook::structures::{BalanceHistoryParams, BlockBookAddress, BlockBookBalanceHistory,
                                          BlockBookBlock, BlockBookTickers, BlockBookTickersList, BlockBookTransaction,
                                          BlockBookTransactionOutput, BlockBookTransactionSpecific, BlockBookUtxo,
-                                         GetAddressParams, GetBlockByHashHeight, XpubTransactions};
+                                         BlookBookStatus, GetAddressParams, GetBlockByHashHeight, XpubTransactions};
 use crate::utxo::rpc_clients::{BlockHashOrHeight, EstimateFeeMethod, EstimateFeeMode, JsonRpcPendingRequestsShared,
                                SpentOutputInfo, UnspentInfo, UnspentMap, UtxoJsonRpcClientInfo, UtxoRpcClientOps,
                                UtxoRpcError, UtxoRpcFut};
@@ -33,6 +33,7 @@ use rpc::v1::types::{deserialize_null_default, Bytes, CoinbaseTransactionInput, 
 use serde::{Deserialize, Deserializer};
 use serde_json::{self as json, Value as Json};
 use serialization::CoinVariant;
+use std::fmt::Display;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::Relaxed;
@@ -90,7 +91,10 @@ impl BlockBookClient {
     }
 
     /// Status page returns current status of Blockbook and connected backend.
-    pub async fn status(&self, _height: u64) -> BlockBookResult<H256> { todo!() }
+    pub async fn status(&self) -> BlockBookResult<BlookBookStatus> {
+        let res = self.query("/api".to_string()).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
+    }
 
     /// Get current block of a given height.
     pub async fn get_block_hash(&self, height: u64) -> BlockBookResult<H256> {
@@ -109,43 +113,68 @@ impl BlockBookClient {
     }
 
     /// Get transaction data in the exact format as returned by backend, including all coin specific fields:
-    pub async fn get_transaction_specific(&self, _txid: &str) -> BlockBookResult<BlockBookTransactionSpecific> {
-        todo!()
+    pub async fn get_transaction_specific(&self, txid: &str) -> BlockBookResult<BlockBookTransactionSpecific> {
+        let path = format!("/api/v2/tx-specific/{txid}");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
     }
 
     /// Get balances and transactions of an address. The returned transactions are sorted by block height, newest
     /// blocks first. see `[strutures::GetAddressParams]` for extra query arguments.
     pub async fn get_address(
         &self,
-        _address: &str,
+        address: &str,
         _query_params: Option<GetAddressParams>,
     ) -> BlockBookResult<BlockBookAddress> {
-        todo!()
+        let path = format!("/api/v2/address/{address}");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
     }
 
     /// Get balances and transactions of an xpub or output descriptor, applicable only for Bitcoin-type coins. see
     /// `[strutures::GetAddressParams]` for extra query arguments.
     pub async fn get_xpub(
         &self,
-        _xpub: &str,
+        xpub: &str,
         _query_params: Option<GetAddressParams>,
     ) -> BlockBookResult<XpubTransactions> {
-        todo!()
+        let path = format!("/api/v2/xpub/{xpub}");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
     }
 
     // Get array of unspent transaction outputs of address or xpub, applicable only for Bitcoin-type coins. By default,
     // the list contains both confirmed and unconfirmed transactions. The query parameter confirmed=true disables return of unconfirmed transactions. The returned utxos are sorted by block height, newest blocks first. For xpubs or output descriptors, the response also contains address and derivation path of the utxo.
-    pub async fn get_utxo(&self, _address: &str, _confirmed: bool) -> BlockBookResult<Vec<BlockBookUtxo>> { todo!() }
+    pub async fn get_utxo(&self, address: &str, _confirmed: bool) -> BlockBookResult<Vec<BlockBookUtxo>> {
+        let path = format!("/api/v2/utxo/{address}");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
+    }
 
     /// Get information about block with transactions, either by height or hash
-    pub async fn get_block(&self, _block_by: &GetBlockByHashHeight) -> BlockBookResult<BlockBookBlock> { todo!() }
+    pub async fn get_block<T: Clone + Display>(
+        &self,
+        block_by: GetBlockByHashHeight<T>,
+    ) -> BlockBookResult<BlockBookBlock> {
+        let path = format!("/api/v2/block/{}", block_by.get_inner());
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
+    }
 
     /// Sends new transaction to backend.
-    pub async fn send_transaction(&self, _hex: &RawTransaction) -> BlockBookResult<H256> { todo!() }
+    pub async fn send_transaction(&self, hex: &RawTransaction) -> BlockBookResult<H256> {
+        let path = format!("/api/v2/sendtx/{:?}", hex);
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
+    }
 
     /// Get a list of available currency rate tickers (secondary currencies) for the specified date, along with an
     /// actual data timestamp.
-    pub async fn get_tickers_list(&self, _timestamp: Option<u32>) -> BlockBookResult<BlockBookTickersList> { todo!() }
+    pub async fn get_tickers_list(&self, _timestamp: Option<u32>) -> BlockBookResult<BlockBookTickersList> {
+        let path = format!("/api/v2/tickers-list/");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
+    }
 
     /// Get currency rate for the specified currency and date. If the currency is not available for that specific
     /// timestamp, the next closest rate will be returned. All responses contain an actual rate timestamp.
@@ -154,16 +183,20 @@ impl BlockBookClient {
         _currency: Option<&str>,
         _timestamp: Option<u32>,
     ) -> BlockBookResult<BlockBookTickers> {
-        todo!()
+        let path = format!("/api/v2/tickerss/");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
     }
 
     /// Returns a balance history for the specified XPUB or address.
     pub async fn balance_history(
         &self,
-        _address: &str,
+        address: &str,
         _query_params: BalanceHistoryParams,
     ) -> BlockBookResult<BlockBookBalanceHistory> {
-        todo!()
+        let path = format!("/api/v2/balancehistory/{address}");
+        let res = self.query(path).await?;
+        Ok(serde_json::from_value(res).map_err(|err| BlockBookClientError::ResponseError(err.to_string()))?)
     }
 }
 
