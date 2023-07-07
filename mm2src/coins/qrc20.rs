@@ -3,8 +3,8 @@ use crate::eth::{self, u256_to_big_decimal, wei_from_big_decimal, TryToAddress};
 use crate::qrc20::rpc_clients::{LogEntry, Qrc20ElectrumOps, Qrc20NativeOps, Qrc20RpcOps, TopicFilter, TxReceipt,
                                 ViewContractCallType};
 use crate::utxo::qtum::QtumBasedCoin;
-use crate::utxo::rpc_clients::{ElectrumClient, NativeClient, UnspentInfo, UtxoRpcClientEnum, UtxoRpcClientOps,
-                               UtxoRpcError, UtxoRpcFut, UtxoRpcResult};
+use crate::utxo::rpc_clients::{ElectrumClient, NativeClient, UnspentInfo, UtxoClientEnum, UtxoClientError,
+                               UtxoClientFut, UtxoClientOps, UtxoRpcResult};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_builder::{UtxoCoinBuildError, UtxoCoinBuildResult, UtxoCoinBuilder, UtxoCoinBuilderCommonOps,
@@ -104,8 +104,8 @@ impl From<UnexpectedDerivationMethod> for Qrc20GenTxError {
     fn from(e: UnexpectedDerivationMethod) -> Self { Qrc20GenTxError::UnexpectedDerivationMethod(e) }
 }
 
-impl From<UtxoRpcError> for Qrc20GenTxError {
-    fn from(e: UtxoRpcError) -> Self { Qrc20GenTxError::ErrorGeneratingUtxoTx(GenerateTxError::from(e)) }
+impl From<UtxoClientError> for Qrc20GenTxError {
+    fn from(e: UtxoClientError) -> Self { Qrc20GenTxError::ErrorGeneratingUtxoTx(GenerateTxError::from(e)) }
 }
 
 impl Qrc20GenTxError {
@@ -197,7 +197,7 @@ impl<'a> UtxoCoinBuilderCommonOps for Qrc20CoinBuilder<'a> {
 
     fn ticker(&self) -> &str { self.ticker }
 
-    async fn decimals(&self, rpc_client: &UtxoRpcClientEnum) -> UtxoCoinBuildResult<u8> {
+    async fn decimals(&self, rpc_client: &UtxoClientEnum) -> UtxoCoinBuildResult<u8> {
         if let Some(d) = self.conf()["decimals"].as_u64() {
             return Ok(d as u8);
         }
@@ -476,10 +476,10 @@ impl From<Qrc20AbiError> for WithdrawError {
     }
 }
 
-impl From<Qrc20AbiError> for UtxoRpcError {
+impl From<Qrc20AbiError> for UtxoClientError {
     fn from(e: Qrc20AbiError) -> Self {
         // `Qrc20ABIError` is always an internal error
-        UtxoRpcError::Internal(e.to_string())
+        UtxoClientError::Internal(e.to_string())
     }
 }
 
@@ -678,7 +678,7 @@ impl UtxoCommonOps for Qrc20Coin {
         _tx: &UtxoTx,
         _input_transactions: &mut HistoryUtxoTxMap,
     ) -> UtxoRpcResult<u64> {
-        MmError::err(UtxoRpcError::Internal(
+        MmError::err(UtxoClientError::Internal(
             "QRC20 coin doesn't support transaction rewards".to_owned(),
         ))
     }
@@ -698,7 +698,7 @@ impl UtxoCommonOps for Qrc20Coin {
     fn get_verbose_transactions_from_cache_or_rpc(
         &self,
         tx_ids: HashSet<H256Json>,
-    ) -> UtxoRpcFut<HashMap<H256Json, VerboseTransactionFrom>> {
+    ) -> UtxoClientFut<HashMap<H256Json, VerboseTransactionFrom>> {
         let selfi = self.clone();
         let fut = async move { utxo_common::get_verbose_transactions_from_cache_or_rpc(&selfi.utxo, tx_ids).await };
         Box::new(fut.boxed().compat())
@@ -726,7 +726,7 @@ impl UtxoCommonOps for Qrc20Coin {
         utxo_common::increase_dynamic_fee_by_stage(self, dynamic_fee, stage)
     }
 
-    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoRpcError>> {
+    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoClientError>> {
         utxo_common::p2sh_tx_locktime(self, &self.utxo.conf.ticker, htlc_locktime).await
     }
 

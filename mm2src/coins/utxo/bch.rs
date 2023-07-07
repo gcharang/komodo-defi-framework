@@ -3,7 +3,7 @@ use crate::coin_errors::MyAddressError;
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxDetailsBuilder,
                               TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
-use crate::utxo::rpc_clients::UtxoRpcFut;
+use crate::utxo::rpc_clients::UtxoClientFut;
 use crate::utxo::slp::{parse_slp_script, SlpGenesisParams, SlpTokenInfo, SlpTransaction, SlpUnspent};
 use crate::utxo::utxo_builder::{UtxoArcBuilder, UtxoCoinBuilder};
 use crate::utxo::utxo_common::big_decimal_from_sat_unsigned;
@@ -79,7 +79,7 @@ pub struct BchCoin {
 
 #[allow(clippy::large_enum_variant)]
 pub enum IsSlpUtxoError {
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     TxDeserialization(serialization::Error),
 }
 
@@ -143,8 +143,8 @@ impl BchUnspents {
     }
 }
 
-impl From<UtxoRpcError> for IsSlpUtxoError {
-    fn from(err: UtxoRpcError) -> IsSlpUtxoError { IsSlpUtxoError::Rpc(err) }
+impl From<UtxoClientError> for IsSlpUtxoError {
+    fn from(err: UtxoClientError) -> IsSlpUtxoError { IsSlpUtxoError::Rpc(err) }
 }
 
 impl From<serialization::Error> for IsSlpUtxoError {
@@ -196,7 +196,7 @@ impl BchCoin {
             let prev_tx_bytes = verbose_txs
                 .get(&prev_tx_hash)
                 .or_mm_err(|| {
-                    UtxoRpcError::Internal(format!(
+                    UtxoClientError::Internal(format!(
                         "'get_verbose_transactions_from_cache_or_rpc' should have returned '{:?}'",
                         prev_tx_hash
                     ))
@@ -307,7 +307,7 @@ impl BchCoin {
             .as_ref()
             .derivation_method
             .single_addr_or_err()
-            .mm_err(|e| UtxoRpcError::Internal(e.to_string()))?;
+            .mm_err(|e| UtxoClientError::Internal(e.to_string()))?;
         let (mut bch_unspents, recently_spent) = self.bch_unspents_for_spend(my_address).await?;
         let (mut slp_unspents, standard_utxos) = (
             bch_unspents.slp.remove(token_id).unwrap_or_default(),
@@ -326,7 +326,7 @@ impl BchCoin {
             .as_ref()
             .derivation_method
             .single_addr_or_err()
-            .mm_err(|e| UtxoRpcError::Internal(e.to_string()))?;
+            .mm_err(|e| UtxoClientError::Internal(e.to_string()))?;
         let mut bch_unspents = self.bch_unspents_for_display(my_address).await?;
         let (mut slp_unspents, standard_utxos) = (
             bch_unspents.slp.remove(token_id).unwrap_or_default(),
@@ -666,12 +666,12 @@ pub enum BchActivationError {
         expected_platform: String,
         actual_platform: String,
     },
-    RpcError(UtxoRpcError),
+    RpcError(UtxoClientError),
     SlpPrefixParseError(String),
 }
 
-impl From<UtxoRpcError> for BchActivationError {
-    fn from(e: UtxoRpcError) -> Self { BchActivationError::RpcError(e) }
+impl From<UtxoClientError> for BchActivationError {
+    fn from(e: UtxoClientError) -> Self { BchActivationError::RpcError(e) }
 }
 
 // if mockable is placed before async_trait there is `munmap_chunk(): invalid pointer` error on async fn mocking attempt
@@ -775,7 +775,7 @@ impl UtxoCommonOps for BchCoin {
     fn get_verbose_transactions_from_cache_or_rpc(
         &self,
         tx_ids: HashSet<H256Json>,
-    ) -> UtxoRpcFut<HashMap<H256Json, VerboseTransactionFrom>> {
+    ) -> UtxoClientFut<HashMap<H256Json, VerboseTransactionFrom>> {
         let selfi = self.clone();
         let fut = async move { utxo_common::get_verbose_transactions_from_cache_or_rpc(&selfi.utxo_arc, tx_ids).await };
         Box::new(fut.boxed().compat())
@@ -803,7 +803,7 @@ impl UtxoCommonOps for BchCoin {
         utxo_common::increase_dynamic_fee_by_stage(self, dynamic_fee, stage)
     }
 
-    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoRpcError>> {
+    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoClientError>> {
         utxo_common::p2sh_tx_locktime(self, &self.utxo_arc.conf.ticker, htlc_locktime).await
     }
 

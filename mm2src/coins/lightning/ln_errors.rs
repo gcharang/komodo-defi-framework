@@ -1,4 +1,4 @@
-use crate::utxo::rpc_clients::UtxoRpcError;
+use crate::utxo::rpc_clients::UtxoClientError;
 use crate::PrivKeyPolicyNotAllowed;
 use common::executor::AbortedError;
 use common::HttpStatusCode;
@@ -71,8 +71,8 @@ impl From<SqlError> for EnableLightningError {
     fn from(err: SqlError) -> EnableLightningError { EnableLightningError::DbError(err.to_string()) }
 }
 
-impl From<UtxoRpcError> for EnableLightningError {
-    fn from(e: UtxoRpcError) -> Self { EnableLightningError::RpcError(e.to_string()) }
+impl From<UtxoClientError> for EnableLightningError {
+    fn from(e: UtxoClientError) -> Self { EnableLightningError::RpcError(e.to_string()) }
 }
 
 impl From<PrivKeyPolicyNotAllowed> for EnableLightningError {

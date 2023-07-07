@@ -2,7 +2,7 @@ use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
 use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
 use crate::utxo::blockbook::client::BlockBookClient;
 use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumRpcRequest, EstimateFeeMethod,
-                               UtxoRpcClientEnum};
+                               UtxoClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::utxo_builder::utxo_conf_builder::{UtxoConfBuilder, UtxoConfError};
@@ -416,18 +416,18 @@ pub trait UtxoCoinBuilderCommonOps {
         Ok(BlockchainNetwork::Mainnet)
     }
 
-    async fn decimals(&self, _rpc_client: &UtxoRpcClientEnum) -> UtxoCoinBuildResult<u8> {
+    async fn decimals(&self, _rpc_client: &UtxoClientEnum) -> UtxoCoinBuildResult<u8> {
         Ok(self.conf()["decimals"].as_u64().unwrap_or(8) as u8)
     }
 
-    async fn tx_fee(&self, rpc_client: &UtxoRpcClientEnum) -> UtxoCoinBuildResult<TxFee> {
+    async fn tx_fee(&self, rpc_client: &UtxoClientEnum) -> UtxoCoinBuildResult<TxFee> {
         let tx_fee = match self.conf()["txfee"].as_u64() {
             None => TxFee::FixedPerKb(1000),
             Some(0) => {
                 let fee_method = match &rpc_client {
-                    UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-                    UtxoRpcClientEnum::Electrum(_) => EstimateFeeMethod::Standard,
-                    UtxoRpcClientEnum::Native(client) => client
+                    UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+                    UtxoClientEnum::Electrum(_) => EstimateFeeMethod::Standard,
+                    UtxoClientEnum::Native(client) => client
                         .detect_fee_method()
                         .compat()
                         .await
@@ -448,7 +448,7 @@ pub trait UtxoCoinBuilderCommonOps {
         }
     }
 
-    async fn rpc_client(&self, abortable_system: AbortableQueue) -> UtxoCoinBuildResult<UtxoRpcClientEnum> {
+    async fn rpc_client(&self, abortable_system: AbortableQueue) -> UtxoCoinBuildResult<UtxoClientEnum> {
         match self.activation_params().mode.clone() {
             UtxoRpcMode::Native => {
                 #[cfg(target_arch = "wasm32")]
@@ -458,14 +458,14 @@ pub trait UtxoCoinBuilderCommonOps {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let native = self.native_client()?;
-                    Ok(UtxoRpcClientEnum::Native(native))
+                    Ok(UtxoClientEnum::Native(native))
                 }
             },
             UtxoRpcMode::Electrum { servers } => {
                 let electrum = self
                     .electrum_client(abortable_system, ElectrumBuilderArgs::default(), servers)
                     .await?;
-                Ok(UtxoRpcClientEnum::Electrum(electrum))
+                Ok(UtxoClientEnum::Electrum(electrum))
             },
         }
     }

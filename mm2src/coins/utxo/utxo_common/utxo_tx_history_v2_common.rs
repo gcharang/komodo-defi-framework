@@ -3,7 +3,7 @@ use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, DisplayAddress, MyTxHistoryErrorV2, MyTxHistoryTarget,
                               TxDetailsBuilder, TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
-use crate::utxo::rpc_clients::{electrum_script_hash, ElectrumClient, NativeClient, UtxoRpcClientEnum};
+use crate::utxo::rpc_clients::{electrum_script_hash, ElectrumClient, NativeClient, UtxoClientEnum};
 use crate::utxo::utxo_common::{big_decimal_from_sat, HISTORY_TOO_LARGE_ERROR};
 use crate::utxo::utxo_tx_history_v2::{UtxoMyAddressesHistoryError, UtxoTxDetailsError, UtxoTxDetailsParams,
                                       UtxoTxHistoryOps};
@@ -279,7 +279,7 @@ where
 }
 
 /// [`UtxoTxHistoryOps::request_tx_history`] implementation.
-/// Requests transaction history according to `UtxoRpcClientEnum`.
+/// Requests transaction history according to `UtxoClientEnum`.
 pub async fn request_tx_history<Coin>(
     coin: &Coin,
     metrics: MetricsArc,
@@ -290,11 +290,11 @@ where
 {
     let ticker = coin.ticker();
     match &coin.as_ref().rpc_client {
-        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-        UtxoRpcClientEnum::Native(ref native) => {
+        UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+        UtxoClientEnum::Native(ref native) => {
             request_tx_history_with_native(ticker, native, metrics, for_addresses).await
         },
-        UtxoRpcClientEnum::Electrum(ref electrum) => {
+        UtxoClientEnum::Electrum(ref electrum) => {
             request_tx_history_with_electrum(ticker, electrum, metrics, for_addresses).await
         },
     }

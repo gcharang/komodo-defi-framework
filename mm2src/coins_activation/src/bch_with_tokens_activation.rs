@@ -4,7 +4,7 @@ use crate::slp_token_activation::SlpActivationRequest;
 use async_trait::async_trait;
 use coins::my_tx_history_v2::TxHistoryStorage;
 use coins::utxo::bch::{bch_coin_with_policy, BchActivationRequest, BchCoin, CashAddrPrefix};
-use coins::utxo::rpc_clients::UtxoRpcError;
+use coins::utxo::rpc_clients::UtxoClientError;
 use coins::utxo::slp::{EnableSlpError, SlpProtocolConf, SlpToken};
 use coins::utxo::utxo_tx_history_v2::bch_and_slp_history_loop;
 use coins::utxo::UtxoCommonOps;
@@ -183,8 +183,8 @@ pub enum BchWithTokensActivationError {
     Internal(String),
 }
 
-impl From<UtxoRpcError> for BchWithTokensActivationError {
-    fn from(err: UtxoRpcError) -> Self { BchWithTokensActivationError::Transport(err.to_string()) }
+impl From<UtxoClientError> for BchWithTokensActivationError {
+    fn from(err: UtxoClientError) -> Self { BchWithTokensActivationError::Transport(err.to_string()) }
 }
 
 impl From<UnexpectedDerivationMethod> for BchWithTokensActivationError {

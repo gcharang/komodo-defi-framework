@@ -1,8 +1,8 @@
 use super::*;
 use crate::lightning::ln_errors::{SaveChannelClosingError, SaveChannelClosingResult};
 use crate::utxo::rpc_clients::{BestBlock as RpcBestBlock, BlockHashOrHeight, ConfirmedTransactionInfo,
-                               ElectrumBlockHeader, ElectrumClient, ElectrumNonce, EstimateFeeMethod,
-                               UtxoRpcClientEnum, UtxoRpcResult};
+                               ElectrumBlockHeader, ElectrumClient, ElectrumNonce, EstimateFeeMethod, UtxoClientEnum,
+                               UtxoRpcResult};
 use crate::utxo::spv::SimplePaymentVerification;
 use crate::utxo::utxo_standard::UtxoStandardCoin;
 use crate::utxo::GetConfirmedTxError;
@@ -123,7 +123,7 @@ pub async fn ln_best_block_update_loop(
     }
 }
 
-async fn get_funding_tx_bytes_loop(rpc_client: &UtxoRpcClientEnum, tx_hash: H256Json) -> BytesJson {
+async fn get_funding_tx_bytes_loop(rpc_client: &UtxoClientEnum, tx_hash: H256Json) -> BytesJson {
     loop {
         match rpc_client.get_transaction_bytes(&tx_hash).compat().await {
             Ok(res) => break res,
@@ -214,7 +214,7 @@ impl Platform {
     }
 
     #[inline]
-    fn rpc_client(&self) -> &UtxoRpcClientEnum { &self.coin.as_ref().rpc_client }
+    fn rpc_client(&self) -> &UtxoClientEnum { &self.coin.as_ref().rpc_client }
 
     pub fn spawner(&self) -> CoinFutSpawner { CoinFutSpawner::new(&self.abortable_system) }
 

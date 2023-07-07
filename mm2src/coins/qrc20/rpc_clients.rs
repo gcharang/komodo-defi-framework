@@ -1,12 +1,12 @@
 use super::*;
-use crate::utxo::rpc_clients::{UtxoRpcError, UtxoRpcFut};
+use crate::utxo::rpc_clients::{UtxoClientError, UtxoClientFut};
 use rpc::v1::types::H256;
 
-impl From<ethabi::Error> for UtxoRpcError {
+impl From<ethabi::Error> for UtxoClientError {
     fn from(e: ethabi::Error) -> Self {
         // Currently, we use the `ethabi` crate to work with a smart contract ABI known at compile time.
         // It's an internal error if there are any issues during working with a smart contract ABI.
-        UtxoRpcError::Internal(e.to_string())
+        UtxoClientError::Internal(e.to_string())
     }
 }
 
@@ -297,7 +297,7 @@ pub trait Qrc20NativeOps {
         to_block: Option<u64>,
         addresses: Vec<H160Json>,
         topics: Vec<TopicFilter>,
-    ) -> UtxoRpcFut<Vec<TxReceipt>>;
+    ) -> UtxoClientFut<Vec<TxReceipt>>;
 }
 
 impl Qrc20NativeOps for NativeClient {
@@ -315,7 +315,7 @@ impl Qrc20NativeOps for NativeClient {
         to_block: Option<u64>,
         addresses: Vec<H160Json>,
         topics: Vec<TopicFilter>,
-    ) -> UtxoRpcFut<Vec<TxReceipt>> {
+    ) -> UtxoClientFut<Vec<TxReceipt>> {
         let to_block = to_block.map(|x| x as i64).unwrap_or(-1);
         let addr_block = json!({ "addresses": addresses });
         let topics: Vec<Json> = topics
@@ -330,7 +330,7 @@ impl Qrc20NativeOps for NativeClient {
         });
         Box::new(
             rpc_func!(self, "searchlogs", from_block, to_block, addr_block, topic_block)
-                .map_to_mm_fut(UtxoRpcError::from),
+                .map_to_mm_fut(UtxoClientError::from),
         )
     }
 }
@@ -373,17 +373,17 @@ pub trait Qrc20RpcOps {
         func: ViewContractCallType,
         contract_addr: &H160,
         tokens: &[Token],
-    ) -> UtxoRpcFut<Vec<Token>>;
+    ) -> UtxoClientFut<Vec<Token>>;
 
     fn token_decimals(&self, token_address: &H160) -> Box<dyn Future<Item = u8, Error = String> + Send>;
 }
 
-impl Qrc20RpcOps for UtxoRpcClientEnum {
+impl Qrc20RpcOps for UtxoClientEnum {
     fn get_transaction_receipts(&self, tx_hash: &H256) -> RpcRes<Vec<TxReceipt>> {
         match self {
-            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-            UtxoRpcClientEnum::Electrum(electrum) => electrum.blockchain_transaction_get_receipt(tx_hash),
-            UtxoRpcClientEnum::Native(native) => native.get_transaction_receipt(tx_hash),
+            UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+            UtxoClientEnum::Electrum(electrum) => electrum.blockchain_transaction_get_receipt(tx_hash),
+            UtxoClientEnum::Native(native) => native.get_transaction_receipt(tx_hash),
         }
     }
 
@@ -392,19 +392,17 @@ impl Qrc20RpcOps for UtxoRpcClientEnum {
         func: ViewContractCallType,
         contract_addr: &H160,
         tokens: &[Token],
-    ) -> UtxoRpcFut<Vec<Token>> {
+    ) -> UtxoClientFut<Vec<Token>> {
         let function = func.as_function().clone();
-        let params = try_f!(function.encode_input(tokens).map_to_mm(UtxoRpcError::from));
+        let params = try_f!(function.encode_input(tokens).map_to_mm(UtxoClientError::from));
         let contract_addr = contract_addr_into_rpc_format(contract_addr);
 
         let rpc_client = self.clone();
         let fut = async move {
             let fut = match rpc_client {
-                UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-                UtxoRpcClientEnum::Native(native) => native.call_contract(&contract_addr, params.into()),
-                UtxoRpcClientEnum::Electrum(electrum) => {
-                    electrum.blockchain_contract_call(&contract_addr, params.into())
-                },
+                UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+                UtxoClientEnum::Native(native) => native.call_contract(&contract_addr, params.into()),
+                UtxoClientEnum::Electrum(electrum) => electrum.blockchain_contract_call(&contract_addr, params.into()),
             };
             let result = fut.compat().await?;
             let decoded = function.decode_output(&result.execution_result.output)?;

@@ -1,5 +1,5 @@
 use crate::my_tx_history_v2::MyTxHistoryErrorV2;
-use crate::utxo::rpc_clients::UtxoRpcError;
+use crate::utxo::rpc_clients::UtxoClientError;
 use crate::utxo::utxo_builder::UtxoCoinBuildError;
 use crate::z_coin::storage::WalletDbError;
 use crate::NumConversError;
@@ -22,7 +22,7 @@ use zcash_primitives::transaction::builder::Error as ZTxBuilderError;
 pub enum UpdateBlocksCacheErr {
     #[cfg(not(target_arch = "wasm32"))]
     GrpcError(tonic::Status),
-    UtxoRpcError(UtxoRpcError),
+    UtxoClientError(UtxoClientError),
     InternalError(String),
     JsonRpcError(JsonRpcError),
     GetLiveLightClientError(String),
@@ -44,8 +44,8 @@ impl From<SqliteClientError> for UpdateBlocksCacheErr {
     fn from(err: SqliteClientError) -> Self { UpdateBlocksCacheErr::ZcashDBError(err.to_string()) }
 }
 
-impl From<UtxoRpcError> for UpdateBlocksCacheErr {
-    fn from(err: UtxoRpcError) -> Self { UpdateBlocksCacheErr::UtxoRpcError(err) }
+impl From<UtxoClientError> for UpdateBlocksCacheErr {
+    fn from(err: UtxoClientError) -> Self { UpdateBlocksCacheErr::UtxoClientError(err) }
 }
 
 impl From<JsonRpcError> for UpdateBlocksCacheErr {
@@ -92,7 +92,7 @@ pub enum GenTxError {
         required: BigDecimal,
     },
     NumConversion(NumConversError),
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     PrevTxNotConfirmed,
     TxBuilderError(ZTxBuilderError),
     #[display(fmt = "Failed to read ZCash tx from bytes {:?} with error {}", hex, err)]
@@ -114,8 +114,8 @@ impl From<NumConversError> for GenTxError {
     fn from(err: NumConversError) -> GenTxError { GenTxError::NumConversion(err) }
 }
 
-impl From<UtxoRpcError> for GenTxError {
-    fn from(err: UtxoRpcError) -> GenTxError { GenTxError::Rpc(err) }
+impl From<UtxoClientError> for GenTxError {
+    fn from(err: UtxoClientError) -> GenTxError { GenTxError::Rpc(err) }
 }
 
 impl From<ZTxBuilderError> for GenTxError {
@@ -169,7 +169,7 @@ impl From<BlockchainScanStopped> for GenTxError {
 pub enum SendOutputsErr {
     GenTxError(GenTxError),
     NumConversion(NumConversError),
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     TxNotMined(String),
     PrivKeyPolicyNotAllowed(PrivKeyPolicyNotAllowed),
 }
@@ -186,8 +186,8 @@ impl From<NumConversError> for SendOutputsErr {
     fn from(err: NumConversError) -> SendOutputsErr { SendOutputsErr::NumConversion(err) }
 }
 
-impl From<UtxoRpcError> for SendOutputsErr {
-    fn from(err: UtxoRpcError) -> SendOutputsErr { SendOutputsErr::Rpc(err) }
+impl From<UtxoClientError> for SendOutputsErr {
+    fn from(err: UtxoClientError) -> SendOutputsErr { SendOutputsErr::Rpc(err) }
 }
 
 #[derive(Debug, Display)]
@@ -208,7 +208,7 @@ pub enum ZCoinBuildError {
     UtxoBuilderError(UtxoCoinBuildError),
     GetAddressError,
     ZcashDBError(String),
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     #[display(fmt = "Sapling cache DB does not exist at {}. Please download it.", path)]
     SaplingCacheDbDoesNotExist {
         path: String,
@@ -225,8 +225,8 @@ impl From<SqliteError> for ZCoinBuildError {
     fn from(err: SqliteError) -> ZCoinBuildError { ZCoinBuildError::ZcashDBError(err.to_string()) }
 }
 
-impl From<UtxoRpcError> for ZCoinBuildError {
-    fn from(err: UtxoRpcError) -> ZCoinBuildError { ZCoinBuildError::Rpc(err) }
+impl From<UtxoClientError> for ZCoinBuildError {
+    fn from(err: UtxoClientError) -> ZCoinBuildError { ZCoinBuildError::Rpc(err) }
 }
 
 impl From<std::io::Error> for ZCoinBuildError {

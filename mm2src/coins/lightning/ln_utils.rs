@@ -143,9 +143,9 @@ pub async fn init_channel_manager(
     }
 
     let rpc_client = match &platform.coin.as_ref().rpc_client {
-        UtxoRpcClientEnum::BlockBook(_c) => todo!(),
-        UtxoRpcClientEnum::Electrum(c) => c.clone(),
-        UtxoRpcClientEnum::Native(_) => {
+        UtxoClientEnum::BlockBook(_c) => todo!(),
+        UtxoClientEnum::Electrum(c) => c.clone(),
+        UtxoClientEnum::Native(_) => {
             return MmError::err(EnableLightningError::UnsupportedMode(
                 "Lightning network".into(),
                 "electrum".into(),

@@ -1,13 +1,10 @@
-use super::serde_helper::{deserialize_amount, deserialize_hex_string};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::{GetBlockHeaderError, NonZeroU64};
-use bitcoin::Amount;
-use bitcoin::Denomination::Satoshi;
 use chain::TransactionInput;
 use keys::Address;
 use mm2_number::BigDecimal;
-use rpc::v1::types::{deserialize_null_default, Bytes, RawTransaction, SignedTransactionOutput, TransactionInputEnum,
-                     TransactionOutputScript, H256};
+use rpc::v1::types::{deserialize_null_default, Bytes, RawTransaction, SignedTransactionOutput, Transaction,
+                     TransactionInputEnum, TransactionOutput, TransactionOutputScript, H256};
 use serde::{Deserialize, Deserializer};
 use serde_json::{self as json, Value as Json};
 use serialization::CoinVariant;
@@ -19,77 +16,56 @@ use uuid::Timestamp;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BlookBookFrontendStatus {
-    coin: String,
-    host: String,
-    version: String,
-    git_commit: String,
+    pub coin: String,
+    pub host: String,
+    pub version: String,
+    #[serde(rename = "gitCommit")]
+    pub git_commit: String,
     #[serde(rename = "buildTime")]
-    build_time: String,
+    pub build_time: String,
     #[serde(rename = "syncMode")]
-    sync_mode: bool,
+    pub sync_mode: bool,
     #[serde(rename = "initialSync")]
-    initial_sync: bool,
+    pub initial_sync: bool,
     #[serde(rename = "inSync")]
-    in_sync: bool,
+    pub in_sync: bool,
     #[serde(rename = "bestHeight")]
-    best_height: u32,
+    pub best_height: u32,
     #[serde(rename = "lastBlockTime")]
-    last_blocktime: String,
-    #[serde(rename = "inSycnMempool")]
-    in_sync_mempool: bool,
+    pub last_blocktime: String,
+    #[serde(rename = "inSyncMempool")]
+    pub in_sync_mempool: bool,
     #[serde(rename = "lastMempoolTime")]
-    last_mempool_time: String,
+    pub last_mempool_time: String,
     #[serde(rename = "mempoolSize")]
-    mempool_size: u32,
-    decimals: u8,
+    pub mempool_size: u32,
+    pub decimals: u8,
     #[serde(rename = "dbSize")]
-    db_size: u32,
-    about: String,
+    pub db_size: u64,
+    pub about: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BlookBookBackendStatus {
-    chain: String,
-    blocks: u32,
-    headers: u32,
+    pub chain: String,
+    pub blocks: u32,
+    pub headers: u32,
     #[serde(rename = "bestBlockHash")]
-    best_block_hash: H256,
-    difficulty: String,
-    version: String,
-    #[serde(rename = "subVersion")]
-    sub_version: String,
+    pub best_block_hash: H256,
+    pub difficulty: String,
+    pub version: String,
+    pub subversion: String,
     #[serde(rename = "protocolVersion")]
-    protocol_verison: String,
+    pub protocol_verison: String,
     #[serde(rename = "timeOffset")]
-    time_offset: u32,
-    warning: String,
+    pub time_offset: Option<u32>,
+    pub warning: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BlookBookStatus {
-    backend: BlookBookBackendStatus,
-    frontend: BlookBookFrontendStatus,
-}
-
-/// Signed transaction output
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct BlockBookTransactionOutput {
-    /// Output value in BTC
-    #[serde(default)]
-    #[serde(deserialize_with = "deserialize_amount")]
-    pub value: Option<f64>,
-    /// Output index
-    pub n: u32,
-    pub hex: RawTransaction,
-    pub addresses: Option<Vec<String>>,
-    #[serde(rename = "isAddress")]
-    pub is_address: bool,
-    #[serde(rename = "spentTxId")]
-    pub spent_txid: Option<H256>,
-    #[serde(rename = "spentIndex")]
-    pub spent_index: Option<usize>,
-    #[serde(rename = "spentHeight")]
-    pub spent_height: Option<u64>,
+    pub backend: BlookBookBackendStatus,
+    pub blockbook: BlookBookFrontendStatus,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -120,7 +96,7 @@ pub struct BlockBookTransaction {
     /// Transaction inputs
     pub vin: Vec<TransactionInputEnum>,
     /// Transaction outputs
-    pub vout: Vec<BlockBookTransactionOutput>,
+    pub vout: Vec<SignedTransactionOutput>,
     /// Number of confirmations of this transaction
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_null_default")]
@@ -133,12 +109,9 @@ pub struct BlockBookTransaction {
     #[serde(deserialize_with = "deserialize_null_default")]
     #[serde(rename = "confirmationETASeconds")]
     pub confirmations_eta_seconds: u32,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub value: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "valueIn")]
     pub value_in: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub fees: Option<f64>,
 }
 
@@ -178,25 +151,22 @@ pub struct BlockBookTransactionSpecific {
     pub txid: H256,
     /// The version
     pub version: i32,
-    pub overwintered: bool,
+    pub overwintered: Option<bool>,
     #[serde(rename = "versiongroupid")]
-    pub version_group_id: String,
+    pub version_group_id: Option<String>,
     #[serde(rename = "locktime")]
-    pub lock_time: u64,
+    pub locktime: u32,
     #[serde(rename = "expiryHeight")]
-    pub expiry_height: u64,
-    pub v_join_split: Vec<String>,
-    #[serde(deserialize_with = "deserialize_amount")]
-    #[serde(rename = "valueBalance")]
-    pub value_balance: Option<f64>,
-    pub v_shielded_spend: Vec<String>,
+    pub expiry_height: Option<u64>,
+    pub v_join_split: Option<Vec<String>>,
+    pub v_shielded_spend: Option<Vec<String>>,
     /// Hash of the block this transaction is included in
     #[serde(default)]
     #[serde(rename = "blockHash")]
-    pub block_hash: H256,
+    pub blockhash: H256,
     /// The block time in seconds since epoch (Jan 1 1970 GMT)
     #[serde(rename = "blocktime")]
-    pub block_time: u32,
+    pub blocktime: u32,
     pub time: u32,
     /// The block height transaction mined in
     #[serde(default)]
@@ -210,13 +180,35 @@ pub struct BlockBookTransactionSpecific {
     /// Transaction inputs
     pub vin: Vec<TransactionInputEnum>,
     /// Transaction outputs
-    pub vout: Vec<BlockBookTransactionOutput>,
+    pub vout: Vec<SignedTransactionOutput>,
     /// Number of confirmations of this transaction
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_null_default")]
     pub confirmations: u32,
     #[serde(rename = "bindingSig")]
-    pub binding_sig: Bytes,
+    pub binding_sig: Option<Bytes>,
+}
+
+impl From<BlockBookTransactionSpecific> for Transaction {
+    fn from(value: BlockBookTransactionSpecific) -> Self {
+        Self {
+            hex: value.hex,
+            txid: value.txid,
+            hash: None,
+            size: value.size,
+            vsize: value.vsize,
+            version: value.version,
+            locktime: value.locktime,
+            vin: value.vin,
+            vout: value.vout,
+            blockhash: value.blockhash,
+            confirmations: value.confirmations,
+            rawconfirmations: None,
+            time: value.time,
+            blocktime: value.blocktime,
+            height: value.height,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -228,15 +220,11 @@ pub struct BlockBookAddress {
     #[serde(rename = "itemsOnPge")]
     pub items_on_page: u32,
     pub address: String,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub balance: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "totalReceived")]
     pub total_received: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "totalSent")]
     pub total_sent: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "unconfirmedBalance")]
     pub unconfirmed_balance: Option<f64>,
     #[serde(rename = "unconfirmedTxs")]
@@ -344,12 +332,9 @@ pub struct Tokens {
     pub path: String,
     pub decimals: u8,
     pub transfers: u32,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub balance: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "totalReceived")]
     pub total_received: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "totalSent")]
     pub total_sent: Option<f64>,
 }
@@ -363,15 +348,11 @@ pub struct XpubTransactions {
     #[serde(rename = "itemsOnPge")]
     pub items_on_page: u32,
     pub address: String,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub balance: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "totalReceived")]
     pub total_received: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "totalSent")]
     pub total_sent: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "unconfirmedBalance")]
     pub unconfirmed_balance: Option<f64>,
     #[serde(rename = "unconfirmedTxs")]
@@ -391,7 +372,6 @@ pub struct XpubTransactions {
 pub struct BlockBookUtxo {
     pub txid: H256,
     pub vout: u32,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub value: Option<f64>,
     pub confirmations: u32,
     #[serde(rename = "locktime")]
@@ -461,11 +441,8 @@ pub struct BlockBookTickers {
 pub struct BlockBookBalanceHistory {
     pub time: u32,
     pub txs: u32,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub received: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     pub sent: Option<f64>,
-    #[serde(deserialize_with = "deserialize_amount")]
     #[serde(rename = "sentToSelf")]
     pub sent_to_self: Option<f64>,
     pub rates: HashMap<String, f64>,

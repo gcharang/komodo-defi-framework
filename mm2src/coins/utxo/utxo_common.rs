@@ -9,8 +9,8 @@ use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, HDAccountMut
 use crate::hd_wallet_storage::{HDWalletCoinWithStorageOps, HDWalletStorageResult};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
-use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
-                               UtxoRpcClientOps, UtxoRpcResult};
+use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoClientEnum,
+                               UtxoClientOps, UtxoRpcResult};
 use crate::utxo::spv::SimplePaymentVerification;
 use crate::utxo::tx_cache::TxCacheResult;
 use crate::utxo::utxo_withdraw::{InitUtxoWithdraw, StandardUtxoWithdraw, UtxoWithdraw};
@@ -1214,9 +1214,9 @@ where
         args.amount
     ));
     let send_fut = match &coin.as_ref().rpc_client {
-        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-        UtxoRpcClientEnum::Electrum(_) => Either::A(send_outputs_from_my_address(coin, outputs)),
-        UtxoRpcClientEnum::Native(client) => {
+        UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+        UtxoClientEnum::Electrum(_) => Either::A(send_outputs_from_my_address(coin, outputs)),
+        UtxoClientEnum::Native(client) => {
             let addr_string = try_tx_fus!(payment_address.display_address());
             Either::B(
                 client
@@ -1252,9 +1252,9 @@ where
     ));
 
     let send_fut = match &coin.as_ref().rpc_client {
-        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-        UtxoRpcClientEnum::Electrum(_) => Either::A(send_outputs_from_my_address(coin, outputs)),
-        UtxoRpcClientEnum::Native(client) => {
+        UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+        UtxoClientEnum::Electrum(_) => Either::A(send_outputs_from_my_address(coin, outputs)),
+        UtxoClientEnum::Native(client) => {
             let addr_string = try_tx_fus!(payment_address.display_address());
             Either::B(
                 client
@@ -2046,7 +2046,7 @@ pub fn watcher_validate_taker_payment<T: UtxoCommonOps + SwapOps>(
             ));
         }
 
-        if let UtxoRpcClientEnum::Electrum(client) = &coin.as_ref().rpc_client {
+        if let UtxoClientEnum::Electrum(client) = &coin.as_ref().rpc_client {
             if coin.as_ref().conf.spv_conf.is_some() && input.confirmations != 0 {
                 client.validate_spv_proof(&taker_payment_tx, input.wait_until).await?;
             }
@@ -2102,8 +2102,8 @@ pub fn check_if_my_payment_sent<T: UtxoCommonOps + SwapOps>(
     let script_hash = electrum_script_hash(&p2sh);
     let fut = async move {
         match &coin.as_ref().rpc_client {
-            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-            UtxoRpcClientEnum::Electrum(client) => {
+            UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+            UtxoClientEnum::Electrum(client) => {
                 let history = try_s!(client.scripthash_get_history(&hex::encode(script_hash)).compat().await);
                 match history.first() {
                     Some(item) => {
@@ -2115,7 +2115,7 @@ pub fn check_if_my_payment_sent<T: UtxoCommonOps + SwapOps>(
                     None => Ok(None),
                 }
             },
-            UtxoRpcClientEnum::Native(client) => {
+            UtxoClientEnum::Native(client) => {
                 let target_addr = Address {
                     t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
                     prefix: coin.as_ref().conf.p2sh_addr_prefix,
@@ -2987,8 +2987,8 @@ where
     };
 
     let tx_ids = match &coin.as_ref().rpc_client {
-        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-        UtxoRpcClientEnum::Native(client) => {
+        UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+        UtxoClientEnum::Native(client) => {
             let mut from = 0;
             let mut all_transactions = vec![];
             loop {
@@ -3028,7 +3028,7 @@ where
                 })
                 .collect()
         },
-        UtxoRpcClientEnum::Electrum(client) => {
+        UtxoClientEnum::Electrum(client) => {
             let my_address = match coin.as_ref().derivation_method.single_addr_or_err() {
                 Ok(my_address) => my_address,
                 Err(e) => return RequestTxHistoryResult::CriticalError(e.to_string()),
@@ -3242,7 +3242,7 @@ where
                 .await?;
             let tx = HistoryUtxoTx {
                 tx: deserialize(verbose.hex.as_slice())
-                    .map_to_mm(|e| UtxoRpcError::InvalidResponse(format!("{:?}, tx: {:?}", e, tx_hash)))?,
+                    .map_to_mm(|e| UtxoClientError::InvalidResponse(format!("{:?}, tx: {:?}", e, tx_hash)))?,
                 height: verbose.height,
             };
             e.insert(tx)
@@ -3269,10 +3269,10 @@ where
 {
     if !tx_details.should_update_kmd_rewards() {
         let error = "There is no need to update KMD rewards".to_owned();
-        return MmError::err(UtxoRpcError::Internal(error));
+        return MmError::err(UtxoClientError::Internal(error));
     }
     let tx: UtxoTx = deserialize(tx_details.tx_hex.as_slice()).map_to_mm(|e| {
-        UtxoRpcError::Internal(format!(
+        UtxoClientError::Internal(format!(
             "Error deserializing the {:?} transaction hex: {:?}",
             tx_details.tx_hash, e
         ))
@@ -3305,7 +3305,7 @@ pub async fn calc_interest_of_tx<T: UtxoCommonOps>(
 ) -> UtxoRpcResult<u64> {
     if coin.as_ref().conf.ticker != "KMD" {
         let error = format!("Expected KMD ticker, found {}", coin.as_ref().conf.ticker);
-        return MmError::err(UtxoRpcError::Internal(error));
+        return MmError::err(UtxoClientError::Internal(error));
     }
 
     let mut kmd_rewards = 0;
@@ -3606,7 +3606,7 @@ where
     /// Calculates actual confirmations number of the given `tx` transaction loaded from cache.
     fn calc_actual_cached_tx_confirmations(tx: &RpcTransaction, block_count: u64) -> UtxoRpcResult<u32> {
         let tx_height = tx.height.or_mm_err(|| {
-            UtxoRpcError::Internal(format!(r#"Warning, height of cached "{:?}" tx is unknown"#, tx.txid))
+            UtxoClientError::Internal(format!(r#"Warning, height of cached "{:?}" tx is unknown"#, tx.txid))
         })?;
         // There shouldn't be cached transactions with height == 0
         if tx_height == 0 {
@@ -3614,14 +3614,14 @@ where
                 r#"Warning, height of cached "{:?}" tx is expected to be non-zero"#,
                 tx.txid
             );
-            return MmError::err(UtxoRpcError::Internal(error));
+            return MmError::err(UtxoClientError::Internal(error));
         }
         if block_count < tx_height {
             let error = format!(
                 r#"Warning, actual block_count {} less than cached tx_height {} of {:?}"#,
                 block_count, tx_height, tx.txid
             );
-            return MmError::err(UtxoRpcError::Internal(error));
+            return MmError::err(UtxoClientError::Internal(error));
         }
 
         let confirmations = block_count - tx_height + 1;
@@ -3647,7 +3647,7 @@ where
         let tx_info = verbose_txs
             .get(&tx_hash)
             .or_mm_err(|| {
-                UtxoRpcError::Internal(format!(
+                UtxoClientError::Internal(format!(
                     "'get_verbose_transactions_from_cache_or_rpc' should have returned '{:?}'",
                     tx_hash
                 ))
@@ -3874,7 +3874,7 @@ pub fn validate_payment<T: UtxoCommonOps>(
             )));
         }
 
-        if let UtxoRpcClientEnum::Electrum(client) = &coin.as_ref().rpc_client {
+        if let UtxoClientEnum::Electrum(client) = &coin.as_ref().rpc_client {
             if coin.as_ref().conf.spv_conf.is_some() && confirmations != 0 {
                 client.validate_spv_proof(&tx, try_spv_proof_until).await?;
             }
@@ -4175,7 +4175,7 @@ fn increase_by_percent(num: u64, percent: f64) -> u64 {
     num + (percent.round() as u64)
 }
 
-pub async fn can_refund_htlc<T>(coin: &T, locktime: u64) -> Result<CanRefundHtlc, MmError<UtxoRpcError>>
+pub async fn can_refund_htlc<T>(coin: &T, locktime: u64) -> Result<CanRefundHtlc, MmError<UtxoClientError>>
 where
     T: UtxoCommonOps,
 {
@@ -4196,7 +4196,7 @@ where
     }
 }
 
-pub async fn p2sh_tx_locktime<T>(coin: &T, ticker: &str, htlc_locktime: u32) -> Result<u32, MmError<UtxoRpcError>>
+pub async fn p2sh_tx_locktime<T>(coin: &T, ticker: &str, htlc_locktime: u32) -> Result<u32, MmError<UtxoClientError>>
 where
     T: UtxoCommonOps,
 {

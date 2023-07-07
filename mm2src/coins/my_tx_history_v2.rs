@@ -4,7 +4,7 @@ use crate::tx_history_storage::{CreateTxHistoryStorageError, FilteringAddresses,
                                 TxHistoryStorageBuilder, WalletId};
 use crate::utxo::utxo_common::big_decimal_from_sat_unsigned;
 use crate::{coin_conf, lp_coinfind_or_err, BlockHeightAndTime, CoinFindError, HDAccountAddressId, HistorySyncState,
-            MmCoin, MmCoinEnum, Transaction, TransactionDetails, TransactionType, TxFeeDetails, UtxoRpcError};
+            MmCoin, MmCoinEnum, Transaction, TransactionDetails, TransactionType, TxFeeDetails, UtxoClientError};
 use async_trait::async_trait;
 use bitcrypto::sha256;
 use common::{calc_total_pages, ten, HttpStatusCode, PagingOptionsEnum, StatusCode};
@@ -354,8 +354,8 @@ impl From<CreateTxHistoryStorageError> for MyTxHistoryErrorV2 {
     fn from(e: CreateTxHistoryStorageError) -> Self { MyTxHistoryErrorV2::StorageError(e.to_string()) }
 }
 
-impl From<UtxoRpcError> for MyTxHistoryErrorV2 {
-    fn from(err: UtxoRpcError) -> Self { MyTxHistoryErrorV2::RpcError(err.to_string()) }
+impl From<UtxoClientError> for MyTxHistoryErrorV2 {
+    fn from(err: UtxoClientError) -> Self { MyTxHistoryErrorV2::RpcError(err.to_string()) }
 }
 
 impl From<AddressDerivingError> for MyTxHistoryErrorV2 {

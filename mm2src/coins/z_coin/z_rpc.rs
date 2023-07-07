@@ -16,7 +16,7 @@ use zcash_primitives::transaction::TxId;
 cfg_native!(
     use super::CheckPointBlockInfo;
     use crate::{RpcCommonOps, ZTransaction};
-    use crate::utxo::rpc_clients::{UtxoRpcClientOps, NO_TX_ERROR_CODE};
+    use crate::utxo::rpc_clients::{UtxoClientOps, NO_TX_ERROR_CODE};
     use crate::z_coin::storage::BlockDbError;
 
     use db_common::sqlite::rusqlite::Connection;

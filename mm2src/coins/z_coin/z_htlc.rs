@@ -6,7 +6,7 @@
 // maker payment spend - https://rick.explorer.dexstats.info/tx/6a2dcc866ad75cebecb780a02320073a88bcf5e57ddccbe2657494e7747d591e
 
 use super::ZCoin;
-use crate::utxo::rpc_clients::{UtxoRpcClientEnum, UtxoRpcError};
+use crate::utxo::rpc_clients::{UtxoClientEnum, UtxoClientError};
 use crate::utxo::utxo_common::payment_script;
 use crate::utxo::{sat_from_big_decimal, UtxoAddressFormat};
 use crate::z_coin::SendOutputsErr;
@@ -58,7 +58,7 @@ pub async fn z_send_htlc(
 
     let amount_sat = sat_from_big_decimal(&amount, coin.utxo_arc.decimals)?;
     let address = htlc_address.to_string();
-    if let UtxoRpcClientEnum::Native(native) = coin.utxo_rpc_client() {
+    if let UtxoClientEnum::Native(native) = coin.utxo_rpc_client() {
         native.import_address(&address, &address, false).compat().await.unwrap();
     }
 
@@ -106,7 +106,7 @@ pub async fn z_send_dex_fee(
 pub enum ZP2SHSpendError {
     ZTxBuilderError(ZTxBuilderError),
     PrivKeyPolicyNotAllowed(PrivKeyPolicyNotAllowed),
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     #[display(fmt = "{:?} {}", _0, _1)]
     TxRecoverable(TransactionEnum, String),
     Io(std::io::Error),
@@ -120,8 +120,8 @@ impl From<PrivKeyPolicyNotAllowed> for ZP2SHSpendError {
     fn from(err: PrivKeyPolicyNotAllowed) -> Self { ZP2SHSpendError::PrivKeyPolicyNotAllowed(err) }
 }
 
-impl From<UtxoRpcError> for ZP2SHSpendError {
-    fn from(rpc: UtxoRpcError) -> ZP2SHSpendError { ZP2SHSpendError::Rpc(rpc) }
+impl From<UtxoClientError> for ZP2SHSpendError {
+    fn from(rpc: UtxoClientError) -> ZP2SHSpendError { ZP2SHSpendError::Rpc(rpc) }
 }
 
 impl From<std::io::Error> for ZP2SHSpendError {

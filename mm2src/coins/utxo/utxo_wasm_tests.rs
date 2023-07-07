@@ -1,4 +1,4 @@
-use super::rpc_clients::{ElectrumClient, UtxoRpcClientOps};
+use super::rpc_clients::{ElectrumClient, UtxoClientOps};
 use super::utxo_builder::{UtxoArcBuilder, UtxoCoinBuilderCommonOps};
 use super::utxo_standard::UtxoStandardCoin;
 use super::*;

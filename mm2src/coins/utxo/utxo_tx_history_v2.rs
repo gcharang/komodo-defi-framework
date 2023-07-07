@@ -6,7 +6,7 @@ use crate::utxo::bch::BchCoin;
 use crate::utxo::slp::ParseSlpScriptError;
 use crate::utxo::{utxo_common, AddrFromStrError, GetBlockHeaderError};
 use crate::{BalanceError, BalanceResult, BlockHeightAndTime, HistorySyncState, MarketCoinOps, NumConversError,
-            ParseBigDecimalError, TransactionDetails, UnexpectedDerivationMethod, UtxoRpcError, UtxoTx};
+            ParseBigDecimalError, TransactionDetails, UnexpectedDerivationMethod, UtxoClientError, UtxoTx};
 use async_trait::async_trait;
 use common::executor::Timer;
 use common::log::{error, info};
@@ -58,7 +58,7 @@ pub enum UtxoTxDetailsError {
     #[display(fmt = "{}", _0)]
     NumConversionErr(NumConversError),
     #[display(fmt = "RPC error: {}", _0)]
-    RpcError(UtxoRpcError),
+    RpcError(UtxoClientError),
     #[display(fmt = "Internal error: {}", _0)]
     Internal(String),
 }
@@ -67,8 +67,8 @@ impl From<serialization::Error> for UtxoTxDetailsError {
     fn from(e: serialization::Error) -> Self { UtxoTxDetailsError::TxDeserializationError(e) }
 }
 
-impl From<UtxoRpcError> for UtxoTxDetailsError {
-    fn from(e: UtxoRpcError) -> Self { UtxoTxDetailsError::RpcError(e) }
+impl From<UtxoClientError> for UtxoTxDetailsError {
+    fn from(e: UtxoClientError) -> Self { UtxoTxDetailsError::RpcError(e) }
 }
 
 impl From<NumConversError> for UtxoTxDetailsError {

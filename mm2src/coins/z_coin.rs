@@ -3,7 +3,7 @@ use crate::coin_errors::MyAddressError;
 use crate::my_tx_history_v2::{MyTxHistoryErrorV2, MyTxHistoryRequestV2, MyTxHistoryResponseV2};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::rpc_command::init_withdraw::{InitWithdrawCoin, WithdrawInProgressStatus, WithdrawTaskHandle};
-use crate::utxo::rpc_clients::{ElectrumRpcRequest, UnspentInfo, UtxoRpcClientEnum, UtxoRpcError, UtxoRpcFut,
+use crate::utxo::rpc_clients::{ElectrumRpcRequest, UnspentInfo, UtxoClientEnum, UtxoClientError, UtxoClientFut,
                                UtxoRpcResult};
 use crate::utxo::utxo_builder::UtxoCoinBuildError;
 use crate::utxo::utxo_builder::{UtxoCoinBuilder, UtxoCoinBuilderCommonOps, UtxoFieldsWithGlobalHDBuilder,
@@ -294,7 +294,7 @@ pub struct ZcoinTxDetails {
 
 impl ZCoin {
     #[inline]
-    pub fn utxo_rpc_client(&self) -> &UtxoRpcClientEnum { &self.utxo_arc.rpc_client }
+    pub fn utxo_rpc_client(&self) -> &UtxoClientEnum { &self.utxo_arc.rpc_client }
 
     #[inline]
     pub fn my_z_address_encoded(&self) -> String { self.z_fields.my_z_addr_encoded.clone() }
@@ -599,7 +599,7 @@ impl ZCoin {
                 Ok((hash, ZTransaction::read(tx.into_inner().hex.as_slice())?))
             })
             .collect::<Result<_, _>>()
-            .map_to_mm(|e| UtxoRpcError::InvalidResponse(e.to_string()))
+            .map_to_mm(|e| UtxoClientError::InvalidResponse(e.to_string()))
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1826,7 +1826,7 @@ impl UtxoCommonOps for ZCoin {
         _tx: &UtxoTx,
         _input_transactions: &mut HistoryUtxoTxMap,
     ) -> UtxoRpcResult<u64> {
-        MmError::err(UtxoRpcError::Internal(
+        MmError::err(UtxoClientError::Internal(
             "ZCoin doesn't support transaction rewards".to_owned(),
         ))
     }
@@ -1846,7 +1846,7 @@ impl UtxoCommonOps for ZCoin {
     fn get_verbose_transactions_from_cache_or_rpc(
         &self,
         tx_ids: HashSet<H256Json>,
-    ) -> UtxoRpcFut<HashMap<H256Json, VerboseTransactionFrom>> {
+    ) -> UtxoClientFut<HashMap<H256Json, VerboseTransactionFrom>> {
         let selfi = self.clone();
         let fut = async move { utxo_common::get_verbose_transactions_from_cache_or_rpc(&selfi.utxo_arc, tx_ids).await };
         Box::new(fut.boxed().compat())
@@ -1874,7 +1874,7 @@ impl UtxoCommonOps for ZCoin {
         utxo_common::increase_dynamic_fee_by_stage(self, dynamic_fee, stage)
     }
 
-    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoRpcError>> {
+    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoClientError>> {
         utxo_common::p2sh_tx_locktime(self, self.ticker(), htlc_locktime).await
     }
 

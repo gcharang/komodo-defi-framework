@@ -1,5 +1,5 @@
-use crate::{eth::Web3RpcError, my_tx_history_v2::MyTxHistoryErrorV2, utxo::rpc_clients::UtxoRpcError, DelegationError,
-            NumConversError, TxHistoryError, UnexpectedDerivationMethod, WithdrawError};
+use crate::{eth::Web3RpcError, my_tx_history_v2::MyTxHistoryErrorV2, utxo::rpc_clients::UtxoClientError,
+            DelegationError, NumConversError, TxHistoryError, UnexpectedDerivationMethod, WithdrawError};
 use futures01::Future;
 use mm2_err_handle::prelude::MmError;
 use spv_validation::helpers_validation::SPVError;
@@ -46,11 +46,11 @@ impl From<UnexpectedDerivationMethod> for ValidatePaymentError {
     fn from(err: UnexpectedDerivationMethod) -> Self { Self::InternalError(err.to_string()) }
 }
 
-impl From<UtxoRpcError> for ValidatePaymentError {
-    fn from(err: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for ValidatePaymentError {
+    fn from(err: UtxoClientError) -> Self {
         match err {
-            UtxoRpcError::Transport(e) => Self::Transport(e.to_string()),
-            UtxoRpcError::Internal(e) => Self::InternalError(e),
+            UtxoClientError::Transport(e) => Self::Transport(e.to_string()),
+            UtxoClientError::Internal(e) => Self::InternalError(e),
             _ => Self::InvalidRpcResponse(err.to_string()),
         }
     }
@@ -82,7 +82,7 @@ impl From<MyAddressError> for WithdrawError {
     fn from(err: MyAddressError) -> Self { Self::InternalError(err.to_string()) }
 }
 
-impl From<MyAddressError> for UtxoRpcError {
+impl From<MyAddressError> for UtxoClientError {
     fn from(err: MyAddressError) -> Self { Self::Internal(err.to_string()) }
 }
 

@@ -8,7 +8,7 @@ use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHisto
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
 use crate::utxo::bch::BchCoin;
 use crate::utxo::bchd_grpc::{check_slp_transaction, validate_slp_utxos, ValidateSlpUtxosErr};
-use crate::utxo::rpc_clients::{UnspentInfo, UtxoRpcClientEnum, UtxoRpcError, UtxoRpcResult};
+use crate::utxo::rpc_clients::{UnspentInfo, UtxoClientEnum, UtxoClientError, UtxoRpcResult};
 use crate::utxo::utxo_common::{self, big_decimal_from_sat_unsigned, payment_script, UtxoTxBuilder};
 use crate::utxo::{generate_and_send_tx, sat_from_big_decimal, ActualTxFee, AdditionalTxData, BroadcastTxErr,
                   FeePolicy, GenerateTxError, RecentlySpentOutPointsGuard, UtxoCoinConf, UtxoCoinFields,
@@ -68,7 +68,7 @@ const SLP_GENESIS: &str = "GENESIS";
 #[derive(Debug, Display)]
 #[allow(clippy::large_enum_variant)]
 pub enum EnableSlpError {
-    GetBalanceError(UtxoRpcError),
+    GetBalanceError(UtxoClientError),
     UnexpectedDerivationMethod(String),
     Internal(String),
 }
@@ -151,7 +151,7 @@ impl From<ParseSlpScriptError> for ValidateDexFeeError {
 #[derive(Debug, Display)]
 pub enum SpendP2SHError {
     GenerateTxErr(GenerateTxError),
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     SignTxErr(UtxoSignWithKeyPairError),
     PrivKeyPolicyNotAllowed(PrivKeyPolicyNotAllowed),
     UnexpectedDerivationMethod(UnexpectedDerivationMethod),
@@ -162,8 +162,8 @@ impl From<GenerateTxError> for SpendP2SHError {
     fn from(err: GenerateTxError) -> SpendP2SHError { SpendP2SHError::GenerateTxErr(err) }
 }
 
-impl From<UtxoRpcError> for SpendP2SHError {
-    fn from(err: UtxoRpcError) -> SpendP2SHError { SpendP2SHError::Rpc(err) }
+impl From<UtxoClientError> for SpendP2SHError {
+    fn from(err: UtxoClientError) -> SpendP2SHError { SpendP2SHError::Rpc(err) }
 }
 
 impl From<UtxoSignWithKeyPairError> for SpendP2SHError {
@@ -191,7 +191,7 @@ pub enum SpendHtlcError {
     PubkeyParseErr(keys::Error),
     InvalidSlpDetails,
     NumConversionErr(NumConversError),
-    RpcErr(UtxoRpcError),
+    RpcErr(UtxoClientError),
     #[allow(clippy::upper_case_acronyms)]
     SpendP2SHErr(SpendP2SHError),
     OpReturnParseError(ParseSlpScriptError),
@@ -218,8 +218,8 @@ impl From<SpendP2SHError> for SpendHtlcError {
     fn from(err: SpendP2SHError) -> SpendHtlcError { SpendHtlcError::SpendP2SHErr(err) }
 }
 
-impl From<UtxoRpcError> for SpendHtlcError {
-    fn from(err: UtxoRpcError) -> SpendHtlcError { SpendHtlcError::RpcErr(err) }
+impl From<UtxoClientError> for SpendHtlcError {
+    fn from(err: UtxoClientError) -> SpendHtlcError { SpendHtlcError::RpcErr(err) }
 }
 
 impl From<ParseSlpScriptError> for SpendHtlcError {
@@ -323,7 +323,7 @@ impl SlpToken {
         slp_send_output(&self.conf.token_id, amounts)
     }
 
-    fn rpc(&self) -> &UtxoRpcClientEnum { &self.platform_coin.as_ref().rpc_client }
+    fn rpc(&self) -> &UtxoClientEnum { &self.platform_coin.as_ref().rpc_client }
 
     /// Returns unspents of the SLP token plus plain BCH UTXOs plus RecentlySpentOutPoints mutex guard
     async fn slp_unspents_for_spend(
@@ -995,7 +995,7 @@ pub fn parse_slp_script(script: &[u8]) -> Result<SlpTxDetails, MmError<ParseSlpS
 
 #[derive(Debug, Display)]
 enum GenSlpSpendErr {
-    RpcError(UtxoRpcError),
+    RpcError(UtxoClientError),
     TooManyOutputs,
     #[display(
         fmt = "Not enough {} to generate SLP spend: available {}, required at least {}",
@@ -1012,8 +1012,8 @@ enum GenSlpSpendErr {
     Internal(String),
 }
 
-impl From<UtxoRpcError> for GenSlpSpendErr {
-    fn from(err: UtxoRpcError) -> GenSlpSpendErr { GenSlpSpendErr::RpcError(err) }
+impl From<UtxoClientError> for GenSlpSpendErr {
+    fn from(err: UtxoClientError) -> GenSlpSpendErr { GenSlpSpendErr::RpcError(err) }
 }
 
 impl From<ValidateSlpUtxosErr> for GenSlpSpendErr {

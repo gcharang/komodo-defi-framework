@@ -461,14 +461,14 @@ impl Qrc20Coin {
             .utxo
             .derivation_method
             .single_addr_or_err()
-            .mm_err(|e| UtxoRpcError::Internal(e.to_string()))?;
+            .mm_err(|e| UtxoClientError::Internal(e.to_string()))?;
         let tokens = self
             .utxo
             .rpc_client
             .rpc_contract_call(ViewContractCallType::Allowance, &self.contract_address, &[
                 Token::Address(
                     qtum::contract_addr_from_utxo_addr(my_address.clone())
-                        .mm_err(|e| UtxoRpcError::Internal(e.to_string()))?,
+                        .mm_err(|e| UtxoClientError::Internal(e.to_string()))?,
                 ),
                 Token::Address(spender),
             ])
@@ -479,18 +479,18 @@ impl Qrc20Coin {
             Some(Token::Uint(number)) => Ok(*number),
             Some(_) => {
                 let error = format!(r#"Expected U256 as "allowance" result but got {:?}"#, tokens);
-                MmError::err(UtxoRpcError::InvalidResponse(error))
+                MmError::err(UtxoClientError::InvalidResponse(error))
             },
             None => {
                 let error = r#"Expected U256 as "allowance" result but got nothing"#.to_owned();
-                MmError::err(UtxoRpcError::InvalidResponse(error))
+                MmError::err(UtxoClientError::InvalidResponse(error))
             },
         }
     }
 
     /// Get payment status by `swap_id`.
     /// Do not use self swap_contract_address, because it could be updated during restart.
-    async fn payment_status(&self, swap_contract_address: &H160, swap_id: Vec<u8>) -> MmResult<U256, UtxoRpcError> {
+    async fn payment_status(&self, swap_contract_address: &H160, swap_id: Vec<u8>) -> MmResult<U256, UtxoClientError> {
         let decoded = self
             .utxo
             .rpc_client
@@ -500,7 +500,7 @@ impl Qrc20Coin {
             .compat()
             .await?;
         if decoded.len() < 3 {
-            return MmError::err(UtxoRpcError::InvalidResponse(format!(
+            return MmError::err(UtxoClientError::InvalidResponse(format!(
                 "Expected at least 3 tokens in \"payments\" call, found {}",
                 decoded.len()
             )));
@@ -508,7 +508,7 @@ impl Qrc20Coin {
 
         match decoded[2] {
             Token::Uint(state) => Ok(state),
-            _ => MmError::err(UtxoRpcError::InvalidResponse(format!(
+            _ => MmError::err(UtxoClientError::InvalidResponse(format!(
                 "Payment status must be uint, got {:?}",
                 decoded[2]
             ))),

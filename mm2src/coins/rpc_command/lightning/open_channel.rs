@@ -6,7 +6,7 @@ use crate::lightning::ln_storage::LightningStorage;
 use crate::utxo::utxo_common::UtxoTxBuilder;
 use crate::utxo::{sat_from_big_decimal, FeePolicy, GetUtxoListOps, UtxoTxGenerationOps};
 use crate::{lp_coinfind_or_err, BalanceError, CoinFindError, GenerateTxError, MmCoinEnum, NumConversError,
-            UnexpectedDerivationMethod, UtxoRpcError};
+            UnexpectedDerivationMethod, UtxoClientError};
 use chain::TransactionOutput;
 use common::log::error;
 use common::{async_blocking, new_uuid, HttpStatusCode};
@@ -89,8 +89,8 @@ impl From<GenerateTxError> for OpenChannelError {
     fn from(e: GenerateTxError) -> Self { OpenChannelError::GenerateTxErr(e.to_string()) }
 }
 
-impl From<UtxoRpcError> for OpenChannelError {
-    fn from(e: UtxoRpcError) -> Self { OpenChannelError::RpcError(e.to_string()) }
+impl From<UtxoClientError> for OpenChannelError {
+    fn from(e: UtxoClientError) -> Self { OpenChannelError::RpcError(e.to_string()) }
 }
 
 impl From<UnexpectedDerivationMethod> for OpenChannelError {

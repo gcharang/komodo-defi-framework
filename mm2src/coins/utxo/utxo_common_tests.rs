@@ -3,7 +3,7 @@ use crate::hd_wallet::HDAccountsMap;
 use crate::my_tx_history_v2::{my_tx_history_v2_impl, CoinWithTxHistoryV2, MyTxHistoryDetails, MyTxHistoryRequestV2,
                               MyTxHistoryResponseV2, MyTxHistoryTarget};
 use crate::tx_history_storage::TxHistoryStorageBuilder;
-use crate::utxo::rpc_clients::{ElectrumClient, UtxoRpcClientOps};
+use crate::utxo::rpc_clients::{ElectrumClient, UtxoClientOps};
 use crate::utxo::tx_cache::dummy_tx_cache::DummyVerboseCache;
 use crate::utxo::tx_cache::UtxoVerboseCacheOps;
 use crate::utxo::utxo_tx_history_v2::{utxo_history_loop, UtxoTxHistoryOps};
@@ -42,7 +42,7 @@ fn parse_tx_history_map(history_str: &'static str) -> HashMap<String, Transactio
 }
 
 pub(super) fn utxo_coin_fields_for_test(
-    rpc_client: UtxoRpcClientEnum,
+    rpc_client: UtxoClientEnum,
     force_seed: Option<&str>,
     is_segwit_coin: bool,
 ) -> UtxoCoinFields {

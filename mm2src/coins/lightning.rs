@@ -12,7 +12,7 @@ pub mod ln_utils;
 
 use crate::coin_errors::MyAddressError;
 use crate::lightning::ln_utils::{filter_channels, pay_invoice_with_max_total_cltv_expiry_delta, PaymentError};
-use crate::utxo::rpc_clients::UtxoRpcClientEnum;
+use crate::utxo::rpc_clients::UtxoClientEnum;
 use crate::utxo::utxo_common::{big_decimal_from_sat, big_decimal_from_sat_unsigned};
 use crate::utxo::{sat_from_big_decimal, utxo_common, BlockchainNetwork};
 use crate::{BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, CoinFutSpawner, ConfirmPaymentInput, FeeApproxStage,

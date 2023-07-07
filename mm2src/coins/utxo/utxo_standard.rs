@@ -213,7 +213,7 @@ impl UtxoCommonOps for UtxoStandardCoin {
     fn get_verbose_transactions_from_cache_or_rpc(
         &self,
         tx_ids: HashSet<H256Json>,
-    ) -> UtxoRpcFut<HashMap<H256Json, VerboseTransactionFrom>> {
+    ) -> UtxoClientFut<HashMap<H256Json, VerboseTransactionFrom>> {
         let selfi = self.clone();
         let fut = async move { utxo_common::get_verbose_transactions_from_cache_or_rpc(&selfi.utxo_arc, tx_ids).await };
         Box::new(fut.boxed().compat())
@@ -241,7 +241,7 @@ impl UtxoCommonOps for UtxoStandardCoin {
         utxo_common::increase_dynamic_fee_by_stage(self, dynamic_fee, stage)
     }
 
-    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoRpcError>> {
+    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoClientError>> {
         utxo_common::p2sh_tx_locktime(self, &self.utxo_arc.conf.ticker, htlc_locktime).await
     }
 
@@ -775,7 +775,7 @@ impl InitWithdrawCoin for UtxoStandardCoin {
 }
 
 impl UtxoSignerOps for UtxoStandardCoin {
-    type TxGetter = UtxoRpcClientEnum;
+    type TxGetter = UtxoClientEnum;
 
     fn trezor_coin(&self) -> UtxoSignTxResult<String> {
         self.utxo_arc

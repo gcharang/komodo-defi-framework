@@ -3,7 +3,7 @@ use crate::qrc20::script_pubkey::generate_contract_call_script_pubkey;
 use crate::qrc20::{contract_addr_into_rpc_format, ContractCallOutput, GenerateQrc20TxResult, Qrc20AbiError,
                    Qrc20FeeDetails, OUTPUT_QTUM_AMOUNT, QRC20_DUST, QRC20_GAS_LIMIT_DEFAULT, QRC20_GAS_PRICE_DEFAULT};
 use crate::utxo::qtum::{QtumBasedCoin, QtumCoin, QtumDelegationOps, QtumDelegationRequest, QtumStakingInfosDetails};
-use crate::utxo::rpc_clients::UtxoRpcClientEnum;
+use crate::utxo::rpc_clients::UtxoClientEnum;
 use crate::utxo::utxo_common::{big_decimal_from_sat_unsigned, UtxoTxBuilder};
 use crate::utxo::{qtum, utxo_common, Address, GetUtxoListOps, UtxoCommonOps};
 use crate::utxo::{PrivKeyPolicyNotAllowed, UTXO_LOCK};
@@ -137,11 +137,11 @@ impl QtumCoin {
         let utxo = self.as_ref();
         let contract_address = contract_addr_into_rpc_format(&QTUM_DELEGATE_CONTRACT_ADDRESS);
         let client = match &utxo.rpc_client {
-            UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-            UtxoRpcClientEnum::Native(_) => {
+            UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+            UtxoClientEnum::Native(_) => {
                 return MmError::err(StakingInfosError::Internal("Native not supported".to_string()))
             },
-            UtxoRpcClientEnum::Electrum(electrum) => electrum,
+            UtxoClientEnum::Electrum(electrum) => electrum,
         };
         let address = self.my_addr_as_contract_addr()?;
         let address_rpc = contract_addr_into_rpc_format(&address);

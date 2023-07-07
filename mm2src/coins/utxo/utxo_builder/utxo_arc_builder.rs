@@ -1,4 +1,4 @@
-use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, UtxoJsonRpcClientInfo, UtxoRpcClientEnum};
+use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, UtxoClientEnum, UtxoJsonRpcClientInfo};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::utxo_builder::{UtxoCoinBuildError, UtxoCoinBuilder, UtxoCoinBuilderCommonOps,
                                 UtxoFieldsWithGlobalHDBuilder, UtxoFieldsWithHardwareWalletBuilder,
@@ -668,9 +668,9 @@ fn spawn_block_header_utxo_loop(
     spv_conf: SPVConf,
 ) {
     let client = match &utxo_arc.rpc_client {
-        UtxoRpcClientEnum::BlockBook(_blockbook) => todo!(),
-        UtxoRpcClientEnum::Native(_) => return,
-        UtxoRpcClientEnum::Electrum(client) => client,
+        UtxoClientEnum::BlockBook(_blockbook) => todo!(),
+        UtxoClientEnum::Native(_) => return,
+        UtxoClientEnum::Electrum(client) => client,
     };
     info!("Starting UTXO block header loop for coin {ticker}");
 

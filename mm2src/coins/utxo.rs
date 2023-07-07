@@ -95,7 +95,7 @@ use utxo_signer::with_key_pair::sign_tx;
 use utxo_signer::{TxProvider, TxProviderError, UtxoSignTxError, UtxoSignTxResult};
 
 use self::rpc_clients::{electrum_script_hash, ElectrumClient, ElectrumRpcRequest, EstimateFeeMethod, EstimateFeeMode,
-                        NativeClient, UnspentInfo, UnspentMap, UtxoRpcClientEnum, UtxoRpcError, UtxoRpcFut,
+                        NativeClient, UnspentInfo, UnspentMap, UtxoClientEnum, UtxoClientError, UtxoClientFut,
                         UtxoRpcResult};
 use super::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BalanceResult, CoinBalance, CoinFutSpawner,
             CoinsContext, DerivationMethod, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, KmdRewardsDetails,
@@ -179,23 +179,23 @@ impl From<JsonRpcError> for BalanceError {
     fn from(e: JsonRpcError) -> Self { BalanceError::Transport(e.to_string()) }
 }
 
-impl From<UtxoRpcError> for BalanceError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for BalanceError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Internal(desc) => BalanceError::Internal(desc),
+            UtxoClientError::Internal(desc) => BalanceError::Internal(desc),
             _ => BalanceError::Transport(e.to_string()),
         }
     }
 }
 
-impl From<UtxoRpcError> for WithdrawError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for WithdrawError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Transport(transport) | UtxoRpcError::ResponseParseError(transport) => {
+            UtxoClientError::Transport(transport) | UtxoClientError::ResponseParseError(transport) => {
                 WithdrawError::Transport(transport.to_string())
             },
-            UtxoRpcError::InvalidResponse(resp) => WithdrawError::Transport(resp),
-            UtxoRpcError::Internal(internal) => WithdrawError::InternalError(internal),
+            UtxoClientError::InvalidResponse(resp) => WithdrawError::Transport(resp),
+            UtxoClientError::Internal(internal) => WithdrawError::InternalError(internal),
         }
     }
 }
@@ -204,26 +204,26 @@ impl From<JsonRpcError> for TradePreimageError {
     fn from(e: JsonRpcError) -> Self { TradePreimageError::Transport(e.to_string()) }
 }
 
-impl From<UtxoRpcError> for TradePreimageError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for TradePreimageError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Transport(transport) | UtxoRpcError::ResponseParseError(transport) => {
+            UtxoClientError::Transport(transport) | UtxoClientError::ResponseParseError(transport) => {
                 TradePreimageError::Transport(transport.to_string())
             },
-            UtxoRpcError::InvalidResponse(resp) => TradePreimageError::Transport(resp),
-            UtxoRpcError::Internal(internal) => TradePreimageError::InternalError(internal),
+            UtxoClientError::InvalidResponse(resp) => TradePreimageError::Transport(resp),
+            UtxoClientError::Internal(internal) => TradePreimageError::InternalError(internal),
         }
     }
 }
 
-impl From<UtxoRpcError> for TxProviderError {
-    fn from(rpc: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for TxProviderError {
+    fn from(rpc: UtxoClientError) -> Self {
         match rpc {
-            resp @ UtxoRpcError::ResponseParseError(_) | resp @ UtxoRpcError::InvalidResponse(_) => {
+            resp @ UtxoClientError::ResponseParseError(_) | resp @ UtxoClientError::InvalidResponse(_) => {
                 TxProviderError::InvalidResponse(resp.to_string())
             },
-            UtxoRpcError::Transport(transport) => TxProviderError::Transport(transport.to_string()),
-            UtxoRpcError::Internal(internal) => TxProviderError::Internal(internal),
+            UtxoClientError::Transport(transport) => TxProviderError::Transport(transport.to_string()),
+            UtxoClientError::Internal(internal) => TxProviderError::Internal(internal),
         }
     }
 }
@@ -237,7 +237,7 @@ impl From<Bip32Error> for HDWalletStorageError {
 }
 
 #[async_trait]
-impl TxProvider for UtxoRpcClientEnum {
+impl TxProvider for UtxoClientEnum {
     async fn get_rpc_transaction(&self, tx_hash: &H256Json) -> Result<RpcTransaction, MmError<TxProviderError>> {
         Ok(self.get_verbose_transaction(tx_hash).compat().await?)
     }
@@ -584,7 +584,7 @@ pub struct UtxoCoinFields {
     /// Minimum transaction value at which the value is not less than fee
     pub dust_amount: u64,
     /// RPC client
-    pub rpc_client: UtxoRpcClientEnum,
+    pub rpc_client: UtxoClientEnum,
     ///BlockBook Client
     pub blockbook_client: Option<BlockBookClient>,
     /// Either ECDSA key pair or a Hardware Wallet info.
@@ -641,12 +641,12 @@ impl From<UnsupportedAddr> for WithdrawError {
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum GetTxError {
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     TxDeserialization(SerError),
 }
 
-impl From<UtxoRpcError> for GetTxError {
-    fn from(err: UtxoRpcError) -> GetTxError { GetTxError::Rpc(err) }
+impl From<UtxoClientError> for GetTxError {
+    fn from(err: UtxoClientError) -> GetTxError { GetTxError::Rpc(err) }
 }
 
 impl From<SerError> for GetTxError {
@@ -670,8 +670,8 @@ impl From<GetTxHeightError> for SPVError {
     }
 }
 
-impl From<UtxoRpcError> for GetTxHeightError {
-    fn from(e: UtxoRpcError) -> Self { GetTxHeightError::HeightNotFound(e.to_string()) }
+impl From<UtxoClientError> for GetTxHeightError {
+    fn from(e: UtxoClientError) -> Self { GetTxHeightError::HeightNotFound(e.to_string()) }
 }
 
 impl From<BlockHeaderStorageError> for GetTxHeightError {
@@ -702,12 +702,12 @@ impl From<JsonRpcError> for GetBlockHeaderError {
     fn from(err: JsonRpcError) -> Self { GetBlockHeaderError::RpcError(err) }
 }
 
-impl From<UtxoRpcError> for GetBlockHeaderError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for GetBlockHeaderError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Transport(e) | UtxoRpcError::ResponseParseError(e) => GetBlockHeaderError::RpcError(e),
-            UtxoRpcError::InvalidResponse(e) => GetBlockHeaderError::InvalidResponse(e),
-            UtxoRpcError::Internal(e) => GetBlockHeaderError::Internal(e),
+            UtxoClientError::Transport(e) | UtxoClientError::ResponseParseError(e) => GetBlockHeaderError::RpcError(e),
+            UtxoClientError::InvalidResponse(e) => GetBlockHeaderError::InvalidResponse(e),
+            UtxoClientError::Internal(e) => GetBlockHeaderError::Internal(e),
         }
     }
 }
@@ -811,13 +811,13 @@ impl UtxoCoinFields {
 #[allow(clippy::large_enum_variant)]
 pub enum BroadcastTxErr {
     /// RPC client error
-    Rpc(UtxoRpcError),
+    Rpc(UtxoClientError),
     /// Other specific error
     Other(String),
 }
 
-impl From<UtxoRpcError> for BroadcastTxErr {
-    fn from(err: UtxoRpcError) -> Self { BroadcastTxErr::Rpc(err) }
+impl From<UtxoClientError> for BroadcastTxErr {
+    fn from(err: UtxoClientError) -> Self { BroadcastTxErr::Rpc(err) }
 }
 
 #[async_trait]
@@ -876,11 +876,11 @@ impl HDAddressBalanceScanner for UtxoAddressScanner {
 }
 
 impl UtxoAddressScanner {
-    pub async fn init(rpc_client: UtxoRpcClientEnum) -> UtxoRpcResult<UtxoAddressScanner> {
+    pub async fn init(rpc_client: UtxoClientEnum) -> UtxoRpcResult<UtxoAddressScanner> {
         match rpc_client {
-            UtxoRpcClientEnum::BlockBook(_c) => todo!(),
-            UtxoRpcClientEnum::Native(native) => UtxoAddressScanner::init_with_native_client(&native).await,
-            UtxoRpcClientEnum::Electrum(electrum) => Ok(UtxoAddressScanner::Electrum(electrum)),
+            UtxoClientEnum::BlockBook(_c) => todo!(),
+            UtxoClientEnum::Native(native) => UtxoAddressScanner::init_with_native_client(&native).await,
+            UtxoClientEnum::Electrum(electrum) => Ok(UtxoAddressScanner::Electrum(electrum)),
         }
     }
 
@@ -981,7 +981,7 @@ pub trait UtxoCommonOps:
     fn get_verbose_transactions_from_cache_or_rpc(
         &self,
         tx_ids: HashSet<H256Json>,
-    ) -> UtxoRpcFut<HashMap<H256Json, VerboseTransactionFrom>>;
+    ) -> UtxoClientFut<HashMap<H256Json, VerboseTransactionFrom>>;
 
     async fn preimage_trade_fee_required_to_send_outputs(
         &self,
@@ -995,7 +995,7 @@ pub trait UtxoCommonOps:
     /// The method is used to predict a possible increase in dynamic fee.
     fn increase_dynamic_fee_by_stage(&self, dynamic_fee: u64, stage: &FeeApproxStage) -> u64;
 
-    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoRpcError>>;
+    async fn p2sh_tx_locktime(&self, htlc_locktime: u32) -> Result<u32, MmError<UtxoClientError>>;
 
     fn addr_format(&self) -> &UtxoAddressFormat;
 
@@ -1187,14 +1187,14 @@ impl From<JsonRpcError> for GenerateTxError {
     fn from(rpc_err: JsonRpcError) -> Self { GenerateTxError::Transport(rpc_err.to_string()) }
 }
 
-impl From<UtxoRpcError> for GenerateTxError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for GenerateTxError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Transport(rpc) | UtxoRpcError::ResponseParseError(rpc) => {
+            UtxoClientError::Transport(rpc) | UtxoClientError::ResponseParseError(rpc) => {
                 GenerateTxError::Transport(rpc.to_string())
             },
-            UtxoRpcError::InvalidResponse(error) => GenerateTxError::Transport(error),
-            UtxoRpcError::Internal(error) => GenerateTxError::Internal(error),
+            UtxoClientError::InvalidResponse(error) => GenerateTxError::Transport(error),
+            UtxoClientError::Internal(error) => GenerateTxError::Internal(error),
         }
     }
 }

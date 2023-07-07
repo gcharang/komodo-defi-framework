@@ -15,7 +15,7 @@ use crate::utxo::qtum::{qtum_coin_with_priv_key, QtumCoin, QtumDelegationOps, Qt
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::rpc_clients::{BlockHashOrHeight, NativeUnspent};
 use crate::utxo::rpc_clients::{ElectrumBalance, ElectrumClient, ElectrumClientImpl, GetAddressInfoRes,
-                               ListSinceBlockRes, NativeClient, NativeClientImpl, NetworkInfo, UtxoRpcClientOps,
+                               ListSinceBlockRes, NativeClient, NativeClientImpl, NetworkInfo, UtxoClientOps,
                                ValidateAddressRes, VerboseBlock};
 use crate::utxo::spv::SimplePaymentVerification;
 #[cfg(not(target_arch = "wasm32"))]
@@ -89,11 +89,7 @@ pub fn electrum_client_for_test(servers: &[&str]) -> ElectrumClient {
 #[cfg(not(target_arch = "wasm32"))]
 fn native_client_for_test() -> NativeClient { NativeClient(Arc::new(NativeClientImpl::default())) }
 
-fn utxo_coin_for_test(
-    rpc_client: UtxoRpcClientEnum,
-    force_seed: Option<&str>,
-    is_segwit_coin: bool,
-) -> UtxoStandardCoin {
+fn utxo_coin_for_test(rpc_client: UtxoClientEnum, force_seed: Option<&str>, is_segwit_coin: bool) -> UtxoStandardCoin {
     utxo_coin_from_fields(utxo_coin_fields_for_test(rpc_client, force_seed, is_segwit_coin))
 }
 
@@ -421,7 +417,7 @@ fn test_wait_for_payment_spend_timeout_native() {
         unsafe { OUTPUT_SPEND_CALLED = true };
         MockResult::Return(Box::new(futures01::future::ok(None)))
     });
-    let client = UtxoRpcClientEnum::Native(NativeClient(Arc::new(client)));
+    let client = UtxoClientEnum::Native(NativeClient(Arc::new(client)));
     let coin = utxo_coin_for_test(client, None, false);
     let transaction = hex::decode("01000000000102fff7f7881a8099afa6940d42d1e7f6362bec38171ea3edf433541db4e4ad969f00000000494830450221008b9d1dc26ba6a9cb62127b02742fa9d754cd3bebf337f7a55d114c8e5cdd30be022040529b194ba3f9281a99f2b1c0a19c0489bc22ede944ccf4ecbab4cc618ef3ed01eeffffffef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a0100000000ffffffff02202cb206000000001976a9148280b37df378db99f66f85c95a783a76ac7a6d5988ac9093510d000000001976a9143bde42dbee7e4dbe6a21b2d50ce2f0167faa815988ac000247304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee0121025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee635711000000")
         .unwrap();
@@ -468,7 +464,7 @@ fn test_wait_for_payment_spend_timeout_electrum() {
         abortable_system,
         true,
     );
-    let client = UtxoRpcClientEnum::Electrum(ElectrumClient(Arc::new(client)));
+    let client = UtxoClientEnum::Electrum(ElectrumClient(Arc::new(client)));
     let coin = utxo_coin_for_test(client, None, false);
     let transaction = hex::decode("01000000000102fff7f7881a8099afa6940d42d1e7f6362bec38171ea3edf433541db4e4ad969f00000000494830450221008b9d1dc26ba6a9cb62127b02742fa9d754cd3bebf337f7a55d114c8e5cdd30be022040529b194ba3f9281a99f2b1c0a19c0489bc22ede944ccf4ecbab4cc618ef3ed01eeffffffef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a0100000000ffffffff02202cb206000000001976a9148280b37df378db99f66f85c95a783a76ac7a6d5988ac9093510d000000001976a9143bde42dbee7e4dbe6a21b2d50ce2f0167faa815988ac000247304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee0121025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee635711000000")
         .unwrap();
@@ -578,7 +574,7 @@ fn test_withdraw_impl_set_fixed_fee() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: 1u64.into(),
@@ -620,7 +616,7 @@ fn test_withdraw_impl_sat_per_kb_fee() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: 1u64.into(),
@@ -665,7 +661,7 @@ fn test_withdraw_impl_sat_per_kb_fee_amount_equal_to_max() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: "9.9789".parse().unwrap(),
@@ -712,7 +708,7 @@ fn test_withdraw_impl_sat_per_kb_fee_amount_equal_to_max_dust_included_to_fee() 
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: "9.9789".parse().unwrap(),
@@ -759,7 +755,7 @@ fn test_withdraw_impl_sat_per_kb_fee_amount_over_max() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: "9.97939455".parse().unwrap(),
@@ -793,7 +789,7 @@ fn test_withdraw_impl_sat_per_kb_fee_max() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: 0u64.into(),
@@ -853,7 +849,7 @@ fn test_withdraw_kmd_rewards_impl(
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let mut fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let mut fields = utxo_coin_fields_for_test(UtxoClientEnum::Native(client), None, false);
     fields.conf.ticker = "KMD".to_owned();
     let coin = utxo_coin_from_fields(fields);
 
@@ -930,7 +926,7 @@ fn test_withdraw_rick_rewards_none() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let withdraw_req = WithdrawRequest {
         amount: BigDecimal::from_str("0.00001").unwrap(),
@@ -1131,7 +1127,7 @@ fn test_generate_transaction_relay_fee_is_used_when_dynamic_fee_is_lower() {
         unsafe { GET_RELAY_FEE_CALLED = true };
         MockResult::Return(Box::new(futures01::future::ok("1.0".parse().unwrap())))
     });
-    let client = UtxoRpcClientEnum::Native(NativeClient(Arc::new(client)));
+    let client = UtxoClientEnum::Native(NativeClient(Arc::new(client)));
     let mut coin = utxo_coin_fields_for_test(client, None, false);
     coin.conf.force_min_relay_fee = true;
     let coin = utxo_coin_from_fields(coin);
@@ -1173,7 +1169,7 @@ fn test_generate_transaction_relay_fee_is_used_when_dynamic_fee_is_lower_and_ded
         unsafe { GET_RELAY_FEE_CALLED = true };
         MockResult::Return(Box::new(futures01::future::ok("1.0".parse().unwrap())))
     });
-    let client = UtxoRpcClientEnum::Native(NativeClient(Arc::new(client)));
+    let client = UtxoClientEnum::Native(NativeClient(Arc::new(client)));
     let mut coin = utxo_coin_fields_for_test(client, None, false);
     coin.conf.force_min_relay_fee = true;
     let coin = utxo_coin_from_fields(coin);
@@ -1218,7 +1214,7 @@ fn test_generate_tx_fee_is_correct_when_dynamic_fee_is_larger_than_relay() {
         unsafe { GET_RELAY_FEE_CALLED = true };
         MockResult::Return(Box::new(futures01::future::ok("0.00001".parse().unwrap())))
     });
-    let client = UtxoRpcClientEnum::Native(NativeClient(Arc::new(client)));
+    let client = UtxoClientEnum::Native(NativeClient(Arc::new(client)));
     let mut coin = utxo_coin_fields_for_test(client, None, false);
     coin.conf.force_min_relay_fee = true;
     let coin = utxo_coin_from_fields(coin);
@@ -1890,7 +1886,7 @@ fn test_get_mature_unspent_ordered_map_from_cache_impl(
     });
 
     // run test
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Electrum(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Electrum(client), None, false);
     let (unspents, _) =
         block_on(coin.get_mature_unspent_ordered_list(&Address::from("R9o9xTocqr6CeEDGDH6mEYpwLoMz6jNjMW")))
             .expect("Expected an empty unspent list");
@@ -2030,7 +2026,7 @@ fn test_get_mature_unspents_ordered_map_from_cache() {
 #[cfg(not(target_arch = "wasm32"))]
 fn test_native_client_unspents_filtered_using_tx_cache_single_tx_in_cache() {
     let client = native_client_for_test();
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     let address: Address = "RGfFZaaNV68uVe1uMf6Y37Y8E1i2SyYZBN".into();
     block_on(coin.as_ref().recently_spent_outpoints.lock()).for_script_pubkey =
@@ -2076,7 +2072,7 @@ fn test_native_client_unspents_filtered_using_tx_cache_single_tx_in_cache() {
 #[cfg(not(target_arch = "wasm32"))]
 fn test_native_client_unspents_filtered_using_tx_cache_single_several_chained_txs_in_cache() {
     let client = native_client_for_test();
-    let coin = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_fields_for_test(UtxoClientEnum::Native(client), None, false);
 
     let address: Address = "RGfFZaaNV68uVe1uMf6Y37Y8E1i2SyYZBN".into();
     block_on(coin.recently_spent_outpoints.lock()).for_script_pubkey = Builder::build_p2pkh(&address.hash).to_bytes();
@@ -2428,7 +2424,7 @@ fn test_qtum_is_unspent_mature() {
     use crate::utxo::qtum::QtumBasedCoin;
     use rpc::v1::types::{ScriptType, SignedTransactionOutput, TransactionOutputScript};
 
-    let mut coin_fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(native_client_for_test()), None, false);
+    let mut coin_fields = utxo_coin_fields_for_test(UtxoClientEnum::Native(native_client_for_test()), None, false);
     // Qtum's mature confirmations is 500 blocks
     coin_fields.conf.mature_confirmations = 500;
     let arc: UtxoArc = coin_fields.into();
@@ -2495,7 +2491,7 @@ fn test_qtum_is_unspent_mature() {
 fn test_get_sender_trade_fee_dynamic_tx_fee() {
     let rpc_client = electrum_client_for_test(&["electrum1.cipig.net:10071"]);
     let mut coin_fields = utxo_coin_fields_for_test(
-        UtxoRpcClientEnum::Electrum(rpc_client),
+        UtxoClientEnum::Electrum(rpc_client),
         Some("bob passphrase max taker vol with dynamic trade fee"),
         false,
     );
@@ -2535,7 +2531,7 @@ fn test_validate_fee_wrong_sender() {
         "electrum2.cipig.net:10018",
         "electrum3.cipig.net:10018",
     ]);
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Electrum(rpc_client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Electrum(rpc_client), None, false);
     // https://morty.explorer.dexstats.info/tx/fe4b0e1c4537e22f2956b5b74513fc936ebd87ada21513e850899cb07a45d475
     let tx_bytes = hex::decode("0400008085202f890199cc492c24cc617731d13cff0ef22e7b0c277a64e7368a615b46214424a1c894020000006a473044022071edae37cf518e98db3f7637b9073a7a980b957b0c7b871415dbb4898ec3ebdc022031b402a6b98e64ffdf752266449ca979a9f70144dba77ed7a6a25bfab11648f6012103ad6f89abc2e5beaa8a3ac28e22170659b3209fe2ddf439681b4b8f31508c36faffffffff0202290200000000001976a914ca1e04745e8ca0c60d8c5881531d51bec470743f88ac8a96e70b000000001976a914d55f0df6cb82630ad21a4e6049522a6f2b6c9d4588ac8afb2c60000000000000000000000000000000").unwrap();
     let taker_fee_tx = coin.tx_enum_from_bytes(&tx_bytes).unwrap();
@@ -2563,7 +2559,7 @@ fn test_validate_fee_min_block() {
         "electrum2.cipig.net:10018",
         "electrum3.cipig.net:10018",
     ]);
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Electrum(rpc_client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Electrum(rpc_client), None, false);
     // https://morty.explorer.dexstats.info/tx/fe4b0e1c4537e22f2956b5b74513fc936ebd87ada21513e850899cb07a45d475
     let tx_bytes = hex::decode("0400008085202f890199cc492c24cc617731d13cff0ef22e7b0c277a64e7368a615b46214424a1c894020000006a473044022071edae37cf518e98db3f7637b9073a7a980b957b0c7b871415dbb4898ec3ebdc022031b402a6b98e64ffdf752266449ca979a9f70144dba77ed7a6a25bfab11648f6012103ad6f89abc2e5beaa8a3ac28e22170659b3209fe2ddf439681b4b8f31508c36faffffffff0202290200000000001976a914ca1e04745e8ca0c60d8c5881531d51bec470743f88ac8a96e70b000000001976a914d55f0df6cb82630ad21a4e6049522a6f2b6c9d4588ac8afb2c60000000000000000000000000000000").unwrap();
     let taker_fee_tx = coin.tx_enum_from_bytes(&tx_bytes).unwrap();
@@ -2592,7 +2588,7 @@ fn test_validate_fee_bch_70_bytes_signature() {
         "electrum2.cipig.net:10055",
         "electrum3.cipig.net:10055",
     ]);
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Electrum(rpc_client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Electrum(rpc_client), None, false);
     // https://blockchair.com/bitcoin-cash/transaction/ccee05a6b5bbc6f50d2a65a5a3a04690d3e2d81082ad57d3ab471189f53dd70d
     let tx_bytes = hex::decode("0100000002cae89775f264e50f14238be86a7184b7f77bfe26f54067b794c546ec5eb9c91a020000006b483045022100d6ed080f722a0637a37552382f462230cc438984bc564bdb4b7094f06cfa38fa022062304a52602df1fbb3bebac4f56e1632ad456f62d9031f4983f07e546c8ec4d8412102ae7dc4ef1b49aadeff79cfad56664105f4d114e1716bc4f930cb27dbd309e521ffffffff11f386a6fe8f0431cb84f549b59be00f05e78f4a8a926c5e023a0d5f9112e8200000000069463043021f17eb93ed20a6f2cd357eabb41a4ec6329000ddc6d5b42ecbe642c5d41b206a022026bc4920c4ce3af751283574baa8e4a3efd4dad0d8fe6ba3ddf5d75628d36fda412102ae7dc4ef1b49aadeff79cfad56664105f4d114e1716bc4f930cb27dbd309e521ffffffff0210270000000000001976a914ca1e04745e8ca0c60d8c5881531d51bec470743f88ac57481c00000000001976a914bac11ce4cd2b1df2769c470d09b54f86df737e3c88ac035b4a60").unwrap();
     let taker_fee_tx = coin.tx_enum_from_bytes(&tx_bytes).unwrap();
@@ -3085,7 +3081,7 @@ fn test_withdraw_to_p2pkh() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     // Create a p2pkh address for the test coin
     let p2pkh_address = Address {
@@ -3133,7 +3129,7 @@ fn test_withdraw_to_p2sh() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, false);
 
     // Create a p2sh address for the test coin
     let p2sh_address = Address {
@@ -3181,7 +3177,7 @@ fn test_withdraw_to_p2wpkh() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
 
-    let coin = utxo_coin_for_test(UtxoRpcClientEnum::Native(client), None, true);
+    let coin = utxo_coin_for_test(UtxoClientEnum::Native(client), None, true);
 
     // Create a p2wpkh address for the test coin
     let p2wpkh_address = Address {
@@ -3495,7 +3491,7 @@ fn test_account_balance_rpc() {
     });
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
-    let mut fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let mut fields = utxo_coin_fields_for_test(UtxoClientEnum::Native(client), None, false);
     let mut hd_accounts = HDAccountsMap::new();
     hd_accounts.insert(0, UtxoHDAccount {
         account_id: 0,
@@ -3822,7 +3818,7 @@ fn test_scan_for_new_addresses() {
         .mock_safe(move |_, _| MockResult::Return(Box::new(futures01::future::ok(Vec::new()))));
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
-    let mut fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let mut fields = utxo_coin_fields_for_test(UtxoClientEnum::Native(client), None, false);
     let mut hd_accounts = HDAccountsMap::new();
     hd_accounts.insert(0, UtxoHDAccount {
         account_id: 0,
@@ -3961,7 +3957,7 @@ fn test_get_new_address() {
         .mock_safe(move |_, _| MockResult::Return(Box::new(futures01::future::ok(Vec::new()))));
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
-    let mut fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let mut fields = utxo_coin_fields_for_test(UtxoClientEnum::Native(client), None, false);
     let mut hd_accounts = HDAccountsMap::new();
     let hd_account_for_test = UtxoHDAccount {
         account_id: 0,
@@ -4379,9 +4375,9 @@ fn test_block_header_utxo_loop() {
     let builder = UtxoArcBuilder::new(&ctx, "RICK", &conf, &params, priv_key_policy, UtxoStandardCoin::from);
     let arc: UtxoArc = block_on(builder.build_utxo_fields()).unwrap().into();
     let client = match &arc.rpc_client {
-        UtxoRpcClientEnum::Electrum(electrum) => electrum.clone(),
-        UtxoRpcClientEnum::Native(_) => unreachable!(),
-        UtxoRpcClientEnum::BlockBook(_) => todo!(),
+        UtxoClientEnum::Electrum(electrum) => electrum.clone(),
+        UtxoClientEnum::Native(_) => unreachable!(),
+        UtxoClientEnum::BlockBook(_) => todo!(),
     };
 
     let (sync_status_notifier, _) = channel::<UtxoSyncStatus>(1);
@@ -4599,9 +4595,9 @@ fn test_block_header_utxo_loop_with_reorg() {
     let builder = UtxoArcBuilder::new(&ctx, "RICK", &conf, &params, priv_key_policy, UtxoStandardCoin::from);
     let arc: UtxoArc = block_on(builder.build_utxo_fields()).unwrap().into();
     let client = match &arc.rpc_client {
-        UtxoRpcClientEnum::Electrum(electrum) => electrum.clone(),
-        UtxoRpcClientEnum::Native(_) => unreachable!(),
-        UtxoRpcClientEnum::BlockBook(_) => todo!(),
+        UtxoClientEnum::Electrum(electrum) => electrum.clone(),
+        UtxoClientEnum::Native(_) => unreachable!(),
+        UtxoClientEnum::BlockBook(_) => todo!(),
     };
 
     let (sync_status_notifier, _) = channel::<UtxoSyncStatus>(1);

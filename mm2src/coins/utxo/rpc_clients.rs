@@ -108,46 +108,46 @@ impl rustls::client::ServerCertVerifier for NoCertificateVerification {
 }
 
 #[derive(Debug)]
-pub enum UtxoRpcClientEnum {
+pub enum UtxoClientEnum {
     BlockBook(BlockBookClient),
     Native(NativeClient),
     Electrum(ElectrumClient),
 }
 
-impl From<BlockBookClient> for UtxoRpcClientEnum {
-    fn from(client: BlockBookClient) -> UtxoRpcClientEnum { UtxoRpcClientEnum::BlockBook(client) }
+impl From<BlockBookClient> for UtxoClientEnum {
+    fn from(client: BlockBookClient) -> UtxoClientEnum { UtxoClientEnum::BlockBook(client) }
 }
 
-impl From<ElectrumClient> for UtxoRpcClientEnum {
-    fn from(client: ElectrumClient) -> UtxoRpcClientEnum { UtxoRpcClientEnum::Electrum(client) }
+impl From<ElectrumClient> for UtxoClientEnum {
+    fn from(client: ElectrumClient) -> UtxoClientEnum { UtxoClientEnum::Electrum(client) }
 }
 
-impl From<NativeClient> for UtxoRpcClientEnum {
-    fn from(client: NativeClient) -> UtxoRpcClientEnum { UtxoRpcClientEnum::Native(client) }
+impl From<NativeClient> for UtxoClientEnum {
+    fn from(client: NativeClient) -> UtxoClientEnum { UtxoClientEnum::Native(client) }
 }
 
-impl Deref for UtxoRpcClientEnum {
-    type Target = dyn UtxoRpcClientOps;
-    fn deref(&self) -> &dyn UtxoRpcClientOps {
+impl Deref for UtxoClientEnum {
+    type Target = dyn UtxoClientOps;
+    fn deref(&self) -> &dyn UtxoClientOps {
         match self {
-            UtxoRpcClientEnum::BlockBook(ref c) => c,
-            UtxoRpcClientEnum::Native(ref c) => c,
-            UtxoRpcClientEnum::Electrum(ref c) => c,
+            UtxoClientEnum::BlockBook(ref c) => c,
+            UtxoClientEnum::Native(ref c) => c,
+            UtxoClientEnum::Electrum(ref c) => c,
         }
     }
 }
 
-impl Clone for UtxoRpcClientEnum {
+impl Clone for UtxoClientEnum {
     fn clone(&self) -> Self {
         match self {
-            UtxoRpcClientEnum::BlockBook(c) => UtxoRpcClientEnum::BlockBook(c.clone()),
-            UtxoRpcClientEnum::Native(c) => UtxoRpcClientEnum::Native(c.clone()),
-            UtxoRpcClientEnum::Electrum(c) => UtxoRpcClientEnum::Electrum(c.clone()),
+            UtxoClientEnum::BlockBook(c) => UtxoClientEnum::BlockBook(c.clone()),
+            UtxoClientEnum::Native(c) => UtxoClientEnum::Native(c.clone()),
+            UtxoClientEnum::Electrum(c) => UtxoClientEnum::Electrum(c.clone()),
         }
     }
 }
 
-impl UtxoRpcClientEnum {
+impl UtxoClientEnum {
     pub fn wait_for_confirmations(
         &self,
         tx_hash: H256Json,
@@ -235,9 +235,9 @@ impl UtxoRpcClientEnum {
     #[inline]
     pub fn is_native(&self) -> bool {
         match self {
-            UtxoRpcClientEnum::BlockBook(_blockbook) => false,
-            UtxoRpcClientEnum::Native(_) => true,
-            UtxoRpcClientEnum::Electrum(_) => false,
+            UtxoClientEnum::BlockBook(_) => false,
+            UtxoClientEnum::Native(_) => true,
+            UtxoClientEnum::Electrum(_) => false,
         }
     }
 }
@@ -283,40 +283,40 @@ pub struct SpentOutputInfo {
     pub spent_in_block: BlockHashOrHeight,
 }
 
-pub type UtxoRpcResult<T> = Result<T, MmError<UtxoRpcError>>;
-pub type UtxoRpcFut<T> = Box<dyn Future<Item = T, Error = MmError<UtxoRpcError>> + Send + 'static>;
+pub type UtxoRpcResult<T> = Result<T, MmError<UtxoClientError>>;
+pub type UtxoClientFut<T> = Box<dyn Future<Item = T, Error = MmError<UtxoClientError>> + Send + 'static>;
 
 #[derive(Debug, Display)]
-pub enum UtxoRpcError {
+pub enum UtxoClientError {
     Transport(JsonRpcError),
     ResponseParseError(JsonRpcError),
     InvalidResponse(String),
     Internal(String),
 }
 
-impl From<JsonRpcError> for UtxoRpcError {
+impl From<JsonRpcError> for UtxoClientError {
     fn from(e: JsonRpcError) -> Self {
         match e.error {
             JsonRpcErrorType::InvalidRequest(_) | JsonRpcErrorType::Internal(_) => {
-                UtxoRpcError::Internal(e.to_string())
+                UtxoClientError::Internal(e.to_string())
             },
-            JsonRpcErrorType::Transport(_) => UtxoRpcError::Transport(e),
-            JsonRpcErrorType::Parse(_, _) | JsonRpcErrorType::Response(_, _) => UtxoRpcError::ResponseParseError(e),
+            JsonRpcErrorType::Transport(_) => UtxoClientError::Transport(e),
+            JsonRpcErrorType::Parse(_, _) | JsonRpcErrorType::Response(_, _) => UtxoClientError::ResponseParseError(e),
         }
     }
 }
 
-impl From<serialization::Error> for UtxoRpcError {
-    fn from(e: serialization::Error) -> Self { UtxoRpcError::InvalidResponse(format!("{:?}", e)) }
+impl From<serialization::Error> for UtxoClientError {
+    fn from(e: serialization::Error) -> Self { UtxoClientError::InvalidResponse(format!("{:?}", e)) }
 }
 
-impl From<NumConversError> for UtxoRpcError {
-    fn from(e: NumConversError) -> Self { UtxoRpcError::Internal(e.to_string()) }
+impl From<NumConversError> for UtxoClientError {
+    fn from(e: NumConversError) -> Self { UtxoClientError::Internal(e.to_string()) }
 }
 
-impl UtxoRpcError {
+impl UtxoClientError {
     pub fn is_tx_not_found_error(&self) -> bool {
-        if let UtxoRpcError::ResponseParseError(ref json_err) = self {
+        if let UtxoClientError::ResponseParseError(ref json_err) = self {
             if let JsonRpcErrorType::Response(_, json) = &json_err.error {
                 return json["error"]["code"] == -5 // native compatible
                     || json["message"].as_str().unwrap_or_default().contains(NO_TX_ERROR_CODE);
@@ -327,7 +327,7 @@ impl UtxoRpcError {
     }
 
     pub fn is_response_too_large(&self) -> bool {
-        if let UtxoRpcError::ResponseParseError(ref json_err) = self {
+        if let UtxoClientError::ResponseParseError(ref json_err) = self {
             if let JsonRpcErrorType::Response(_, json) = &json_err.error {
                 return json["code"] == RESPONSE_TOO_LARGE_CODE;
             }
@@ -335,42 +335,42 @@ impl UtxoRpcError {
         false
     }
 
-    pub fn is_network_error(&self) -> bool { matches!(self, UtxoRpcError::Transport(_)) }
+    pub fn is_network_error(&self) -> bool { matches!(self, UtxoClientError::Transport(_)) }
 }
 
 /// Common operations that both types of UTXO clients have but implement them differently
 #[async_trait]
-pub trait UtxoRpcClientOps: fmt::Debug + Send + Sync + 'static {
+pub trait UtxoClientOps: fmt::Debug + Send + Sync + 'static {
     /// Returns available unspents for the given `address`.
-    fn list_unspent(&self, address: &Address, decimals: u8) -> UtxoRpcFut<Vec<UnspentInfo>>;
+    fn list_unspent(&self, address: &Address, decimals: u8) -> UtxoClientFut<Vec<UnspentInfo>>;
 
     /// Returns available unspents for every given `addresses`.
-    fn list_unspent_group(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<UnspentMap>;
+    fn list_unspent_group(&self, addresses: Vec<Address>, decimals: u8) -> UtxoClientFut<UnspentMap>;
 
     /// Submits the given `tx` transaction to blockchain network.
-    fn send_transaction(&self, tx: &UtxoTx) -> UtxoRpcFut<H256Json>;
+    fn send_transaction(&self, tx: &UtxoTx) -> UtxoClientFut<H256Json>;
 
     /// Submits the raw `tx` transaction (serialized, hex-encoded) to blockchain network.
-    fn send_raw_transaction(&self, tx: BytesJson) -> UtxoRpcFut<H256Json>;
+    fn send_raw_transaction(&self, tx: BytesJson) -> UtxoClientFut<H256Json>;
 
     /// Returns raw transaction (serialized, hex-encoded) by the given `txid`.
-    fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson>;
+    fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoClientFut<BytesJson>;
 
     /// Returns verbose transaction by the given `txid`.
-    fn get_verbose_transaction(&self, txid: &H256Json) -> UtxoRpcFut<RpcTransaction>;
+    fn get_verbose_transaction(&self, txid: &H256Json) -> UtxoClientFut<RpcTransaction>;
 
     /// Returns verbose transactions in the same order they were requested.
-    fn get_verbose_transactions(&self, tx_ids: &[H256Json]) -> UtxoRpcFut<Vec<RpcTransaction>>;
+    fn get_verbose_transactions(&self, tx_ids: &[H256Json]) -> UtxoClientFut<Vec<RpcTransaction>>;
 
     /// Returns the height of the most-work fully-validated chain.
-    fn get_block_count(&self) -> UtxoRpcFut<u64>;
+    fn get_block_count(&self) -> UtxoClientFut<u64>;
 
     /// Requests balance of the given `address`.
     fn display_balance(&self, address: Address, decimals: u8) -> RpcRes<BigDecimal>;
 
     /// Requests balances of the given `addresses`.
     /// The pairs `(Address, BigDecimal)` are guaranteed to be in the same order in which they were requested.
-    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<Vec<(Address, BigDecimal)>>;
+    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoClientFut<Vec<(Address, BigDecimal)>>;
 
     /// Returns fee estimation per KByte in satoshis.
     fn estimate_fee_sat(
@@ -379,7 +379,7 @@ pub trait UtxoRpcClientOps: fmt::Debug + Send + Sync + 'static {
         fee_method: &EstimateFeeMethod,
         mode: &Option<EstimateFeeMode>,
         n_blocks: u32,
-    ) -> UtxoRpcFut<u64>;
+    ) -> UtxoClientFut<u64>;
 
     /// Returns the minimum fee a low-priority transaction must pay in order to be accepted to the daemon’s memory pool.
     fn get_relay_fee(&self) -> RpcRes<BigDecimal>;
@@ -399,7 +399,7 @@ pub trait UtxoRpcClientOps: fmt::Debug + Send + Sync + 'static {
         starting_block: u64,
         count: NonZeroU64,
         coin_variant: CoinVariant,
-    ) -> UtxoRpcFut<u32>;
+    ) -> UtxoClientFut<u32>;
 
     /// Returns block time in seconds since epoch (Jan 1 1970 GMT).
     async fn get_block_timestamp(&self, height: u64) -> Result<u64, MmError<GetBlockHeaderError>>;
@@ -737,11 +737,11 @@ impl JsonRpcBatchClient for NativeClientImpl {}
 // if mockable is placed before async_trait there is `munmap_chunk(): invalid pointer` error on async fn mocking attempt
 #[async_trait]
 #[cfg_attr(test, mockable)]
-impl UtxoRpcClientOps for NativeClient {
-    fn list_unspent(&self, address: &Address, decimals: u8) -> UtxoRpcFut<Vec<UnspentInfo>> {
+impl UtxoClientOps for NativeClient {
+    fn list_unspent(&self, address: &Address, decimals: u8) -> UtxoClientFut<Vec<UnspentInfo>> {
         let fut = self
             .list_unspent_impl(0, std::i32::MAX, vec![address.to_string()])
-            .map_to_mm_fut(UtxoRpcError::from)
+            .map_to_mm_fut(UtxoClientError::from)
             .and_then(move |unspents| {
                 let unspents: UtxoRpcResult<Vec<_>> = unspents
                     .into_iter()
@@ -761,7 +761,7 @@ impl UtxoRpcClientOps for NativeClient {
         Box::new(fut)
     }
 
-    fn list_unspent_group(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<UnspentMap> {
+    fn list_unspent_group(&self, addresses: Vec<Address>, decimals: u8) -> UtxoClientFut<UnspentMap> {
         let mut addresses_str = Vec::with_capacity(addresses.len());
         let mut addresses_map = HashMap::with_capacity(addresses.len());
         for addr in addresses {
@@ -772,7 +772,7 @@ impl UtxoRpcClientOps for NativeClient {
 
         let fut = self
             .list_unspent_impl(0, std::i32::MAX, addresses_str)
-            .map_to_mm_fut(UtxoRpcError::from)
+            .map_to_mm_fut(UtxoClientError::from)
             .and_then(move |unspents| {
                 unspents
                     .into_iter()
@@ -781,7 +781,7 @@ impl UtxoRpcClientOps for NativeClient {
                         let orig_address = addresses_map
                             .get(&unspent.address)
                             .or_mm_err(|| {
-                                UtxoRpcError::InvalidResponse(format!("Unexpected address '{}'", unspent.address))
+                                UtxoClientError::InvalidResponse(format!("Unexpected address '{}'", unspent.address))
                             })?
                             .clone();
                         let unspent_info = UnspentInfo {
@@ -800,7 +800,7 @@ impl UtxoRpcClientOps for NativeClient {
         Box::new(fut)
     }
 
-    fn send_transaction(&self, tx: &UtxoTx) -> UtxoRpcFut<H256Json> {
+    fn send_transaction(&self, tx: &UtxoTx) -> UtxoClientFut<H256Json> {
         let tx_bytes = if tx.has_witness() {
             BytesJson::from(serialize_with_flags(tx, SERIALIZE_TRANSACTION_WITNESS))
         } else {
@@ -810,27 +810,33 @@ impl UtxoRpcClientOps for NativeClient {
     }
 
     /// https://developer.bitcoin.org/reference/rpc/sendrawtransaction
-    fn send_raw_transaction(&self, tx: BytesJson) -> UtxoRpcFut<H256Json> {
-        Box::new(rpc_func!(self, "sendrawtransaction", tx).map_to_mm_fut(UtxoRpcError::from))
+    fn send_raw_transaction(&self, tx: BytesJson) -> UtxoClientFut<H256Json> {
+        Box::new(rpc_func!(self, "sendrawtransaction", tx).map_to_mm_fut(UtxoClientError::from))
     }
 
-    fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson> {
-        Box::new(self.get_raw_transaction_bytes(txid).map_to_mm_fut(UtxoRpcError::from))
-    }
-
-    fn get_verbose_transaction(&self, txid: &H256Json) -> UtxoRpcFut<RpcTransaction> {
-        Box::new(self.get_raw_transaction_verbose(txid).map_to_mm_fut(UtxoRpcError::from))
-    }
-
-    fn get_verbose_transactions(&self, tx_ids: &[H256Json]) -> UtxoRpcFut<Vec<RpcTransaction>> {
+    fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoClientFut<BytesJson> {
         Box::new(
-            self.get_raw_transaction_verbose_batch(tx_ids)
-                .map_to_mm_fut(UtxoRpcError::from),
+            self.get_raw_transaction_bytes(txid)
+                .map_to_mm_fut(UtxoClientError::from),
         )
     }
 
-    fn get_block_count(&self) -> UtxoRpcFut<u64> {
-        Box::new(self.0.get_block_count().map_to_mm_fut(UtxoRpcError::from))
+    fn get_verbose_transaction(&self, txid: &H256Json) -> UtxoClientFut<RpcTransaction> {
+        Box::new(
+            self.get_raw_transaction_verbose(txid)
+                .map_to_mm_fut(UtxoClientError::from),
+        )
+    }
+
+    fn get_verbose_transactions(&self, tx_ids: &[H256Json]) -> UtxoClientFut<Vec<RpcTransaction>> {
+        Box::new(
+            self.get_raw_transaction_verbose_batch(tx_ids)
+                .map_to_mm_fut(UtxoClientError::from),
+        )
+    }
+
+    fn get_block_count(&self) -> UtxoClientFut<u64> {
+        Box::new(self.0.get_block_count().map_to_mm_fut(UtxoClientError::from))
     }
 
     fn display_balance(&self, address: Address, _decimals: u8) -> RpcRes<BigDecimal> {
@@ -844,7 +850,7 @@ impl UtxoRpcClientOps for NativeClient {
         )
     }
 
-    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<Vec<(Address, BigDecimal)>> {
+    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoClientFut<Vec<(Address, BigDecimal)>> {
         let this = self.clone();
         let fut = async move {
             let unspent_map = this.list_unspent_group(addresses.clone(), decimals).compat().await?;
@@ -866,7 +872,7 @@ impl UtxoRpcClientOps for NativeClient {
         fee_method: &EstimateFeeMethod,
         mode: &Option<EstimateFeeMode>,
         n_blocks: u32,
-    ) -> UtxoRpcFut<u64> {
+    ) -> UtxoClientFut<u64> {
         match fee_method {
             EstimateFeeMethod::Standard => Box::new(self.estimate_fee(n_blocks).map(move |fee| {
                 if fee > 0.00001 {
@@ -930,7 +936,7 @@ impl UtxoRpcClientOps for NativeClient {
         starting_block: u64,
         count: NonZeroU64,
         _coin_variant: CoinVariant,
-    ) -> UtxoRpcFut<u32> {
+    ) -> UtxoClientFut<u32> {
         let selfi = self.clone();
         let fut = async move {
             let starting_block_hash = selfi.get_block_hash(starting_block).compat().await?;
@@ -1039,14 +1045,14 @@ impl NativeClientImpl {
 
     /// https://developer.bitcoin.org/reference/rpc/getblock.html
     /// Always returns verbose block
-    pub fn get_block(&self, hash: H256Json) -> UtxoRpcFut<VerboseBlock> {
+    pub fn get_block(&self, hash: H256Json) -> UtxoClientFut<VerboseBlock> {
         let verbose = true;
-        Box::new(rpc_func!(self, "getblock", hash, verbose).map_to_mm_fut(UtxoRpcError::from))
+        Box::new(rpc_func!(self, "getblock", hash, verbose).map_to_mm_fut(UtxoClientError::from))
     }
 
     /// https://developer.bitcoin.org/reference/rpc/getblockhash.html
-    pub fn get_block_hash(&self, height: u64) -> UtxoRpcFut<H256Json> {
-        Box::new(rpc_func!(self, "getblockhash", height).map_to_mm_fut(UtxoRpcError::from))
+    pub fn get_block_hash(&self, height: u64) -> UtxoClientFut<H256Json> {
+        Box::new(rpc_func!(self, "getblockhash", height).map_to_mm_fut(UtxoClientError::from))
     }
 
     /// https://developer.bitcoin.org/reference/rpc/getblockcount.html
@@ -1080,18 +1086,22 @@ impl NativeClientImpl {
     /// It is recommended to set n_blocks as low as possible.
     /// However, in some cases, n_blocks = 1 leads to an unreasonably high fee estimation.
     /// https://github.com/KomodoPlatform/atomicDEX-API/issues/656#issuecomment-743759659
-    pub fn estimate_fee(&self, n_blocks: u32) -> UtxoRpcFut<f64> {
-        Box::new(rpc_func!(self, "estimatefee", n_blocks).map_to_mm_fut(UtxoRpcError::from))
+    pub fn estimate_fee(&self, n_blocks: u32) -> UtxoClientFut<f64> {
+        Box::new(rpc_func!(self, "estimatefee", n_blocks).map_to_mm_fut(UtxoClientError::from))
     }
 
     /// https://developer.bitcoin.org/reference/rpc/estimatesmartfee.html
     /// It is recommended to set n_blocks as low as possible.
     /// However, in some cases, n_blocks = 1 leads to an unreasonably high fee estimation.
     /// https://github.com/KomodoPlatform/atomicDEX-API/issues/656#issuecomment-743759659
-    pub fn estimate_smart_fee(&self, mode: &Option<EstimateFeeMode>, n_blocks: u32) -> UtxoRpcFut<EstimateSmartFeeRes> {
+    pub fn estimate_smart_fee(
+        &self,
+        mode: &Option<EstimateFeeMode>,
+        n_blocks: u32,
+    ) -> UtxoClientFut<EstimateSmartFeeRes> {
         match mode {
-            Some(m) => Box::new(rpc_func!(self, "estimatesmartfee", n_blocks, m).map_to_mm_fut(UtxoRpcError::from)),
-            None => Box::new(rpc_func!(self, "estimatesmartfee", n_blocks).map_to_mm_fut(UtxoRpcError::from)),
+            Some(m) => Box::new(rpc_func!(self, "estimatesmartfee", n_blocks, m).map_to_mm_fut(UtxoClientError::from)),
+            None => Box::new(rpc_func!(self, "estimatesmartfee", n_blocks).map_to_mm_fut(UtxoClientError::from)),
         }
     }
 
@@ -1977,12 +1987,12 @@ impl ElectrumClient {
     /// It is recommended to set n_blocks as low as possible.
     /// However, in some cases, n_blocks = 1 leads to an unreasonably high fee estimation.
     /// https://github.com/KomodoPlatform/atomicDEX-API/issues/656#issuecomment-743759659
-    pub fn estimate_fee(&self, mode: &Option<EstimateFeeMode>, n_blocks: u32) -> UtxoRpcFut<f64> {
+    pub fn estimate_fee(&self, mode: &Option<EstimateFeeMode>, n_blocks: u32) -> UtxoClientFut<f64> {
         match mode {
             Some(m) => {
-                Box::new(rpc_func!(self, "blockchain.estimatefee", n_blocks, m).map_to_mm_fut(UtxoRpcError::from))
+                Box::new(rpc_func!(self, "blockchain.estimatefee", n_blocks, m).map_to_mm_fut(UtxoClientError::from))
             },
-            None => Box::new(rpc_func!(self, "blockchain.estimatefee", n_blocks).map_to_mm_fut(UtxoRpcError::from)),
+            None => Box::new(rpc_func!(self, "blockchain.estimatefee", n_blocks).map_to_mm_fut(UtxoClientError::from)),
         }
     }
 
@@ -2106,24 +2116,24 @@ impl ElectrumClient {
         server_address: &str,
         from_height: u64,
         to_height: u64,
-    ) -> UtxoRpcFut<(HashMap<u64, BlockHeader>, Vec<BlockHeader>)> {
+    ) -> UtxoClientFut<(HashMap<u64, BlockHeader>, Vec<BlockHeader>)> {
         let coin_name = self.coin_ticker.clone();
         if from_height == 0 || to_height < from_height {
             return Box::new(futures01::future::err(
-                UtxoRpcError::Internal("Invalid values for from/to parameters".to_string()).into(),
+                UtxoClientError::Internal("Invalid values for from/to parameters".to_string()).into(),
             ));
         }
         let count: NonZeroU64 = match (to_height - from_height + 1).try_into() {
             Ok(c) => c,
-            Err(e) => return Box::new(futures01::future::err(UtxoRpcError::Internal(e.to_string()).into())),
+            Err(e) => return Box::new(futures01::future::err(UtxoClientError::Internal(e.to_string()).into())),
         };
         Box::new(
             self.get_block_headers_from(server_address, from_height, count)
-                .map_to_mm_fut(UtxoRpcError::from)
+                .map_to_mm_fut(UtxoClientError::from)
                 .and_then(move |headers| {
                     let (block_registry, block_headers) = {
                         if headers.count == 0 {
-                            return MmError::err(UtxoRpcError::Internal("No headers available".to_string()));
+                            return MmError::err(UtxoClientError::Internal("No headers available".to_string()));
                         }
                         let len = CompactInteger::from(headers.count);
                         let mut serialized = serialize(&len).take();
@@ -2134,7 +2144,7 @@ impl ElectrumClient {
                         let maybe_block_headers = reader.read_list::<BlockHeader>();
                         let block_headers = match maybe_block_headers {
                             Ok(headers) => headers,
-                            Err(e) => return MmError::err(UtxoRpcError::InvalidResponse(format!("{:?}", e))),
+                            Err(e) => return MmError::err(UtxoClientError::InvalidResponse(format!("{:?}", e))),
                         };
                         let mut block_registry: HashMap<u64, BlockHeader> = HashMap::new();
                         let mut starting_height = from_height;
@@ -2149,7 +2159,7 @@ impl ElectrumClient {
         )
     }
 
-    pub(crate) fn get_servers_with_latest_block_count(&self) -> UtxoRpcFut<(Vec<String>, u64)> {
+    pub(crate) fn get_servers_with_latest_block_count(&self) -> UtxoClientFut<(Vec<String>, u64)> {
         let selfi = self.clone();
         let fut = async move {
             let connections = selfi.connections.lock().await;
@@ -2186,7 +2196,7 @@ impl ElectrumClient {
                 return Ok((servers_with_max_count, *max_block_count));
             }
 
-            return Err(MmError::new(UtxoRpcError::Internal(format!(
+            return Err(MmError::new(UtxoClientError::Internal(format!(
                 "Couldn't get block count from any server for {}, responses: {:?}",
                 &selfi.coin_ticker, responses
             ))));
@@ -2199,13 +2209,13 @@ impl ElectrumClient {
 // if mockable is placed before async_trait there is `munmap_chunk(): invalid pointer` error on async fn mocking attempt
 #[async_trait]
 #[cfg_attr(test, mockable)]
-impl UtxoRpcClientOps for ElectrumClient {
-    fn list_unspent(&self, address: &Address, _decimals: u8) -> UtxoRpcFut<Vec<UnspentInfo>> {
+impl UtxoClientOps for ElectrumClient {
+    fn list_unspent(&self, address: &Address, _decimals: u8) -> UtxoClientFut<Vec<UnspentInfo>> {
         let script = output_script(address, ScriptType::P2PKH);
         let script_hash = electrum_script_hash(&script);
         Box::new(
             self.scripthash_list_unspent(&hex::encode(script_hash))
-                .map_to_mm_fut(UtxoRpcError::from)
+                .map_to_mm_fut(UtxoClientError::from)
                 .map(move |unspents| {
                     unspents
                         .iter()
@@ -2222,7 +2232,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         )
     }
 
-    fn list_unspent_group(&self, addresses: Vec<Address>, _decimals: u8) -> UtxoRpcFut<UnspentMap> {
+    fn list_unspent_group(&self, addresses: Vec<Address>, _decimals: u8) -> UtxoClientFut<UnspentMap> {
         let script_hashes = addresses
             .iter()
             .map(|addr| {
@@ -2249,7 +2259,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         Box::new(fut.boxed().compat())
     }
 
-    fn send_transaction(&self, tx: &UtxoTx) -> UtxoRpcFut<H256Json> {
+    fn send_transaction(&self, tx: &UtxoTx) -> UtxoClientFut<H256Json> {
         let bytes = if tx.has_witness() {
             BytesJson::from(serialize_with_flags(tx, SERIALIZE_TRANSACTION_WITNESS))
         } else {
@@ -2257,46 +2267,46 @@ impl UtxoRpcClientOps for ElectrumClient {
         };
         Box::new(
             self.blockchain_transaction_broadcast(bytes)
-                .map_to_mm_fut(UtxoRpcError::from),
+                .map_to_mm_fut(UtxoClientError::from),
         )
     }
 
-    fn send_raw_transaction(&self, tx: BytesJson) -> UtxoRpcFut<H256Json> {
+    fn send_raw_transaction(&self, tx: BytesJson) -> UtxoClientFut<H256Json> {
         Box::new(
             self.blockchain_transaction_broadcast(tx)
-                .map_to_mm_fut(UtxoRpcError::from),
+                .map_to_mm_fut(UtxoClientError::from),
         )
     }
 
     /// https://electrumx.readthedocs.io/en/latest/protocol-methods.html#blockchain-transaction-get
     /// returns transaction bytes by default
-    fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson> {
+    fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoClientFut<BytesJson> {
         let verbose = false;
-        Box::new(rpc_func!(self, "blockchain.transaction.get", txid, verbose).map_to_mm_fut(UtxoRpcError::from))
+        Box::new(rpc_func!(self, "blockchain.transaction.get", txid, verbose).map_to_mm_fut(UtxoClientError::from))
     }
 
     /// https://electrumx.readthedocs.io/en/latest/protocol-methods.html#blockchain-transaction-get
     /// returns verbose transaction by default
-    fn get_verbose_transaction(&self, txid: &H256Json) -> UtxoRpcFut<RpcTransaction> {
+    fn get_verbose_transaction(&self, txid: &H256Json) -> UtxoClientFut<RpcTransaction> {
         let verbose = true;
-        Box::new(rpc_func!(self, "blockchain.transaction.get", txid, verbose).map_to_mm_fut(UtxoRpcError::from))
+        Box::new(rpc_func!(self, "blockchain.transaction.get", txid, verbose).map_to_mm_fut(UtxoClientError::from))
     }
 
     /// https://electrumx.readthedocs.io/en/latest/protocol-methods.html#blockchain-transaction-get
     /// Returns verbose transactions in a batch.
-    fn get_verbose_transactions(&self, tx_ids: &[H256Json]) -> UtxoRpcFut<Vec<RpcTransaction>> {
+    fn get_verbose_transactions(&self, tx_ids: &[H256Json]) -> UtxoClientFut<Vec<RpcTransaction>> {
         let verbose = true;
         let requests = tx_ids
             .iter()
             .map(|txid| rpc_req!(self, "blockchain.transaction.get", txid, verbose));
-        Box::new(self.batch_rpc(requests).map_to_mm_fut(UtxoRpcError::from))
+        Box::new(self.batch_rpc(requests).map_to_mm_fut(UtxoClientError::from))
     }
 
-    fn get_block_count(&self) -> UtxoRpcFut<u64> {
+    fn get_block_count(&self) -> UtxoClientFut<u64> {
         Box::new(
             self.blockchain_headers_subscribe()
                 .map(|r| r.block_height())
-                .map_to_mm_fut(UtxoRpcError::from),
+                .map_to_mm_fut(UtxoClientError::from),
         )
     }
 
@@ -2309,7 +2319,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         )
     }
 
-    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoRpcFut<Vec<(Address, BigDecimal)>> {
+    fn display_balances(&self, addresses: Vec<Address>, decimals: u8) -> UtxoClientFut<Vec<(Address, BigDecimal)>> {
         let this = self.clone();
         let fut = async move {
             let hashes = addresses.iter().map(|address| {
@@ -2337,7 +2347,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         _fee_method: &EstimateFeeMethod,
         mode: &Option<EstimateFeeMode>,
         n_blocks: u32,
-    ) -> UtxoRpcFut<u64> {
+    ) -> UtxoClientFut<u64> {
         Box::new(self.estimate_fee(mode, n_blocks).map(move |fee| {
             if fee > 0.00001 {
                 (fee * 10.0_f64.powf(decimals as f64)) as u64
@@ -2390,7 +2400,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         starting_block: u64,
         count: NonZeroU64,
         coin_variant: CoinVariant,
-    ) -> UtxoRpcFut<u32> {
+    ) -> UtxoClientFut<u32> {
         let from = if starting_block <= count.get() {
             0
         } else {
@@ -2398,10 +2408,12 @@ impl UtxoRpcClientOps for ElectrumClient {
         };
         Box::new(
             self.blockchain_block_headers(from, count)
-                .map_to_mm_fut(UtxoRpcError::from)
+                .map_to_mm_fut(UtxoClientError::from)
                 .and_then(|res| {
                     if res.count == 0 {
-                        return MmError::err(UtxoRpcError::InvalidResponse("Server returned zero count".to_owned()));
+                        return MmError::err(UtxoClientError::InvalidResponse(
+                            "Server returned zero count".to_owned(),
+                        ));
                     }
                     let len = CompactInteger::from(res.count);
                     let mut serialized = serialize(&len).take();

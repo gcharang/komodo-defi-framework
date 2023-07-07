@@ -277,7 +277,7 @@ pub mod utxo;
 use utxo::bch::{bch_coin_with_policy, BchActivationRequest, BchCoin};
 use utxo::qtum::{self, qtum_coin_with_policy, Qrc20AddressError, QtumCoin, QtumDelegationOps, QtumDelegationRequest,
                  QtumStakingInfosDetails, ScriptHashTypeNotSupported};
-use utxo::rpc_clients::UtxoRpcError;
+use utxo::rpc_clients::UtxoClientError;
 use utxo::slp::SlpToken;
 use utxo::slp::{slp_addr_from_pubkey_str, SlpFeeDetails};
 use utxo::utxo_common::big_decimal_from_sat_unsigned;
@@ -1620,14 +1620,14 @@ pub enum StakingInfosError {
     Internal(String),
 }
 
-impl From<UtxoRpcError> for StakingInfosError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for StakingInfosError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Transport(rpc) | UtxoRpcError::ResponseParseError(rpc) => {
+            UtxoClientError::Transport(rpc) | UtxoClientError::ResponseParseError(rpc) => {
                 StakingInfosError::Transport(rpc.to_string())
             },
-            UtxoRpcError::InvalidResponse(error) => StakingInfosError::Transport(error),
-            UtxoRpcError::Internal(error) => StakingInfosError::Internal(error),
+            UtxoClientError::InvalidResponse(error) => StakingInfosError::Transport(error),
+            UtxoClientError::Internal(error) => StakingInfosError::Internal(error),
         }
     }
 }
@@ -1700,14 +1700,14 @@ pub enum DelegationError {
     InternalError(String),
 }
 
-impl From<UtxoRpcError> for DelegationError {
-    fn from(e: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for DelegationError {
+    fn from(e: UtxoClientError) -> Self {
         match e {
-            UtxoRpcError::Transport(transport) | UtxoRpcError::ResponseParseError(transport) => {
+            UtxoClientError::Transport(transport) | UtxoClientError::ResponseParseError(transport) => {
                 DelegationError::Transport(transport.to_string())
             },
-            UtxoRpcError::InvalidResponse(resp) => DelegationError::Transport(resp),
-            UtxoRpcError::Internal(internal) => DelegationError::InternalError(internal),
+            UtxoClientError::InvalidResponse(resp) => DelegationError::Transport(resp),
+            UtxoClientError::Internal(internal) => DelegationError::InternalError(internal),
         }
     }
 }

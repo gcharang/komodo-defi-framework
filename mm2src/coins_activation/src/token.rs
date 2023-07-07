@@ -3,7 +3,7 @@
 use crate::platform_coin_with_tokens::{self, RegisterTokenInfo};
 use crate::prelude::*;
 use async_trait::async_trait;
-use coins::utxo::rpc_clients::UtxoRpcError;
+use coins::utxo::rpc_clients::UtxoClientError;
 use coins::{lp_coinfind, lp_coinfind_or_err, BalanceError, CoinProtocol, CoinsContext, MmCoinEnum, RegisterCoinError,
             UnexpectedDerivationMethod};
 use common::{HttpStatusCode, StatusCode};
@@ -143,14 +143,14 @@ where
     Ok(activation_result)
 }
 
-impl From<UtxoRpcError> for EnableTokenError {
-    fn from(err: UtxoRpcError) -> Self {
+impl From<UtxoClientError> for EnableTokenError {
+    fn from(err: UtxoClientError) -> Self {
         match err {
-            UtxoRpcError::Transport(e) | UtxoRpcError::ResponseParseError(e) => {
+            UtxoClientError::Transport(e) | UtxoClientError::ResponseParseError(e) => {
                 EnableTokenError::Transport(e.to_string())
             },
-            UtxoRpcError::InvalidResponse(e) => EnableTokenError::Transport(e),
-            UtxoRpcError::Internal(e) => EnableTokenError::Internal(e),
+            UtxoClientError::InvalidResponse(e) => EnableTokenError::Transport(e),
+            UtxoClientError::Internal(e) => EnableTokenError::Internal(e),
         }
     }
 }
