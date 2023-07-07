@@ -9,6 +9,8 @@ use mm2_test_helpers::{for_tests::{eth_jst_testnet_conf, eth_testnet_conf, ETH_D
                                    ETH_MAINNET_SWAP_CONTRACT},
                        get_passphrase};
 use mocktopus::mocking::*;
+use rand;
+use rand::Rng;
 
 /// The gas price for the tests
 const GAS_PRICE: u64 = 50_000_000_000;
@@ -165,7 +167,6 @@ pub fn fill_eth(to_addr: Address, amount: f64) {
         .send_to_address(to_addr, amount_in_wei.into())
         .wait()
         .unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(2));
 }
 
 pub fn fill_jst(to_addr: Address, amount: f64) {
@@ -344,10 +345,8 @@ fn send_and_refund_erc20_payment() {
         abortable_system: AbortableQueue::default(),
     }));
 
-    std::thread::sleep(std::time::Duration::from_secs(2));
-    println!("Balance {}", coin.my_spendable_balance().wait().unwrap());
     let time_lock = now_sec_u32() - 200;
-    let secret_hash = &[1; 20];
+    let secret_hash = &rand::thread_rng().gen::<[u8; 20]>();
     let maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -436,7 +435,7 @@ fn send_and_refund_eth_payment() {
     }));
 
     let time_lock = now_sec_u32() - 200;
-    let secret_hash = &[1; 20];
+    let secret_hash = &rand::thread_rng().gen::<[u8; 20]>();
     let send_maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -452,7 +451,6 @@ fn send_and_refund_eth_payment() {
     let payment = coin.send_maker_payment(send_maker_payment_args).wait().unwrap();
 
     log!("{:?}", payment);
-    std::thread::sleep(std::time::Duration::from_secs(2));
 
     let swap_id = coin.etomic_swap_id(time_lock, secret_hash);
     let status = block_on(
@@ -501,12 +499,10 @@ fn test_nonce_several_urls() {
     .unwrap();
 
     let devnet_transport = Web3Transport::single_node(ETH_DEV_NODE, false);
-    let sepolia_transport = Web3Transport::single_node("https://rpc2.sepolia.org", false);
     // get nonce must succeed if some nodes are down at the moment for some reason
     let failing_transport = Web3Transport::single_node("http://195.201.0.6:8989", false);
 
     let web3_devnet = Web3::new(devnet_transport);
-    let web3_sepolia = Web3::new(sepolia_transport);
     let web3_failing = Web3::new(failing_transport);
 
     let ctx = MmCtxBuilder::new().into_mm_arc();
@@ -522,10 +518,6 @@ fn test_nonce_several_urls() {
         web3_instances: vec![
             Web3Instance {
                 web3: web3_devnet.clone(),
-                is_parity: false,
-            },
-            Web3Instance {
-                web3: web3_sepolia,
                 is_parity: false,
             },
             Web3Instance {

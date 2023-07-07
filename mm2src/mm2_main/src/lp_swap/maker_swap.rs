@@ -2346,7 +2346,7 @@ mod maker_swap_tests {
     use coins::eth::{addr_from_str, signed_eth_tx_from_bytes, SignedEthTx};
     use coins::{MarketCoinOps, MmCoin, SwapOps, TestCoin};
     use common::block_on;
-    use mm2_test_helpers::for_tests::{mm_ctx_with_iguana, ETH_DEV_SWAP_CONTRACT};
+    use mm2_test_helpers::for_tests::{mm_ctx_with_iguana, ETH_DEV_OLD_SWAP_CONTRACT};
     use mocktopus::mocking::*;
     use serde_json as json;
 
@@ -2779,7 +2779,7 @@ mod maker_swap_tests {
         let (maker_swap, _) = MakerSwap::load_from_saved(ctx, maker_coin, taker_coin, maker_saved_swap).unwrap();
 
         assert_eq!(unsafe { SWAP_CONTRACT_ADDRESS_CALLED }, 1);
-        let expected_addr = addr_from_str(ETH_DEV_SWAP_CONTRACT).unwrap();
+        let expected_addr = addr_from_str(ETH_DEV_OLD_SWAP_CONTRACT).unwrap();
         let expected = BytesJson::from(expected_addr.0.as_ref());
         assert_eq!(maker_swap.r().data.maker_coin_swap_contract_address, Some(expected));
         assert_eq!(

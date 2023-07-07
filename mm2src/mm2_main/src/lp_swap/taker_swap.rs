@@ -2588,7 +2588,7 @@ mod taker_swap_tests {
     use coins::utxo::UtxoTx;
     use coins::{FoundSwapTxSpend, MarketCoinOps, MmCoin, SwapOps, TestCoin};
     use common::{block_on, new_uuid};
-    use mm2_test_helpers::for_tests::{mm_ctx_with_iguana, ETH_DEV_SWAP_CONTRACT};
+    use mm2_test_helpers::for_tests::{mm_ctx_with_iguana, ETH_DEV_OLD_SWAP_CONTRACT};
     use mocktopus::mocking::*;
 
     const PASSPHRASE: Option<&str> =
@@ -2913,7 +2913,7 @@ mod taker_swap_tests {
         let (taker_swap, _) = TakerSwap::load_from_saved(ctx, maker_coin, taker_coin, taker_saved_swap).unwrap();
 
         assert_eq!(unsafe { SWAP_CONTRACT_ADDRESS_CALLED }, 1);
-        let expected_addr = addr_from_str(ETH_DEV_SWAP_CONTRACT).unwrap();
+        let expected_addr = addr_from_str(ETH_DEV_OLD_SWAP_CONTRACT).unwrap();
         let expected = BytesJson::from(expected_addr.0.as_ref());
         assert_eq!(taker_swap.r().data.maker_coin_swap_contract_address, Some(expected));
         assert_eq!(

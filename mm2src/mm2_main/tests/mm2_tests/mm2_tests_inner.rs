@@ -7410,7 +7410,7 @@ fn test_eth_swap_contract_addr_negotiation_same_fallback() {
     thread::sleep(Duration::from_secs(3));
 
     let wait_until = get_utc_timestamp() + 30;
-    let expected_contract = Json::from(ETH_DEV_SWAP_CONTRACT.trim_start_matches("0x"));
+    let expected_contract = Json::from(ETH_DEV_SWAP_CONTRACT.trim_start_matches("0x").to_lowercase());
 
     block_on(wait_for_swap_contract_negotiation(
         &mm_bob,
