@@ -4257,6 +4257,7 @@ dependencies = [
  "enum-primitive-derive",
  "enum_from",
  "ethereum-types",
+ "ethkey",
  "futures 0.1.29",
  "futures 0.3.15",
  "futures-rustls 0.21.1",

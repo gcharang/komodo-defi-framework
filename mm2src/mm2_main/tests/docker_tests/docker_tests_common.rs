@@ -57,6 +57,7 @@ lazy_static! {
     // Supply more privkeys when 18 will be not enough.
     pub static ref SLP_TOKEN_OWNERS: Mutex<Vec<[u8; 32]>> = Mutex::new(Vec::with_capacity(18));
     static ref ETH_DISTRIBUTOR: EthCoin = eth_distributor();
+    static ref JST_DISTRIBUTOR: EthCoin = jst_distributor();
     static ref MM_CTX: MmArc = MmCtxBuilder::new().into_mm_arc();
 }
 
@@ -157,10 +158,40 @@ pub fn eth_distributor() -> EthCoin {
     .unwrap()
 }
 
-// pass address without 0x prefix to this fn
-pub fn _fill_eth(to_addr: &str) {
+pub fn jst_distributor() -> EthCoin {
+    let req = json!({
+        "method": "enable",
+        "coin": "ETH",
+        "urls": ETH_DEV_NODES,
+        "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
+    });
+    let keypair =
+        key_pair_from_seed("spice describe gravity federal blast come thank unfair canal monkey style afraid").unwrap();
+    let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(keypair.private().secret);
+    block_on(eth_coin_from_conf_and_request(
+        &MM_CTX,
+        "JST",
+        &eth_testnet_conf(),
+        &req,
+        CoinProtocol::ERC20 {
+            platform: "ETH".to_string(),
+            contract_address: ETH_DEV_TOKEN_CONTRACT.to_string(),
+        },
+        priv_key_policy,
+    ))
+    .unwrap()
+}
+
+pub fn fill_eth(to_addr: ethkey::Address) {
     ETH_DISTRIBUTOR
-        .send_to_address(to_addr.parse().unwrap(), 1_000_000_000_000_000_000u64.into())
+        .send_to_address(to_addr, 1_000_000_000_000_000_000u64.into())
+        .wait()
+        .unwrap();
+}
+
+pub fn fill_jst(to_addr: ethkey::Address) {
+    JST_DISTRIBUTOR
+        .send_to_address(to_addr, 2_000_000_000_000_000_000u64.into())
         .wait()
         .unwrap();
 }
