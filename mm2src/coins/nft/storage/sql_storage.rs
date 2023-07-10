@@ -362,6 +362,37 @@ where
     Ok(sql)
 }
 
+fn delete_scanned_block_sql() -> MmResult<String, SqlError> {
+    let table_name = scanned_nft_blocks_table_name();
+    validate_table_name(&table_name)?;
+    let sql = format!("DELETE from {} where chain=?1", table_name);
+    Ok(sql)
+}
+
+fn drop_scanned_block_table_sql() -> MmResult<String, SqlError> {
+    let table_name = scanned_nft_blocks_table_name();
+    validate_table_name(&table_name)?;
+    let sql = format!("DROP TABLE {};", table_name);
+    Ok(sql)
+}
+
+fn drop_nft_table_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
+where
+    F: FnOnce(&Chain) -> String,
+{
+    let table_name = table_name_creator(chain);
+    validate_table_name(&table_name)?;
+    let sql = format!("DROP TABLE {};", table_name);
+    Ok(sql)
+}
+
+fn is_table_empty(conn: &Connection, table_name: String) -> MmResult<bool, SqlError> {
+    validate_table_name(&table_name)?;
+    let mut stmt = conn.prepare(&format!("SELECT COUNT(*) FROM {}", table_name))?;
+    let count: i64 = stmt.query_row([], |row| row.get(0))?;
+    Ok(count == 0)
+}
+
 fn block_number_from_row(row: &Row<'_>) -> Result<i64, SqlError> { row.get::<_, i64>(0) }
 
 fn nft_amount_from_row(row: &Row<'_>) -> Result<String, SqlError> { row.get(0) }
@@ -674,6 +705,26 @@ impl NftListStorageOps for SqliteNftStorage {
         })
         .await
     }
+
+    async fn clear_nft_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let sql_nft = drop_nft_table_sql(chain, nft_list_table_name)?;
+        let sql_scanned_block = delete_scanned_block_sql()?;
+        let block_param = [chain.to_ticker()];
+        let selfi = self.clone();
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+            sql_transaction.execute(&sql_nft, [])?;
+            sql_transaction.execute(&sql_scanned_block, block_param)?;
+            sql_transaction.commit()?;
+            if is_table_empty(&conn, scanned_nft_blocks_table_name())? {
+                let sql_drop_block_table = drop_scanned_block_table_sql()?;
+                conn.execute(&sql_drop_block_table, []).map(|_| ())?;
+            }
+            Ok(())
+        })
+        .await
+    }
 }
 
 #[async_trait]
@@ -883,6 +934,19 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
             let sql_builder = get_txs_with_empty_meta_builder(&conn, &chain)?;
             let token_addr_id_pair = sql_builder.query(token_address_id_from_row)?;
             Ok(token_addr_id_pair)
+        })
+        .await
+    }
+
+    async fn clear_history_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let sql_nft = drop_nft_table_sql(chain, nft_tx_history_table_name)?;
+        let selfi = self.clone();
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+            sql_transaction.execute(&sql_nft, [])?;
+            sql_transaction.commit()?;
+            Ok(())
         })
         .await
     }

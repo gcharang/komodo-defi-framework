@@ -15,8 +15,9 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
 use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft::nft_errors::ProtectFromSpamError;
-use crate::nft::nft_structs::{NftCommon, NftTransferCommon, RefreshMetadataReq, TransferStatus, TxMeta, UriMeta};
+use crate::nft::nft_errors::{ClearNftDbError, ProtectFromSpamError};
+use crate::nft::nft_structs::{ClearNftDbReq, NftCommon, NftTransferCommon, RefreshMetadataReq, TransferStatus, TxMeta,
+                              UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use http::header::ACCEPT;
@@ -193,6 +194,8 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     storage.update_txs_meta_by_token_addr_id(&nft_db.chain, tx_meta).await?;
     Ok(())
 }
+
+pub async fn clear_nft_db(_ctx: MmArc, _req: ClearNftDbReq) -> MmResult<(), ClearNftDbError> { todo!() }
 
 async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult<Vec<Nft>, GetNftInfoError> {
     let mut res_list = Vec::new();

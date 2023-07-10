@@ -103,6 +103,9 @@ mod native_tests {
     fn test_nft_amount() { block_on(test_nft_amount_impl()) }
 
     #[test]
+    fn test_clear_nft() { block_on(test_clear_nft_impl()) }
+
+    #[test]
     fn test_add_get_txs() { block_on(test_add_get_txs_impl()) }
 
     #[test]
@@ -116,6 +119,9 @@ mod native_tests {
 
     #[test]
     fn test_get_update_tx_meta() { block_on(test_get_update_tx_meta_impl()) }
+
+    #[test]
+    fn test_clear_history() { block_on(test_clear_history_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -168,6 +174,9 @@ mod wasm_tests {
     async fn test_refresh_metadata() { test_refresh_metadata_impl().await }
 
     #[wasm_bindgen_test]
+    async fn test_clear_nft() { test_clear_nft_impl().await }
+
+    #[wasm_bindgen_test]
     async fn test_add_get_txs() { test_add_get_txs_impl().await }
 
     #[wasm_bindgen_test]
@@ -181,4 +190,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_get_update_tx_meta() { test_get_update_tx_meta_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_clear_history() { test_clear_history_impl().await }
 }

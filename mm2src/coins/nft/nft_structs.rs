@@ -455,3 +455,11 @@ impl From<Nft> for TxMeta {
         }
     }
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct ClearNftDbReq {
+    chains: Vec<Chain>,
+    #[serde(default)]
+    clear_all: bool,
+}

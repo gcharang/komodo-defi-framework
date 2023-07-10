@@ -429,6 +429,34 @@ pub(crate) async fn test_refresh_metadata_impl() {
     assert_eq!(new_symbol.to_string(), nft_upd.common.symbol.unwrap());
 }
 
+pub(crate) async fn test_clear_nft_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft = nft();
+    storage.add_nfts_to_list(&chain, vec![nft], 25919780).await.unwrap();
+
+    storage.clear_nft_data(&chain).await.unwrap();
+    test_clear_nft_target(&storage, &chain).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn test_clear_nft_target<S: NftListStorageOps>(storage: &S, chain: &Chain) {
+    let is_initialized = NftListStorageOps::is_initialized(storage, chain).await.unwrap();
+    assert!(!is_initialized);
+
+    let is_err = storage
+        .get_nft_list(vec![chain.clone()], false, 10, None)
+        .await
+        .is_err();
+    assert!(is_err);
+
+    let is_err = storage.get_last_scanned_block(chain).await.is_err();
+    assert!(is_err);
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn test_clear_nft_target<S: NftListStorageOps>(_storage: &S, _chain: &Chain) { todo!() }
+
 pub(crate) async fn test_add_get_txs_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
@@ -573,3 +601,22 @@ pub(crate) async fn test_get_update_tx_meta_impl() {
         .unwrap();
     assert_eq!(tx_by_hash.token_name, Some("Nebula Nodes".to_string()))
 }
+
+pub(crate) async fn test_clear_history_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let tx = tx();
+    storage.add_txs_to_history(&chain, vec![tx]).await.unwrap();
+
+    storage.clear_history_data(&chain).await.unwrap();
+    test_clear_history_target(&storage, &chain).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn test_clear_history_target<S: NftTxHistoryStorageOps>(storage: &S, chain: &Chain) {
+    let is_init = NftTxHistoryStorageOps::is_initialized(storage, chain).await.unwrap();
+    assert!(!is_init);
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn test_clear_history_target<S: NftTxHistoryStorageOps>(_storage: &S, _chain: &Chain) { todo!() }

@@ -85,6 +85,8 @@ pub trait NftListStorageOps {
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error>;
 
     async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
+
+    async fn clear_nft_data(&self, chain: &Chain) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]
@@ -139,6 +141,8 @@ pub trait NftTxHistoryStorageOps {
     async fn update_txs_meta_by_token_addr_id(&self, chain: &Chain, tx_meta: TxMeta) -> MmResult<(), Self::Error>;
 
     async fn get_txs_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error>;
+
+    async fn clear_history_data(&self, chain: &Chain) -> MmResult<(), Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]

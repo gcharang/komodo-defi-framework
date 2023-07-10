@@ -315,6 +315,8 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .await?;
         Ok(())
     }
+
+    async fn clear_nft_data(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
 }
 
 #[async_trait]
@@ -511,6 +513,8 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         }
         Ok(res.into_iter().collect())
     }
+
+    async fn clear_history_data(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
 }
 
 /// `get_last_block_from_table` function returns the highest block in the table related to certain blockchain type.

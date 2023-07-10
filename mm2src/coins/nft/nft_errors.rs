@@ -238,3 +238,11 @@ pub enum ProtectFromSpamError {
     #[from_stringify("serde_json::Error")]
     SerdeError(String),
 }
+
+#[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize, SerializeErrorType)]
+#[serde(tag = "error_type", content = "error_data")]
+pub enum ClearNftDbError {}
+
+impl HttpStatusCode for ClearNftDbError {
+    fn status_code(&self) -> StatusCode { todo!() }
+}
