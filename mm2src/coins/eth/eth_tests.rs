@@ -41,8 +41,8 @@ pub fn eth_distributor() -> EthCoin {
         "urls": ETH_DEV_NODES,
         "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
     });
-    let seed = get_passphrase!("../../.env.client", "ALICE_PASSPHRASE").unwrap();
-    let keypair = key_pair_from_seed(&seed).unwrap();
+    let keypair =
+        key_pair_from_seed("spice describe gravity federal blast come thank unfair canal monkey style afraid").unwrap();
     let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(keypair.private().secret);
     block_on(eth_coin_from_conf_and_request(
         &MM_CTX,
@@ -62,8 +62,8 @@ pub fn jst_distributor() -> EthCoin {
         "urls": ETH_DEV_NODES,
         "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
     });
-    let seed = get_passphrase!("../../.env.client", "BOB_PASSPHRASE").unwrap();
-    let keypair = key_pair_from_seed(&seed).unwrap();
+    let keypair =
+        key_pair_from_seed("also shoot benefit prefer juice shell elder veteran woman mimic image kidney").unwrap();
     let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(keypair.private().secret);
     block_on(eth_coin_from_conf_and_request(
         &MM_CTX,

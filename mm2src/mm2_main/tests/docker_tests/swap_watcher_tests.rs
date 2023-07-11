@@ -693,9 +693,13 @@ fn test_watcher_waits_for_taker_utxo() {
 
 #[test]
 fn test_watcher_waits_for_taker_eth() {
-    let alice_privkey = "814ea055c807c1ff2d49c81abfc3434fa0d10a427369b1f8d60fc78ab1da7d16";
-    let bob_privkey = "36533ec51a61f4b32856c8ce2ee811a263c625ae26e45ee68e6d28b65c8f9298";
-    let watcher_privkey = "baa1c83a0993ba96f88ffc943919991792ce9e2498fc41f42b38030915d58f9f";
+    let alice_keypair = Random.generate().unwrap();
+    fill_eth(alice_keypair.address());
+    fill_jst(alice_keypair.address());
+    let bob_keypair = Random.generate().unwrap();
+    fill_eth(bob_keypair.address());
+    let watcher_keypair = Random.generate().unwrap();
+    fill_eth(watcher_keypair.address());
 
     start_swaps_and_get_balances(
         "JST",
@@ -709,9 +713,9 @@ fn test_watcher_waits_for_taker_eth() {
             ("USE_WATCHER_REWARD", ""),
         ],
         SwapFlow::TakerSpendsMakerPayment,
-        alice_privkey,
-        bob_privkey,
-        watcher_privkey,
+        &format!("{:02x}", alice_keypair.secret()),
+        &format!("{:02x}", bob_keypair.secret()),
+        &format!("{:02x}", watcher_keypair.secret()),
     );
 }
 

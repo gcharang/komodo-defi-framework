@@ -166,7 +166,7 @@ pub fn jst_distributor() -> EthCoin {
         "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
     });
     let keypair =
-        key_pair_from_seed("spice describe gravity federal blast come thank unfair canal monkey style afraid").unwrap();
+        key_pair_from_seed("also shoot benefit prefer juice shell elder veteran woman mimic image kidney").unwrap();
     let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(keypair.private().secret);
     block_on(eth_coin_from_conf_and_request(
         &MM_CTX,
