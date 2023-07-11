@@ -142,8 +142,14 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let nft_table = db_transaction.table::<NftListTable>().await?;
         let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
         for nft in nfts {
+            let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+                .with_value(chain.to_string())?
+                .with_value(&nft.common.token_address)?
+                .with_value(nft.common.token_id.to_string())?;
             let nft_item = NftListTable::from_nft(&nft)?;
-            nft_table.add_item(&nft_item).await?;
+            nft_table
+                .add_item_or_ignore_by_unique_multi_index(index_keys, &nft_item)
+                .await?;
         }
         let last_scanned_block = LastScannedBlockTable {
             chain: chain.to_string(),
