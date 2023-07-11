@@ -195,7 +195,28 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     Ok(())
 }
 
-pub async fn clear_nft_db(_ctx: MmArc, _req: ClearNftDbReq) -> MmResult<(), ClearNftDbError> { todo!() }
+pub async fn clear_nft_db(ctx: MmArc, req: ClearNftDbReq) -> MmResult<(), ClearNftDbError> {
+    let chains = if req.clear_all {
+        vec![Chain::Avalanche, Chain::Bsc, Chain::Eth, Chain::Fantom, Chain::Polygon]
+    } else {
+        req.chains
+    };
+    clear_nft_data_for_chains(&ctx, chains).await
+}
+
+async fn clear_nft_data_for_chains(ctx: &MmArc, chains: Vec<Chain>) -> MmResult<(), ClearNftDbError> {
+    let storage = NftStorageBuilder::new(ctx).build()?;
+    for chain in &chains {
+        let is_list_init = NftListStorageOps::is_initialized(&storage, chain).await?;
+        let is_history_init = NftTxHistoryStorageOps::is_initialized(&storage, chain).await?;
+        if !is_list_init && !is_history_init {
+            continue;
+        }
+        storage.clear_nft_data(chain).await?;
+        storage.clear_history_data(chain).await?;
+    }
+    Ok(())
+}
 
 async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult<Vec<Nft>, GetNftInfoError> {
     let mut res_list = Vec::new();

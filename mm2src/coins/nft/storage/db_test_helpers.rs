@@ -455,7 +455,10 @@ async fn test_clear_nft_target<S: NftListStorageOps>(storage: &S, chain: &Chain)
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn test_clear_nft_target<S: NftListStorageOps>(_storage: &S, _chain: &Chain) { todo!() }
+async fn test_clear_nft_target<S: NftListStorageOps>(storage: &S, chain: &Chain) {
+    let nft_list = storage.get_nft_list(vec![*chain], true, 1, None).await.unwrap();
+    assert!(nft_list.nfts.is_empty());
+}
 
 pub(crate) async fn test_add_get_txs_impl() {
     let chain = Chain::Bsc;
@@ -619,4 +622,7 @@ async fn test_clear_history_target<S: NftTxHistoryStorageOps>(storage: &S, chain
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn test_clear_history_target<S: NftTxHistoryStorageOps>(_storage: &S, _chain: &Chain) { todo!() }
+async fn test_clear_history_target<S: NftTxHistoryStorageOps>(storage: &S, chain: &Chain) {
+    let txs = storage.get_tx_history(vec![*chain], true, 1, None, None).await.unwrap();
+    assert!(txs.transfer_history.is_empty());
+}

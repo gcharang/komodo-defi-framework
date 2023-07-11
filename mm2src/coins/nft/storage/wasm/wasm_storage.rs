@@ -316,7 +316,18 @@ impl NftListStorageOps for IndexedDbNftStorage {
         Ok(())
     }
 
-    async fn clear_nft_data(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
+    async fn clear_nft_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+
+        nft_table.delete_items_by_index("chain", chain.to_string()).await?;
+        last_scanned_block_table
+            .delete_item_by_unique_index("chain", chain.to_string())
+            .await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -514,7 +525,13 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         Ok(res.into_iter().collect())
     }
 
-    async fn clear_history_data(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
+    async fn clear_history_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTxHistoryTable>().await?;
+        table.delete_items_by_index("chain", chain.to_string()).await?;
+        Ok(())
+    }
 }
 
 /// `get_last_block_from_table` function returns the highest block in the table related to certain blockchain type.
