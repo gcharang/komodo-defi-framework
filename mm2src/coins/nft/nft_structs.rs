@@ -2,6 +2,8 @@ use crate::nft::eth_add_to_hex;
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
 use common::ten;
 use ethereum_types::Address;
+use futures::lock::Mutex as AsyncMutex;
+use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::Deserialize;
@@ -9,6 +11,7 @@ use serde_json::Value as Json;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
+use std::sync::Arc;
 use url::Url;
 
 #[derive(Debug, Deserialize)]
@@ -454,5 +457,19 @@ impl From<Nft> for TxMeta {
             image_url: nft_db.uri_meta.image_url,
             token_name: nft_db.uri_meta.token_name,
         }
+    }
+}
+
+pub(crate) struct NftCtx {
+    pub(crate) guard: Arc<AsyncMutex<()>>,
+}
+
+impl NftCtx {
+    pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
+        Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
+            Ok(NftCtx {
+                guard: Arc::new(AsyncMutex::new(())),
+            })
+        })))
     }
 }

@@ -42,7 +42,7 @@ pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError
 
 /// `get_nft_list` function returns list of NFTs on requested chains owned by user.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    let storage = NftStorageBuilder::new(&ctx)?.build()?;
     for chain in req.chains.iter() {
         if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
@@ -62,7 +62,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 
 /// `get_nft_metadata` function returns info of one specific NFT.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    let storage = NftStorageBuilder::new(&ctx)?.build()?;
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
         NftListStorageOps::init(&storage, &req.chain).await?;
     }
@@ -82,7 +82,7 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
 
 /// `get_nft_transfers` function returns a transfer history of NFTs on requested chains owned by user.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    let storage = NftStorageBuilder::new(&ctx)?.build()?;
     for chain in req.chains.iter() {
         if !NftTxHistoryStorageOps::is_initialized(&storage, chain).await? {
             NftTxHistoryStorageOps::init(&storage, chain).await?;
@@ -102,7 +102,10 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
 
 /// `update_nft` function updates cache of nft transfer history and nft list.
 pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNftError> {
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    let mut storage_builder = NftStorageBuilder::new(&ctx)?;
+    let storage = storage_builder.build()?;
+    let _lock = storage_builder.lock().await;
+
     for chain in req.chains.iter() {
         let tx_history_initialized = NftTxHistoryStorageOps::is_initialized(&storage, chain).await?;
 
@@ -162,7 +165,9 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
 }
 
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    let mut storage_builder = NftStorageBuilder::new(&ctx)?;
+    let storage = storage_builder.build()?;
+    let _lock = storage_builder.lock();
     let moralis_meta = get_moralis_metadata(
         format!("{:#02x}", req.token_address),
         req.token_id.clone(),
@@ -176,7 +181,7 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         chain: req.chain,
         protect_from_spam: false,
     };
-    let mut nft_db = get_nft_metadata(ctx, req).await?;
+    let mut nft_db = get_nft_metadata(ctx.clone(), req).await?;
     let token_uri = check_moralis_ipfs_bafy(moralis_meta.common.token_uri.as_deref());
     let uri_meta = get_uri_meta(token_uri.as_deref(), moralis_meta.common.metadata.as_deref()).await;
     nft_db.common.collection_name = moralis_meta.common.collection_name;
@@ -717,7 +722,7 @@ pub(crate) async fn find_wallet_nft_amount(
     token_address: String,
     token_id: BigDecimal,
 ) -> MmResult<BigDecimal, GetNftInfoError> {
-    let storage = NftStorageBuilder::new(ctx).build()?;
+    let storage = NftStorageBuilder::new(ctx)?.build()?;
     if !NftListStorageOps::is_initialized(&storage, chain).await? {
         NftListStorageOps::init(&storage, chain).await?;
     }
