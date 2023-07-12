@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
 use db_common::sqlite::rusqlite::types::{FromSqlError, Type};
-use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row};
+use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row, Statement};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
 use mm2_core::mm_ctx::MmArc;
@@ -383,22 +383,15 @@ fn get_txs_from_block_builder<'a>(
     Ok(sql_builder)
 }
 
-fn get_txs_by_token_addr_id_builder<'a>(
-    conn: &'a Connection,
-    chain: &'a Chain,
-    token_address: String,
-    token_id: String,
-) -> MmResult<SqlQuery<'a>, SqlError> {
+fn get_txs_by_token_addr_id_statement<'a>(conn: &'a Connection, chain: &'a Chain) -> MmResult<Statement<'a>, SqlError> {
     let table_name = nft_tx_history_table_name(chain);
     validate_table_name(table_name.as_str())?;
-    let mut sql_builder = SqlQuery::select_from(conn, table_name.as_str())?;
-    sql_builder
-        .sql_builder()
-        .and_where_eq("token_address", format!("'{}'", token_address))
-        .and_where_eq("token_id", format!("'{}'", token_id))
-        .field("details_json");
-    drop_mutability!(sql_builder);
-    Ok(sql_builder)
+    let sql_query = format!(
+        "SELECT details_json FROM {} WHERE token_address = ? AND token_id = ?",
+        table_name
+    );
+    let stmt = conn.prepare(&sql_query)?;
+    Ok(stmt)
 }
 
 fn get_txs_with_empty_meta_builder<'a>(conn: &'a Connection, chain: &'a Chain) -> MmResult<SqlQuery<'a>, SqlError> {
@@ -816,8 +809,10 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
         let chain = *chain;
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            let sql_builder = get_txs_by_token_addr_id_builder(&conn, &chain, token_address, token_id.to_string())?;
-            let txs = sql_builder.query(tx_history_from_row)?;
+            let mut stmt = get_txs_by_token_addr_id_statement(&conn, &chain)?;
+            let txs = stmt
+                .query_map([token_address, token_id.to_string()], tx_history_from_row)?
+                .collect::<Result<Vec<_>, _>>()?;
             Ok(txs)
         })
         .await
