@@ -3,6 +3,7 @@ use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTokenAddrId,
 use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftStorageError,
                           NftTxHistoryStorageOps, RemoveNftResult};
 use async_trait::async_trait;
+use bitcoin_hashes::hex::ToHex;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
 use db_common::sqlite::rusqlite::types::{FromSqlError, Type};
@@ -753,7 +754,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.block_number.to_string()),
                     Some(tx.block_timestamp.to_string()),
                     Some(tx.contract_type.to_string()),
-                    Some(tx.common.token_address),
+                    Some(format!("0x{}", tx.common.token_address.to_hex())),
                     Some(tx.common.token_id.to_string()),
                     Some(tx.status.to_string()),
                     Some(tx.common.amount.to_string()),

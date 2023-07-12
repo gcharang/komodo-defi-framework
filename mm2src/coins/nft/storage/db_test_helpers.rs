@@ -1,6 +1,7 @@
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftTransferCommon, NftTransferHistory,
                               NftTxHistoryFilters, TransferStatus, TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps, RemoveNftResult};
+use ethereum_types::Address;
 use mm2_number::BigDecimal;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::num::NonZeroUsize;
@@ -63,7 +64,7 @@ fn tx() -> NftTransferHistory {
             log_index: Some(495),
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
-            token_address: "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string(),
+            token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
             token_id: BigDecimal::from_str("214300047252").unwrap(),
             from_address: "0x6fad0ec6bb76914b2a2a800686acc22970645820".to_string(),
             to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
@@ -195,7 +196,7 @@ fn nft_list() -> Vec<Nft> {
     vec![nft, nft1, nft2]
 }
 
-fn nft_tx_historty() -> Vec<NftTransferHistory> {
+fn nft_tx_history() -> Vec<NftTransferHistory> {
     let tx = NftTransferHistory {
         common: NftTransferCommon {
             block_hash: Some("0xcb41654fc5cf2bf5d7fd3f061693405c74d419def80993caded0551ecfaeaae5".to_string()),
@@ -204,7 +205,7 @@ fn nft_tx_historty() -> Vec<NftTransferHistory> {
             log_index: Some(139),
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
-            token_address: "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string(),
+            token_address: Address::from_str("0x5c7d6712dfaf0cb079d48981781c8705e8417ca0").unwrap(),
             token_id: Default::default(),
             from_address: "0x4ff0bbc9b64d635a4696d1a38554fb2529c103ff".to_string(),
             to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
@@ -232,7 +233,7 @@ fn nft_tx_historty() -> Vec<NftTransferHistory> {
             log_index: Some(495),
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
-            token_address: "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string(),
+            token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
             token_id: BigDecimal::from_str("214300047252").unwrap(),
             from_address: "0x6fad0ec6bb76914b2a2a800686acc22970645820".to_string(),
             to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
@@ -262,7 +263,7 @@ fn nft_tx_historty() -> Vec<NftTransferHistory> {
             log_index: Some(201),
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
-            token_address: "0xfd913a305d70a60aac4faac70c739563738e1f81".to_string(),
+            token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
             token_id: BigDecimal::from_str("214300044414").unwrap(),
             from_address: "0x6fad0ec6bb76914b2a2a800686acc22970645820".to_string(),
             to_address: "0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2".to_string(),
@@ -432,7 +433,7 @@ pub(crate) async fn test_refresh_metadata_impl() {
 pub(crate) async fn test_add_get_txs_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
-    let txs = nft_tx_historty();
+    let txs = nft_tx_history();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
     let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
@@ -457,7 +458,7 @@ pub(crate) async fn test_add_get_txs_impl() {
 pub(crate) async fn test_last_tx_block_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
-    let txs = nft_tx_historty();
+    let txs = nft_tx_history();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
     let last_block = NftTxHistoryStorageOps::get_last_block_number(&storage, &chain)
@@ -470,7 +471,7 @@ pub(crate) async fn test_last_tx_block_impl() {
 pub(crate) async fn test_tx_history_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
-    let txs = nft_tx_historty();
+    let txs = nft_tx_history();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
     let tx_history = storage
@@ -487,7 +488,7 @@ pub(crate) async fn test_tx_history_impl() {
 pub(crate) async fn test_tx_history_filters_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
-    let txs = nft_tx_historty();
+    let txs = nft_tx_history();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
     let filters = NftTxHistoryFilters {
@@ -541,7 +542,7 @@ pub(crate) async fn test_tx_history_filters_impl() {
 pub(crate) async fn test_get_update_tx_meta_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
-    let txs = nft_tx_historty();
+    let txs = nft_tx_history();
     storage.add_txs_to_history(&chain, txs).await.unwrap();
 
     let vec_token_add_id = storage.get_txs_with_empty_meta(&chain).await.unwrap();

@@ -41,7 +41,7 @@ pub struct RefreshMetadataReq {
 
 #[derive(Debug, Display)]
 pub enum ParseChainTypeError {
-    UnsupportedCainType,
+    UnsupportedChainType,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -93,7 +93,7 @@ impl FromStr for Chain {
             "ETH" => Ok(Chain::Eth),
             "FANTOM" => Ok(Chain::Fantom),
             "POLYGON" => Ok(Chain::Polygon),
-            _ => Err(ParseChainTypeError::UnsupportedCainType),
+            _ => Err(ParseChainTypeError::UnsupportedChainType),
         }
     }
 }
@@ -368,7 +368,7 @@ pub struct NftTransferCommon {
     pub(crate) log_index: Option<u64>,
     pub(crate) value: Option<BigDecimal>,
     pub(crate) transaction_type: Option<String>,
-    pub(crate) token_address: String,
+    pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) from_address: String,
     pub(crate) to_address: String,
