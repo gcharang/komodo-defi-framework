@@ -1,10 +1,12 @@
-use common::serde_derive::{Deserialize, Serialize};
 use derive_more::Display;
-use mm2_number::{construct_detailed, BigDecimal, BigRational, Fraction, MmNumber};
 use rpc::v1::types::H256 as H256Json;
 use std::collections::HashSet;
 use std::ops::Deref;
 use uuid::Uuid;
+
+use common::serde_derive::{Deserialize, Serialize};
+use common::{one_hundred, ten_f64, true_f};
+use mm2_number::{construct_detailed, BigDecimal, BigRational, Fraction, MmNumber};
 
 #[derive(Serialize, Deserialize)]
 pub struct Mm2RpcResult<T> {
@@ -139,7 +141,7 @@ pub struct SellBuyRequest {
     pub rel_confs: Option<u64>,
     pub rel_nota: Option<bool>,
     pub min_volume: Option<MmNumber>,
-    #[serde(default = "get_true")]
+    #[serde(default = "true_f")]
     pub save_in_history: bool,
 }
 
@@ -254,4 +256,95 @@ pub struct MmVersionResponse {
     pub datetime: String,
 }
 
-fn get_true() -> bool { true }
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "method", rename_all = "lowercase")]
+pub enum ActivationRequest {
+    Enable(EnableRequest),
+    Electrum(ElectrumRequest),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct EnableRequest {
+    pub coin: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub urls: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub swap_contract_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_swap_contract: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gas_station_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gas_station_decimals: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gas_station_policy: Option<GasStationPricePolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mm2: Option<u8>,
+    #[serde(default)]
+    pub tx_history: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_confirmations: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires_notarization: Option<bool>,
+}
+
+/// Using tagged representation to allow adding variants with coefficients, percentage, etc in the future.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "policy", content = "additional_data")]
+pub enum GasStationPricePolicy {
+    /// Use mean between average and fast values, default and recommended to use on ETH mainnet due to
+    /// gas price big spikes.
+    MeanAverageFast,
+    /// Use average value only. Useful for non-heavily congested networks (Matic, etc.)
+    Average,
+}
+
+impl Default for GasStationPricePolicy {
+    fn default() -> Self { GasStationPricePolicy::MeanAverageFast }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ElectrumRequest {
+    pub coin: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub servers: Vec<Server>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mm2: Option<u8>,
+    #[serde(default)]
+    pub tx_history: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_confirmations: Option<u64>,
+    #[serde(default)]
+    pub requires_notarization: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub swap_contract_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_swap_contract: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub utxo_merge_params: Option<UtxoMergeParams>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Server {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<Protocol>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_cert_verification: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Protocol {
+    Tcp,
+    Ssl,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct UtxoMergeParams {
+    pub merge_at: usize,
+    #[serde(default = "ten_f64")]
+    pub check_every: f64,
+    #[serde(default = "one_hundred")]
+    pub max_merge_at_once: usize,
+}
