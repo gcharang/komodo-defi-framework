@@ -1,9 +1,9 @@
+use crate::nft::eth_add_to_hex;
 use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTokenAddrId, NftTransferHistory,
                               NftTxHistoryFilters, NftsTransferHistoryList, TxMeta};
 use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftStorageError,
                           NftTxHistoryStorageOps, RemoveNftResult};
 use async_trait::async_trait;
-use bitcoin_hashes::hex::ToHex;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
 use db_common::sqlite::rusqlite::types::{FromSqlError, Type};
@@ -504,7 +504,7 @@ impl NftListStorageOps for SqliteNftStorage {
             for nft in nfts {
                 let nft_json = json::to_string(&nft).expect("serialization should not fail");
                 let params = [
-                    Some(nft.common.token_address),
+                    Some(eth_add_to_hex(&nft.common.token_address)),
                     Some(nft.common.token_id.to_string()),
                     Some(nft.chain.to_string()),
                     Some(nft.common.amount.to_string()),
@@ -589,7 +589,11 @@ impl NftListStorageOps for SqliteNftStorage {
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
-            let params = [nft_json, nft.common.token_address, nft.common.token_id.to_string()];
+            let params = [
+                nft_json,
+                eth_add_to_hex(&nft.common.token_address),
+                nft.common.token_id.to_string(),
+            ];
             sql_transaction.execute(&sql, params)?;
             sql_transaction.commit()?;
             Ok(())
@@ -635,7 +639,7 @@ impl NftListStorageOps for SqliteNftStorage {
             let params = [
                 Some(nft.common.amount.to_string()),
                 Some(nft_json),
-                Some(nft.common.token_address),
+                Some(eth_add_to_hex(&nft.common.token_address)),
                 Some(nft.common.token_id.to_string()),
             ];
             sql_transaction.execute(&sql, params)?;
@@ -658,7 +662,7 @@ impl NftListStorageOps for SqliteNftStorage {
                 Some(nft.common.amount.to_string()),
                 Some(nft.block_number.to_string()),
                 Some(nft_json),
-                Some(nft.common.token_address),
+                Some(eth_add_to_hex(&nft.common.token_address)),
                 Some(nft.common.token_id.to_string()),
             ];
             sql_transaction.execute(&sql, params)?;
@@ -754,7 +758,7 @@ impl NftTxHistoryStorageOps for SqliteNftStorage {
                     Some(tx.block_number.to_string()),
                     Some(tx.block_timestamp.to_string()),
                     Some(tx.contract_type.to_string()),
-                    Some(format!("0x{}", tx.common.token_address.to_hex())),
+                    Some(eth_add_to_hex(&tx.common.token_address)),
                     Some(tx.common.token_id.to_string()),
                     Some(tx.status.to_string()),
                     Some(tx.common.amount.to_string()),

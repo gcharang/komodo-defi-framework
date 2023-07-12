@@ -1,3 +1,4 @@
+use crate::nft::eth_add_to_hex;
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
 use common::ten;
 use ethereum_types::Address;
@@ -188,10 +189,10 @@ impl UriMeta {
 /// [`NftCommon`] structure contains common fields from [`Nft`] and [`NftFromMoralis`]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftCommon {
-    pub(crate) token_address: String,
+    pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
     pub(crate) amount: BigDecimal,
-    pub(crate) owner_of: String,
+    pub(crate) owner_of: Address,
     pub(crate) token_hash: Option<String>,
     #[serde(rename = "name")]
     pub(crate) collection_name: Option<String>,
@@ -370,8 +371,8 @@ pub struct NftTransferCommon {
     pub(crate) transaction_type: Option<String>,
     pub(crate) token_address: Address,
     pub(crate) token_id: BigDecimal,
-    pub(crate) from_address: String,
-    pub(crate) to_address: String,
+    pub(crate) from_address: Address,
+    pub(crate) to_address: Address,
     pub(crate) amount: BigDecimal,
     pub(crate) verified: Option<u64>,
     pub(crate) operator: Option<String>,
@@ -446,7 +447,7 @@ pub struct TxMeta {
 impl From<Nft> for TxMeta {
     fn from(nft_db: Nft) -> Self {
         TxMeta {
-            token_address: nft_db.common.token_address,
+            token_address: eth_add_to_hex(&nft_db.common.token_address),
             token_id: nft_db.common.token_id,
             token_uri: nft_db.common.token_uri,
             collection_name: nft_db.common.collection_name,

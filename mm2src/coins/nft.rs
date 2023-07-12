@@ -14,18 +14,19 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
                   NftTransferHistory, NftTransfersReq, NftTxHistoryFromMoralis, NftsTransferHistoryList,
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
-use crate::eth::{get_eth_address, withdraw_erc1155, withdraw_erc721};
+use crate::eth::{eth_add_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_errors::ProtectFromSpamError;
 use crate::nft::nft_structs::{NftCommon, NftTransferCommon, RefreshMetadataReq, TransferStatus, TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
-use bitcoin_hashes::hex::ToHex;
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
+use ethereum_types::Address;
 use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_number::BigDecimal;
 use regex::Regex;
 use serde_json::Value as Json;
 use std::cmp::Ordering;
+use std::str::FromStr;
 
 const MORALIS_API_ENDPOINT: &str = "api/v2";
 /// query parameters for moralis request: The format of the token ID
@@ -284,7 +285,7 @@ async fn get_moralis_nft_transfers(
                     Some(contract_type) => contract_type,
                     None => continue,
                 };
-                let status = get_tx_status(&wallet_address, &transfer_moralis.common.to_address);
+                let status = get_tx_status(&wallet_address, &eth_add_to_hex(&transfer_moralis.common.to_address));
                 let block_timestamp = parse_rfc3339_to_timestamp(&transfer_moralis.block_timestamp)?;
                 let transfer_history = NftTransferHistory {
                     common: NftTransferCommon {
@@ -520,12 +521,12 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let nft_db = storage
         .get_nft(
             chain,
-            format!("0x{}", tx.common.token_address.to_hex()),
+            eth_add_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
         .ok_or_else(|| UpdateNftError::TokenNotFoundInWallet {
-            token_address: format!("0x{}", tx.common.token_address.to_hex()),
+            token_address: eth_add_to_hex(&tx.common.token_address),
             token_id: tx.common.token_id.to_string(),
         })?;
     let tx_meta = TxMeta::from(nft_db);
@@ -533,7 +534,7 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     storage
         .remove_nft_from_list(
             chain,
-            format!("0x{}", tx.common.token_address.to_hex()),
+            eth_add_to_hex(&tx.common.token_address),
             tx.common.token_id,
             tx.block_number,
         )
@@ -551,7 +552,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let nft = match storage
         .get_nft(
             chain,
-            format!("0x{}", tx.common.token_address.to_hex()),
+            eth_add_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
@@ -559,7 +560,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
         Some(mut nft_db) => {
             // An error is raised if user tries to receive an identical ERC-721 token they already own
             // and if owner address != from address
-            if my_address != tx.common.from_address {
+            if my_address != eth_add_to_hex(&tx.common.from_address) {
                 return MmError::err(UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 {
                     tx_hash: tx.common.transaction_hash,
                 });
@@ -573,16 +574,12 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
         },
         // If token isn't in NFT LIST table then add nft to the table.
         None => {
-            let mut nft = get_moralis_metadata(
-                format!("0x{}", tx.common.token_address.to_hex()),
-                tx.common.token_id,
-                chain,
-                url,
-            )
-            .await?;
+            let mut nft =
+                get_moralis_metadata(eth_add_to_hex(&tx.common.token_address), tx.common.token_id, chain, url).await?;
             // sometimes moralis updates Get All NFTs (which also affects Get Metadata) later
             // than History by Wallet update
-            nft.common.owner_of = my_address.to_string();
+            nft.common.owner_of =
+                Address::from_str(my_address).map_to_mm(|e| UpdateNftError::InvalidHexString(e.to_string()))?;
             nft.block_number = tx.block_number;
             drop_mutability!(nft);
             storage
@@ -604,12 +601,12 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let mut nft_db = storage
         .get_nft(
             chain,
-            format!("0x{}", tx.common.token_address.to_hex()),
+            eth_add_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
         .ok_or_else(|| UpdateNftError::TokenNotFoundInWallet {
-            token_address: format!("0x{}", tx.common.token_address.to_hex()),
+            token_address: eth_add_to_hex(&tx.common.token_address),
             token_id: tx.common.token_id.to_string(),
         })?;
     match nft_db.common.amount.cmp(&tx.common.amount) {
@@ -617,7 +614,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             storage
                 .remove_nft_from_list(
                     chain,
-                    format!("0x{}", tx.common.token_address.to_hex()),
+                    eth_add_to_hex(&tx.common.token_address),
                     tx.common.token_id,
                     tx.block_number,
                 )
@@ -651,7 +648,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let nft = match storage
         .get_nft(
             chain,
-            format!("0x{}", tx.common.token_address.to_hex()),
+            eth_add_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
@@ -659,7 +656,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         Some(mut nft_db) => {
             // if owner address == from address, then owner sent tokens to themself,
             // which means that the amount will not change.
-            if my_address != tx.common.from_address {
+            if my_address != eth_add_to_hex(&tx.common.from_address) {
                 nft_db.common.amount += tx.common.amount;
             }
             nft_db.block_number = tx.block_number;
@@ -672,7 +669,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         // If token isn't in NFT LIST table then add nft to the table.
         None => {
             let moralis_meta = get_moralis_metadata(
-                format!("0x{}", tx.common.token_address.to_hex()),
+                eth_add_to_hex(&tx.common.token_address),
                 tx.common.token_id.clone(),
                 chain,
                 url,
@@ -685,7 +682,8 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
                     token_address: moralis_meta.common.token_address,
                     token_id: moralis_meta.common.token_id,
                     amount: tx.common.amount,
-                    owner_of: my_address.to_string(),
+                    owner_of: Address::from_str(my_address)
+                        .map_to_mm(|e| UpdateNftError::InvalidHexString(e.to_string()))?,
                     token_hash: moralis_meta.common.token_hash,
                     collection_name: moralis_meta.common.collection_name,
                     symbol: moralis_meta.common.symbol,
