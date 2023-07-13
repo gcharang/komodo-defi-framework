@@ -32,9 +32,6 @@ const MORALIS_API_ENDPOINT: &str = "api/v2";
 /// query parameters for moralis request: The format of the token ID
 const MORALIS_FORMAT_QUERY_NAME: &str = "format";
 const MORALIS_FORMAT_QUERY_VALUE: &str = "decimal";
-/// query parameters for moralis request: The transfer direction
-const MORALIS_DIRECTION_QUERY_NAME: &str = "direction";
-const MORALIS_DIRECTION_QUERY_VALUE: &str = "both";
 /// The minimum block number from which to get the transfers
 const MORALIS_FROM_BLOCK_QUERY_NAME: &str = "from_block";
 
@@ -273,7 +270,6 @@ async fn get_moralis_nft_transfers(
         .query_pairs_mut()
         .append_pair("chain", &chain.to_string())
         .append_pair(MORALIS_FORMAT_QUERY_NAME, MORALIS_FORMAT_QUERY_VALUE)
-        .append_pair(MORALIS_DIRECTION_QUERY_NAME, MORALIS_DIRECTION_QUERY_VALUE)
         .append_pair(MORALIS_FROM_BLOCK_QUERY_NAME, &from_block);
     drop_mutability!(uri_without_cursor);
 
