@@ -1,17 +1,14 @@
-use crate::nft::nft_structs::{Chain, Nft, NftCtx, NftList, NftTokenAddrId, NftTransferHistory, NftTxHistoryFilters,
+use crate::nft::nft_structs::{Chain, Nft, NftList, NftTokenAddrId, NftTransferHistory, NftTxHistoryFilters,
                               NftsTransferHistoryList, TxMeta};
 use crate::WithdrawError;
 use async_trait::async_trait;
 use derive_more::Display;
-use futures::lock::Mutex as AsyncMutex;
-use futures::lock::MutexLockFuture;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::MmResult;
 use mm2_err_handle::mm_error::{NotEqual, NotMmError};
 use mm2_number::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 
 #[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) mod db_test_helpers;
@@ -161,19 +158,11 @@ impl From<CreateNftStorageError> for WithdrawError {
 /// and [`NftTxHistoryStorageOps`] traits.Also has guard to lock write operations.
 pub struct NftStorageBuilder<'a> {
     ctx: &'a MmArc,
-    guard: Arc<AsyncMutex<()>>,
 }
 
 impl<'a> NftStorageBuilder<'a> {
     #[inline]
-    pub fn new(ctx: &MmArc) -> MmResult<NftStorageBuilder<'_>, CreateNftStorageError> {
-        let nft_ctx = NftCtx::from_ctx(ctx).map_err(CreateNftStorageError::Internal)?;
-        let builder = NftStorageBuilder {
-            ctx,
-            guard: nft_ctx.guard.clone(),
-        };
-        Ok(builder)
-    }
+    pub fn new(ctx: &MmArc) -> NftStorageBuilder<'_> { NftStorageBuilder { ctx } }
 
     /// `build` function is used to build nft storage which implements [`NftListStorageOps`] and [`NftTxHistoryStorageOps`] traits.
     #[inline]
@@ -183,12 +172,6 @@ impl<'a> NftStorageBuilder<'a> {
         #[cfg(not(target_arch = "wasm32"))]
         sql_storage::SqliteNftStorage::new(self.ctx)
     }
-
-    /// `lock` is used at the beginning of functions where we need to update database, so
-    /// we can avoid race condition.
-    /// Also it prevents sending identical moralis requests several times in write operations.
-    #[inline]
-    pub fn lock(&mut self) -> MutexLockFuture<'_, ()> { self.guard.lock() }
 }
 
 /// `get_offset_limit` function calculates offset and limit for final result if we use pagination.
