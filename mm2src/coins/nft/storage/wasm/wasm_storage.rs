@@ -380,21 +380,20 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTxHistoryTable>().await?;
-        let mut cursor = table
+        let items = table
             .cursor_builder()
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .bound("block_number", BeBigUint::from(from_block), BeBigUint::from(u64::MAX))
             .open_cursor(NftTxHistoryTable::CHAIN_BLOCK_NUMBER_INDEX)
             .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .collect()
+            .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
 
         let mut res = Vec::new();
-        while let Some((_item_id, item)) = cursor
-            .next()
-            .await
-            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-        {
+        for (_item_id, item) in items.into_iter() {
             let tx = tx_details_from_item(item)?;
             res.push(tx);
         }
@@ -485,20 +484,19 @@ impl NftTxHistoryStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTxHistoryTable>().await?;
-        let mut cursor = table
+        let items = table
             .cursor_builder()
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .open_cursor("chain")
             .await
+            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+            .collect()
+            .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
 
         let mut res = HashSet::new();
-        while let Some((_item_id, item)) = cursor
-            .next()
-            .await
-            .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-        {
+        for (_item_id, item) in items.into_iter() {
             if item.token_uri.is_none()
                 && item.collection_name.is_none()
                 && item.image_url.is_none()
@@ -520,27 +518,26 @@ async fn get_last_block_from_table(
     table: DbTable<'_, impl TableSignature + BlockNumberTable>,
     cursor: &str,
 ) -> MmResult<Option<u64>, WasmNftCacheError> {
-    let maybe_item = table
+    let items = table
         .cursor_builder()
         .only("chain", chain.to_string())
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
         // Sets lower and upper bounds for block_number field
         .bound("block_number", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
-        // Cursor returns values from the lowest to highest key indexes.
-        // But we need to get the most highest block_number, so reverse the cursor direction.
-        .reverse()
         // Opens a cursor by the specified index.
         // In get_last_block_from_table case it is CHAIN_BLOCK_NUMBER_INDEX, as we need to search block_number for specific chain.
+        // Cursor returns values from the lowest to highest key indexes.
         .open_cursor(cursor)
         .await
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-        // Advances the iterator and returns the next value.
-        // Please note that the items are sorted by the index keys.
-        .next()
+        .collect()
         .await
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
-    let maybe_item = maybe_item
-        .map(|(_, item)| {
+
+    let maybe_item = items
+        .into_iter()
+        .last()
+        .map(|(_item_id, item)| {
             item.get_block_number()
                 .to_u64()
                 .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))
