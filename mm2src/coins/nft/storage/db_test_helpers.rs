@@ -291,7 +291,7 @@ fn nft_tx_history() -> Vec<NftTransferHistory> {
 
 async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTxHistoryStorageOps {
     let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).unwrap().build().unwrap();
+    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     NftListStorageOps::init(&storage, chain).await.unwrap();
     let is_initialized = NftListStorageOps::is_initialized(&storage, chain).await.unwrap();
     assert!(is_initialized);
@@ -300,7 +300,7 @@ async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTxH
 
 async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + NftTxHistoryStorageOps {
     let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).unwrap().build().unwrap();
+    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     NftTxHistoryStorageOps::init(&storage, chain).await.unwrap();
     let is_initialized = NftTxHistoryStorageOps::is_initialized(&storage, chain).await.unwrap();
     assert!(is_initialized);
