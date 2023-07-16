@@ -1,4 +1,4 @@
-use crate::eth::eth_add_to_hex;
+use crate::eth::eth_addr_to_hex;
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftTransferCommon, NftTransferHistory,
                               NftTxHistoryFilters, TransferStatus, TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps, RemoveNftResult};
@@ -391,7 +391,7 @@ pub(crate) async fn test_nft_amount_impl() {
     let amount = storage
         .get_nft_amount(
             &chain,
-            eth_add_to_hex(&nft.common.token_address),
+            eth_addr_to_hex(&nft.common.token_address),
             nft.common.token_id.clone(),
         )
         .await
@@ -408,7 +408,7 @@ pub(crate) async fn test_nft_amount_impl() {
         .await
         .unwrap();
     let amount = storage
-        .get_nft_amount(&chain, eth_add_to_hex(&nft.common.token_address), nft.common.token_id)
+        .get_nft_amount(&chain, eth_addr_to_hex(&nft.common.token_address), nft.common.token_id)
         .await
         .unwrap()
         .unwrap();
@@ -428,7 +428,7 @@ pub(crate) async fn test_refresh_metadata_impl() {
         .unwrap();
     nft.common.symbol = Some(new_symbol.to_string());
     drop_mutability!(nft);
-    let token_add = eth_add_to_hex(&nft.common.token_address);
+    let token_add = eth_addr_to_hex(&nft.common.token_address);
     let token_id = nft.common.token_id.clone();
     storage.refresh_nft_metadata(&chain, nft).await.unwrap();
     let nft_upd = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();

@@ -1,4 +1,4 @@
-use crate::nft::eth_add_to_hex;
+use crate::nft::eth_addr_to_hex;
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
 use common::ten;
 use ethereum_types::Address;
@@ -13,6 +13,12 @@ use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
+
+#[cfg(target_arch = "wasm32")]
+use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
+
+#[cfg(target_arch = "wasm32")]
+use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
 
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
@@ -450,7 +456,7 @@ pub struct TxMeta {
 impl From<Nft> for TxMeta {
     fn from(nft_db: Nft) -> Self {
         TxMeta {
-            token_address: eth_add_to_hex(&nft_db.common.token_address),
+            token_address: eth_addr_to_hex(&nft_db.common.token_address),
             token_id: nft_db.common.token_id,
             token_uri: nft_db.common.token_uri,
             collection_name: nft_db.common.collection_name,
@@ -462,6 +468,8 @@ impl From<Nft> for TxMeta {
 
 pub(crate) struct NftCtx {
     pub(crate) guard: Arc<AsyncMutex<()>>,
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) nft_cache_db: SharedDb<NftCacheIDB>,
 }
 
 impl NftCtx {
@@ -469,6 +477,8 @@ impl NftCtx {
         Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
             Ok(NftCtx {
                 guard: Arc::new(AsyncMutex::new(())),
+                #[cfg(target_arch = "wasm32")]
+                nft_cache_db: ConstructibleDb::new(ctx).into_shared(),
             })
         })))
     }

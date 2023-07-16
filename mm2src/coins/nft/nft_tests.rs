@@ -5,7 +5,7 @@ const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod native_tests {
-    use crate::eth::eth_add_to_hex;
+    use crate::eth::eth_addr_to_hex;
     use crate::nft::nft_structs::{NftFromMoralis, NftTxHistoryFromMoralis, UriMeta};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
@@ -67,7 +67,7 @@ mod native_tests {
         let nfts_list = response_nft_list["result"].as_array().unwrap();
         for nft_json in nfts_list {
             let nft_moralis: NftFromMoralis = serde_json::from_str(&nft_json.to_string()).unwrap();
-            assert_eq!(TEST_WALLET_ADDR_EVM, eth_add_to_hex(&nft_moralis.common.owner_of));
+            assert_eq!(TEST_WALLET_ADDR_EVM, eth_addr_to_hex(&nft_moralis.common.owner_of));
         }
 
         let response_tx_history = block_on(send_request_to_uri(NFT_HISTORY_URL_TEST)).unwrap();
@@ -77,7 +77,7 @@ mod native_tests {
         let transfer_moralis: NftTxHistoryFromMoralis = serde_json::from_str(&first_tx.to_string()).unwrap();
         assert_eq!(
             TEST_WALLET_ADDR_EVM,
-            eth_add_to_hex(&transfer_moralis.common.to_address)
+            eth_addr_to_hex(&transfer_moralis.common.to_address)
         );
 
         let response_meta = block_on(send_request_to_uri(NFT_METADATA_URL_TEST)).unwrap();
@@ -124,7 +124,7 @@ mod native_tests {
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_tests {
-    use crate::eth::eth_add_to_hex;
+    use crate::eth::eth_addr_to_hex;
     use crate::nft::nft_structs::{NftFromMoralis, NftTxHistoryFromMoralis};
     use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::send_request_to_uri;
@@ -139,7 +139,7 @@ mod wasm_tests {
         let nfts_list = response_nft_list["result"].as_array().unwrap();
         for nft_json in nfts_list {
             let nft_moralis: NftFromMoralis = serde_json::from_str(&nft_json.to_string()).unwrap();
-            assert_eq!(TEST_WALLET_ADDR_EVM, eth_add_to_hex(&nft_moralis.common.owner_of));
+            assert_eq!(TEST_WALLET_ADDR_EVM, eth_addr_to_hex(&nft_moralis.common.owner_of));
         }
 
         let response_tx_history = send_request_to_uri(NFT_HISTORY_URL_TEST).await.unwrap();
@@ -149,7 +149,7 @@ mod wasm_tests {
         let transfer_moralis: NftTxHistoryFromMoralis = serde_json::from_str(&first_tx.to_string()).unwrap();
         assert_eq!(
             TEST_WALLET_ADDR_EVM,
-            eth_add_to_hex(&transfer_moralis.common.to_address)
+            eth_addr_to_hex(&transfer_moralis.common.to_address)
         );
 
         let response_meta = send_request_to_uri(NFT_METADATA_URL_TEST).await.unwrap();

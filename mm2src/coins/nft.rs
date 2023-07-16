@@ -14,7 +14,7 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
                   NftTransferHistory, NftTransfersReq, NftTxHistoryFromMoralis, NftsTransferHistoryList,
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
-use crate::eth::{eth_add_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
+use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_errors::ProtectFromSpamError;
 use crate::nft::nft_structs::{NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq, TransferStatus, TxMeta,
                               UriMeta};
@@ -40,9 +40,8 @@ pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError
 
 /// `get_nft_list` function returns list of NFTs on requested chains owned by user.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
-    let nft_ctx = NftCtx::from_ctx(&ctx).map_err(GetNftInfoError::Internal)?;
-    let guard = nft_ctx.guard.clone();
-    let _lock = guard.lock().await;
+    let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
+    let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
@@ -64,9 +63,8 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 
 /// `get_nft_metadata` function returns info of one specific NFT.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
-    let nft_ctx = NftCtx::from_ctx(&ctx).map_err(GetNftInfoError::Internal)?;
-    let guard = nft_ctx.guard.clone();
-    let _lock = guard.lock().await;
+    let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
+    let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
@@ -88,9 +86,8 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
 
 /// `get_nft_transfers` function returns a transfer history of NFTs on requested chains owned by user.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
-    let nft_ctx = NftCtx::from_ctx(&ctx).map_err(GetNftInfoError::Internal)?;
-    let guard = nft_ctx.guard.clone();
-    let _lock = guard.lock().await;
+    let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
+    let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
@@ -112,9 +109,8 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
 
 /// `update_nft` function updates cache of nft transfer history and nft list.
 pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNftError> {
-    let nft_ctx = NftCtx::from_ctx(&ctx).map_err(GetNftInfoError::Internal)?;
-    let guard = nft_ctx.guard.clone();
-    let _lock = guard.lock().await;
+    let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
+    let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
@@ -176,9 +172,8 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
 }
 
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
-    let nft_ctx = NftCtx::from_ctx(&ctx).map_err(GetNftInfoError::Internal)?;
-    let guard = nft_ctx.guard.clone();
-    let _lock = guard.lock().await;
+    let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
+    let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
     let moralis_meta = get_moralis_metadata(
@@ -302,7 +297,7 @@ async fn get_moralis_nft_transfers(
                     Some(contract_type) => contract_type,
                     None => continue,
                 };
-                let status = get_tx_status(&wallet_address, &eth_add_to_hex(&transfer_moralis.common.to_address));
+                let status = get_tx_status(&wallet_address, &eth_addr_to_hex(&transfer_moralis.common.to_address));
                 let block_timestamp = parse_rfc3339_to_timestamp(&transfer_moralis.block_timestamp)?;
                 let transfer_history = NftTransferHistory {
                     common: NftTransferCommon {
@@ -538,12 +533,12 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let nft_db = storage
         .get_nft(
             chain,
-            eth_add_to_hex(&tx.common.token_address),
+            eth_addr_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
         .ok_or_else(|| UpdateNftError::TokenNotFoundInWallet {
-            token_address: eth_add_to_hex(&tx.common.token_address),
+            token_address: eth_addr_to_hex(&tx.common.token_address),
             token_id: tx.common.token_id.to_string(),
         })?;
     let tx_meta = TxMeta::from(nft_db);
@@ -551,7 +546,7 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     storage
         .remove_nft_from_list(
             chain,
-            eth_add_to_hex(&tx.common.token_address),
+            eth_addr_to_hex(&tx.common.token_address),
             tx.common.token_id,
             tx.block_number,
         )
@@ -569,7 +564,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let nft = match storage
         .get_nft(
             chain,
-            eth_add_to_hex(&tx.common.token_address),
+            eth_addr_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
@@ -577,7 +572,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
         Some(mut nft_db) => {
             // An error is raised if user tries to receive an identical ERC-721 token they already own
             // and if owner address != from address
-            if my_address != eth_add_to_hex(&tx.common.from_address) {
+            if my_address != eth_addr_to_hex(&tx.common.from_address) {
                 return MmError::err(UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 {
                     tx_hash: tx.common.transaction_hash,
                 });
@@ -591,8 +586,13 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTxHistoryStorageOps>(
         },
         // If token isn't in NFT LIST table then add nft to the table.
         None => {
-            let mut nft =
-                get_moralis_metadata(eth_add_to_hex(&tx.common.token_address), tx.common.token_id, chain, url).await?;
+            let mut nft = get_moralis_metadata(
+                eth_addr_to_hex(&tx.common.token_address),
+                tx.common.token_id,
+                chain,
+                url,
+            )
+            .await?;
             // sometimes moralis updates Get All NFTs (which also affects Get Metadata) later
             // than History by Wallet update
             nft.common.owner_of =
@@ -618,12 +618,12 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let mut nft_db = storage
         .get_nft(
             chain,
-            eth_add_to_hex(&tx.common.token_address),
+            eth_addr_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
         .ok_or_else(|| UpdateNftError::TokenNotFoundInWallet {
-            token_address: eth_add_to_hex(&tx.common.token_address),
+            token_address: eth_addr_to_hex(&tx.common.token_address),
             token_id: tx.common.token_id.to_string(),
         })?;
     match nft_db.common.amount.cmp(&tx.common.amount) {
@@ -631,7 +631,7 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
             storage
                 .remove_nft_from_list(
                     chain,
-                    eth_add_to_hex(&tx.common.token_address),
+                    eth_addr_to_hex(&tx.common.token_address),
                     tx.common.token_id,
                     tx.block_number,
                 )
@@ -665,7 +665,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
     let nft = match storage
         .get_nft(
             chain,
-            eth_add_to_hex(&tx.common.token_address),
+            eth_addr_to_hex(&tx.common.token_address),
             tx.common.token_id.clone(),
         )
         .await?
@@ -673,7 +673,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         Some(mut nft_db) => {
             // if owner address == from address, then owner sent tokens to themself,
             // which means that the amount will not change.
-            if my_address != eth_add_to_hex(&tx.common.from_address) {
+            if my_address != eth_addr_to_hex(&tx.common.from_address) {
                 nft_db.common.amount += tx.common.amount;
             }
             nft_db.block_number = tx.block_number;
@@ -686,7 +686,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTxHistoryStorageOps>(
         // If token isn't in NFT LIST table then add nft to the table.
         None => {
             let moralis_meta = get_moralis_metadata(
-                eth_add_to_hex(&tx.common.token_address),
+                eth_addr_to_hex(&tx.common.token_address),
                 tx.common.token_id.clone(),
                 chain,
                 url,
@@ -735,8 +735,7 @@ pub(crate) async fn find_wallet_nft_amount(
     token_id: BigDecimal,
 ) -> MmResult<BigDecimal, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(ctx).map_err(GetNftInfoError::Internal)?;
-    let guard = nft_ctx.guard.clone();
-    let _lock = guard.lock().await;
+    let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(ctx).build()?;
     if !NftListStorageOps::is_initialized(&storage, chain).await? {
