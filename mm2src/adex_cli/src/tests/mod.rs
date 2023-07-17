@@ -3,12 +3,11 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 
-use mm2_rpc::data::legacy::ActivationRequest;
-
 use crate::activation_scheme_db::{get_activation_scheme, init_activation_scheme};
 use crate::adex_config::AdexConfigImpl;
 use crate::adex_proc::ResponseHandlerImpl;
 use crate::cli::Cli;
+use crate::rpc_data::ActivationRequest;
 
 const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 10;
 const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;

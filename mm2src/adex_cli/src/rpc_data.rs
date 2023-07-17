@@ -44,7 +44,7 @@ pub(crate) struct EnableRequest {
 pub(crate) struct ElectrumRequest {
     coin: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    servers: Vec<Server>,
+    pub(super) servers: Vec<Server>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mm2: Option<u8>,
     #[serde(default)]
@@ -62,7 +62,7 @@ pub(crate) struct ElectrumRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct Server {
+pub(super) struct Server {
     url: String,
     #[serde(default)]
     protocol: ElectrumProtocol,
