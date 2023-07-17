@@ -51,8 +51,8 @@ pub(crate) struct ElectrumRequest {
     tx_history: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     required_confirmations: Option<u64>,
-    #[serde(default)]
-    requires_notarization: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requires_notarization: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     swap_contract_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
