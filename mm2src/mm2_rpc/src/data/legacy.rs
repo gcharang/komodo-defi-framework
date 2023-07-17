@@ -306,7 +306,7 @@ impl Default for GasStationPricePolicy {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ElectrumRequest {
     pub coin: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub servers: Vec<Server>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mm2: Option<u8>,
