@@ -219,6 +219,9 @@ pub async fn clear_nft_db(ctx: MmArc, req: ClearNftDbReq) -> MmResult<(), ClearN
 }
 
 async fn clear_nft_data_for_chains(ctx: &MmArc, chains: Vec<Chain>) -> MmResult<(), ClearNftDbError> {
+    let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(ClearNftDbError::Internal)?;
+    let _lock = nft_ctx.guard.lock().await;
+
     let storage = NftStorageBuilder::new(ctx).build()?;
     for chain in &chains {
         let is_list_init = NftListStorageOps::is_initialized(&storage, chain).await?;
