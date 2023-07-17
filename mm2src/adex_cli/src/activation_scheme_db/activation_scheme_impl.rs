@@ -3,11 +3,11 @@ use serde_json::Value as Json;
 use std::collections::HashMap;
 
 use common::log::{debug, error};
-use mm2_rpc::data::legacy::ActivationRequest;
 
 use super::init_activation_scheme::get_activation_scheme_path;
 use crate::helpers::read_json_file;
 use crate::logging::{error_anyhow, error_bail};
+use crate::rpc_data::ActivationRequest;
 
 #[derive(Default)]
 pub(crate) struct ActivationScheme {
