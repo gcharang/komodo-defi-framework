@@ -1,10 +1,23 @@
+#[path = "legacy/activation.rs"] mod activation;
+#[path = "legacy/orders.rs"] mod orders;
+#[path = "legacy/utility.rs"] mod utility;
+#[path = "legacy/wallet.rs"] mod wallet;
+
+pub use activation::{eth::GasStationPricePolicy,
+                     utxo::{ElectrumProtocol, UtxoMergeParams},
+                     CoinInitResponse, EnabledCoin, GetEnabledResponse};
+pub use orders::{AggregatedOrderbookEntry, MatchBy, OrderConfirmationsSettings, OrderType, OrderbookRequest,
+                 OrderbookResponse, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, TakerAction,
+                 TakerRequestForRpc};
+pub use utility::{MmVersionResponse, Status};
+pub use wallet::BalanceResponse;
+
 use common::serde_derive::{Deserialize, Serialize};
 use derive_more::Display;
 use mm2_number::{construct_detailed, BigDecimal, BigRational, Fraction, MmNumber};
 use rpc::v1::types::H256 as H256Json;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
-use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub struct Mm2RpcResult<T> {
@@ -20,22 +33,8 @@ impl<T> Deref for Mm2RpcResult<T> {
     fn deref(&self) -> &Self::Target { &self.result }
 }
 
-#[derive(Default, Serialize)]
-#[serde(tag = "method", rename = "stop")]
-pub struct StopRequest {}
-
-#[derive(Default, Serialize)]
-#[serde(tag = "method", rename = "version")]
-pub struct VersionRequest {}
-
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "method", rename = "my_balance")]
-pub struct MyBalanceRequest {
-    pub coin: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct MyBalanceResponse {
+pub struct BalanceResponse {
     pub coin: String,
     pub balance: BigDecimal,
     pub unspendable_balance: BigDecimal,
@@ -43,7 +42,6 @@ pub struct MyBalanceResponse {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "method", rename = "orderbook")]
 pub struct OrderbookRequest {
     pub base: String,
     pub rel: String,
@@ -128,21 +126,7 @@ pub struct AggregatedOrderbookEntry {
 construct_detailed!(AggregatedBaseVol, base_max_volume_aggr);
 construct_detailed!(AggregatedRelVol, rel_max_volume_aggr);
 
-#[derive(Serialize)]
-#[serde(tag = "method", rename = "sell")]
-pub struct SellRequest {
-    #[serde(flatten)]
-    pub delegate: SellBuyRequest,
-}
-
-#[derive(Serialize)]
-#[serde(tag = "method", rename = "buy")]
-pub struct BuyRequest {
-    #[serde(flatten)]
-    pub delegate: SellBuyRequest,
-}
-
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SellBuyRequest {
     pub base: String,
     pub rel: String,
@@ -152,7 +136,6 @@ pub struct SellBuyRequest {
     /// Not used. Deprecated.
     #[allow(dead_code)]
     pub duration: Option<u32>,
-    #[serde(skip_serializing_if = "String::is_empty")]
     pub method: String,
     #[allow(dead_code)]
     pub gui: Option<String>,
@@ -188,7 +171,6 @@ construct_detailed!(DetailedMinVolume, min_volume);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TakerRequestForRpc {
-    pub uuid: Uuid,
     pub base: String,
     pub rel: String,
     pub base_amount: BigDecimal,
@@ -196,6 +178,7 @@ pub struct TakerRequestForRpc {
     pub rel_amount: BigDecimal,
     pub rel_amount_rat: BigRational,
     pub action: TakerAction,
+    pub uuid: Uuid,
     pub method: String,
     pub sender_pubkey: H256Json,
     pub dest_pub_key: H256Json,
@@ -203,13 +186,13 @@ pub struct TakerRequestForRpc {
     pub conf_settings: Option<OrderConfirmationsSettings>,
 }
 
-#[derive(Clone, Display, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TakerAction {
     Buy,
     Sell,
 }
 
-#[derive(Clone, Display, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum OrderType {
     FillOrKill,
@@ -270,10 +253,6 @@ pub struct EnabledCoin {
     pub address: String,
 }
 
-#[derive(Default, Serialize)]
-#[serde(tag = "method", rename = "get_enabled_coins")]
-pub struct GetEnabledRequest {}
-
 pub type GetEnabledResponse = Vec<EnabledCoin>;
 
 #[derive(Serialize, Deserialize, Display)]
@@ -287,6 +266,8 @@ pub struct MmVersionResponse {
     pub result: String,
     pub datetime: String,
 }
+
+fn get_true() -> bool { true }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", rename = "cancel_order")]

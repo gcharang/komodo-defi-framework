@@ -7,6 +7,7 @@ use crate::activation_scheme_db::{get_activation_scheme, init_activation_scheme}
 use crate::adex_config::AdexConfigImpl;
 use crate::adex_proc::ResponseHandlerImpl;
 use crate::cli::Cli;
+use crate::rpc_data::ActivationRequest;
 
 const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 10;
 const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;
@@ -79,10 +80,10 @@ async fn test_activation_scheme() {
     init_activation_scheme().await.unwrap();
     let scheme = get_activation_scheme().unwrap();
     let kmd_scheme = scheme.get_activation_method("KMD");
-    assert!(kmd_scheme.is_some());
-    let kmd_scheme = kmd_scheme.unwrap();
-    assert_eq!(kmd_scheme.get("method").unwrap().as_str().unwrap(), "electrum");
-    assert_eq!(kmd_scheme.get("servers").unwrap().as_array().unwrap().iter().count(), 3);
+    let Ok(ActivationRequest::Electrum(electrum)) = kmd_scheme else {
+        panic!("Failed to get electrum scheme")
+    };
+    assert_eq!(electrum.servers.len(), 3);
 }
 
 #[tokio::test]
