@@ -450,10 +450,7 @@ async fn test_clear_nft_target<S: NftListStorageOps>(storage: &S, chain: &Chain)
     let is_initialized = NftListStorageOps::is_initialized(storage, chain).await.unwrap();
     assert!(!is_initialized);
 
-    let is_err = storage
-        .get_nft_list(vec![*chain.clone()], false, 10, None)
-        .await
-        .is_err();
+    let is_err = storage.get_nft_list(vec![*chain], false, 10, None).await.is_err();
     assert!(is_err);
 
     let is_err = storage.get_last_scanned_block(chain).await.is_err();
