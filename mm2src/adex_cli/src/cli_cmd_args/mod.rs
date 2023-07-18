@@ -8,6 +8,7 @@ mod cmd_orders_history;
 mod cmd_sell_buy;
 mod cmd_set_config;
 mod cmd_set_price;
+mod cmd_swap;
 mod cmd_update_maker_order;
 
 use anyhow::Result;
@@ -27,6 +28,7 @@ pub(crate) mod prelude {
     pub(crate) use super::cmd_sell_buy::{BuyOrderArgs, SellOrderArgs};
     pub(crate) use super::cmd_set_config::SetConfigArgs;
     pub(crate) use super::cmd_set_price::SetPriceArgs;
+    pub(crate) use super::cmd_swap::SwapSubcommand;
     pub(crate) use super::cmd_update_maker_order::UpdateMakerOrderArgs;
 }
 

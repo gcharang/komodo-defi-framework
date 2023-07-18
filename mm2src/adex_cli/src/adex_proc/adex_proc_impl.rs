@@ -295,4 +295,20 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .rpc_password()
             .ok_or_else(|| error_anyhow!("Failed to get rpc_password, not set"))
     }
+
+    pub(crate) async fn active_swaps(&self, include_status: bool) -> Result<()> {
+        info!("Getting active swaps");
+
+        let request =
+        let active_swaps_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(
+            active_swaps_command,
+            Mm2RpcResult<MakerOrderForRpc>,
+            self,
+            on_active_swaps()
+        )
+    }
 }

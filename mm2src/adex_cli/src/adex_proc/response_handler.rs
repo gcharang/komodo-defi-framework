@@ -61,6 +61,7 @@ pub(crate) trait ResponseHandler {
         settings: OrdersHistorySettings,
     ) -> Result<()>;
     fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()>;
+    fn on_active_swaps() -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -202,4 +203,6 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()> {
         formatters::on_maker_order_response(self.writer.borrow_mut().deref_mut(), response.result)
     }
+
+    fn on_active_swaps() -> Result<()> { Ok(()) }
 }
