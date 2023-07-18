@@ -487,8 +487,10 @@ pub(crate) async fn test_add_get_txs_impl() {
         .unwrap()
         .unwrap();
     assert_eq!(tx2.block_number, 28056726);
-    let tx_from = storage.get_txs_from_block(&chain, 28056721).await.unwrap();
-    assert_eq!(tx_from.len(), 2);
+    let mut txs_from_block = storage.get_txs_from_block(&chain, 28056721).await.unwrap();
+    assert_eq!(txs_from_block.len(), 2);
+    assert_eq!(txs_from_block.pop().unwrap().block_number, 28056726);
+    assert_eq!(txs_from_block.pop().unwrap().block_number, 28056721);
 }
 
 pub(crate) async fn test_last_tx_block_impl() {
