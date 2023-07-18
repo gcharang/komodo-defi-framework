@@ -17,8 +17,7 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_errors::{ClearNftDbError, ProtectFromSpamError};
 use crate::nft::nft_structs::{ClearNftDbReq, NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq, TransferStatus,
-                              TxMeta,
-                              UriMeta};
+                              TxMeta, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTxHistoryStorageOps};
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use ethereum_types::Address;
