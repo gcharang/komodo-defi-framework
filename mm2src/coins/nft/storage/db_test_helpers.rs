@@ -451,7 +451,7 @@ async fn test_clear_nft_target<S: NftListStorageOps>(storage: &S, chain: &Chain)
     assert!(!is_initialized);
 
     let is_err = storage
-        .get_nft_list(vec![chain.clone()], false, 10, None)
+        .get_nft_list(vec![*chain.clone()], false, 10, None)
         .await
         .is_err();
     assert!(is_err);
