@@ -28,6 +28,8 @@ dependencies = [
  "http 0.2.9",
  "inquire",
  "itertools",
+ "keys",
+ "lightning-invoice",
  "log 0.4.17",
  "mm2_net",
  "mm2_number",
@@ -1561,6 +1563,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "087add70f81d2fdc6d4409bc0cef69e11ad366ef1d0068550159bd22b3ac8664"
 dependencies = [
  "bitcoin",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9680857590c3529cf8c7d32b04501f215f2bf1e029fdfa22f4112f66c1741e4"
+dependencies = [
+ "bech32",
+ "bitcoin_hashes",
+ "lightning",
+ "num-traits",
+ "secp256k1 0.24.3",
+ "serde",
 ]
 
 [[package]]

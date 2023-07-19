@@ -2398,7 +2398,7 @@ pub async fn send_raw_transaction(mm: &MarketMakerIt, coin: &str, tx: &str) -> J
     json::from_str(&request.1).unwrap()
 }
 
-pub async fn my_balance(mm: &MarketMakerIt, coin: &str) -> MyBalanceResponse {
+pub async fn my_balance(mm: &MarketMakerIt, coin: &str) -> BalanceResponse {
     let request = mm
         .rpc(&json!({
             "userpass": mm.userpass,

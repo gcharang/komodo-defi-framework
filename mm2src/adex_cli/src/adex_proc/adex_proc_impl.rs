@@ -1,15 +1,15 @@
 use anyhow::{anyhow, bail, Result};
-use common::log::{error, info, warn};
 use itertools::Itertools;
 use serde_json::Value as Json;
 
-use mm2_rpc::data::legacy::{BuyRequest, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy, CancelOrderRequest,
-                            CoinInitResponse, GetEnabledRequest, GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult,
-                            MmVersionResponse, MyBalanceRequest, MyBalanceResponse, MyOrdersRequest, MyOrdersResponse,
-                            OrderStatusRequest, OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest,
-                            OrderbookResponse, OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth,
-                            SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest, UpdateMakerOrderRequest,
-                            VersionRequest};
+use common::log::{error, info, warn};
+use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BuyRequest, CancelAllOrdersRequest,
+                            CancelAllOrdersResponse, CancelBy, CancelOrderRequest, CoinInitResponse,
+                            GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult, MmVersionResponse, MyOrdersRequest,
+                            MyOrdersResponse, OrderStatusRequest, OrderStatusResponse, OrderbookDepthRequest,
+                            OrderbookRequest, OrderbookResponse, OrdersHistoryRequest, OrdersHistoryResponse,
+                            PairWithDepth, SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest,
+                            UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 
 use super::command::{Command, V2Method};
@@ -17,6 +17,7 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -41,7 +42,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn enable(&self, coin: &str) -> Result<()> {
         info!("Enabling coin: {coin}");
         let activation_scheme = get_activation_scheme()?;
-        let activation_method = activation_scheme.get_activation_method(asset)?;
+        let activation_method = activation_scheme.get_activation_method(coin)?;
 
         let enable = Command::builder()
             .flatten_data(activation_method)
@@ -51,13 +52,13 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         request_legacy!(enable, CoinInitResponse, self, on_enable_response)
     }
 
-    pub(crate) async fn get_balance(&self, request: MyBalanceRequest) -> Result<()> {
+    pub(crate) async fn get_balance(&self, request: BalanceRequest) -> Result<()> {
         info!("Getting balance, coin: {}", request.coin);
         let get_balance = Command::builder()
             .flatten_data(request)
             .userpass(self.get_rpc_password()?)
             .build()?;
-        request_legacy!(get_balance, MyBalanceResponse, self, on_balance_response)
+        request_legacy!(get_balance, BalanceResponse, self, on_balance_response)
     }
 
     pub(crate) async fn get_enabled(&self) -> Result<()> {
@@ -297,16 +298,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn active_swaps(&self, include_status: bool) -> Result<()> {
         info!("Getting active swaps");
 
-        let request =
         let active_swaps_command = Command::builder()
             .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
+            .flatten_data(ActiveSwapsRequest { include_status })
             .build()?;
-        request_legacy!(
-            active_swaps_command,
-            Mm2RpcResult<MakerOrderForRpc>,
-            self,
-            on_active_swaps()
-        )
+
+        request_legacy!(active_swaps_command, ActiveSwapsResponse, self, on_active_swaps)
     }
 }

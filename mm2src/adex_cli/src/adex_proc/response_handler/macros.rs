@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! writeln_field {
     ($writer:expr, $name:expr, $value:expr, $width:expr) => {
-        writeln_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width);
+        writeln_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width)
     };
 }
 
@@ -9,7 +9,7 @@ macro_rules! writeln_field {
 macro_rules! write_field_option {
     ($writer:expr, $name:expr, $value:expr, $width:expr) => {
         if let Some(ref value) = $value {
-            writeln_safe_io!($writer, "{:>width$}: {}", $name, value, width = $width);
+            writeln_safe_io!($writer, "{:>width$}: {}", $name, value, width = $width)
         }
     };
 }
@@ -19,7 +19,7 @@ macro_rules! write_confirmation_settings {
     ($writer:expr, $host:ident, $width:ident) => {
         if $host.conf_settings.is_some() {
             let output = format_confirmation_settings($host.conf_settings.as_ref().unwrap());
-            writeln_field!($writer, concat!(stringify!($host), ".conf_settings"), output, $width);
+            writeln_field!($writer, concat!(stringify!($host), ".conf_settings"), output, $width)
         }
     };
 }

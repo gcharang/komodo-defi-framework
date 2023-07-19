@@ -1,9 +1,11 @@
+#[path = "response_handler/active_swaps.rs"] mod active_swaps;
 #[path = "response_handler/best_orders.rs"] mod best_orders;
 #[path = "response_handler/formatters.rs"] mod formatters;
 #[path = "response_handler/macros.rs"] mod macros;
 #[path = "response_handler/my_orders.rs"] mod my_orders;
 #[path = "response_handler/order_status.rs"] mod order_status;
 #[path = "response_handler/orderbook.rs"] mod orderbook;
+
 #[path = "response_handler/orderbook_depth.rs"]
 mod orderbook_depth;
 #[path = "response_handler/orders_history.rs"]
@@ -24,13 +26,14 @@ use std::ops::DerefMut;
 
 use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
-use mm2_rpc::data::legacy::{CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse, MakerOrderForRpc,
-                            Mm2RpcResult, MmVersionResponse, MyBalanceResponse, MyOrdersResponse, OrderStatusResponse,
+use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
+                            MakerOrderForRpc, Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderStatusResponse,
                             OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
 use crate::logging::error_anyhow;
+use crate::rpc_data::ActiveSwapsResponse;
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -44,7 +47,7 @@ pub(crate) trait ResponseHandler {
     fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
     fn on_version_response(&self, response: MmVersionResponse) -> Result<()>;
     fn on_enable_response(&self, response: CoinInitResponse) -> Result<()>;
-    fn on_balance_response(&self, response: MyBalanceResponse) -> Result<()>;
+    fn on_balance_response(&self, response: BalanceResponse) -> Result<()>;
     fn on_sell_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
     fn on_buy_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
     fn on_stop_response(&self, response: Mm2RpcResult<Status>) -> Result<()>;
@@ -61,7 +64,7 @@ pub(crate) trait ResponseHandler {
         settings: OrdersHistorySettings,
     ) -> Result<()>;
     fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()>;
-    fn on_active_swaps() -> Result<()>;
+    fn on_active_swaps(&self, response: ActiveSwapsResponse) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -124,7 +127,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_balance_response(&self, response: MyBalanceResponse) -> Result<()> {
+    fn on_balance_response(&self, response: BalanceResponse) -> Result<()> {
         writeln_safe_io!(
             self.writer.borrow_mut(),
             "coin: {}\nbalance: {}\nunspendable: {}\naddress: {}",
@@ -204,5 +207,8 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         formatters::on_maker_order_response(self.writer.borrow_mut().deref_mut(), response.result)
     }
 
-    fn on_active_swaps() -> Result<()> { Ok(()) }
+    fn on_active_swaps(&self, response: ActiveSwapsResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        active_swaps::on_active_swaps(writer.deref_mut(), response)
+    }
 }

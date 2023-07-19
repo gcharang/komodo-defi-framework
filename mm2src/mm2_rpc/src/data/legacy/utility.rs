@@ -12,3 +12,11 @@ pub struct MmVersionResponse {
     pub result: String,
     pub datetime: String,
 }
+
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "stop")]
+pub struct StopRequest {}
+
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "version")]
+pub struct VersionRequest {}

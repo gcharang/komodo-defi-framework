@@ -161,6 +161,15 @@ async fn test_history_makers_detailed() {
     assert_eq!(HISTORY_MAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }
 
+#[tokio::test]
+async fn test_active_swaps() {
+    let mut buffer: Vec<u8> = vec![];
+    let mock_resp = include_bytes!("http_mock_data/active_swaps.bin");
+    let command = &["adex-cli", "swaps", "active"];
+    start_server_and_do_command(command, &mut buffer, mock_resp, 7799).await;
+    assert_eq!(ACTIVE_SWAPS_OUTPUT, String::from_utf8(buffer).unwrap());
+}
+
 async fn fake_mm2_server(port: u16, predefined_response: &'static [u8]) {
     let server = TcpListener::bind(("0.0.0.0", port))
         .await
@@ -460,4 +469,8 @@ Maker orders history detailed:
 │            │         │                                      │ 23-06-06 14:52:20  │ 8.16          │       │                 │                 │ none             │
 │ RICK,MORTY │ 1.10    │ 23d2c04b-6fa5-4e76-bde9-4a8fe0b7a144 │ 23-06-06 14:51:40, │ 0.000100,     │ empty │ 1,false:1,false │ none            │ none             │
 │            │         │                                      │ 23-06-06 14:51:40  │ 8.16          │       │                 │                 │ none             │
+";
+
+const ACTIVE_SWAPS_OUTPUT: &str = "
+adf
 ";

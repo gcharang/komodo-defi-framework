@@ -1,7 +1,7 @@
 use clap::Args;
 use std::mem::take;
 
-use mm2_rpc::data::legacy::MyBalanceRequest;
+use mm2_rpc::data::legacy::BalanceRequest;
 
 #[derive(Args)]
 pub(crate) struct MyBalanceArgs {
@@ -9,9 +9,9 @@ pub(crate) struct MyBalanceArgs {
     coin: String,
 }
 
-impl From<&mut MyBalanceArgs> for MyBalanceRequest {
+impl From<&mut MyBalanceArgs> for BalanceRequest {
     fn from(value: &mut MyBalanceArgs) -> Self {
-        MyBalanceRequest {
+        BalanceRequest {
             coin: take(&mut value.coin),
         }
     }

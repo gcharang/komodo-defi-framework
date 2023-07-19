@@ -1,10 +1,10 @@
-//! Contains rpc data layer structures that are not ready to become a part of the mm2_rpc::data module
-//!
-//! *Note: it's expected that the following data types will be moved to mm2_rpc::data when mm2 is refactored to be able to handle them*
-//!
+use serde::{Deserialize, Serialize};
 
 use mm2_rpc::data::legacy::{ElectrumProtocol, GasStationPricePolicy, UtxoMergeParams};
-use serde::{Deserialize, Serialize};
+
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "get_enabled_coins")]
+pub struct GetEnabledRequest {}
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "lowercase")]
@@ -44,7 +44,7 @@ pub(crate) struct EnableRequest {
 pub(crate) struct ElectrumRequest {
     coin: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(super) servers: Vec<Server>,
+    pub(crate) servers: Vec<Server>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mm2: Option<u8>,
     #[serde(default)]
@@ -62,7 +62,7 @@ pub(crate) struct ElectrumRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub(super) struct Server {
+pub(crate) struct Server {
     url: String,
     #[serde(default)]
     protocol: ElectrumProtocol,

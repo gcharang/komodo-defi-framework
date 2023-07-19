@@ -77,7 +77,7 @@ enum Command {
     #[command(visible_alias = "update", about = "Update order on the orderbook")]
     UpdateMakerOrder(UpdateMakerOrderArgs),
     #[command(subcommand, about = "Swap related commands ")]
-    Swap(SwapSubcommand),
+    Swaps(SwapSubcommand),
 }
 
 #[derive(Parser)]
@@ -142,7 +142,7 @@ impl Cli {
                 proc.orders_history(history_args.into(), history_args.into()).await?
             },
             Command::UpdateMakerOrder(update_maker_args) => proc.update_maker_order(update_maker_args.into()).await?,
-            Command::Swap(SwapSubcommand::ActiveSwaps(args)) => proc.active_swaps(args.include_status).await?,
+            Command::Swaps(SwapSubcommand::ActiveSwaps(args)) => proc.active_swaps(args.include_status).await?,
         }
         Ok(())
     }
