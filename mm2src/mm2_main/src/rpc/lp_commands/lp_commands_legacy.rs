@@ -28,8 +28,8 @@ use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
 use mm2_number::construct_detailed;
-use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, CancelBy, CoinInitResponse, Mm2RpcResult,
-                            MmVersionResponse, Status};
+use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, CancelBy, CoinInitResponse, MinTradingVolResponse,
+                            Mm2RpcResult, MmVersionResponse, Status};
 use serde_json::{self as json, Value as Json};
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -379,15 +379,6 @@ pub async fn get_my_peer_id(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
     });
     let res = try_s!(json::to_vec(&result));
     Ok(try_s!(Response::builder().body(res)))
-}
-
-construct_detailed!(DetailedMinTradingVol, min_trading_vol);
-
-#[derive(Serialize)]
-struct MinTradingVolResponse<'a> {
-    coin: &'a str,
-    #[serde(flatten)]
-    volume: DetailedMinTradingVol,
 }
 
 /// Get min_trading_vol of a coin

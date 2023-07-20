@@ -520,3 +520,12 @@ pub struct UpdateMakerOrderRequest {
 }
 
 fn get_true() -> bool { true }
+
+#[derive(Deserialize, Serialize)]
+pub struct MinTradingVolResponse {
+    pub coin: String,
+    #[serde(flatten)]
+    pub volume: DetailedMinTradingVol,
+}
+
+construct_detailed!(DetailedMinTradingVol, min_trading_vol);

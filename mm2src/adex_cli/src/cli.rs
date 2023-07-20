@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::mem::take;
 
 use crate::adex_config::{get_config, set_config, AdexConfig};
 use crate::adex_proc::{AdexProc, ResponseHandler};
@@ -78,6 +79,12 @@ enum Command {
     UpdateMakerOrder(UpdateMakerOrderArgs),
     #[command(subcommand, about = "Swap related commands ")]
     Swaps(SwapSubcommand),
+    MinTradingVol {
+        coin: String,
+    },
+    MaxTakerVol {
+        coin: String,
+    },
 }
 
 #[derive(Parser)]
@@ -147,6 +154,8 @@ impl Cli {
             },
             Command::Swaps(SwapSubcommand::MySwapStatus(args)) => proc.swap_status(args.uuid).await?,
             Command::Swaps(SwapSubcommand::MyRecentSwaps(args)) => proc.recent_swaps(args.into()).await?,
+            Command::MinTradingVol { coin } => proc.min_trading_vol(take(coin)).await?,
+            Command::MaxTakerVol { coin } => proc.max_taker_vol(take(coin)).await?,
         }
         Ok(())
     }

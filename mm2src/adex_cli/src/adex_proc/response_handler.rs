@@ -5,6 +5,7 @@
 #[path = "response_handler/order_status.rs"] mod order_status;
 #[path = "response_handler/orderbook.rs"] mod orderbook;
 #[path = "response_handler/swaps.rs"] mod swaps;
+#[path = "response_handler/trading.rs"] mod trading;
 
 #[path = "response_handler/orderbook_depth.rs"]
 mod orderbook_depth;
@@ -27,13 +28,14 @@ use std::ops::DerefMut;
 use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitResponse, GetEnabledResponse,
-                            MakerOrderForRpc, Mm2RpcResult, MmVersionResponse, MyOrdersResponse, OrderStatusResponse,
-                            OrderbookResponse, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, Status};
+                            MakerOrderForRpc, MinTradingVolResponse, Mm2RpcResult, MmVersionResponse,
+                            MyOrdersResponse, OrderStatusResponse, OrderbookResponse, OrdersHistoryResponse,
+                            PairWithDepth, SellBuyResponse, Status};
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
 use crate::logging::error_anyhow;
-use crate::rpc_data::{ActiveSwapsResponse, MyRecentSwapResponse, MySwapStatusResponse};
+use crate::rpc_data::{ActiveSwapsResponse, MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse};
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -67,6 +69,8 @@ pub(crate) trait ResponseHandler {
     fn on_active_swaps(&self, response: ActiveSwapsResponse, uuids_only: bool) -> Result<()>;
     fn on_my_swap_status(&self, response: Mm2RpcResult<MySwapStatusResponse>) -> Result<()>;
     fn on_my_recent_swaps(&self, response: Mm2RpcResult<MyRecentSwapResponse>) -> Result<()>;
+    fn on_min_trading_vol(&self, response: Mm2RpcResult<MinTradingVolResponse>) -> Result<()>;
+    fn on_max_taker_vol(&self, response: MaxTakerVolResponse) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -222,5 +226,15 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn on_my_recent_swaps(&self, response: Mm2RpcResult<MyRecentSwapResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         swaps::on_my_recent_swaps(writer.deref_mut(), response.result)
+    }
+
+    fn on_min_trading_vol(&self, response: Mm2RpcResult<MinTradingVolResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        trading::on_min_trading_vol(writer.deref_mut(), response.result)
+    }
+
+    fn on_max_taker_vol(&self, response: MaxTakerVolResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        trading::on_max_taker_vol(writer.deref_mut(), response)
     }
 }

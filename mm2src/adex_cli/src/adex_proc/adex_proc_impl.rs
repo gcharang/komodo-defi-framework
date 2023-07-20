@@ -5,11 +5,11 @@ use serde_json::Value as Json;
 use common::log::{error, info, warn};
 use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BuyRequest, CancelAllOrdersRequest,
                             CancelAllOrdersResponse, CancelBy, CancelOrderRequest, CoinInitResponse,
-                            GetEnabledResponse, MakerOrderForRpc, Mm2RpcResult, MmVersionResponse, MyOrdersRequest,
-                            MyOrdersResponse, OrderStatusRequest, OrderStatusResponse, OrderbookDepthRequest,
-                            OrderbookRequest, OrderbookResponse, OrdersHistoryRequest, OrdersHistoryResponse,
-                            PairWithDepth, SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest,
-                            UpdateMakerOrderRequest, VersionRequest};
+                            GetEnabledResponse, MakerOrderForRpc, MinTradingVolResponse, Mm2RpcResult,
+                            MmVersionResponse, MyOrdersRequest, MyOrdersResponse, OrderStatusRequest,
+                            OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
+                            OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, SellRequest,
+                            SetPriceReq, Status, StopRequest, UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 use uuid::Uuid;
 
@@ -18,8 +18,9 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest, MyRecentSwapResponse,
-                      MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusRequestParams, MySwapStatusResponse};
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest, MaxTakerVolRequest,
+                      MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
+                      MySwapStatusRequest, MySwapStatusRequestParams, MySwapStatusResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -342,5 +343,29 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             self,
             on_my_recent_swaps
         )
+    }
+
+    pub(crate) async fn min_trading_vol(&self, coin: String) -> Result<()> {
+        info!("Getting min trading vol: {}", coin);
+        let min_trading_vol_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(MinTradingVolRequest { coin })
+            .build()?;
+        request_legacy!(
+            min_trading_vol_command,
+            Mm2RpcResult<MinTradingVolResponse>,
+            self,
+            on_min_trading_vol
+        )
+    }
+
+    pub(crate) async fn max_taker_vol(&self, coin: String) -> Result<()> {
+        info!("Getting max taker vol, {}", coin);
+        let max_taker_vol_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(MaxTakerVolRequest { coin })
+            .build()?;
+
+        request_legacy!(max_taker_vol_command, MaxTakerVolResponse, self, on_max_taker_vol)
     }
 }

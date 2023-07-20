@@ -5,6 +5,10 @@
 
 mod activation;
 mod swaps;
+mod trading;
 
 pub(crate) use activation::*;
 pub(crate) use swaps::*;
+pub(crate) use trading::*;
+
+//TODO: @rozhkovdmitrii
