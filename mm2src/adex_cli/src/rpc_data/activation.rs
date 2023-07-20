@@ -1,6 +1,11 @@
-use serde::{Deserialize, Serialize};
+//! Contains rpc data layer structures that are not ready to become a part of the mm2_rpc::data module
+//!
+//! *Note: it's expected that the following data types will be moved to mm2_rpc::data when mm2 is refactored to be able to handle them*
+//!
 
 use mm2_rpc::data::legacy::{ElectrumProtocol, GasStationPricePolicy, UtxoMergeParams};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "get_enabled_coins")]
@@ -16,8 +21,8 @@ pub(crate) enum ActivationRequest {
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct EnableRequest {
     coin: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    urls: Vec<String>,
+    #[serde(default, serialize_with = "serialize_urls", skip_serializing_if = "Vec::is_empty")]
+    urls: Vec<EnableUrl>,
     #[serde(skip_serializing_if = "Option::is_none")]
     swap_contract_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,6 +43,22 @@ pub(crate) struct EnableRequest {
     requires_notarization: Option<bool>,
     #[serde(default)]
     contract_supports_watchers: Option<bool>,
+}
+
+fn serialize_urls<S>(urls: &Vec<EnableUrl>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut s_seq = s.serialize_seq(None)?;
+    for url in urls {
+        s_seq.serialize_element(url.url.as_str())?;
+    }
+    s_seq.end()
+}
+
+#[derive(Debug, Deserialize)]
+struct EnableUrl {
+    url: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
