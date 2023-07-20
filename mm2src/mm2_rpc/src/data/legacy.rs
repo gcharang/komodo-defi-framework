@@ -1,5 +1,6 @@
 #[path = "legacy/activation.rs"] mod activation;
 #[path = "legacy/orders.rs"] mod orders;
+#[path = "legacy/swaps.rs"] mod swaps;
 #[path = "legacy/utility.rs"] mod utility;
 #[path = "legacy/wallet.rs"] mod wallet;
 
@@ -7,6 +8,7 @@ pub use activation::{eth::GasStationPricePolicy,
                      utxo::{ElectrumProtocol, UtxoMergeParams},
                      CoinInitResponse, EnabledCoin, GetEnabledResponse};
 pub use orders::*;
+pub use swaps::MySwapsFilter;
 pub use utility::{MmVersionResponse, Status, StopRequest, VersionRequest};
 pub use wallet::{BalanceRequest, BalanceResponse};
 

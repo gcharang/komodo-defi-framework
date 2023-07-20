@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use mm2_number::BigDecimal;
+use mm2_rpc::data::legacy::MySwapsFilter;
 
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "active_swaps")]
@@ -17,6 +18,17 @@ pub(crate) struct ActiveSwapsResponse {
     #[allow(dead_code)]
     pub(crate) uuids: Vec<Uuid>,
     pub(crate) statuses: Option<HashMap<Uuid, SavedSwap>>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "my_swap_status")]
+pub(crate) struct MySwapStatusRequest {
+    pub(crate) params: MySwapStatusRequestParams,
+}
+
+#[derive(Serialize)]
+pub(crate) struct MySwapStatusRequestParams {
+    pub(crate) uuid: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
@@ -281,4 +293,47 @@ pub(crate) struct MakerNegotiationData {
 pub(crate) struct TakerPaymentSpentData {
     pub(crate) transaction: TransactionIdentifier,
     pub(crate) secret: H256Json,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct MySwapStatusResponse {
+    #[serde(flatten)]
+    pub(crate) swap: SavedSwap,
+    pub(crate) my_info: Option<MySwapInfo>,
+    pub(crate) recoverable: bool,
+}
+
+/// The helper structure that makes easier to parse the response for GUI devs
+/// They won't have to parse the events themselves handling possible errors, index out of bounds etc.
+#[derive(Deserialize)]
+pub(crate) struct MySwapInfo {
+    pub(crate) my_coin: String,
+    pub(crate) other_coin: String,
+    pub(crate) my_amount: BigDecimal,
+    pub(crate) other_amount: BigDecimal,
+    pub(crate) started_at: u64,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "my_recent_swaps")]
+pub(crate) struct MyRecentSwapsRequest {
+    #[serde(flatten)]
+    pub(crate) filter: MySwapsFilter,
+    pub(crate) limit: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) from_uuid: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) page_number: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct MyRecentSwapResponse {
+    pub(crate) swaps: Vec<SavedSwap>,
+    pub(crate) from_uuid: Option<Uuid>,
+    pub(crate) skipped: usize,
+    pub(crate) limit: usize,
+    pub(crate) total: usize,
+    pub(crate) page_number: usize,
+    pub(crate) total_pages: usize,
+    pub(crate) found_records: usize,
 }

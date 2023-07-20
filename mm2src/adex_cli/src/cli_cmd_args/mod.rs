@@ -12,6 +12,7 @@ mod cmd_swap;
 mod cmd_update_maker_order;
 
 use anyhow::Result;
+use chrono::{DateTime, TimeZone, Utc};
 use std::str::FromStr;
 
 use mm2_number::bigdecimal::ParseBigDecimalError;
@@ -35,4 +36,8 @@ pub(crate) mod prelude {
 fn parse_mm_number(value: &str) -> Result<MmNumber, ParseBigDecimalError> {
     let decimal: BigDecimal = BigDecimal::from_str(value)?;
     Ok(MmNumber::from(decimal))
+}
+
+fn parse_datetime(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+    Utc.datetime_from_str(value, "%y-%m-%dT%H:%M:%S")
 }

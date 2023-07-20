@@ -1,10 +1,10 @@
-#[path = "response_handler/active_swaps.rs"] mod active_swaps;
 #[path = "response_handler/best_orders.rs"] mod best_orders;
 #[path = "response_handler/formatters.rs"] mod formatters;
 #[path = "response_handler/macros.rs"] mod macros;
 #[path = "response_handler/my_orders.rs"] mod my_orders;
 #[path = "response_handler/order_status.rs"] mod order_status;
 #[path = "response_handler/orderbook.rs"] mod orderbook;
+#[path = "response_handler/swaps.rs"] mod swaps;
 
 #[path = "response_handler/orderbook_depth.rs"]
 mod orderbook_depth;
@@ -33,7 +33,7 @@ use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
 use crate::logging::error_anyhow;
-use crate::rpc_data::ActiveSwapsResponse;
+use crate::rpc_data::{ActiveSwapsResponse, MyRecentSwapResponse, MySwapStatusResponse};
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -64,7 +64,9 @@ pub(crate) trait ResponseHandler {
         settings: OrdersHistorySettings,
     ) -> Result<()>;
     fn on_update_maker_order(&self, response: Mm2RpcResult<MakerOrderForRpc>) -> Result<()>;
-    fn on_active_swaps(&self, response: ActiveSwapsResponse) -> Result<()>;
+    fn on_active_swaps(&self, response: ActiveSwapsResponse, uuids_only: bool) -> Result<()>;
+    fn on_my_swap_status(&self, response: Mm2RpcResult<MySwapStatusResponse>) -> Result<()>;
+    fn on_my_recent_swaps(&self, response: Mm2RpcResult<MyRecentSwapResponse>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -207,8 +209,18 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         formatters::on_maker_order_response(self.writer.borrow_mut().deref_mut(), response.result)
     }
 
-    fn on_active_swaps(&self, response: ActiveSwapsResponse) -> Result<()> {
+    fn on_active_swaps(&self, response: ActiveSwapsResponse, uuids_only: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        active_swaps::on_active_swaps(writer.deref_mut(), response)
+        swaps::on_active_swaps(writer.deref_mut(), response, uuids_only)
+    }
+
+    fn on_my_swap_status(&self, response: Mm2RpcResult<MySwapStatusResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        swaps::on_my_swap_status(writer.deref_mut(), response.result)
+    }
+
+    fn on_my_recent_swaps(&self, response: Mm2RpcResult<MyRecentSwapResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        swaps::on_my_recent_swaps(writer.deref_mut(), response.result)
     }
 }

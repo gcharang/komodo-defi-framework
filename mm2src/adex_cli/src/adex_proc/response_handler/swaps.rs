@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use itertools::Itertools;
 use rpc::v1::types::{Bytes, H264};
 use std::io::Write;
 use term_table::{row::Row, TableStyle};
@@ -6,25 +7,82 @@ use term_table::{row::Row, TableStyle};
 use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 
-use crate::adex_proc::response_handler::formatters::{format_datetime, format_ratio, term_table_blank, COMMON_PRECISION};
+use crate::adex_proc::response_handler::formatters::{format_datetime, format_ratio, term_table_blank,
+                                                     COMMON_PRECISION, ZERO_INDENT};
 use crate::rpc_data::{ActiveSwapsResponse, MakerNegotiationData, MakerSavedEvent, MakerSavedSwap, MakerSwapData,
-                      MakerSwapEvent, PaymentInstructions, SavedSwap, SavedTradeFee, SwapError, TakerNegotiationData,
-                      TakerPaymentSpentData, TakerSavedEvent, TakerSavedSwap, TakerSwapData, TakerSwapEvent,
-                      TransactionIdentifier};
+                      MakerSwapEvent, MyRecentSwapResponse, MySwapStatusResponse, PaymentInstructions, SavedSwap,
+                      SavedTradeFee, SwapError, TakerNegotiationData, TakerPaymentSpentData, TakerSavedEvent,
+                      TakerSavedSwap, TakerSwapData, TakerSwapEvent, TransactionIdentifier};
 use crate::{error_anyhow, write_field_option, writeln_field};
 
-pub(super) fn on_active_swaps(writer: &mut dyn Write, response: ActiveSwapsResponse) -> Result<()> {
+const DATA_COLUMN_WIDTH: usize = 120;
+
+pub(super) fn on_active_swaps(writer: &mut dyn Write, response: ActiveSwapsResponse, uuids_only: bool) -> Result<()> {
     let Some(statuses) = response.statuses else {
-        writeln_safe_io!(writer, "No statuses found");
+        writeln_safe_io!(writer, "No swaps found");
         return Ok(());
     };
 
+    if uuids_only {
+        writeln_field!(writer, "uuids", "", ZERO_INDENT);
+        writeln_safe_io!(writer, "{}", response.uuids.iter().join("\n"));
+        return Ok(());
+    }
+
     for (_uuid, swap) in statuses {
+        writeln_safe_io!(writer, "");
         match swap {
             SavedSwap::Taker(taker_swap) => write_taker_swap(writer, taker_swap)?,
             SavedSwap::Maker(maker_swap) => write_maker_swap(writer, maker_swap)?,
         }
     }
+    Ok(())
+}
+
+pub(super) fn on_my_swap_status(writer: &mut dyn Write, response: MySwapStatusResponse) -> Result<()> {
+    if let Some(my_info) = response.my_info {
+        writeln_field!(writer, "my_coin", my_info.my_coin, 0);
+        writeln_field!(writer, "other_coin", my_info.other_coin, 0);
+        writeln_field!(
+            writer,
+            "my_amount",
+            format_ratio(&my_info.my_amount, COMMON_PRECISION)?,
+            0
+        );
+        writeln_field!(
+            writer,
+            "other_amount",
+            format_ratio(&my_info.other_amount, COMMON_PRECISION)?,
+            0
+        );
+        writeln_field!(writer, "started_at", format_datetime(my_info.started_at)?, 0);
+    }
+    writeln_field!(writer, "recoverable", response.recoverable, 0);
+    match response.swap {
+        SavedSwap::Taker(taker_swap) => write_taker_swap(writer, taker_swap)?,
+        SavedSwap::Maker(maker_swap) => write_maker_swap(writer, maker_swap)?,
+    }
+    Ok(())
+}
+
+pub(super) fn on_my_recent_swaps(writer: &mut dyn Write, response: MyRecentSwapResponse) -> Result<()> {
+    write_field_option!(writer, "from_uuid", response.from_uuid, 0);
+
+    writeln_field!(writer, "skipped", response.skipped, 0);
+    writeln_field!(writer, "limit", response.limit, 0);
+    writeln_field!(writer, "total", response.total, 0);
+    writeln_field!(writer, "page_number", response.page_number, 0);
+    writeln_field!(writer, "total_pages", response.total_pages, 0);
+    writeln_field!(writer, "found_records", response.found_records, 0);
+
+    for swap in response.swaps {
+        writeln_safe_io!(writer, "");
+        match swap {
+            SavedSwap::Taker(taker_swap) => write_taker_swap(writer, taker_swap)?,
+            SavedSwap::Maker(maker_swap) => write_maker_swap(writer, maker_swap)?,
+        }
+    }
+
     Ok(())
 }
 
@@ -57,6 +115,7 @@ fn write_taker_swap(writer: &mut dyn Write, taker_swap: TakerSavedSwap) -> Resul
 
 fn write_taker_swap_events(writer: &mut dyn Write, taker_swap_events: Vec<TakerSavedEvent>) -> Result<()> {
     let mut term_table = term_table_blank(TableStyle::thin(), false, false, false);
+    term_table.set_max_width_for_column(1, DATA_COLUMN_WIDTH);
     if taker_swap_events.is_empty() {
         writeln_field!(writer, "events", "empty", 0);
         return Ok(());
@@ -129,7 +188,7 @@ fn write_taker_swap_events(writer: &mut dyn Write, taker_swap_events: Vec<TakerS
         term_table.add_row(row);
     }
     writeln_field!(writer, "events", "", 0);
-    writeln_safe_io!(writer, "{}", term_table.render());
+    writeln_safe_io!(writer, "{}", term_table.render().replace('\0', ""));
     Ok(())
 }
 
@@ -396,6 +455,7 @@ fn write_maker_swap(writer: &mut dyn Write, maker_swap: MakerSavedSwap) -> Resul
 
 fn write_maker_swap_events(writer: &mut dyn Write, maker_swap_event: Vec<MakerSavedEvent>) -> Result<()> {
     let mut term_table = term_table_blank(TableStyle::thin(), false, false, false);
+    term_table.set_max_width_for_column(1, DATA_COLUMN_WIDTH);
     if maker_swap_event.is_empty() {
         writeln_field!(writer, "events", "empty", 0);
         return Ok(());

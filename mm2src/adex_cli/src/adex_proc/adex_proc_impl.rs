@@ -11,13 +11,15 @@ use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BuyRequest, CancelA
                             PairWithDepth, SellBuyResponse, SellRequest, SetPriceReq, Status, StopRequest,
                             UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
+use uuid::Uuid;
 
 use super::command::{Command, V2Method};
 use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest};
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest, MyRecentSwapResponse,
+                      MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusRequestParams, MySwapStatusResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -295,7 +297,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .ok_or_else(|| error_anyhow!("Failed to get rpc_password, not set"))
     }
 
-    pub(crate) async fn active_swaps(&self, include_status: bool) -> Result<()> {
+    pub(crate) async fn active_swaps(&self, include_status: bool, uuids_only: bool) -> Result<()> {
         info!("Getting active swaps");
 
         let active_swaps_command = Command::builder()
@@ -303,6 +305,42 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .flatten_data(ActiveSwapsRequest { include_status })
             .build()?;
 
-        request_legacy!(active_swaps_command, ActiveSwapsResponse, self, on_active_swaps)
+        request_legacy!(
+            active_swaps_command,
+            ActiveSwapsResponse,
+            self,
+            on_active_swaps,
+            uuids_only
+        )
+    }
+
+    pub(crate) async fn swap_status(&self, uuid: Uuid) -> Result<()> {
+        info!("Getting swap status: {}", uuid);
+        let my_swap_status_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(MySwapStatusRequest {
+                params: MySwapStatusRequestParams { uuid },
+            })
+            .build()?;
+        request_legacy!(
+            my_swap_status_command,
+            Mm2RpcResult<MySwapStatusResponse>,
+            self,
+            on_my_swap_status
+        )
+    }
+
+    pub(crate) async fn recent_swaps(&self, request: MyRecentSwapsRequest) -> Result<()> {
+        info!("Getting recent swaps");
+        let recent_swaps_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(
+            recent_swaps_command,
+            Mm2RpcResult<MyRecentSwapResponse>,
+            self,
+            on_my_recent_swaps
+        )
     }
 }

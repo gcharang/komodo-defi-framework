@@ -21,7 +21,7 @@ use crate::logging::error_anyhow;
 pub(super) const COMMON_INDENT: usize = 20;
 pub(super) const COMMON_PRECISION: SmartFractPrecision = (2, 5);
 const NESTED_INDENT: usize = 26;
-const ZERO_INDENT: usize = 0;
+pub(super) const ZERO_INDENT: usize = 0;
 
 pub(super) fn on_maker_order_response(writer: &mut dyn Write, order: MakerOrderForRpc) -> Result<()> {
     writeln_field!(writer, "Maker order", "", ZERO_INDENT);

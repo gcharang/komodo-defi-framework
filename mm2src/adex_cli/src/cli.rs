@@ -142,7 +142,11 @@ impl Cli {
                 proc.orders_history(history_args.into(), history_args.into()).await?
             },
             Command::UpdateMakerOrder(update_maker_args) => proc.update_maker_order(update_maker_args.into()).await?,
-            Command::Swaps(SwapSubcommand::ActiveSwaps(args)) => proc.active_swaps(args.include_status).await?,
+            Command::Swaps(SwapSubcommand::ActiveSwaps(args)) => {
+                proc.active_swaps(args.include_status, args.uuids_only).await?
+            },
+            Command::Swaps(SwapSubcommand::MySwapStatus(args)) => proc.swap_status(args.uuid).await?,
+            Command::Swaps(SwapSubcommand::MyRecentSwaps(args)) => proc.recent_swaps(args.into()).await?,
         }
         Ok(())
     }

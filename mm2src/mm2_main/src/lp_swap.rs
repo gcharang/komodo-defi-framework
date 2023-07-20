@@ -113,6 +113,7 @@ pub use maker_swap::{calc_max_maker_vol, check_balance_for_maker_swap, get_max_m
                      run_maker_swap, CoinVolumeInfo, MakerSavedEvent, MakerSavedSwap, MakerSwap,
                      MakerSwapStatusChanged, MakerTradePreimage, RunMakerSwapInput, MAKER_PAYMENT_SENT_LOG};
 pub use max_maker_vol_rpc::max_maker_vol;
+use mm2_rpc::data::legacy::MySwapsFilter;
 use my_swaps_storage::{MySwapsOps, MySwapsStorage};
 use pubkey_banning::BanReason;
 pub use pubkey_banning::{ban_pubkey_rpc, is_pubkey_banned, list_banned_pubkeys_rpc, unban_pubkeys_rpc};
@@ -1028,14 +1029,6 @@ async fn broadcast_my_swap_status(ctx: &MmArc, uuid: Uuid) -> Result<(), String>
     let msg = json::to_vec(&status).expect("Swap status ser should never fail");
     broadcast_p2p_msg(ctx, vec![swap_topic(&uuid)], msg, None);
     Ok(())
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MySwapsFilter {
-    pub my_coin: Option<String>,
-    pub other_coin: Option<String>,
-    pub from_timestamp: Option<u64>,
-    pub to_timestamp: Option<u64>,
 }
 
 // TODO: Should return the result from SQL like in order history. So it can be clear the exact started_at time

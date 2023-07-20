@@ -1,11 +1,11 @@
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use clap::{Args, ValueEnum};
 use derive_more::Display;
 
 use mm2_number::MmNumber;
 use mm2_rpc::data::legacy::OrdersHistoryRequest;
 
-use super::parse_mm_number;
+use super::{parse_datetime, parse_mm_number};
 use crate::adex_proc;
 
 #[derive(Clone, Display, ValueEnum)]
@@ -131,8 +131,4 @@ impl From<&OrdersHistorySettings> for adex_proc::OrdersHistorySettings {
 
 impl From<&mut OrdersHistoryArgs> for adex_proc::OrdersHistorySettings {
     fn from(value: &mut OrdersHistoryArgs) -> Self { adex_proc::OrdersHistorySettings::from(&value.settings) }
-}
-
-fn parse_datetime(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
-    Utc.datetime_from_str(value, "%y-%m-%dT%H:%M:%S")
 }
