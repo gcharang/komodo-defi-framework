@@ -3,9 +3,10 @@
 //! *Note: it's expected that the following data types will be moved to mm2_rpc::data when mm2 is refactored to be able to handle them*
 //!
 
-use mm2_rpc::data::legacy::{ElectrumProtocol, GasStationPricePolicy, UtxoMergeParams};
+use mm2_rpc::data::legacy::{ElectrumProtocol, GasStationPricePolicy, Mm2RpcResult, UtxoMergeParams};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
+use uuid::Uuid;
 
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "get_enabled_coins")]
@@ -89,4 +90,37 @@ pub(crate) struct Server {
     protocol: ElectrumProtocol,
     #[serde(default)]
     disable_cert_verification: bool,
+}
+
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "disable_coin")]
+pub(crate) struct DisableCoinRequest {
+    pub(crate) coin: String,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum DisableCoinResponse {
+    Success(Mm2RpcResult<DisableCoinSuccess>),
+    Failed(DisableCoinFailed),
+}
+
+#[derive(Deserialize)]
+pub(crate) struct DisableCoinSuccess {
+    pub(crate) coin: String,
+    pub(crate) cancelled_orders: Vec<Uuid>,
+    pub(crate) passivized: bool,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct DisableCoinFailed {
+    pub(crate) error: String,
+    pub(crate) orders: DisableFailedOrders,
+    pub(crate) active_swaps: Vec<Uuid>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct DisableFailedOrders {
+    pub(crate) matching: Vec<Uuid>,
+    pub(crate) cancelled: Vec<Uuid>,
 }

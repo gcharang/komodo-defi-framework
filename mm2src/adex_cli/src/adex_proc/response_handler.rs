@@ -1,3 +1,4 @@
+#[path = "response_handler/activation.rs"] mod activation;
 #[path = "response_handler/best_orders.rs"] mod best_orders;
 #[path = "response_handler/formatters.rs"] mod formatters;
 #[path = "response_handler/macros.rs"] mod macros;
@@ -36,7 +37,7 @@ use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
 use crate::logging::error_anyhow;
-use crate::rpc_data::{ActiveSwapsResponse, GetGossipMeshResponse, GetGossipPeerTopicsResponse,
+use crate::rpc_data::{ActiveSwapsResponse, DisableCoinResponse, GetGossipMeshResponse, GetGossipPeerTopicsResponse,
                       GetGossipTopicPeersResponse, GetMyPeerIdResponse, GetPeersInfoResponse, GetRelayMeshResponse,
                       MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
                       TradePreimageResponse};
@@ -53,6 +54,7 @@ pub(crate) trait ResponseHandler {
     fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
     fn on_version_response(&self, response: MmVersionResponse) -> Result<()>;
     fn on_enable_response(&self, response: CoinInitResponse) -> Result<()>;
+    fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()>;
     fn on_balance_response(&self, response: BalanceResponse) -> Result<()>;
     fn on_sell_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
     fn on_buy_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
@@ -142,6 +144,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         if let Some(mature_confirmations) = response.mature_confirmations {
             writeln_safe_io!(writer, "mature_confirmations: {}", mature_confirmations);
         }
+        Ok(())
+    }
+
+    fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_disable_coin(writer.deref_mut(), response);
         Ok(())
     }
 

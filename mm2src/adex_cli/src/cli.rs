@@ -45,6 +45,8 @@ enum Command {
         #[arg(name = "COIN", help = "Coin to be included into the trading index")]
         coin: String,
     },
+    #[command(about = "Deactivates enabled coin and also cancels all active orders that use the selected coin.")]
+    Disable(DisableCoinArgs),
     #[command(visible_alias = "balance", about = "Get coin balance")]
     MyBalance(MyBalanceArgs),
     #[command(visible_alias = "enabled", about = "List activated coins")]
@@ -166,6 +168,7 @@ impl Cli {
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Enable { coin } => proc.enable(coin).await?,
+            Command::Disable(args) => proc.disable(args.into()).await?,
             Command::MyBalance(my_balance_args) => proc.get_balance(my_balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
             Command::Orderbook(obook_args) => proc.get_orderbook(obook_args.into(), obook_args.into()).await?,

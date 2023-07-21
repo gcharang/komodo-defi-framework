@@ -18,14 +18,14 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest, GetGossipMeshRequest,
-                      GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
-                      GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
-                      GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse, GetRelayMeshRequest,
-                      GetRelayMeshResponse, MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest,
-                      MyRecentSwapResponse, MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusResponse, Params,
-                      RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse, TradePreimageRequest,
-                      TradePreimageResponse};
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, DisableCoinRequest, DisableCoinResponse,
+                      GetEnabledRequest, GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
+                      GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
+                      GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
+                      GetRelayMeshRequest, GetRelayMeshResponse, MaxTakerVolRequest, MaxTakerVolResponse,
+                      MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest, MySwapStatusRequest,
+                      MySwapStatusResponse, Params, RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse,
+                      TradePreimageRequest, TradePreimageResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -58,6 +58,27 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .build()?;
 
         request_legacy!(enable, CoinInitResponse, self, on_enable_response)
+    }
+
+    pub(crate) async fn disable(&self, request: DisableCoinRequest) -> Result<()> {
+        info!("Disabling coin: {}", request.coin);
+
+        let disable_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+
+        let transport = self
+            .transport
+            .ok_or_else(|| warn_anyhow!(concat!("Failed to send: `disable_command`, transport is not available")))?;
+        match transport
+            .send::<_, DisableCoinResponse, DisableCoinResponse>(disable_command)
+            .await
+        {
+            Ok(Ok(ok)) => self.response_handler.on_disable_coin(ok),
+            Ok(Err(error)) => self.response_handler.on_disable_coin(error),
+            Err(error) => error_bail!("Failed to send: `disable_command`: {}", error),
+        }
     }
 
     pub(crate) async fn get_balance(&self, request: BalanceRequest) -> Result<()> {

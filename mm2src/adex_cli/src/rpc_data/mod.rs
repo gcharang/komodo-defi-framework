@@ -8,7 +8,8 @@ mod network;
 mod swaps;
 mod trade_preimage;
 
-pub(crate) use activation::{ActivationRequest, GetEnabledRequest};
+pub(crate) use activation::{ActivationRequest, DisableCoinFailed, DisableCoinRequest, DisableCoinResponse,
+                            DisableCoinSuccess, GetEnabledRequest};
 pub(crate) use network::{GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
                          GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
                          GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,

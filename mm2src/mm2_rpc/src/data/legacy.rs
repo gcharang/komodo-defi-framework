@@ -7,14 +7,14 @@
 pub use activation::{eth::GasStationPricePolicy,
                      utxo::{ElectrumProtocol, UtxoMergeParams},
                      CoinInitResponse, EnabledCoin, GetEnabledResponse};
-pub use orders::{AggregatedOrderbookEntry, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
+pub use orders::{AggregatedOrderbookEntry, BuyRequest, CancelAllOrdersRequest, CancelAllOrdersResponse, CancelBy,
                  CancelOrderRequest, FilteringOrder, HistoricalOrder, MakerConnectedForRpc, MakerMatchForRpc,
                  MakerOrderForMyOrdersRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy, MinTradingVolResponse,
-                 MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest, OrderStatusResponse,
-                 OrderType, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse, OrdersHistoryRequest,
-                 OrdersHistoryResponse, PairDepth, PairWithDepth, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse,
-                 SetPriceReq, TakerAction, TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc,
-                 UpdateMakerOrderRequest, UuidParseError};
+                 MyOrdersRequest, MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest,
+                 OrderStatusResponse, OrderType, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
+                 OrdersHistoryRequest, OrdersHistoryResponse, PairDepth, PairWithDepth, RpcOrderbookEntry,
+                 SellBuyRequest, SellBuyResponse, SellRequest, SetPriceReq, TakerAction, TakerConnectForRpc,
+                 TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc, UpdateMakerOrderRequest, UuidParseError};
 pub use swaps::{MySwapsFilter, RecoveredSwapAction};
 pub use utility::{MmVersionResponse, Status, StopRequest, VersionRequest};
 pub use wallet::{BalanceRequest, BalanceResponse};
