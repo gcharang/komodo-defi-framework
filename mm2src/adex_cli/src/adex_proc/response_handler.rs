@@ -2,6 +2,7 @@
 #[path = "response_handler/formatters.rs"] mod formatters;
 #[path = "response_handler/macros.rs"] mod macros;
 #[path = "response_handler/my_orders.rs"] mod my_orders;
+#[path = "response_handler/network.rs"] mod network;
 #[path = "response_handler/order_status.rs"] mod order_status;
 #[path = "response_handler/orderbook.rs"] mod orderbook;
 #[path = "response_handler/swaps.rs"] mod swaps;
@@ -35,7 +36,10 @@ use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
 use crate::logging::error_anyhow;
-use crate::rpc_data::{ActiveSwapsResponse, MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse};
+use crate::rpc_data::{ActiveSwapsResponse, GetGossipMeshResponse, GetGossipPeerTopicsResponse,
+                      GetGossipTopicPeersResponse, GetMyPeerIdResponse, GetPeersInfoResponse, GetRelayMeshResponse,
+                      MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
+                      TradePreimageResponse};
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -71,6 +75,14 @@ pub(crate) trait ResponseHandler {
     fn on_my_recent_swaps(&self, response: Mm2RpcResult<MyRecentSwapResponse>) -> Result<()>;
     fn on_min_trading_vol(&self, response: Mm2RpcResult<MinTradingVolResponse>) -> Result<()>;
     fn on_max_taker_vol(&self, response: MaxTakerVolResponse) -> Result<()>;
+    fn on_recover_funds(&self, response: RecoverFundsOfSwapResponse) -> Result<()>;
+    fn on_trade_preimage(&self, response: TradePreimageResponse) -> Result<()>;
+    fn on_gossip_mesh(&self, response: Mm2RpcResult<GetGossipMeshResponse>) -> Result<()>;
+    fn on_relay_mesh(&self, response: Mm2RpcResult<GetRelayMeshResponse>) -> Result<()>;
+    fn on_gossip_peer_topics(&self, response: Mm2RpcResult<GetGossipPeerTopicsResponse>) -> Result<()>;
+    fn on_gossip_topic_peers(&self, response: Mm2RpcResult<GetGossipTopicPeersResponse>) -> Result<()>;
+    fn on_my_peer_id(&self, response: Mm2RpcResult<GetMyPeerIdResponse>) -> Result<()>;
+    fn on_peers_info(&self, response: Mm2RpcResult<GetPeersInfoResponse>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -236,5 +248,51 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn on_max_taker_vol(&self, response: MaxTakerVolResponse) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         trading::on_max_taker_vol(writer.deref_mut(), response)
+    }
+
+    fn on_recover_funds(&self, response: RecoverFundsOfSwapResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        swaps::on_recover_funds(writer.deref_mut(), response)
+    }
+
+    fn on_trade_preimage(&self, response: TradePreimageResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        trading::on_trade_preimage(writer.deref_mut(), response)
+    }
+
+    fn on_gossip_mesh(&self, response: Mm2RpcResult<GetGossipMeshResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        network::on_gossip_mesh(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_relay_mesh(&self, response: Mm2RpcResult<GetRelayMeshResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        network::on_relay_mesh(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_gossip_peer_topics(&self, response: Mm2RpcResult<GetGossipPeerTopicsResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        network::on_gossip_peer_topics(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_gossip_topic_peers(&self, response: Mm2RpcResult<GetGossipTopicPeersResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        network::on_gossip_topic_peers(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_my_peer_id(&self, response: Mm2RpcResult<GetMyPeerIdResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        network::on_my_peer_id(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_peers_info(&self, response: Mm2RpcResult<GetPeersInfoResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        network::on_peers_info(writer.deref_mut(), response.result);
+        Ok(())
     }
 }

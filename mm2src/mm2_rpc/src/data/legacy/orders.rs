@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+use common::true_f;
 use mm2_number::{construct_detailed, BigDecimal, BigRational, Fraction, MmNumber};
 
 #[derive(Serialize, Deserialize)]
@@ -133,7 +134,7 @@ pub struct SellBuyRequest {
     pub rel_confs: Option<u64>,
     pub rel_nota: Option<bool>,
     pub min_volume: Option<MmNumber>,
-    #[serde(default = "get_true")]
+    #[serde(default = "true_f")]
     pub save_in_history: bool,
 }
 
@@ -215,29 +216,10 @@ impl OrderConfirmationsSettings {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CoinInitResponse {
-    pub result: String,
-    pub address: String,
-    pub balance: BigDecimal,
-    pub unspendable_balance: BigDecimal,
-    pub coin: String,
-    pub required_confirmations: u64,
-    pub requires_notarization: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mature_confirmations: Option<u32>,
-}
-
 #[derive(Serialize, Deserialize, Display)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
     Success,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct MmVersionResponse {
-    pub result: String,
-    pub datetime: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -414,7 +396,7 @@ pub struct SetPriceReq {
     #[serde(default)]
     pub volume: MmNumber,
     pub min_volume: Option<MmNumber>,
-    #[serde(default = "get_true")]
+    #[serde(default = "true_f")]
     pub cancel_previous: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_confs: Option<u64>,
@@ -424,7 +406,7 @@ pub struct SetPriceReq {
     pub rel_confs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rel_nota: Option<bool>,
-    #[serde(default = "get_true")]
+    #[serde(default = "true_f")]
     pub save_in_history: bool,
 }
 
@@ -518,8 +500,6 @@ pub struct UpdateMakerOrderRequest {
     pub rel_confs: Option<u64>,
     pub rel_nota: Option<bool>,
 }
-
-fn get_true() -> bool { true }
 
 #[derive(Deserialize, Serialize)]
 pub struct MinTradingVolResponse {

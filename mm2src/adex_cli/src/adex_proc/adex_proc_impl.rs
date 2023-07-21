@@ -18,9 +18,14 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest, MaxTakerVolRequest,
-                      MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
-                      MySwapStatusRequest, MySwapStatusRequestParams, MySwapStatusResponse};
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, GetEnabledRequest, GetGossipMeshRequest,
+                      GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
+                      GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
+                      GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse, GetRelayMeshRequest,
+                      GetRelayMeshResponse, MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest,
+                      MyRecentSwapResponse, MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusResponse, Params,
+                      RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse, TradePreimageRequest,
+                      TradePreimageResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -320,7 +325,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         let my_swap_status_command = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(MySwapStatusRequest {
-                params: MySwapStatusRequestParams { uuid },
+                params: Params { uuid },
             })
             .build()?;
         request_legacy!(
@@ -367,5 +372,139 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .build()?;
 
         request_legacy!(max_taker_vol_command, MaxTakerVolResponse, self, on_max_taker_vol)
+    }
+
+    pub(crate) async fn recover_funds_of_swap(&self, request: RecoverFundsOfSwapRequest) -> Result<()> {
+        info!("Recovering funds of swap: {}", request.params.uuid);
+        let recover_funds_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(
+            recover_funds_command,
+            RecoverFundsOfSwapResponse,
+            self,
+            on_recover_funds
+        )
+    }
+
+    pub(crate) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
+        info!("Getting trade preimage");
+        let command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .v2_method(V2Method::TradePreimage)
+            .flatten_data(request)
+            .build_v2()?;
+
+        let transport = self
+            .transport
+            .ok_or_else(|| warn_anyhow!("Failed to send `trade_preimage`, transport is not available"))?;
+
+        match transport
+            .send::<_, MmRpcResponseV2<TradePreimageResponse>, Json>(command)
+            .await
+        {
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Ok { result },
+                id: _,
+            })) => self.response_handler.on_trade_preimage(result),
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Err(error),
+                id: _,
+            })) => {
+                error_bail!("Got error: {:?}", error)
+            },
+            Ok(Err(error)) => self.response_handler.print_response(error),
+            Err(error) => error_bail!("Failed to send `trade_preimage` request: {error}"),
+        }
+    }
+
+    pub(crate) async fn get_gossip_mesh(&self) -> Result<()> {
+        info!("Getting gossip mesh");
+        let get_gossip_mesh_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(GetGossipMeshRequest::default())
+            .build()?;
+
+        request_legacy!(
+            get_gossip_mesh_command,
+            Mm2RpcResult<GetGossipMeshResponse>,
+            self,
+            on_gossip_mesh
+        )
+    }
+
+    pub(crate) async fn get_relay_mesh(&self) -> Result<()> {
+        info!("Getting relay mesh");
+        let get_relay_mesh_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(GetRelayMeshRequest::default())
+            .build()?;
+        request_legacy!(
+            get_relay_mesh_command,
+            Mm2RpcResult<GetRelayMeshResponse>,
+            self,
+            on_relay_mesh
+        )
+    }
+
+    pub(crate) async fn get_gossip_peer_topics(&self) -> Result<()> {
+        info!("Getting gossip peer topics");
+        let get_gossip_peer_topics_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(GetGossipPeerTopicsRequest::default())
+            .build()?;
+        request_legacy!(
+            get_gossip_peer_topics_command,
+            Mm2RpcResult<GetGossipPeerTopicsResponse>,
+            self,
+            on_gossip_peer_topics
+        )
+    }
+
+    pub(crate) async fn get_gossip_topic_peers(&self) -> Result<()> {
+        info!("Getting gossip topic peers");
+        let get_gossip_topic_peers = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(GetGossipTopicPeersRequest::default())
+            .build()?;
+
+        request_legacy!(
+            get_gossip_topic_peers,
+            Mm2RpcResult<GetGossipTopicPeersResponse>,
+            self,
+            on_gossip_topic_peers
+        )
+    }
+
+    pub(crate) async fn get_my_peer_id(&self) -> Result<()> {
+        info!("Getting my peer id");
+        let get_my_peer_id_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(GetMyPeerIdRequest::default())
+            .build()?;
+
+        request_legacy!(
+            get_my_peer_id_command,
+            Mm2RpcResult<GetMyPeerIdResponse>,
+            self,
+            on_my_peer_id
+        )
+    }
+
+    pub(crate) async fn get_peers_info(&self) -> Result<()> {
+        info!("Getting peers info");
+        let peers_info_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(GetPeersInfoRequest::default())
+            .build()?;
+        request_legacy!(
+            peers_info_command,
+            Mm2RpcResult<GetPeersInfoResponse>,
+            self,
+            on_peers_info
+        )
     }
 }

@@ -22,6 +22,7 @@ where
 #[serde(rename_all = "snake_case")]
 pub(super) enum V2Method {
     BestOrders,
+    TradePreimage,
 }
 
 impl<T> Command<T>

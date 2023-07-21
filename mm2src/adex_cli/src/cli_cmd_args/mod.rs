@@ -1,6 +1,7 @@
 mod cmd_best_orders;
 mod cmd_cancel;
 mod cmd_my_balance;
+mod cmd_network;
 mod cmd_order_status;
 mod cmd_orderbook;
 mod cmd_orderbook_depth;
@@ -9,6 +10,7 @@ mod cmd_sell_buy;
 mod cmd_set_config;
 mod cmd_set_price;
 mod cmd_swap;
+mod cmd_trade_preimage;
 mod cmd_update_maker_order;
 
 use anyhow::Result;
@@ -30,6 +32,7 @@ pub(crate) mod prelude {
     pub(crate) use super::cmd_set_config::SetConfigArgs;
     pub(crate) use super::cmd_set_price::SetPriceArgs;
     pub(crate) use super::cmd_swap::SwapSubcommand;
+    pub(crate) use super::cmd_trade_preimage::TradePreimageArgs;
     pub(crate) use super::cmd_update_maker_order::UpdateMakerOrderArgs;
 }
 

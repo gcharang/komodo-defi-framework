@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use mm2_number::BigDecimal;
-use mm2_rpc::data::legacy::MySwapsFilter;
+use mm2_rpc::data::legacy::{MySwapsFilter, RecoveredSwapAction};
 
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "active_swaps")]
@@ -23,12 +23,26 @@ pub(crate) struct ActiveSwapsResponse {
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "my_swap_status")]
 pub(crate) struct MySwapStatusRequest {
-    pub(crate) params: MySwapStatusRequestParams,
+    pub(crate) params: Params,
 }
 
 #[derive(Serialize)]
-pub(crate) struct MySwapStatusRequestParams {
+pub(crate) struct Params {
     pub(crate) uuid: Uuid,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "recover_funds_of_swap")]
+pub(crate) struct RecoverFundsOfSwapRequest {
+    pub(crate) params: Params,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct RecoverFundsOfSwapResponse {
+    pub(crate) action: RecoveredSwapAction,
+    pub(crate) coin: String,
+    pub(crate) tx_hash: BytesJson,
+    pub(crate) tx_hex: BytesJson,
 }
 
 #[derive(Debug, Deserialize)]

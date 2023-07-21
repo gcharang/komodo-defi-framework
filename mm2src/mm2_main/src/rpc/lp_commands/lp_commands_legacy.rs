@@ -27,7 +27,6 @@ use futures::compat::Future01CompatExt;
 use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
-use mm2_number::construct_detailed;
 use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, CancelBy, CoinInitResponse, MinTradingVolResponse,
                             Mm2RpcResult, MmVersionResponse, Status};
 use serde_json::{self as json, Value as Json};
@@ -391,7 +390,7 @@ pub async fn min_trading_vol(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>,
     };
     let min_trading_vol = coin.min_trading_vol();
     let response = MinTradingVolResponse {
-        coin: &ticker,
+        coin: ticker,
         volume: min_trading_vol.into(),
     };
     let res = json!({

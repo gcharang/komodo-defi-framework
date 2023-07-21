@@ -77,14 +77,52 @@ enum Command {
     OrdersHistory(OrdersHistoryArgs),
     #[command(visible_alias = "update", about = "Update order on the orderbook")]
     UpdateMakerOrder(UpdateMakerOrderArgs),
-    #[command(subcommand, about = "Swap related commands ")]
+    #[command(subcommand, visible_alias = "swap", about = "Swap related commands")]
     Swaps(SwapSubcommand),
+    #[command(about = "Return the minimum required volume for buy/sell/setprice methods for the selected coin")]
     MinTradingVol {
         coin: String,
     },
+    #[command(
+        about = "Return the maximum available volume for buy/sell methods for selected coin. \
+    This takes the dex fee and blockchain miner fees into account. The result should be used as is for \
+    sell method or divided by price for buy method."
+    )]
     MaxTakerVol {
         coin: String,
     },
+    #[command(about = "Return the approximate fee amounts that are paid per the whole swap")]
+    TradePreimage(TradePreimageArgs),
+    #[command(
+        visible_alias = "gossip-mesh",
+        about = "Return an array of peerIDs added to a topics' mesh for each known gossipsub topic"
+    )]
+    GetGossipMesh,
+    #[command(
+        visible_alias = "relay-mesh",
+        about = "Return a list of peerIDs included in our local relay mesh"
+    )]
+    GetRelayMesh,
+    #[command(
+        visible_alias = "peer-topics",
+        about = "Return a map of peerIDs to an array of the topics to which they are subscribed"
+    )]
+    GetGossipPeerTopics,
+    #[command(
+        visible_alias = "topic-peers",
+        about = "Return a map of topics to an array of the PeerIDs which are subscribers"
+    )]
+    GetGossipTopicPeers,
+    #[command(
+        visible_alias = "my-peer-id",
+        about = "Return your unique identifying Peer ID on the network"
+    )]
+    GetMyPeerId,
+    #[command(
+        visible_alias = "peers-info",
+        about = "Return all connected peers with their multiaddresses"
+    )]
+    GetPeersInfo,
 }
 
 #[derive(Parser)]
@@ -154,8 +192,16 @@ impl Cli {
             },
             Command::Swaps(SwapSubcommand::MySwapStatus(args)) => proc.swap_status(args.uuid).await?,
             Command::Swaps(SwapSubcommand::MyRecentSwaps(args)) => proc.recent_swaps(args.into()).await?,
+            Command::Swaps(SwapSubcommand::RecoverFundsOfSwap(args)) => proc.recover_funds_of_swap(args.into()).await?,
             Command::MinTradingVol { coin } => proc.min_trading_vol(take(coin)).await?,
             Command::MaxTakerVol { coin } => proc.max_taker_vol(take(coin)).await?,
+            Command::TradePreimage(args) => proc.trade_preimage(args.into()).await?,
+            Command::GetGossipMesh => proc.get_gossip_mesh().await?,
+            Command::GetRelayMesh => proc.get_relay_mesh().await?,
+            Command::GetGossipPeerTopics => proc.get_gossip_peer_topics().await?,
+            Command::GetGossipTopicPeers => proc.get_gossip_topic_peers().await?,
+            Command::GetMyPeerId => proc.get_my_peer_id().await?,
+            Command::GetPeersInfo => proc.get_peers_info().await?,
         }
         Ok(())
     }

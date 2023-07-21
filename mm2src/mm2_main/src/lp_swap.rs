@@ -113,7 +113,7 @@ pub use maker_swap::{calc_max_maker_vol, check_balance_for_maker_swap, get_max_m
                      run_maker_swap, CoinVolumeInfo, MakerSavedEvent, MakerSavedSwap, MakerSwap,
                      MakerSwapStatusChanged, MakerTradePreimage, RunMakerSwapInput, MAKER_PAYMENT_SENT_LOG};
 pub use max_maker_vol_rpc::max_maker_vol;
-use mm2_rpc::data::legacy::MySwapsFilter;
+use mm2_rpc::data::legacy::{MySwapsFilter, RecoveredSwapAction};
 use my_swaps_storage::{MySwapsOps, MySwapsStorage};
 use pubkey_banning::BanReason;
 pub use pubkey_banning::{ban_pubkey_rpc, is_pubkey_banned, list_banned_pubkeys_rpc, unban_pubkeys_rpc};
@@ -390,12 +390,6 @@ const _SWAP_DEFAULT_NUM_CONFIRMS: u32 = 1;
 const _SWAP_DEFAULT_MAX_CONFIRMS: u32 = 6;
 /// MM2 checks that swap payment is confirmed every WAIT_CONFIRM_INTERVAL seconds
 const WAIT_CONFIRM_INTERVAL_SEC: u64 = 15;
-
-#[derive(Debug, PartialEq, Serialize)]
-pub enum RecoveredSwapAction {
-    RefundedMyPayment,
-    SpentOtherPayment,
-}
 
 #[derive(Debug, PartialEq)]
 pub struct RecoveredSwap {

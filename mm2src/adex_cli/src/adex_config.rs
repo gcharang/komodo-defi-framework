@@ -119,8 +119,14 @@ impl AdexConfigImpl {
     }
 
     pub(crate) fn get_config_path() -> Result<PathBuf> {
-        let mut config_path = Self::get_config_dir()?;
-        config_path.push(ADEX_CFG);
+        let config_path = if let Ok(config_path) = std::env::var("KOMODO_CLI_CFG") {
+            info!("KOMODO_CLI_CFG: {}", config_path);
+            PathBuf::from(config_path)
+        } else {
+            let mut config_path = AdexConfigImpl::get_config_dir()?;
+            config_path.push(ADEX_CFG);
+            config_path
+        };
         Ok(config_path)
     }
 

@@ -1,9 +1,9 @@
-use crate::rpc_data::MyRecentSwapsRequest;
 use clap::{Args, Subcommand};
 use mm2_rpc::data::legacy::MySwapsFilter;
 use uuid::Uuid;
 
 use super::parse_datetime;
+use crate::rpc_data::{MyRecentSwapsRequest, Params, RecoverFundsOfSwapRequest};
 
 #[derive(Subcommand)]
 pub(crate) enum SwapSubcommand {
@@ -25,6 +25,12 @@ pub(crate) enum SwapSubcommand {
         about = "Return the data of the most recent atomic swaps by filter"
     )]
     MyRecentSwaps(MyRecentSwapsArgs),
+    #[command(
+        short_flag = 'R',
+        visible_aliases = ["recover", "recover-funds", "refund"],
+        about = "Reclaim the user funds from the swap-payment address, if possible"
+    )]
+    RecoverFundsOfSwap(RecoverFundsOfSwapArgs),
 }
 
 #[derive(Args, Debug)]
@@ -91,14 +97,14 @@ pub(crate) struct MyRecentSwapsArgs {
         long,
         short = 't',
         value_parser = parse_datetime,
-        help = "Return only swaps that match the swap.started_at >= request.from_timestamp condition"
+        help = "Return only swaps that match the swap.started_at >= request.from_timestamp condition. Datetime fmt: \"%y-%m-%dT%H:%M:%S\""
     )]
     pub(crate) from_timestamp: Option<u64>,
     #[arg(
         long,
         short = 'T',
         value_parser = parse_datetime,
-        help = "Return only swaps that match the swap.started_at < request.to_timestamp condition"
+        help = "Return only swaps that match the swap.started_at < request.to_timestamp condition. Datetime fmt: \"%y-%m-%dT%H:%M:%S\""
     )]
     pub(crate) to_timestamp: Option<u64>,
 }
@@ -115,6 +121,20 @@ impl From<&mut MyRecentSwapsArgs> for MyRecentSwapsRequest {
                 from_timestamp: value.from_timestamp.take(),
                 to_timestamp: value.to_timestamp.take(),
             },
+        }
+    }
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct RecoverFundsOfSwapArgs {
+    #[arg(help = "uuid of the swap to recover the funds")]
+    pub(crate) uuid: Uuid,
+}
+
+impl From<&mut RecoverFundsOfSwapArgs> for RecoverFundsOfSwapRequest {
+    fn from(value: &mut RecoverFundsOfSwapArgs) -> Self {
+        RecoverFundsOfSwapRequest {
+            params: Params { uuid: value.uuid },
         }
     }
 }
