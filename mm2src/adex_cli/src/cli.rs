@@ -87,12 +87,16 @@ enum Command {
     },
     #[command(
         about = "Return the maximum available volume for buy/sell methods for selected coin. \
-    This takes the dex fee and blockchain miner fees into account. The result should be used as is for \
-    sell method or divided by price for buy method."
+                 The result should be used as is for sell method or divided by price for buy method."
     )]
     MaxTakerVol {
         coin: String,
     },
+    #[command(
+        visible_alias = "kick-start-coins",
+        about = "Return the coins that should be activated to continue the interrupted swaps"
+    )]
+    CoinsToKickStart,
     #[command(about = "Return the approximate fee amounts that are paid per the whole swap")]
     TradePreimage(TradePreimageArgs),
     #[command(
@@ -125,6 +129,38 @@ enum Command {
         about = "Return all connected peers with their multiaddresses"
     )]
     GetPeersInfo,
+    #[command(
+        visible_alias = "set-conf",
+        about = "Set the number of confirmations to wait for the selected coin"
+    )]
+    SetRequiredConf(SetRequiredConfArgs),
+    #[command(
+        visible_alias = "set-nota",
+        about = "Whether to wait for a dPoW notarization of the given atomic swap transactions"
+    )]
+    SetRequiredNota(SetRequiredNotaArgs),
+    #[command(
+        visible_alias = "ban",
+        about = "Bans the selected pubkey ignoring its order matching messages and preventing its \
+                 orders from displaying in the orderbook. \
+                 Use the secp256k1 pubkey without prefix for this method input"
+    )]
+    BanPubkey(BanPubkeyArgs),
+    #[command(
+        visible_aliases = ["ban-list", "list-banned"],
+        about = "Returns a list of public keys of nodes that are banned from interacting with the node executing the method"
+    )]
+    ListBannedPubkeys,
+    #[command(
+        visible_alias = "unban",
+        about = "Remove all currently banned pubkeys from ban list, or specific pubkeys"
+    )]
+    UnbanPubkeys(UnbanPubkeysArgs),
+    #[command(
+        visible_alias = "send-raw",
+        about = "Broadcasts the transaction to the network of selected coin"
+    )]
+    SendRawTransaction(SendRawTransactionArgs),
 }
 
 #[derive(Parser)]
@@ -199,12 +235,19 @@ impl Cli {
             Command::MinTradingVol { coin } => proc.min_trading_vol(take(coin)).await?,
             Command::MaxTakerVol { coin } => proc.max_taker_vol(take(coin)).await?,
             Command::TradePreimage(args) => proc.trade_preimage(args.into()).await?,
+            Command::CoinsToKickStart => proc.coins_to_kick_start().await?,
             Command::GetGossipMesh => proc.get_gossip_mesh().await?,
             Command::GetRelayMesh => proc.get_relay_mesh().await?,
             Command::GetGossipPeerTopics => proc.get_gossip_peer_topics().await?,
             Command::GetGossipTopicPeers => proc.get_gossip_topic_peers().await?,
             Command::GetMyPeerId => proc.get_my_peer_id().await?,
             Command::GetPeersInfo => proc.get_peers_info().await?,
+            Command::SetRequiredConf(args) => proc.set_required_confirmations(args.into()).await?,
+            Command::SetRequiredNota(args) => proc.set_required_nota(args.into()).await?,
+            Command::BanPubkey(args) => proc.ban_pubkey(args.into()).await?,
+            Command::ListBannedPubkeys => proc.list_banned_pubkeys().await?,
+            Command::UnbanPubkeys(args) => proc.unban_pubkeys(args.into()).await?,
+            Command::SendRawTransaction(args) => proc.send_raw_transaction(args.into()).await?,
         }
         Ok(())
     }

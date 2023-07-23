@@ -57,4 +57,20 @@ macro_rules! write_connected {
     };
 }
 
-pub(crate) use {write_base_rel, write_confirmation_settings, write_connected, write_field_option, writeln_field};
+#[macro_export]
+macro_rules! write_field_seq {
+    ($writer:ident, $iter:expr, $delim:literal, $indent:ident) => {
+        writeln_field!(
+            $writer,
+            stringify!($iter),
+            if $iter.len() == 0 {
+                "none".to_string()
+            } else {
+                $iter.join(", ")
+            },
+            $indent
+        )
+    };
+}
+
+pub(super) use {write_base_rel, write_confirmation_settings, write_connected, write_field_option, writeln_field};

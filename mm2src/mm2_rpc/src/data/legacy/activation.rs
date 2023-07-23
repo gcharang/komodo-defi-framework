@@ -24,3 +24,17 @@ pub struct CoinInitResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mature_confirmations: Option<u32>,
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "set_required_confirmations")]
+pub struct SetRequiredConfRequest {
+    pub coin: String,
+    pub confirmations: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "set_requires_notarization")]
+pub struct SetRequiredNotaRequest {
+    pub coin: String,
+    pub requires_notarization: bool,
+}

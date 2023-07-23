@@ -1,11 +1,5 @@
-use derive_more::Display;
+use rpc::v1::types::H256 as H256Json;
 use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Display)]
-#[serde(rename_all = "lowercase")]
-pub enum Status {
-    Success,
-}
 
 #[derive(Serialize, Deserialize)]
 pub struct MmVersionResponse {
@@ -20,3 +14,17 @@ pub struct StopRequest {}
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "version")]
 pub struct VersionRequest {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "method", rename = "ban_pubkey")]
+pub struct BanPubkeysRequest {
+    pub pubkey: H256Json,
+    pub reason: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum UnbanPubkeysReq {
+    All,
+    Few(Vec<H256Json>),
+}

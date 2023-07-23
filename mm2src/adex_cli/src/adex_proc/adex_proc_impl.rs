@@ -1,15 +1,17 @@
 use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
+use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
 
 use common::log::{error, info, warn};
-use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BuyRequest, CancelAllOrdersRequest,
+use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, BuyRequest, CancelAllOrdersRequest,
                             CancelAllOrdersResponse, CancelBy, CancelOrderRequest, CoinInitResponse,
                             GetEnabledResponse, MakerOrderForRpc, MinTradingVolResponse, Mm2RpcResult,
                             MmVersionResponse, MyOrdersRequest, MyOrdersResponse, OrderStatusRequest,
                             OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
                             OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, SellRequest,
-                            SetPriceReq, Status, StopRequest, UpdateMakerOrderRequest, VersionRequest};
+                            SetPriceReq, SetRequiredConfRequest, SetRequiredNotaRequest, Status, StopRequest,
+                            UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 use uuid::Uuid;
 
@@ -18,14 +20,17 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::adex_config::AdexConfig;
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, DisableCoinRequest, DisableCoinResponse,
-                      GetEnabledRequest, GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
-                      GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
-                      GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
-                      GetRelayMeshRequest, GetRelayMeshResponse, MaxTakerVolRequest, MaxTakerVolResponse,
-                      MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest, MySwapStatusRequest,
-                      MySwapStatusResponse, Params, RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse,
-                      TradePreimageRequest, TradePreimageResponse};
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
+                      DisableCoinRequest, DisableCoinResponse, GetEnabledRequest, GetGossipMeshRequest,
+                      GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
+                      GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
+                      GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse, GetRelayMeshRequest,
+                      GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse, MaxTakerVolRequest,
+                      MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
+                      MySwapStatusRequest, MySwapStatusResponse, Params, RecoverFundsOfSwapRequest,
+                      RecoverFundsOfSwapResponse, SendRawTransactionRequest, SetRequiredConfResponse,
+                      SetRequiredNotaResponse, TradePreimageRequest, TradePreimageResponse, UnbanPubkeysRequest,
+                      UnbanPubkeysResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -527,5 +532,100 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             self,
             on_peers_info
         )
+    }
+
+    pub(crate) async fn set_required_confirmations(&self, request: SetRequiredConfRequest) -> Result<()> {
+        info!(
+            "Setting required confirmations: {}, confirmations: {}",
+            request.coin, request.confirmations
+        );
+        let set_required_conf_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(
+            set_required_conf_command,
+            Mm2RpcResult<SetRequiredConfResponse>,
+            self,
+            on_set_confirmations
+        )
+    }
+
+    pub(crate) async fn set_required_nota(&self, request: SetRequiredNotaRequest) -> Result<()> {
+        info!(
+            "Setting required nota: {}, requires_nota: {}",
+            request.coin, request.requires_notarization
+        );
+        let set_nota_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(
+            set_nota_command,
+            Mm2RpcResult<SetRequiredNotaResponse>,
+            self,
+            on_set_notarization
+        )
+    }
+
+    pub(crate) async fn coins_to_kick_start(&self) -> Result<()> {
+        info!("Getting coins needed for kickstart");
+        let coins_to_kick_start_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(CoinsToKickStartRequest::default())
+            .build()?;
+        request_legacy!(
+            coins_to_kick_start_command,
+            Mm2RpcResult<CoinsToKickstartResponse>,
+            self,
+            on_coins_to_kickstart
+        )
+    }
+
+    pub(crate) async fn ban_pubkey(&self, request: BanPubkeysRequest) -> Result<()> {
+        info!("Banning pubkey: {}", request.pubkey);
+        let ban_pubkey_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(ban_pubkey_command, Mm2RpcResult<Status>, self, on_ban_pubkey)
+    }
+
+    pub(crate) async fn list_banned_pubkeys(&self) -> Result<()> {
+        info!("Getting list of banned pubkeys");
+        let list_banned_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(ListBannedPubkeysRequest::default())
+            .build()?;
+        request_legacy!(
+            list_banned_command,
+            Mm2RpcResult<ListBannedPubkeysResponse>,
+            self,
+            on_list_banned_pubkeys
+        )
+    }
+
+    pub(crate) async fn unban_pubkeys(&self, request: UnbanPubkeysRequest) -> Result<()> {
+        info!("Unbanning pubkeys");
+        let unban_pubkeys_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+
+        request_legacy!(
+            unban_pubkeys_command,
+            Mm2RpcResult<UnbanPubkeysResponse>,
+            self,
+            on_unban_pubkeys
+        )
+    }
+
+    pub(crate) async fn send_raw_transaction(&self, request: SendRawTransactionRequest) -> Result<()> {
+        info!("Sending raw transaction");
+        let send_raw_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()?;
+        request_legacy!(send_raw_command, BytesJson, self, on_send_raw_transaction)
     }
 }

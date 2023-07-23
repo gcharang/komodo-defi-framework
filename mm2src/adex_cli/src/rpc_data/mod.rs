@@ -7,16 +7,28 @@ mod activation;
 mod network;
 mod swaps;
 mod trade_preimage;
+mod utility;
+mod wallet;
 
-pub(crate) use activation::{ActivationRequest, DisableCoinFailed, DisableCoinRequest, DisableCoinResponse,
-                            DisableCoinSuccess, GetEnabledRequest};
+pub(crate) use activation::{ActivationRequest, CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinFailed,
+                            DisableCoinRequest, DisableCoinResponse, DisableCoinSuccess, GetEnabledRequest,
+                            SetRequiredConfResponse, SetRequiredNotaResponse};
 pub(crate) use network::{GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
                          GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
                          GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
                          GetRelayMeshRequest, GetRelayMeshResponse};
-pub(crate) use swaps::*;
+pub(crate) use swaps::{ActiveSwapsRequest, ActiveSwapsResponse, MakerNegotiationData, MakerSavedEvent, MakerSavedSwap,
+                       MakerSwapData, MakerSwapEvent, MyRecentSwapResponse, MyRecentSwapsRequest, MySwapStatusRequest,
+                       MySwapStatusResponse, Params, PaymentInstructions, RecoverFundsOfSwapRequest,
+                       RecoverFundsOfSwapResponse, SavedSwap, SavedTradeFee, SwapError, TakerNegotiationData,
+                       TakerPaymentSpentData, TakerSavedEvent, TakerSavedSwap, TakerSwapData, TakerSwapEvent,
+                       TransactionIdentifier};
+
 pub(crate) use trade_preimage::{MakerPreimage, MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest,
                                 TakerPreimage, TotalTradeFeeResponse, TradeFeeResponse, TradePreimageMethod,
                                 TradePreimageRequest, TradePreimageResponse};
+pub(crate) use utility::{BanReason, ListBannedPubkeysRequest, ListBannedPubkeysResponse, UnbanPubkeysRequest,
+                         UnbanPubkeysResponse};
+pub(crate) use wallet::SendRawTransactionRequest;
 
 //TODO: @rozhkovdmitrii

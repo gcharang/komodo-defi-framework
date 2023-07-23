@@ -103,20 +103,20 @@ fn write_taker_swap(writer: &mut dyn Write, taker_swap: TakerSavedSwap) -> Resul
 
     let taker_amount = taker_swap
         .taker_amount
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "taker_amount", taker_amount, ZERO_INDENT);
     let taker_coin_usd_price = taker_swap
         .taker_coin_usd_price
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "taker_coin_usd_price", taker_coin_usd_price, ZERO_INDENT);
     write_field_option!(writer, "maker_coin", taker_swap.maker_coin, ZERO_INDENT);
     let maker_amount = taker_swap
         .maker_amount
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "maker_amount", maker_amount, ZERO_INDENT);
     let maker_coin_usd_price = taker_swap
         .maker_coin_usd_price
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "maker_coin_usd_price", maker_coin_usd_price, ZERO_INDENT);
     write_taker_swap_events(writer, taker_swap.events)
 }
@@ -276,15 +276,15 @@ fn taker_swap_started_row(timestamp: u64, swap_data: TakerSwapData) -> Result<Ro
     );
     let fee_to_send_taker_fee = swap_data
         .fee_to_send_taker_fee
-        .map(|value| format_saved_trade_fee(value).unwrap_or("error".to_string()));
+        .map(|value| format_saved_trade_fee(value).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "fee_to_send_taker_fee", fee_to_send_taker_fee, ZERO_INDENT);
     let taker_payment_trade_fee = swap_data
         .taker_payment_trade_fee
-        .map(|value| format_saved_trade_fee(value).unwrap_or("error".to_string()));
+        .map(|value| format_saved_trade_fee(value).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "taker_payment_trade_fee", taker_payment_trade_fee, ZERO_INDENT);
     let maker_spend_trade_fee = swap_data
         .maker_payment_spend_trade_fee
-        .map(|value| format_saved_trade_fee(value).unwrap_or("error".to_string()));
+        .map(|value| format_saved_trade_fee(value).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(
         writer,
         "maker_payment_spend_trade_fee",
@@ -482,21 +482,21 @@ fn write_maker_swap(writer: &mut dyn Write, maker_swap: MakerSavedSwap) -> Resul
 
     let taker_amount = maker_swap
         .taker_amount
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "taker_amount", taker_amount, ZERO_INDENT);
     let taker_coin_usd_price = maker_swap
         .taker_coin_usd_price
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "taker_coin_usd_price", taker_coin_usd_price, ZERO_INDENT);
 
     write_field_option!(writer, "maker_coin", maker_swap.maker_coin, ZERO_INDENT);
     let maker_amount = maker_swap
         .maker_amount
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "maker_amount", maker_amount, ZERO_INDENT);
     let maker_coin_usd_price = maker_swap
         .maker_coin_usd_price
-        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or("error".to_string()));
+        .map(|value| format_ratio(&value, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string()));
     write_field_option!(writer, "maker_coin_usd_price", maker_coin_usd_price, ZERO_INDENT);
     write_maker_swap_events(writer, maker_swap.events)
 }

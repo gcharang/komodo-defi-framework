@@ -64,7 +64,7 @@ use mm2_err_handle::prelude::*;
 use mm2_metrics::MetricsWeak;
 use mm2_number::{bigdecimal::{BigDecimal, ParseBigDecimalError, Zero},
                  MmNumber};
-use mm2_rpc::data::legacy::{EnabledCoin, GetEnabledResponse, Mm2RpcResult};
+use mm2_rpc::data::legacy::{EnabledCoin, GetEnabledResponse, Mm2RpcResult, SetRequiredNotaRequest};
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -221,6 +221,7 @@ pub mod hd_pubkey;
 
 pub mod hd_wallet;
 use hd_wallet::{HDAccountAddressId, HDAddress};
+use mm2_rpc::data::legacy::SetRequiredConfRequest;
 
 pub mod hd_wallet_storage;
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
@@ -3483,14 +3484,8 @@ pub async fn get_enabled_coins(ctx: MmArc) -> Result<Response<Vec<u8>>, String> 
     Ok(try_s!(Response::builder().body(res)))
 }
 
-#[derive(Deserialize)]
-pub struct ConfirmationsReq {
-    coin: String,
-    confirmations: u64,
-}
-
 pub async fn set_required_confirmations(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let req: ConfirmationsReq = try_s!(json::from_value(req));
+    let req: SetRequiredConfRequest = try_s!(json::from_value(req));
     let coin = match lp_coinfind(&ctx, &req.coin).await {
         Ok(Some(t)) => t,
         Ok(None) => return ERR!("No such coin {}", req.coin),
@@ -3506,14 +3501,8 @@ pub async fn set_required_confirmations(ctx: MmArc, req: Json) -> Result<Respons
     Ok(try_s!(Response::builder().body(res)))
 }
 
-#[derive(Deserialize)]
-pub struct RequiresNotaReq {
-    coin: String,
-    requires_notarization: bool,
-}
-
 pub async fn set_requires_notarization(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let req: RequiresNotaReq = try_s!(json::from_value(req));
+    let req: SetRequiredNotaRequest = try_s!(json::from_value(req));
     let coin = match lp_coinfind(&ctx, &req.coin).await {
         Ok(Some(t)) => t,
         Ok(None) => return ERR!("No such coin {}", req.coin),

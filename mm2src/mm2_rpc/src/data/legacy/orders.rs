@@ -216,12 +216,6 @@ impl OrderConfirmationsSettings {
     }
 }
 
-#[derive(Serialize, Deserialize, Display)]
-#[serde(rename_all = "lowercase")]
-pub enum Status {
-    Success,
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", rename = "cancel_order")]
 pub struct CancelOrderRequest {

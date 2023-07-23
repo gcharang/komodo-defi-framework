@@ -11,7 +11,9 @@ mod cmd_set_price;
 mod cmd_trade_preimage;
 mod cmd_update_maker_order;
 mod commands_coin;
+mod commands_pubkeys;
 mod commands_swap;
+mod commands_wallet;
 
 use anyhow::Result;
 use chrono::{DateTime, TimeZone, Utc};
@@ -33,8 +35,10 @@ pub(crate) mod prelude {
     pub(crate) use super::cmd_set_price::SetPriceArgs;
     pub(crate) use super::cmd_trade_preimage::TradePreimageArgs;
     pub(crate) use super::cmd_update_maker_order::UpdateMakerOrderArgs;
-    pub(crate) use super::commands_coin::DisableCoinArgs;
+    pub(crate) use super::commands_coin::{DisableCoinArgs, SetRequiredConfArgs, SetRequiredNotaArgs};
+    pub(crate) use super::commands_pubkeys::{BanPubkeyArgs, UnbanPubkeysArgs};
     pub(crate) use super::commands_swap::SwapSubcommand;
+    pub(crate) use super::commands_wallet::SendRawTransactionArgs;
 }
 
 fn parse_mm_number(value: &str) -> Result<MmNumber, ParseBigDecimalError> {

@@ -6,15 +6,16 @@
 #[path = "response_handler/network.rs"] mod network;
 #[path = "response_handler/order_status.rs"] mod order_status;
 #[path = "response_handler/orderbook.rs"] mod orderbook;
-#[path = "response_handler/swaps.rs"] mod swaps;
-#[path = "response_handler/trading.rs"] mod trading;
-
 #[path = "response_handler/orderbook_depth.rs"]
 mod orderbook_depth;
 #[path = "response_handler/orders_history.rs"]
 mod orders_history;
 #[path = "response_handler/smart_fraction_fmt.rs"]
 mod smart_fraction_fmt;
+#[path = "response_handler/swaps.rs"] mod swaps;
+#[path = "response_handler/trading.rs"] mod trading;
+#[path = "response_handler/utility.rs"] mod utility;
+#[path = "response_handler/wallet.rs"] mod wallet;
 
 pub(crate) use orderbook::OrderbookSettings;
 pub(crate) use orders_history::OrdersHistorySettings;
@@ -22,6 +23,7 @@ pub(crate) use smart_fraction_fmt::SmartFractPrecision;
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
+use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::Write;
@@ -36,11 +38,14 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
+use crate::adex_proc::response_handler::formatters::ZERO_INDENT;
 use crate::logging::error_anyhow;
-use crate::rpc_data::{ActiveSwapsResponse, DisableCoinResponse, GetGossipMeshResponse, GetGossipPeerTopicsResponse,
-                      GetGossipTopicPeersResponse, GetMyPeerIdResponse, GetPeersInfoResponse, GetRelayMeshResponse,
-                      MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
-                      TradePreimageResponse};
+use crate::rpc_data::{ActiveSwapsResponse, CoinsToKickstartResponse, DisableCoinResponse, GetGossipMeshResponse,
+                      GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse, GetMyPeerIdResponse,
+                      GetPeersInfoResponse, GetRelayMeshResponse, ListBannedPubkeysResponse, MaxTakerVolResponse,
+                      MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse, SetRequiredConfResponse,
+                      SetRequiredNotaResponse, TradePreimageResponse, UnbanPubkeysResponse};
+use crate::writeln_field;
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -85,6 +90,13 @@ pub(crate) trait ResponseHandler {
     fn on_gossip_topic_peers(&self, response: Mm2RpcResult<GetGossipTopicPeersResponse>) -> Result<()>;
     fn on_my_peer_id(&self, response: Mm2RpcResult<GetMyPeerIdResponse>) -> Result<()>;
     fn on_peers_info(&self, response: Mm2RpcResult<GetPeersInfoResponse>) -> Result<()>;
+    fn on_set_confirmations(&self, resonse: Mm2RpcResult<SetRequiredConfResponse>) -> Result<()>;
+    fn on_set_notarization(&self, response: Mm2RpcResult<SetRequiredNotaResponse>) -> Result<()>;
+    fn on_coins_to_kickstart(&self, response: Mm2RpcResult<CoinsToKickstartResponse>) -> Result<()>;
+    fn on_ban_pubkey(&self, response: Mm2RpcResult<Status>) -> Result<()>;
+    fn on_list_banned_pubkeys(&self, response: Mm2RpcResult<ListBannedPubkeysResponse>) -> Result<()>;
+    fn on_unban_pubkeys(&self, response: Mm2RpcResult<UnbanPubkeysResponse>) -> Result<()>;
+    fn on_send_raw_transaction(&self, response: BytesJson) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -301,6 +313,48 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn on_peers_info(&self, response: Mm2RpcResult<GetPeersInfoResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         network::on_peers_info(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_set_confirmations(&self, response: Mm2RpcResult<SetRequiredConfResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_set_confirmations(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_set_notarization(&self, response: Mm2RpcResult<SetRequiredNotaResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_set_notarization(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_coins_to_kickstart(&self, response: Mm2RpcResult<CoinsToKickstartResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_coins_to_kickstart(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_ban_pubkey(&self, response: Mm2RpcResult<Status>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        writeln_field!(writer, "Status", response.result, ZERO_INDENT);
+        Ok(())
+    }
+
+    fn on_list_banned_pubkeys(&self, response: Mm2RpcResult<ListBannedPubkeysResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        utility::on_list_banned_pubkeys(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_unban_pubkeys(&self, response: Mm2RpcResult<UnbanPubkeysResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        utility::on_unban_pubkeys(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_send_raw_transaction(&self, response: BytesJson) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_send_raw_transaction(writer.deref_mut(), response);
         Ok(())
     }
 }
