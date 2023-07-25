@@ -12,14 +12,16 @@ use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, 
                             OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, SellRequest,
                             SetPriceReq, SetRequiredConfRequest, SetRequiredNotaRequest, Status, StopRequest,
                             UpdateMakerOrderRequest, VersionRequest};
-use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
+use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, GetPublicKeyHashResponse,
+                              GetPublicKeyResponse, GetRawTransactionRequest, GetRawTransactionResponse,
+                              MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
 use uuid::Uuid;
 
 use super::command::{Command, V2Method};
 use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
-use crate::adex_config::AdexConfig;
+use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
                       DisableCoinRequest, DisableCoinResponse, GetEnabledRequest, GetGossipMeshRequest,
                       GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
@@ -34,7 +36,7 @@ use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartR
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
-pub(crate) struct AdexProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, C: AdexConfig + ?Sized> {
+pub(crate) struct KomodefiProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, C: KomodefiConfig + ?Sized> {
     pub(crate) transport: Option<&'trp T>,
     pub(crate) response_handler: &'hand H,
     pub(crate) config: &'cfg C,
@@ -77,7 +79,7 @@ macro_rules! request_v2 {
     }};
 }
 
-impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_, '_, T, P, C> {
+impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc<'_, '_, '_, T, P, C> {
     pub(crate) async fn enable(&self, coin: &str) -> Result<()> {
         info!("Enabling coin: {coin}");
         let activation_scheme = get_activation_scheme()?;
@@ -612,7 +614,7 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
     pub(crate) async fn send_raw_transaction(
         &self,
         request: SendRawTransactionRequest,
-        raw_output: bool,
+        bare_output: bool,
     ) -> Result<()> {
         info!("Sending raw transaction");
         let send_raw_command = Command::builder()
@@ -624,11 +626,11 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             SendRawTransactionResponse,
             self,
             on_send_raw_transaction,
-            raw_output
+            bare_output
         )
     }
 
-    pub(crate) async fn withdraw(&self, request: WithdrawRequest, raw_output: bool) -> Result<()> {
+    pub(crate) async fn withdraw(&self, request: WithdrawRequest, bare_output: bool) -> Result<()> {
         info!("Getting withdraw tx_hex");
         debug!("Getting withdraw request: {:?}", request);
 
@@ -638,6 +640,44 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
             .flatten_data(request)
             .build_v2()?;
 
-        request_v2!(withdraw_command, WithdrawResponse, self, on_withdraw, raw_output)
+        request_v2!(withdraw_command, WithdrawResponse, self, on_withdraw, bare_output)
+    }
+
+    pub(crate) async fn get_public_key(&self) -> Result<()> {
+        info!("Getting public key");
+        let pubkey_command = Command::<()>::builder()
+            .userpass(self.get_rpc_password()?)
+            .v2_method(V2Method::GetPublicKey)
+            .build_v2()?;
+        request_v2!(pubkey_command, GetPublicKeyResponse, self, on_public_key)
+    }
+
+    pub(crate) async fn get_public_key_hash(&self) -> Result<()> {
+        info!("Getting public key hash");
+        let pubkey_hash_command = Command::<()>::builder()
+            .userpass(self.get_rpc_password()?)
+            .v2_method(V2Method::GetPublicKeyHash)
+            .build_v2()?;
+        request_v2!(pubkey_hash_command, GetPublicKeyHashResponse, self, on_public_key_hash)
+    }
+
+    pub(crate) async fn get_raw_transaction(&self, request: GetRawTransactionRequest, bare_output: bool) -> Result<()> {
+        info!(
+            "Getting raw transaction of coin: {}, hash: {}",
+            request.coin, request.tx_hash
+        );
+        let get_raw_tx_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .v2_method(V2Method::GetRawTransaction)
+            .flatten_data(request)
+            .build_v2()?;
+
+        request_v2!(
+            get_raw_tx_command,
+            GetRawTransactionResponse,
+            self,
+            on_raw_transaction,
+            bare_output
+        )
     }
 }

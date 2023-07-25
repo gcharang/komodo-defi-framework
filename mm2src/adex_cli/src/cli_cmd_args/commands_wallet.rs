@@ -8,6 +8,7 @@ use std::{f64, u64};
 
 use common::log::error;
 use mm2_number::BigDecimal;
+use mm2_rpc::data::version2::GetRawTransactionRequest;
 
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
@@ -28,10 +29,10 @@ pub(crate) struct SendRawTransactionArgs {
         long,
         short,
         default_value_t = false,
-        visible_alias = "raw",
+        visible_alias = "bare",
         help = "Whether to output only tx_hash"
     )]
-    pub(crate) raw_output: bool,
+    pub(crate) bare_output: bool,
 }
 
 fn parse_bytes(value: &str) -> Result<BytesJson, FromHexError> {
@@ -69,10 +70,10 @@ pub(crate) struct WithdrawArgs {
         long,
         short,
         default_value_t = false,
-        visible_alias = "raw",
+        visible_alias = "bare",
         help = "Whether to output only tx_hex"
     )]
-    pub(crate) raw_output: bool,
+    pub(crate) bare_output: bool,
 }
 
 #[derive(Args)]
@@ -274,5 +275,36 @@ impl TryFrom<&mut WithdrawFromArgs> for WithdrawFrom {
             chain,
             address_id
         )
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct GetRawTransactionArgs {
+    #[arg(long, short, help = "Coin the user desires to request for the transaction")]
+    pub(crate) coin: String,
+    #[arg(
+        long,
+        value_parser=parse_bytes,
+        visible_alias = "hash",
+        short = 'h',
+        help = "Hash of the transaction"
+    )]
+    pub(crate) tx_hash: BytesJson,
+    #[arg(
+        long,
+        short,
+        default_value_t = false,
+        visible_alias = "bare",
+        help = "Whether to output only tx_hex"
+    )]
+    pub(crate) bare_output: bool,
+}
+
+impl From<&mut GetRawTransactionArgs> for GetRawTransactionRequest {
+    fn from(value: &mut GetRawTransactionArgs) -> Self {
+        GetRawTransactionRequest {
+            coin: take(&mut value.coin),
+            tx_hash: hex::encode(value.tx_hash.as_slice()),
+        }
     }
 }

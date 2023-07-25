@@ -24,6 +24,9 @@ pub(super) enum V2Method {
     BestOrders,
     TradePreimage,
     Withdraw,
+    GetPublicKey,
+    GetPublicKeyHash,
+    GetRawTransaction,
 }
 
 impl<T> Command<T>
@@ -85,10 +88,7 @@ where
                 .method
                 .take()
                 .ok_or_else(|| error_anyhow!("Failed to build v2 request, method is not set"))?,
-            params: self
-                .flatten_data
-                .take()
-                .ok_or_else(|| error_anyhow!("Failed to build v2 request, flatten_data is not set"))?,
+            params: self.flatten_data.take(),
             id: None,
         };
 

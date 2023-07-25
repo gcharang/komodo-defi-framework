@@ -7,14 +7,14 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::adex_proc::SmartFractPrecision;
 use crate::helpers::rewrite_json_file;
+use crate::komodefi_proc::SmartFractPrecision;
 use crate::logging::{error_anyhow, warn_bail};
 
 const PROJECT_QUALIFIER: &str = "com";
 const PROJECT_COMPANY: &str = "komodoplatform";
-const PROJECT_APP: &str = "adex-cli";
-const ADEX_CFG: &str = "adex_cfg.json";
+const PROJECT_APP: &str = "komodefi-cli";
+const KOMODEFI_CFG: &str = "komodefi_cfg.json";
 
 const PRICE_PRECISION_MIN: usize = 8;
 const PRICE_PRECISION_MAX: usize = 8;
@@ -24,32 +24,32 @@ const VOLUME_PRECISION: SmartFractPrecision = (VOLUME_PRECISION_MIN, VOLUME_PREC
 const PRICE_PRECISION: SmartFractPrecision = (PRICE_PRECISION_MIN, PRICE_PRECISION_MAX);
 
 pub(super) fn get_config() {
-    let Ok(adex_cfg) = AdexConfigImpl::from_config_path() else { return; };
-    info!("{}", adex_cfg)
+    let Ok(komodefi_cfg) = KomodefiConfigImpl::from_config_path() else { return; };
+    info!("{}", komodefi_cfg)
 }
 
 pub(super) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Result<()> {
     assert!(set_password || rpc_api_uri.is_some());
-    let mut adex_cfg = AdexConfigImpl::from_config_path().unwrap_or_else(|_| AdexConfigImpl::default());
+    let mut komodefi_cfg = KomodefiConfigImpl::from_config_path().unwrap_or_else(|_| KomodefiConfigImpl::default());
 
     if set_password {
         let rpc_password = Password::new("Enter RPC API password:")
             .prompt()
             .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
-        adex_cfg.set_rpc_password(rpc_password);
+        komodefi_cfg.set_rpc_password(rpc_password);
     }
 
     if let Some(rpc_api_uri) = rpc_api_uri {
-        adex_cfg.set_rpc_uri(rpc_api_uri);
+        komodefi_cfg.set_rpc_uri(rpc_api_uri);
     }
 
-    adex_cfg.write_to_config_path()?;
+    komodefi_cfg.write_to_config_path()?;
     info!("Configuration has been set");
 
     Ok(())
 }
 
-pub(super) trait AdexConfig {
+pub(super) trait KomodefiConfig {
     fn rpc_password(&self) -> Option<String>;
     fn rpc_uri(&self) -> Option<String>;
     fn orderbook_price_precision(&self) -> &SmartFractPrecision;
@@ -57,24 +57,24 @@ pub(super) trait AdexConfig {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(super) struct AdexConfigImpl {
+pub(super) struct KomodefiConfigImpl {
     #[serde(skip_serializing_if = "Option::is_none")]
     rpc_password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rpc_uri: Option<String>,
 }
 
-impl AdexConfig for AdexConfigImpl {
+impl KomodefiConfig for KomodefiConfigImpl {
     fn rpc_password(&self) -> Option<String> { self.rpc_password.clone() }
     fn rpc_uri(&self) -> Option<String> { self.rpc_uri.clone() }
     fn orderbook_price_precision(&self) -> &SmartFractPrecision { &PRICE_PRECISION }
     fn orderbook_volume_precision(&self) -> &SmartFractPrecision { &VOLUME_PRECISION }
 }
 
-impl Display for AdexConfigImpl {
+impl Display for KomodefiConfigImpl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.is_set() {
-            return writeln!(f, "adex configuration is not set");
+            return writeln!(f, "komodefi configuration is not set");
         }
         writeln!(
             f,
@@ -86,7 +86,7 @@ impl Display for AdexConfigImpl {
     }
 }
 
-impl AdexConfigImpl {
+impl KomodefiConfigImpl {
     #[cfg(test)]
     pub(super) fn new(rpc_password: &str, rpc_uri: &str) -> Self {
         Self {
@@ -96,8 +96,8 @@ impl AdexConfigImpl {
     }
 
     #[cfg(not(test))]
-    pub(super) fn read_config() -> Result<AdexConfigImpl> {
-        let config = AdexConfigImpl::from_config_path()?;
+    pub(super) fn read_config() -> Result<KomodefiConfigImpl> {
+        let config = KomodefiConfigImpl::from_config_path()?;
         if config.rpc_password.is_none() {
             warn!("Configuration is not complete, no rpc_password in there");
         }
@@ -123,14 +123,14 @@ impl AdexConfigImpl {
             info!("KOMODO_CLI_CFG: {}", config_path);
             PathBuf::from(config_path)
         } else {
-            let mut config_path = AdexConfigImpl::get_config_dir()?;
-            config_path.push(ADEX_CFG);
+            let mut config_path = KomodefiConfigImpl::get_config_dir()?;
+            config_path.push(KOMODEFI_CFG);
             config_path
         };
         Ok(config_path)
     }
 
-    fn from_config_path() -> Result<AdexConfigImpl> {
+    fn from_config_path() -> Result<KomodefiConfigImpl> {
         let config_path = Self::get_config_path()?;
 
         if !config_path.exists() {
@@ -144,20 +144,21 @@ impl AdexConfigImpl {
         self.write_to(&config_path)
     }
 
-    fn read_from(cfg_path: &Path) -> Result<AdexConfigImpl> {
-        let adex_path_str = cfg_path.to_str().unwrap_or("Undefined");
-        let adex_cfg_file = fs::File::open(cfg_path)
-            .map_err(|error| error_anyhow!("Failed to open: {adex_path_str}, error: {error}"))?;
+    fn read_from(cfg_path: &Path) -> Result<KomodefiConfigImpl> {
+        let komodefi_path_str = cfg_path.to_str().unwrap_or("Undefined");
+        let komodefi_cfg_file = fs::File::open(cfg_path)
+            .map_err(|error| error_anyhow!("Failed to open: {komodefi_path_str}, error: {error}"))?;
 
-        serde_json::from_reader(adex_cfg_file)
-            .map_err(|error| error_anyhow!("Failed to read adex_cfg to read from: {adex_path_str}, error: {error}"))
+        serde_json::from_reader(komodefi_cfg_file).map_err(|error| {
+            error_anyhow!("Failed to read komodefi_cfg to read from: {komodefi_path_str}, error: {error}")
+        })
     }
 
     fn write_to(&self, cfg_path: &Path) -> Result<()> {
-        let adex_path_str = cfg_path
+        let komodefi_path_str = cfg_path
             .to_str()
             .ok_or_else(|| error_anyhow!("Failed to get cfg_path as str"))?;
-        rewrite_json_file(self, adex_path_str)
+        rewrite_json_file(self, komodefi_path_str)
     }
 
     fn set_rpc_password(&mut self, rpc_password: String) { self.rpc_password.replace(rpc_password); }

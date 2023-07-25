@@ -9,7 +9,7 @@ use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookResponse};
 
 use super::formatters::{format_confirmation_settings, format_ratio};
 use super::smart_fraction_fmt::SmartFractPrecision;
-use crate::adex_config::AdexConfig;
+use crate::komodefi_config::KomodefiConfig;
 
 pub(crate) struct OrderbookSettings {
     pub(crate) uuids: bool,
@@ -23,7 +23,7 @@ pub(crate) struct OrderbookSettings {
     pub(crate) bids_limit: Option<usize>,
 }
 
-pub(super) fn on_orderbook_response<Cfg: AdexConfig + 'static>(
+pub(super) fn on_orderbook_response<Cfg: KomodefiConfig + 'static>(
     writer: &mut dyn Write,
     response: OrderbookResponse,
     config: &Cfg,

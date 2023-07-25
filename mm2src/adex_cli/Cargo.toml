@@ -1,5 +1,5 @@
 [package]
-name = "adex-cli"
+name = "komodefi-cli"
 version = "0.1.0"
 edition = "2021"
 authors = ["Rozhkov Dmitrii <rozhkov@komodoplatform.com>"]

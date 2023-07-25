@@ -57,7 +57,7 @@ fn test_construct_smart_fraction_fmt() {
 
 #[test]
 fn test_smart_fraction_fmt() {
-    use crate::adex_proc::response_handler::formatters::COMMON_PRECISION;
+    use crate::komodefi_proc::response_handler::formatters::COMMON_PRECISION;
 
     let num = SmartFractionFmt::new(&COMMON_PRECISION, 0.0).unwrap();
     assert_eq!(num.to_string(), "0");

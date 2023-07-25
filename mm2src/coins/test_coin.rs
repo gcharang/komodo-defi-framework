@@ -1,7 +1,7 @@
 #![allow(clippy::all)]
 
-use super::{CoinBalance, HistorySyncState, MarketCoinOps, MmCoin, RawTransactionFut, RawTransactionRequest, SwapOps,
-            TradeFee, TransactionEnum, TransactionFut};
+use super::{CoinBalance, HistorySyncState, MarketCoinOps, MmCoin, RawTransactionFut, SwapOps, TradeFee,
+            TransactionEnum, TransactionFut};
 use crate::{coin_errors::MyAddressError, BalanceFut, CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinFutSpawner,
             ConfirmPaymentInput, FeeApproxStage, FoundSwapTxSpend, MakerSwapTakerCoin, MmCoinEnum,
             NegotiateSwapContractAddrErr, PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr,
@@ -19,6 +19,7 @@ use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, MmNumber};
+use mm2_rpc::data::version2::wallet::GetRawTransactionRequest;
 use mocktopus::macros::*;
 use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
@@ -305,7 +306,7 @@ impl MmCoin for TestCoin {
 
     fn spawner(&self) -> CoinFutSpawner { unimplemented!() }
 
-    fn get_raw_transaction(&self, _req: RawTransactionRequest) -> RawTransactionFut { unimplemented!() }
+    fn get_raw_transaction(&self, _req: GetRawTransactionRequest) -> RawTransactionFut { unimplemented!() }
 
     fn get_tx_hex_by_hash(&self, tx_hash: Vec<u8>) -> RawTransactionFut { unimplemented!() }
 

@@ -197,7 +197,7 @@ fn write_taker_swap_events(writer: &mut dyn Write, taker_swap_events: Vec<TakerS
         term_table.add_row(row);
     }
     writeln_field(writer, "events", "", ZERO_INDENT);
-    writeln_safe_io!(writer, "{}", term_table.render().replace('\0', ""));
+    write_safe_io!(writer, "{}", term_table.render().replace('\0', ""));
     Ok(())
 }
 
@@ -577,7 +577,7 @@ fn write_maker_swap_events(writer: &mut dyn Write, maker_swap_event: Vec<MakerSa
         term_table.add_row(row);
     }
     writeln_field(writer, "events", "", ZERO_INDENT);
-    writeln_safe_io!(writer, "{}", term_table.render());
+    write_safe_io!(writer, "{}", term_table.render());
     Ok(())
 }
 

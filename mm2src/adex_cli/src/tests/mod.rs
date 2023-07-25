@@ -4,9 +4,9 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::activation_scheme_db::{get_activation_scheme, get_activation_scheme_path, init_activation_scheme};
-use crate::adex_config::AdexConfigImpl;
-use crate::adex_proc::ResponseHandlerImpl;
 use crate::cli::Cli;
+use crate::komodefi_config::KomodefiConfigImpl;
+use crate::komodefi_proc::ResponseHandlerImpl;
 use crate::rpc_data::ActivationRequest;
 
 const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 10;
@@ -16,7 +16,7 @@ const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;
 async fn test_get_version() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/version.http");
-    let command = &["adex-cli", "version"];
+    let command = &["komodefi-cli", "version"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7784).await;
     assert_eq!(VERSION_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -25,7 +25,7 @@ async fn test_get_version() {
 async fn test_get_orderbook() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook.http");
-    let command = &["adex-cli", "orderbook", "RICK", "MORTY"];
+    let command = &["komodefi-cli", "orderbook", "RICK", "MORTY"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7785).await;
     assert_eq!(RICK_AND_MORTY_ORDERBOOK, String::from_utf8(buffer).unwrap());
 }
@@ -34,7 +34,7 @@ async fn test_get_orderbook() {
 async fn test_get_orderbook_with_uuids() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook.http");
-    let command = &["adex-cli", "orderbook", "RICK", "MORTY", "--uuids"];
+    let command = &["komodefi-cli", "orderbook", "RICK", "MORTY", "--uuids"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7786).await;
     assert_eq!(RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS, String::from_utf8(buffer).unwrap());
 }
@@ -43,7 +43,7 @@ async fn test_get_orderbook_with_uuids() {
 async fn test_get_orderbook_with_publics() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook.http");
-    let command = &["adex-cli", "orderbook", "RICK", "MORTY", "--publics"];
+    let command = &["komodefi-cli", "orderbook", "RICK", "MORTY", "--publics"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7787).await;
     assert_eq!(ORDERBOOK_WITH_PUBLICS, String::from_utf8(buffer).unwrap());
 }
@@ -52,7 +52,7 @@ async fn test_get_orderbook_with_publics() {
 async fn test_get_enabled() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/get_enabled.http");
-    let command = &["adex-cli", "get-enabled"];
+    let command = &["komodefi-cli", "get-enabled"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7788).await;
     assert_eq!(ENABLED_COINS, String::from_utf8(buffer).unwrap());
 }
@@ -61,7 +61,7 @@ async fn test_get_enabled() {
 async fn test_get_balance() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/balance.http");
-    let command = &["adex-cli", "balance", "RICK"];
+    let command = &["komodefi-cli", "balance", "RICK"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7789).await;
     assert_eq!(RICK_BALANCE, String::from_utf8(buffer).unwrap());
 }
@@ -71,7 +71,7 @@ async fn test_enable() {
     test_activation_scheme().await;
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/enable.http");
-    let command = &["adex-cli", "enable", "ETH"];
+    let command = &["komodefi-cli", "enable", "ETH"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7790).await;
     assert_eq!(ENABLE_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -91,7 +91,7 @@ async fn test_activation_scheme() {
 async fn test_buy_morty_for_rick() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/buy.http");
-    let command = &["adex-cli", "buy", "MORTY", "RICK", "0.01", "0.5"];
+    let command = &["komodefi-cli", "buy", "MORTY", "RICK", "0.01", "0.5"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7791).await;
     assert_eq!(
         "4685e133-dfb3-4b31-8d4c-0ffa79933c8e\n",
@@ -103,7 +103,7 @@ async fn test_buy_morty_for_rick() {
 async fn test_order_status() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/taker_status.http");
-    let command = &["adex-cli", "status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
+    let command = &["komodefi-cli", "status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7792).await;
     assert_eq!(TAKER_STATUS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -112,7 +112,7 @@ async fn test_order_status() {
 async fn test_my_orders() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/my_orders.http");
-    let command = &["adex-cli", "my-orders"];
+    let command = &["komodefi-cli", "my-orders"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7793).await;
     assert_eq!(MY_ORDERS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -121,7 +121,7 @@ async fn test_my_orders() {
 async fn test_best_orders() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/best_orders.http");
-    let command = &["adex-cli", "best", "--number", "2", "RICK", "buy"];
+    let command = &["komodefi-cli", "best", "--number", "2", "RICK", "buy"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7794).await;
     assert_eq!(BEST_ORDERS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -130,7 +130,7 @@ async fn test_best_orders() {
 async fn test_orderbook_depth() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook_depth.http");
-    let command = &["adex-cli", "orderbook-depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
+    let command = &["komodefi-cli", "orderbook-depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7795).await;
     assert_eq!(ORDERBOOK_DEPTH_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -139,7 +139,7 @@ async fn test_orderbook_depth() {
 async fn test_history_common() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/history-common.http");
-    let command = &["adex-cli", "history", "--all"];
+    let command = &["komodefi-cli", "history", "--all"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7796).await;
     assert_eq!(HISTORY_COMMON_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -148,7 +148,7 @@ async fn test_history_common() {
 async fn test_history_takers_detailed() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/history-takers-detailed.http");
-    let command = &["adex-cli", "history", "--takers"];
+    let command = &["komodefi-cli", "history", "--takers"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7797).await;
     assert_eq!(HISTORY_TAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -157,7 +157,7 @@ async fn test_history_takers_detailed() {
 async fn test_history_makers_detailed() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/history-makers-detailed.http");
-    let command = &["adex-cli", "history", "--makers"];
+    let command = &["komodefi-cli", "history", "--makers"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7798).await;
     assert_eq!(HISTORY_MAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -165,8 +165,8 @@ async fn test_history_makers_detailed() {
 #[tokio::test]
 async fn test_active_swaps() {
     let mut buffer: Vec<u8> = vec![];
-    let mock_resp = include_bytes!("http_mock_data/active_swaps.bin");
-    let command = &["adex-cli", "swaps", "active"];
+    let mock_resp = include_bytes!("http_mock_data/active_swaps.http");
+    let command = &["komodefi-cli", "swaps", "active"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7799).await;
     assert_eq!(ACTIVE_SWAPS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -193,7 +193,7 @@ async fn start_server_and_do_command(args: &[&str], buf: &mut dyn Write, mock_re
     tokio::time::sleep(Duration::from_millis(FAKE_SERVER_WARMUP_TIMEOUT_MS)).await;
 
     let response_handler = ResponseHandlerImpl { writer: buf.into() };
-    let config = AdexConfigImpl::new("dummy", format!("http://127.0.0.1:{port}").as_str());
+    let config = KomodefiConfigImpl::new("dummy", format!("http://127.0.0.1:{port}").as_str());
     Cli::execute(args.iter().map(|arg| arg.to_string()), &config, &response_handler)
         .await
         .unwrap();
@@ -473,5 +473,104 @@ Maker orders history detailed:
 ";
 
 const ACTIVE_SWAPS_OUTPUT: &str = "
-adf
+TakerSwap: 6b007706-d6e1-4565-8655-9eeb128d00e2
+my_order_uuid: 6b007706-d6e1-4565-8655-9eeb128d00e2
+gui: adex-cli
+mm_version: 1.0.6-beta_dabdaf33b
+taker_coin: DOC
+taker_amount: 1.00
+maker_coin: MARTY
+maker_amount: 1.00
+events: 
+│ Started                           │ uuid: 6b007706-d6e1-4565-8655-9eeb128d00e2                                                                             │
+│ 23-07-25 12:20:07                 │ started_at: 70-01-20 13:31:27                                                                                          │
+│                                   │ taker_coin: DOC                                                                                                        │
+│                                   │ maker_coin: MARTY                                                                                                      │
+│                                   │ maker: 2d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846                                                │
+│                                   │ my_persistent_pub: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                                  │
+│                                   │ lock_duration: 7800                                                                                                    │
+│                                   │ maker_amount: 1.00                                                                                                     │
+│                                   │ taker_amount: 1.00                                                                                                     │
+│                                   │ maker_payment_confirmations: 1                                                                                         │
+│                                   │ maker_payment_requires_nota: false                                                                                     │
+│                                   │ taker_payment_confirmations: 1                                                                                         │
+│                                   │ taker_payment_requires_nota: false                                                                                     │
+│                                   │ tacker_payment_lock: 70-01-20 13:31:35                                                                                 │
+│                                   │ maker_payment_wait: 70-01-20 13:31:30                                                                                  │
+│                                   │ maker_coin_start_block: 147860                                                                                         │
+│                                   │ taker_coin_start_block: 133421                                                                                         │
+│                                   │ fee_to_send_taker_fee: coin: DOC, amount: 0.00001, paid_from_trading_vol: false                                        │
+│                                   │ taker_payment_trade_fee: coin: DOC, amount: 0.00001, paid_from_trading_vol: false                                      │
+│                                   │ maker_payment_spend_trade_fee: coin: MARTY, amount: 0.00001, paid_from_trading_vol: true                               │
+│                                   │ maker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │
+│                                   │ taker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │
+│                                   │                                                                                                                        │
+│ Negotiated                        │ maker_payment_locktime: 70-01-20 13:31:43                                                                              │
+│ 23-07-25 12:20:23                 │ maker_pubkey: 000000000000000000000000000000000000000000000000000000000000000000                                       │
+│                                   │ secret_hash: a5cfc9787066562ba03c7538d024a88fd1a0fe12                                                                  │
+│                                   │ maker_coin_htlc_pubkey: 022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846                             │
+│                                   │ taker_coin_htlc_pubkey: 022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846                             │
+│                                   │                                                                                                                        │
+│ TakerFeeSent                      │ tx_hex: 0400008085202f890108742b73cfadf56dbc93d3fb8b33b54e5301869e2c950b200e67354b56e2d2ef010000006a473044022073605008 │
+│ 23-07-25 12:20:23                 │ 9328c8ec984036b4a248ba3a130d58e9601da3358ffef3482d40927002204a8aa7b83560ee22792457465432bf4f098b38f41d0a483f68920eb63b │
+│                                   │ 487d02012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff02bcf60100000000001976a914ca1e0474 │
+│                                   │ 5e8ca0c60d8c5881531d51bec470743f88ace0adaf08635600001976a9149934ebeaa56cb597c936a9ed8202d8d97a0a700388ac07bebf64000000 │
+│                                   │ 000000000000000000000000                                                                                               │
+│                                   │ tx_hash: c71f3793e976209674e2b00efb236c0fa8f0b1b552cb6cfe9068c6b731e570fd                                              │
+│                                   │                                                                                                                        │
+│ TakerPaymentInstructionsReceived  │ none                                                                                                                   │
+│ 23-07-25 12:20:24                 │                                                                                                                        │
+│                                   │                                                                                                                        │
+│ MakerPaymentReceived              │ tx_hex: 0400008085202f890754448b50295dedd36f8de60aeaeeb56a5efa9d1a4464185e329c3aae9fd17673020000006a4730440220651b3753 │
+│ 23-07-25 12:20:24                 │ 986a47026f36b082d870c3b2f7651684c0ed26637b64bfbc8722059302200ee7478e290327827daff8a2daf836e9446362169a4a8a4958f538c07f │
+│                                   │ 2093180121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846ffffffffe69a594c67460f781debbca0cfc731c29d │
+│                                   │ ddba613d65cf630acb00db6c93c9c0000000006b483045022100ef75d49925b7465bec5bc367f87fc7726d33aa17f472cd1ab6c13181d686139402 │
+│                                   │ 20447c529336a478f4b9d89cc1453ca1cc22f34c13c3b69f7440fcc7fe889493880121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09 │
+│                                   │ e359a3d4c850834846ffffffff990db7e9fa1f052aba359969b64b892cb76ff881ccd38cb75c09129e9065dbb3000000006a473044022000e7b9f1 │
+│                                   │ 3c99aa71ce1b8559c2a63cec9b808767a744196e9ed0bde0b5e481a40220053e683e1efc9191207f8feb5e42646301cd2b1f2a8f9e7616e29914eb │
+│                                   │ 9937c10121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846ffffffff41b284103365315e6fb79a7aa111295a03 │
+│                                   │ 9ccc96aa90d888915f9f0eabec549b000000006b483045022100b2b3cdc669c916e88615b5d2dc3c99186fc1369879bf08b681097986b6842b6302 │
+│                                   │ 2014a5c0b86d9732d4f202eb5a6d8590a37b6de013e17746c5a7be76b7c932f7390121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09 │
+│                                   │ e359a3d4c850834846ffffffffdd878ff57eb64187cb74390a4b959c4012d11b766c698f706634e3360e48a6f0000000006b483045022100a16683 │
+│                                   │ 4300118a432b2b4374e8d076be488b0f84109381f0862c050e73873885022050b3ca3475f1e266ab0b84f30f9030b2d4186a9939c305071691502c │
+│                                   │ de007d8c0121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846ffffffff509a8dc208434566c92ccfcc493df990 │
+│                                   │ da5edd7454c9527dd7df6d7c8aff49a8020000006b483045022100a02adf39ac6ad8e16603e0fc56948f7973223287f0fc0c9665ccd556b135193e │
+│                                   │ 022065ef4363429e83ae3703f6536a9f5294b178e7f1641bd24af7bbf3d72c0ada700121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a │
+│                                   │ 09e359a3d4c850834846ffffffffc3fbc1f34fd64e0dcb1db65a18789f2fbb170cc41a874f8788d904a24b3c2c5d020000006a47304402201e8190 │
+│                                   │ 95555707955dc508afc6db4acc7662c62460efa79a982f921bfd4afcb90220694cb9276b5228d544571cfdca849f6c18a6abf7169b983f9d47e88d │
+│                                   │ a43cd4b90121022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846ffffffff0300e1f5050000000017a914cea7345f │
+│                                   │ e6ada43ef95fd6cdfd8c339ef7d1c864870000000000000000166a14a5cfc9787066562ba03c7538d024a88fd1a0fe12d08c15d460ba11001976a9 │
+│                                   │ 14046922483fab8ca76b23e55e9d338605e2dbab6088ac07bebf64000000000000000000000000000000                                   │
+│                                   │ tx_hash: 3284af63a9fa0c4080fd5367c3c7c1ab1d00bb12ae47eb8fb0f5e2bd2da4736a                                              │
+│                                   │                                                                                                                        │
+│ MakerPaymentWaitConfirmStarted    │                                                                                                                        │
+│ 23-07-25 12:20:24                 │                                                                                                                        │
+│                                   │                                                                                                                        │
+│ MakerPaymentValidatedAndConfirmed │                                                                                                                        │
+│ 23-07-25 12:20:40                 │                                                                                                                        │
+│                                   │                                                                                                                        │
+│ TakerPaymentSent                  │ tx_hex: 0400008085202f8901fd70e531b7c66890fe6ccb52b5b1f0a80f6c23fb0eb0e274962076e993371fc7010000006a4730440220259ab8ec │
+│ 23-07-25 12:20:40                 │ 216b802f32092ef307017f183f4bd8a52bec420363abf7f070d444a8022061fce8a8b562e07b8ab41afd8953521ad7d22ffb0aa5c710f044554d89 │
+│                                   │ 833bb6012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff0300e1f5050000000017a914b491ff619f │
+│                                   │ 632ac1b7ef4e11f64404cff0e98adf870000000000000000166a14a5cfc9787066562ba03c7538d024a88fd1a0fe12f8c8b902635600001976a914 │
+│                                   │ 9934ebeaa56cb597c936a9ed8202d8d97a0a700388ac18bebf64000000000000000000000000000000                                     │
+│                                   │ tx_hash: 75cbad92b60fdb6be1fc7e73b6bac9b4b531c4f14d03b5201f8ff26f20ca1e5d                                              │
+│                                   │                                                                                                                        │
+│ TakerPaymentSpent                 │ tx_hex: 0400008085202f89015d1eca206ff28f1f20b5034df1c431b5b4c9bab6737efce16bdb0fb692adcb7500000000d8483045022100a0ec1d │
+│ 23-07-25 12:21:21                 │ 13d15a4f02a18a9adaa3442d8a9b956034c3e45b68bcbada8f877aef3b02206d59dcea375e86d5a014d51728c74a172c22a5b3cdc5dbe8daa70bb4 │
+│                                   │ b887a5a30120bed41dce1b0681670b3cad9d31c862bb166fcab656e23d4c00eef7dcac38cad4004c6b63046fdcbf64b1752102264fcd9401d797c5 │
+│                                   │ 0fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dac6782012088a914a5cfc9787066562ba03c7538d024a88fd1a0fe128821022d7424c7 │
+│                                   │ 41213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846ac68ffffffff0118ddf505000000001976a914046922483fab8ca76b23e55e │
+│                                   │ 9d338605e2dbab6088ac6fdcbf64000000000000000000000000000000                                                             │
+│                                   │ tx_hash: 13de819b027b4ae98e730679b2b716f98bd1154f729303efd89615f152865586                                              │
+│                                   │ secret: bed41dce1b0681670b3cad9d31c862bb166fcab656e23d4c00eef7dcac38cad4                                               │
+│                                   │                                                                                                                        │
+│ MakerPaymentSpent                 │ tx_hex: 0400008085202f89016a73a42dbde2f5b08feb47ae12bb001dabc1c7c36753fd80400cfaa963af843200000000d74730440220641be55e │
+│ 23-07-25 12:21:21                 │ f769d759be59afe213d57eeeedf7d0f57bcf90835c8c3b7642d0e78902202a8f07ce745553107bea98a58cd50edb46782267fbeb4960c28073ad04 │
+│                                   │ 12cc380120bed41dce1b0681670b3cad9d31c862bb166fcab656e23d4c00eef7dcac38cad4004c6b6304e6fabf64b17521022d7424c741213a2b9b │
+│                                   │ 49aebdaa10e84419e642a8db0a09e359a3d4c850834846ac6782012088a914a5cfc9787066562ba03c7538d024a88fd1a0fe12882102264fcd9401 │
+│                                   │ d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dac68ffffffff0118ddf505000000001976a9149934ebeaa56cb597c936a9ed82 │
+│                                   │ 02d8d97a0a700388ace6fabf64000000000000000000000000000000                                                               │
+│                                   │ tx_hash: 4f2cc7a83d7012c5d03fa64df188500db4bee51bbb9a6a0a1f06a50ca3409fdc                                              │
+│                                   │                                                                                                                        │
 ";

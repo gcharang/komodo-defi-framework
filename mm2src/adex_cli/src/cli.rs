@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::mem::take;
 
-use crate::adex_config::{get_config, set_config, AdexConfig};
-use crate::adex_proc::{AdexProc, ResponseHandler};
+use crate::komodefi_config::{get_config, set_config, KomodefiConfig};
+use crate::komodefi_proc::{KomodefiProc, ResponseHandler};
 use crate::scenarios::{get_status, init, start_process, stop_process};
 use crate::transport::SlurpTransport;
 
@@ -165,6 +165,21 @@ enum Command {
         about = "Generates, signs, and returns a transaction that transfers the amount of coin to the address indicated in the to argument"
     )]
     Withdraw(WithdrawArgs),
+    #[command(
+        visible_aliases = ["get-public", "public-key", "public"],
+        about = "Returns the compressed secp256k1 pubkey corresponding to the user's seed phrase"
+    )]
+    GetPublicKey,
+    #[command(
+        visible_aliases = ["pubkey-hash", "hash", "pubhash"],
+        about = "Returns the RIPEMD-160 hash version of your public key"
+    )]
+    GetPublicKeyHash,
+    #[command(
+        visible_aliases = ["get-raw", "raw-tx", "raw"],
+        about = "Returns the full signed raw transaction hex for any transaction that is confirmed or within the mempool"
+    )]
+    GetRawTransaction(GetRawTransactionArgs),
 }
 
 #[derive(Parser)]
@@ -175,14 +190,14 @@ pub(super) struct Cli {
 }
 
 impl Cli {
-    pub(super) async fn execute<P: ResponseHandler, Cfg: AdexConfig + 'static>(
+    pub(super) async fn execute<P: ResponseHandler, Cfg: KomodefiConfig + 'static>(
         args: impl Iterator<Item = String>,
         config: &Cfg,
         printer: &P,
     ) -> Result<()> {
         let transport = config.rpc_uri().map(SlurpTransport::new);
 
-        let proc = AdexProc {
+        let proc = KomodefiProc {
             transport: transport.as_ref(),
             response_handler: printer,
             config,
@@ -251,8 +266,11 @@ impl Cli {
             Command::BanPubkey(args) => proc.ban_pubkey(args.into()).await?,
             Command::ListBannedPubkeys => proc.list_banned_pubkeys().await?,
             Command::UnbanPubkeys(args) => proc.unban_pubkeys(args.into()).await?,
-            Command::SendRawTransaction(args) => proc.send_raw_transaction(args.into(), args.raw_output).await?,
-            Command::Withdraw(args) => proc.withdraw(args.into(), args.raw_output).await?,
+            Command::SendRawTransaction(args) => proc.send_raw_transaction(args.into(), args.bare_output).await?,
+            Command::Withdraw(args) => proc.withdraw(args.into(), args.bare_output).await?,
+            Command::GetPublicKey => proc.get_public_key().await?,
+            Command::GetPublicKeyHash => proc.get_public_key_hash().await?,
+            Command::GetRawTransaction(args) => proc.get_raw_transaction(args.into(), args.bare_output).await?,
         }
         Ok(())
     }
@@ -260,8 +278,8 @@ impl Cli {
 
 #[derive(Subcommand)]
 enum ConfigSubcommand {
-    #[command(about = "Set komodo adex cli configuration")]
+    #[command(about = "Set komodo komodefi cli configuration")]
     Set(SetConfigArgs),
-    #[command(about = "Get komodo adex cli configuration")]
+    #[command(about = "Get komodo komodefi cli configuration")]
     Get,
 }

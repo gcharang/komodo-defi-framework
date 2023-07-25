@@ -1,11 +1,4 @@
 #[macro_export]
-macro_rules! writeln_field {
-    ($writer:expr, $name:expr, $value:expr, $width:expr) => {
-        writeln_safe_io!($writer, "{:>width$}: {}", $name, $value, width = $width)
-    };
-}
-
-#[macro_export]
 macro_rules! write_field_option {
     ($writer:expr, $name:expr, $value:expr, $width:expr) => {
         if let Some(ref value) = $value {

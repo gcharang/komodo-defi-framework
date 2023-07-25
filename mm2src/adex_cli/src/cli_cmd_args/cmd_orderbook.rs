@@ -4,7 +4,7 @@ use std::mem::take;
 use common::serde_derive::Serialize;
 use mm2_rpc::data::legacy::OrderbookRequest;
 
-use crate::adex_proc::OrderbookSettings;
+use crate::komodefi_proc::OrderbookSettings;
 
 const ORDERBOOK_BIDS_LIMIT: &str = "20";
 const ORDERBOOK_ASKS_LIMIT: &str = "20";

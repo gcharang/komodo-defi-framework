@@ -2,7 +2,7 @@ use anyhow::Result;
 use mm2_rpc::data::legacy::MinTradingVolResponse;
 use std::io::Write;
 
-use crate::adex_proc::response_handler::formatters::{term_table_blank, writeln_field, ZERO_INDENT};
+use crate::komodefi_proc::response_handler::formatters::{term_table_blank, writeln_field, ZERO_INDENT};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_number::BigRational;
 use term_table::row::Row;

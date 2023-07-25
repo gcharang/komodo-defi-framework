@@ -222,6 +222,7 @@ pub mod hd_pubkey;
 pub mod hd_wallet;
 use hd_wallet::{HDAccountAddressId, HDAddress};
 use mm2_rpc::data::legacy::SetRequiredConfRequest;
+use mm2_rpc::data::version2::wallet::{GetRawTransactionRequest, GetRawTransactionResponse};
 
 pub mod hd_wallet_storage;
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
@@ -307,9 +308,9 @@ pub type TradePreimageFut<T> = Box<dyn Future<Item = T, Error = MmError<TradePre
 pub type CoinFindResult<T> = Result<T, MmError<CoinFindError>>;
 pub type TxHistoryFut<T> = Box<dyn Future<Item = T, Error = MmError<TxHistoryError>> + Send>;
 pub type TxHistoryResult<T> = Result<T, MmError<TxHistoryError>>;
-pub type RawTransactionResult = Result<RawTransactionRes, MmError<RawTransactionError>>;
+pub type RawTransactionResult = Result<GetRawTransactionResponse, MmError<RawTransactionError>>;
 pub type RawTransactionFut<'a> =
-    Box<dyn Future<Item = RawTransactionRes, Error = MmError<RawTransactionError>> + Send + 'a>;
+    Box<dyn Future<Item = GetRawTransactionResponse, Error = MmError<RawTransactionError>> + Send + 'a>;
 pub type RefundResult<T> = Result<T, MmError<RefundError>>;
 
 pub type IguanaPrivKey = Secp256k1Secret;
@@ -391,18 +392,6 @@ impl HttpStatusCode for GetMyAddressError {
             },
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct RawTransactionRequest {
-    pub coin: String,
-    pub tx_hash: String,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct RawTransactionRes {
-    /// Raw bytes of signed transaction in hexadecimal string, this should be return hexadecimal encoded signed transaction for get_raw_transaction
-    pub tx_hex: BytesJson,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2178,7 +2167,7 @@ pub trait MmCoin:
 
     fn withdraw(&self, req: WithdrawRequest) -> WithdrawFut;
 
-    fn get_raw_transaction(&self, req: RawTransactionRequest) -> RawTransactionFut;
+    fn get_raw_transaction(&self, req: GetRawTransactionRequest) -> RawTransactionFut;
 
     fn get_tx_hex_by_hash(&self, tx_hash: Vec<u8>) -> RawTransactionFut;
 
@@ -3285,7 +3274,7 @@ pub async fn withdraw(ctx: MmArc, req: WithdrawRequest) -> WithdrawResult {
     coin.withdraw(req).compat().await
 }
 
-pub async fn get_raw_transaction(ctx: MmArc, req: RawTransactionRequest) -> RawTransactionResult {
+pub async fn get_raw_transaction(ctx: MmArc, req: GetRawTransactionRequest) -> RawTransactionResult {
     let coin = lp_coinfind_or_err(&ctx, &req.coin).await?;
     coin.get_raw_transaction(req).compat().await
 }

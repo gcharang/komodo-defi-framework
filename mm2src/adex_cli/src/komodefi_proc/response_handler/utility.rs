@@ -2,7 +2,7 @@ use rpc::v1::types::H256 as H256Json;
 use std::io::Write;
 use term_table::{row::Row, TableStyle};
 
-use crate::adex_proc::response_handler::formatters::{term_table_blank, write_sequence, writeln_field};
+use crate::komodefi_proc::response_handler::formatters::{term_table_blank, write_sequence, writeln_field};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 
 use super::ZERO_INDENT;

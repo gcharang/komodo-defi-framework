@@ -34,10 +34,11 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
                             MakerOrderForRpc, MinTradingVolResponse, Mm2RpcResult, MmVersionResponse,
                             MyOrdersResponse, OrderStatusResponse, OrderbookResponse, OrdersHistoryResponse,
                             PairWithDepth, SellBuyResponse, Status};
-use mm2_rpc::data::version2::BestOrdersV2Response;
+use mm2_rpc::data::version2::{BestOrdersV2Response, GetPublicKeyHashResponse, GetPublicKeyResponse,
+                              GetRawTransactionResponse};
 
-use crate::adex_config::AdexConfig;
-use crate::adex_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
+use crate::komodefi_config::KomodefiConfig;
+use crate::komodefi_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
 use crate::logging::error_anyhow;
 use crate::rpc_data::{ActiveSwapsResponse, CoinsToKickstartResponse, DisableCoinResponse, GetGossipMeshResponse,
                       GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse, GetMyPeerIdResponse,
@@ -49,7 +50,7 @@ use crate::rpc_data::{ActiveSwapsResponse, CoinsToKickstartResponse, DisableCoin
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
 
-    fn on_orderbook_response<Cfg: AdexConfig + 'static>(
+    fn on_orderbook_response<Cfg: KomodefiConfig + 'static>(
         &self,
         response: OrderbookResponse,
         config: &Cfg,
@@ -95,8 +96,11 @@ pub(crate) trait ResponseHandler {
     fn on_ban_pubkey(&self, response: Mm2RpcResult<Status>) -> Result<()>;
     fn on_list_banned_pubkeys(&self, response: Mm2RpcResult<ListBannedPubkeysResponse>) -> Result<()>;
     fn on_unban_pubkeys(&self, response: Mm2RpcResult<UnbanPubkeysResponse>) -> Result<()>;
-    fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, raw_output: bool) -> Result<()>;
-    fn on_withdraw(&self, response: WithdrawResponse, raw_output: bool) -> Result<()>;
+    fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()>;
+    fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()>;
+    fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()>;
+    fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()>;
+    fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -116,7 +120,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_orderbook_response<Cfg: AdexConfig + 'static>(
+    fn on_orderbook_response<Cfg: KomodefiConfig + 'static>(
         &self,
         response: OrderbookResponse,
         config: &Cfg,
@@ -352,14 +356,32 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, raw_output: bool) -> Result<()> {
+    fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        wallet::on_send_raw_transaction(writer.deref_mut(), response, raw_output);
+        wallet::on_send_raw_transaction(writer.deref_mut(), response, bare_output);
         Ok(())
     }
 
-    fn on_withdraw(&self, response: WithdrawResponse, raw_output: bool) -> Result<()> {
+    fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        wallet::on_withdraw(writer.deref_mut(), response, raw_output)
+        wallet::on_withdraw(writer.deref_mut(), response, bare_output)
+    }
+
+    fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_public_key(writer.deref_mut(), response);
+        Ok(())
+    }
+
+    fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_public_key_hash(writer.deref_mut(), response);
+        Ok(())
+    }
+
+    fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_raw_transaction(writer.deref_mut(), response, bare_output);
+        Ok(())
     }
 }

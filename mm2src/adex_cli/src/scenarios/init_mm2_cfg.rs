@@ -15,7 +15,7 @@ use crate::helpers;
 use crate::logging::error_anyhow;
 
 const DEFAULT_NET_ID: u16 = 7777;
-const DEFAULT_GID: &str = "adex-cli";
+const DEFAULT_GID: &str = "komodefi-cli";
 const DEFAULT_OPTION_PLACEHOLDER: &str = "Tap enter to skip";
 const RPC_PORT_MIN: u16 = 1024;
 const RPC_PORT_MAX: u16 = 49151;

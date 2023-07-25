@@ -10,9 +10,9 @@ use mm2_rpc::data::legacy::{FilteringOrder, MakerOrderForRpc, Mm2RpcResult, Orde
                             UuidParseError};
 
 use super::formatters::{term_table_blank, write_maker_match};
-use crate::adex_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
-                                                     format_historical_changes, format_ratio, get_matches_rows,
-                                                     taker_order_header_row, taker_order_rows, COMMON_PRECISION};
+use crate::komodefi_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
+                                                         format_historical_changes, format_ratio, get_matches_rows,
+                                                         taker_order_header_row, taker_order_rows, COMMON_PRECISION};
 
 pub(crate) struct OrdersHistorySettings {
     pub(crate) takers_detailed: bool,

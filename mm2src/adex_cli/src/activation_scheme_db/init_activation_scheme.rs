@@ -7,8 +7,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::adex_config::AdexConfigImpl;
 use crate::error_anyhow;
+use crate::komodefi_config::KomodefiConfigImpl;
 
 const ACTIVATION_SCHEME_FILE: &str = "activation_scheme.json";
 const COIN_ACTIVATION_SOURCE: &str = "https://stats.kmd.io/api/table/coin_activation/";
@@ -31,7 +31,7 @@ pub(crate) async fn init_activation_scheme() -> Result<()> {
 }
 
 pub(crate) fn get_activation_scheme_path() -> Result<PathBuf> {
-    let mut config_path = AdexConfigImpl::get_config_dir()?;
+    let mut config_path = KomodefiConfigImpl::get_config_dir()?;
     config_path.push(ACTIVATION_SCHEME_FILE);
     Ok(config_path)
 }

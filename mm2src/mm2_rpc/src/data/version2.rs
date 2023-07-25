@@ -1,3 +1,7 @@
+#[path = "version2/wallet.rs"] pub mod wallet;
+
+pub use wallet::{GetPublicKeyHashResponse, GetPublicKeyResponse, GetRawTransactionRequest, GetRawTransactionResponse};
+
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -13,7 +17,7 @@ pub struct MmRpcRequest<M, T> {
     pub mmrpc: MmRpcVersion,
     pub userpass: Option<String>,
     pub method: M,
-    pub params: T,
+    pub params: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<usize>,
 }

@@ -85,13 +85,12 @@ use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut,
             EthValidateFeeArgs, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, IguanaPrivKey, MakerSwapTakerCoin,
             MarketCoinOps, MmCoin, MmCoinEnum, MyAddressError, MyWalletAddress, NegotiateSwapContractAddrErr,
             NumConversError, NumConversResult, PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr,
-            PrivKeyBuildPolicy, PrivKeyPolicyNotAllowed, RawTransactionError, RawTransactionFut,
-            RawTransactionRequest, RawTransactionRes, RawTransactionResult, RefundError, RefundPaymentArgs,
-            RefundResult, RewardTarget, RpcClientType, RpcTransportEventHandler, RpcTransportEventHandlerShared,
-            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignatureError,
-            SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee, TradePreimageError,
-            TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction, TransactionDetails,
-            TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
+            PrivKeyBuildPolicy, PrivKeyPolicyNotAllowed, RawTransactionError, RawTransactionFut, RawTransactionResult,
+            RefundError, RefundPaymentArgs, RefundResult, RewardTarget, RpcClientType, RpcTransportEventHandler,
+            RpcTransportEventHandlerShared, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
+            SendPaymentArgs, SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee,
+            TradePreimageError, TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction,
+            TransactionDetails, TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
             UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
             ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, VerificationError,
             VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
@@ -99,6 +98,7 @@ use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut,
             WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest, WithdrawResult, EARLY_CONFIRMATION_ERR_LOG,
             INVALID_CONTRACT_ADDRESS_ERR_LOG, INVALID_PAYMENT_STATE_ERR_LOG, INVALID_RECEIVER_ERR_LOG,
             INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG};
+use mm2_rpc::data::version2::wallet::{GetRawTransactionRequest, GetRawTransactionResponse};
 pub use rlp;
 
 #[cfg(test)] mod eth_tests;
@@ -709,7 +709,7 @@ impl EthCoinImpl {
     }
 }
 
-async fn get_raw_transaction_impl(coin: EthCoin, req: RawTransactionRequest) -> RawTransactionResult {
+async fn get_raw_transaction_impl(coin: EthCoin, req: GetRawTransactionRequest) -> RawTransactionResult {
     let tx = match req.tx_hash.strip_prefix("0x") {
         Some(tx) => tx,
         None => &req.tx_hash,
@@ -726,7 +726,7 @@ async fn get_tx_hex_by_hash_impl(coin: EthCoin, tx_hash: H256) -> RawTransaction
         .await?
         .or_mm_err(|| RawTransactionError::HashNotExist(tx_hash.to_string()))?;
     let raw = signed_tx_from_web3_tx(web3_tx).map_to_mm(RawTransactionError::InternalError)?;
-    Ok(RawTransactionRes {
+    Ok(GetRawTransactionResponse {
         tx_hex: BytesJson(rlp::encode(&raw).to_vec()),
     })
 }
@@ -4464,7 +4464,7 @@ impl MmCoin for EthCoin {
 
     fn spawner(&self) -> CoinFutSpawner { CoinFutSpawner::new(&self.abortable_system) }
 
-    fn get_raw_transaction(&self, req: RawTransactionRequest) -> RawTransactionFut {
+    fn get_raw_transaction(&self, req: GetRawTransactionRequest) -> RawTransactionFut {
         Box::new(get_raw_transaction_impl(self.clone(), req).boxed().compat())
     }
 

@@ -6,7 +6,7 @@ use mm2_number::MmNumber;
 use mm2_rpc::data::legacy::OrdersHistoryRequest;
 
 use super::{parse_datetime, parse_mm_number};
-use crate::adex_proc;
+use crate::komodefi_proc;
 
 #[derive(Clone, Display, ValueEnum)]
 enum OrderTypeFilter {
@@ -118,9 +118,9 @@ struct OrdersHistorySettings {
     all: bool,
 }
 
-impl From<&OrdersHistorySettings> for adex_proc::OrdersHistorySettings {
+impl From<&OrdersHistorySettings> for komodefi_proc::OrdersHistorySettings {
     fn from(value: &OrdersHistorySettings) -> Self {
-        adex_proc::OrdersHistorySettings {
+        komodefi_proc::OrdersHistorySettings {
             takers_detailed: value.takers,
             makers_detailed: value.makers,
             warnings: value.warnings,
@@ -129,6 +129,6 @@ impl From<&OrdersHistorySettings> for adex_proc::OrdersHistorySettings {
     }
 }
 
-impl From<&mut OrdersHistoryArgs> for adex_proc::OrdersHistorySettings {
-    fn from(value: &mut OrdersHistoryArgs) -> Self { adex_proc::OrdersHistorySettings::from(&value.settings) }
+impl From<&mut OrdersHistoryArgs> for komodefi_proc::OrdersHistorySettings {
+    fn from(value: &mut OrdersHistoryArgs) -> Self { komodefi_proc::OrdersHistorySettings::from(&value.settings) }
 }

@@ -1,18 +1,18 @@
 use std::env;
 use std::io::Write;
 
-use super::adex_config::AdexConfigImpl;
-use super::adex_proc::ResponseHandlerImpl;
 use super::cli;
+use super::komodefi_config::KomodefiConfigImpl;
+use super::komodefi_proc::ResponseHandlerImpl;
 
-pub(super) struct AdexApp {
-    config: AdexConfigImpl,
+pub(super) struct KomodefiApp {
+    config: KomodefiConfigImpl,
 }
 
-impl AdexApp {
-    pub(super) fn new() -> AdexApp {
-        let config = AdexConfigImpl::read_config().unwrap_or_default();
-        AdexApp { config }
+impl KomodefiApp {
+    pub(super) fn new() -> KomodefiApp {
+        let config = KomodefiConfigImpl::read_config().unwrap_or_default();
+        KomodefiApp { config }
     }
 
     pub(super) async fn execute(&self) {

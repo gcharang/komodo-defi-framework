@@ -16,14 +16,13 @@ use crate::utxo::tx_cache::TxCacheResult;
 use crate::utxo::utxo_withdraw::{InitUtxoWithdraw, StandardUtxoWithdraw, UtxoWithdraw};
 use crate::watcher_common::validate_watcher_reward;
 use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPaymentInput, GetWithdrawSenderAddress,
-            HDAccountAddressId, RawTransactionError, RawTransactionRequest, RawTransactionRes, RefundPaymentArgs,
-            RewardTarget, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs,
-            SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TradePreimageValue, TransactionFut,
-            TxFeeDetails, TxMarshalingErr, ValidateAddressResult, ValidateOtherPubKeyErr, ValidatePaymentFut,
-            ValidatePaymentInput, VerificationError, VerificationResult, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFrom, WithdrawResult,
-            WithdrawSenderAddress, EARLY_CONFIRMATION_ERR_LOG, INVALID_RECEIVER_ERR_LOG, INVALID_REFUND_TX_ERR_LOG,
-            INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
+            HDAccountAddressId, RawTransactionError, RefundPaymentArgs, RewardTarget, SearchForSwapTxSpendInput,
+            SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignatureError, SignatureResult, SpendPaymentArgs,
+            SwapOps, TradePreimageValue, TransactionFut, TxFeeDetails, TxMarshalingErr, ValidateAddressResult,
+            ValidateOtherPubKeyErr, ValidatePaymentFut, ValidatePaymentInput, VerificationError, VerificationResult,
+            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFrom,
+            WithdrawResult, WithdrawSenderAddress, EARLY_CONFIRMATION_ERR_LOG, INVALID_RECEIVER_ERR_LOG,
+            INVALID_REFUND_TX_ERR_LOG, INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
 use crate::{MmCoinEnum, WatcherReward, WatcherRewardError};
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
@@ -48,7 +47,7 @@ use primitives::hash::H512;
 use rpc::v1::types::{Bytes as BytesJson, ToTxHash, TransactionInputEnum, H256 as H256Json};
 use script::{Builder, Opcode, Script, ScriptAddress, TransactionInputSigner, UnsignedTransactionInput};
 use secp256k1::{PublicKey, Signature};
-use serde_json::{self as json};
+use serde_json as json;
 use serialization::{deserialize, serialize, serialize_with_flags, CoinVariant, CompactInteger, Serializable, Stream,
                     SERIALIZE_TRANSACTION_WITNESS};
 use std::cmp::Ordering;
@@ -59,6 +58,7 @@ use utxo_signer::with_key_pair::p2sh_spend;
 use utxo_signer::UtxoSignerOps;
 
 pub use chain::Transaction as UtxoTx;
+use mm2_rpc::data::version2::wallet::{GetRawTransactionRequest, GetRawTransactionResponse};
 
 pub mod utxo_tx_history_v2_common;
 
@@ -2478,7 +2478,7 @@ pub fn min_trading_vol(coin: &UtxoCoinFields) -> MmNumber {
 
 pub fn is_asset_chain(coin: &UtxoCoinFields) -> bool { coin.conf.asset_chain }
 
-pub async fn get_raw_transaction(coin: &UtxoCoinFields, req: RawTransactionRequest) -> RawTransactionResult {
+pub async fn get_raw_transaction(coin: &UtxoCoinFields, req: GetRawTransactionRequest) -> RawTransactionResult {
     let hash = H256Json::from_str(&req.tx_hash).map_to_mm(|e| RawTransactionError::InvalidHashError(e.to_string()))?;
     let hex = coin
         .rpc_client
@@ -2486,7 +2486,7 @@ pub async fn get_raw_transaction(coin: &UtxoCoinFields, req: RawTransactionReque
         .compat()
         .await
         .map_err(|e| RawTransactionError::Transport(e.to_string()))?;
-    Ok(RawTransactionRes { tx_hex: hex })
+    Ok(GetRawTransactionResponse { tx_hex: hex })
 }
 
 pub async fn get_tx_hex_by_hash(coin: &UtxoCoinFields, tx_hash: Vec<u8>) -> RawTransactionResult {
@@ -2496,7 +2496,7 @@ pub async fn get_tx_hex_by_hash(coin: &UtxoCoinFields, tx_hash: Vec<u8>) -> RawT
         .compat()
         .await
         .map_err(|e| RawTransactionError::Transport(e.to_string()))?;
-    Ok(RawTransactionRes { tx_hex: hex })
+    Ok(GetRawTransactionResponse { tx_hex: hex })
 }
 
 pub async fn withdraw<T>(coin: T, req: WithdrawRequest) -> WithdrawResult

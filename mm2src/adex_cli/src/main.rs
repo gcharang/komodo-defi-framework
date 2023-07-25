@@ -1,10 +1,10 @@
 #[cfg(not(target_arch = "wasm32"))] mod activation_scheme_db;
-#[cfg(not(any(test, target_arch = "wasm32")))] mod adex_app;
-#[cfg(not(target_arch = "wasm32"))] mod adex_config;
-#[cfg(not(target_arch = "wasm32"))] mod adex_proc;
 #[cfg(not(target_arch = "wasm32"))] mod cli;
 #[cfg(not(target_arch = "wasm32"))] mod cli_cmd_args;
 #[cfg(not(target_arch = "wasm32"))] mod helpers;
+#[cfg(not(any(test, target_arch = "wasm32")))] mod komodefi_app;
+#[cfg(not(target_arch = "wasm32"))] mod komodefi_config;
+#[cfg(not(target_arch = "wasm32"))] mod komodefi_proc;
 mod logging;
 #[cfg(not(target_arch = "wasm32"))] mod rpc_data;
 #[cfg(not(target_arch = "wasm32"))] mod scenarios;
@@ -18,6 +18,6 @@ fn main() {}
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     logging::init_logging();
-    let app = adex_app::AdexApp::new();
+    let app = komodefi_app::KomodefiApp::new();
     app.execute().await;
 }
