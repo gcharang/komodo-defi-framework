@@ -23,7 +23,6 @@ pub(crate) use smart_fraction_fmt::SmartFractPrecision;
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
-use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::Write;
@@ -38,14 +37,14 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
 use mm2_rpc::data::version2::BestOrdersV2Response;
 
 use crate::adex_config::AdexConfig;
-use crate::adex_proc::response_handler::formatters::ZERO_INDENT;
+use crate::adex_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
 use crate::logging::error_anyhow;
 use crate::rpc_data::{ActiveSwapsResponse, CoinsToKickstartResponse, DisableCoinResponse, GetGossipMeshResponse,
                       GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse, GetMyPeerIdResponse,
                       GetPeersInfoResponse, GetRelayMeshResponse, ListBannedPubkeysResponse, MaxTakerVolResponse,
-                      MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse, SetRequiredConfResponse,
-                      SetRequiredNotaResponse, TradePreimageResponse, UnbanPubkeysResponse};
-use crate::writeln_field;
+                      MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
+                      SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
+                      TradePreimageResponse, UnbanPubkeysResponse, WithdrawResponse};
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -96,7 +95,8 @@ pub(crate) trait ResponseHandler {
     fn on_ban_pubkey(&self, response: Mm2RpcResult<Status>) -> Result<()>;
     fn on_list_banned_pubkeys(&self, response: Mm2RpcResult<ListBannedPubkeysResponse>) -> Result<()>;
     fn on_unban_pubkeys(&self, response: Mm2RpcResult<UnbanPubkeysResponse>) -> Result<()>;
-    fn on_send_raw_transaction(&self, response: BytesJson) -> Result<()>;
+    fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, raw_output: bool) -> Result<()>;
+    fn on_withdraw(&self, response: WithdrawResponse, raw_output: bool) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -336,7 +336,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
 
     fn on_ban_pubkey(&self, response: Mm2RpcResult<Status>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        writeln_field!(writer, "Status", response.result, ZERO_INDENT);
+        writeln_field(writer.deref_mut(), "Status", response.result, ZERO_INDENT);
         Ok(())
     }
 
@@ -352,9 +352,14 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_send_raw_transaction(&self, response: BytesJson) -> Result<()> {
+    fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, raw_output: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        wallet::on_send_raw_transaction(writer.deref_mut(), response);
+        wallet::on_send_raw_transaction(writer.deref_mut(), response, raw_output);
         Ok(())
+    }
+
+    fn on_withdraw(&self, response: WithdrawResponse, raw_output: bool) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_withdraw(writer.deref_mut(), response, raw_output)
     }
 }

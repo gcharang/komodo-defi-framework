@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::io::Write;
 use term_table::{row::Row, table_cell::TableCell, Table as TermTable, TableStyle};
 use uuid::Uuid;
@@ -12,9 +12,10 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_number::bigdecimal::{ToPrimitive, Zero};
 use mm2_rpc::data::legacy::{HistoricalOrder, MakerMatchForRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy,
                             OrderConfirmationsSettings, TakerMatchForRpc, TakerOrderForRpc};
+use rpc::v1::types::Bytes;
 
 use super::super::SmartFractPrecision;
-use super::macros::{write_base_rel, write_confirmation_settings, write_connected, writeln_field};
+use super::macros::{write_base_rel, write_confirmation_settings, write_connected};
 use super::smart_fraction_fmt::SmartFractionFmt;
 use crate::logging::error_anyhow;
 
@@ -24,7 +25,7 @@ const NESTED_INDENT: usize = 26;
 pub(super) const ZERO_INDENT: usize = 0;
 
 pub(super) fn on_maker_order_response(writer: &mut dyn Write, order: MakerOrderForRpc) -> Result<()> {
-    writeln_field!(writer, "Maker order", "", ZERO_INDENT);
+    writeln_field(writer, "Maker order", "", ZERO_INDENT);
     write_maker_order(writer, &order)?;
     write_maker_matches(writer, &order.matches)?;
     writeln_safe_io!(writer, "");
@@ -32,32 +33,32 @@ pub(super) fn on_maker_order_response(writer: &mut dyn Write, order: MakerOrderF
 }
 
 pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc) -> Result<()> {
-    writeln_field!(writer, "base", order.base, COMMON_INDENT);
-    writeln_field!(writer, "rel", order.rel, COMMON_INDENT);
-    writeln_field!(
+    writeln_field(writer, "base", &order.base, COMMON_INDENT);
+    writeln_field(writer, "rel", &order.rel, COMMON_INDENT);
+    writeln_field(
         writer,
         "price",
         format_ratio(&order.price_rat, COMMON_PRECISION)?,
-        COMMON_INDENT
+        COMMON_INDENT,
     );
-    writeln_field!(writer, "uuid", order.uuid, COMMON_INDENT);
-    writeln_field!(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
+    writeln_field(writer, "uuid", order.uuid, COMMON_INDENT);
+    writeln_field(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
     if let Some(updated_at) = order.updated_at {
-        writeln_field!(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
+        writeln_field(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
     }
-    writeln_field!(
+    writeln_field(
         writer,
         "max_base_vol",
         format_ratio(&order.max_base_vol_rat, COMMON_PRECISION)?,
-        COMMON_INDENT
+        COMMON_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "min_base_vol",
         format_ratio(&order.min_base_vol_rat, COMMON_PRECISION)?,
-        COMMON_INDENT
+        COMMON_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "swaps",
         if order.started_swaps.is_empty() {
@@ -65,25 +66,25 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
         } else {
             order.started_swaps.iter().join(", ")
         },
-        COMMON_INDENT
+        COMMON_INDENT,
     );
     if let Some(ref conf_settings) = order.conf_settings {
-        writeln_field!(
+        writeln_field(
             writer,
             "conf_settings",
             format_confirmation_settings(conf_settings),
-            COMMON_INDENT
+            COMMON_INDENT,
         );
     }
     if let Some(ref changes_history) = order.changes_history {
-        writeln_field!(
+        writeln_field(
             writer,
             "changes_history",
             changes_history
                 .iter()
                 .map(|val| format_historical_changes(val, ", ").unwrap_or_else(|_| "error".to_string()))
                 .join("; "),
-            COMMON_INDENT
+            COMMON_INDENT,
         );
     }
     Ok(())
@@ -93,7 +94,7 @@ pub(super) fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid
     if matches.is_empty() {
         return Ok(());
     }
-    writeln_field!(writer, "matches", "", COMMON_INDENT);
+    writeln_field(writer, "matches", "", COMMON_INDENT);
     for (uuid, m) in matches {
         write_maker_match(writer, uuid, m)?;
         writeln_safe_io!(writer, "");
@@ -103,22 +104,22 @@ pub(super) fn write_maker_matches(writer: &mut dyn Write, matches: &HashMap<Uuid
 
 pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMatchForRpc) -> Result<()> {
     let (req, reserved, connect, connected) = (&m.request, &m.reserved, &m.connect, &m.connected);
-    writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
-    writeln_field!(writer, "req.uuid", req.uuid, NESTED_INDENT);
+    writeln_field(writer, "uuid", uuid, NESTED_INDENT);
+    writeln_field(writer, "req.uuid", req.uuid, NESTED_INDENT);
     write_base_rel!(writer, req, NESTED_INDENT);
-    writeln_field!(
+    writeln_field(
         writer,
         "req.match_by",
         format_match_by(&req.match_by, ", "),
-        NESTED_INDENT
+        NESTED_INDENT,
     );
-    writeln_field!(writer, "req.action", req.action, NESTED_INDENT);
+    writeln_field(writer, "req.action", &req.action, NESTED_INDENT);
     write_confirmation_settings!(writer, req, NESTED_INDENT);
-    writeln_field!(
+    writeln_field(
         writer,
         "req.(sender, dest)",
         format!("{},{}", req.sender_pubkey, req.dest_pub_key),
-        NESTED_INDENT
+        NESTED_INDENT,
     );
     write_maker_reserved_for_rpc(writer, reserved);
     if let Some(ref connected) = connected {
@@ -127,23 +128,23 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
     if let Some(ref connect) = connect {
         write_connected!(writer, connect, NESTED_INDENT);
     }
-    writeln_field!(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
+    writeln_field(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
     Ok(())
 }
 
 fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) {
     write_base_rel!(writer, reserved, NESTED_INDENT);
-    writeln_field!(
+    writeln_field(
         writer,
         "reserved.(taker, maker)",
         format!("{},{}", reserved.taker_order_uuid, reserved.maker_order_uuid),
-        NESTED_INDENT
+        NESTED_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "reserved.(sender, dest)",
         format!("{},{}", reserved.sender_pubkey, reserved.dest_pub_key),
-        NESTED_INDENT
+        NESTED_INDENT,
     );
     write_confirmation_settings!(writer, reserved, NESTED_INDENT);
 }
@@ -221,14 +222,14 @@ pub(super) fn get_matches_rows<M, F: Fn(&mut dyn Write, &Uuid, &M) -> Result<()>
 
 pub(super) fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<()> {
     let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
-    writeln_field!(writer, "uuid", uuid, NESTED_INDENT);
+    writeln_field(writer, "uuid", uuid, NESTED_INDENT);
     write_maker_reserved_for_rpc(writer, reserved);
     let last_updated = if m.last_updated.is_zero() {
         "none".to_string()
     } else {
         format_datetime(m.last_updated)?
     };
-    writeln_field!(writer, "last_updated", last_updated, NESTED_INDENT);
+    writeln_field(writer, "last_updated", last_updated, NESTED_INDENT);
     write_connected!(writer, connect, NESTED_INDENT);
     if let Some(ref connected) = connected {
         write_connected!(writer, connected, NESTED_INDENT);
@@ -317,3 +318,38 @@ pub(super) fn format_confirmation_settings(settings: &OrderConfirmationsSettings
         settings.base_confs, settings.base_nota, settings.rel_confs, settings.rel_nota
     )
 }
+
+pub(super) fn write_sequence<T: Display, I: ExactSizeIterator<Item = T> + Itertools>(
+    writer: &mut dyn Write,
+    header: &str,
+    mut iter: I,
+    indent: usize,
+) {
+    writeln_field(
+        writer,
+        header,
+        if iter.len() == 0 {
+            "none".to_string()
+        } else {
+            iter.join(", ")
+        },
+        indent,
+    )
+}
+
+pub(super) fn writeln_field<H: Display, T: Display>(writer: &mut dyn Write, header: H, value: T, indent: usize) {
+    writeln_safe_io!(writer, "{:>width$}: {}", header, value, width = indent)
+}
+
+pub(super) fn write_field_option<H: Display, T: Display>(
+    writer: &mut dyn Write,
+    header: H,
+    value: Option<T>,
+    indent: usize,
+) {
+    if let Some(ref value) = value {
+        writeln_safe_io!(writer, "{:>width$}: {}", header, value, width = indent)
+    }
+}
+
+pub(super) fn format_bytes(bytes: Bytes) -> String { hex::encode(bytes.as_slice()) }

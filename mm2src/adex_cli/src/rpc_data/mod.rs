@@ -29,6 +29,5 @@ pub(crate) use trade_preimage::{MakerPreimage, MaxTakerVolRequest, MaxTakerVolRe
                                 TradePreimageRequest, TradePreimageResponse};
 pub(crate) use utility::{BanReason, ListBannedPubkeysRequest, ListBannedPubkeysResponse, UnbanPubkeysRequest,
                          UnbanPubkeysResponse};
-pub(crate) use wallet::SendRawTransactionRequest;
-
-//TODO: @rozhkovdmitrii
+pub(crate) use wallet::{Bip44Chain, HDAccountAddressId, KmdRewardsDetails, SendRawTransactionRequest,
+                        SendRawTransactionResponse, WithdrawFee, WithdrawFrom, WithdrawRequest, WithdrawResponse};

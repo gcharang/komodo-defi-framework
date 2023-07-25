@@ -1,9 +1,9 @@
 use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
-use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
 
 use common::log::{error, info, warn};
+use log::debug;
 use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, BuyRequest, CancelAllOrdersRequest,
                             CancelAllOrdersResponse, CancelBy, CancelOrderRequest, CoinInitResponse,
                             GetEnabledResponse, MakerOrderForRpc, MinTradingVolResponse, Mm2RpcResult,
@@ -28,9 +28,9 @@ use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartR
                       GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse, MaxTakerVolRequest,
                       MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
                       MySwapStatusRequest, MySwapStatusResponse, Params, RecoverFundsOfSwapRequest,
-                      RecoverFundsOfSwapResponse, SendRawTransactionRequest, SetRequiredConfResponse,
-                      SetRequiredNotaResponse, TradePreimageRequest, TradePreimageResponse, UnbanPubkeysRequest,
-                      UnbanPubkeysResponse};
+                      RecoverFundsOfSwapResponse, SendRawTransactionRequest, SendRawTransactionResponse,
+                      SetRequiredConfResponse, SetRequiredNotaResponse, TradePreimageRequest, TradePreimageResponse,
+                      UnbanPubkeysRequest, UnbanPubkeysResponse, WithdrawRequest, WithdrawResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -46,7 +46,33 @@ macro_rules! request_legacy {
         match transport.send::<_, $response_ty, Json>($request).await {
             Ok(Ok(ok)) => $self.response_handler.$handle_method(ok, $($opt),*),
             Ok(Err(error)) => $self.response_handler.print_response(error),
-            Err(_) => error_bail!(concat!("Failed to send: `", stringify!($request), "`"))
+            Err(error) => error_bail!(concat!("Failed to send: `", stringify!($request), "`: {}"), error)
+        }
+    }};
+}
+
+macro_rules! request_v2 {
+    ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
+        let transport = $self.transport.ok_or_else(|| {
+            warn_anyhow!(concat!(
+                "Failed to send: `",
+                stringify!($request),
+                "`, transport is not available"
+            ))
+        })?;
+        match transport.send::<_, MmRpcResponseV2<$response_ty>, Json>($request).await {
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Ok { result },
+                id: _,
+            })) => $self.response_handler.$handle_method(result, $($opt),*),
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Err(error),
+                id: _,
+            })) => error_bail!(concat!("Got `", stringify!($request), "` error: {:?}"), error),
+            Ok(Err(error)) => $self.response_handler.print_response(error),
+            Err(error) => error_bail!(concat!("Failed to send `", stringify!($request), "` request: {}"), error),
         }
     }};
 }
@@ -235,34 +261,19 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn best_orders(&self, request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
         info!("Getting best orders: {} {}", request.action, request.coin);
-        let command = Command::builder()
+        let best_orders_command = Command::builder()
             .userpass(self.get_rpc_password()?)
             .v2_method(V2Method::BestOrders)
             .flatten_data(request)
             .build_v2()?;
-        let transport = self
-            .transport
-            .ok_or_else(|| warn_anyhow!("Failed to send, transport is not available"))?;
 
-        match transport
-            .send::<_, MmRpcResponseV2<BestOrdersV2Response>, Json>(command)
-            .await
-        {
-            Ok(Ok(MmRpcResponseV2 {
-                mmrpc: MmRpcVersion::V2,
-                result: MmRpcResultV2::Ok { result },
-                id: _,
-            })) => self.response_handler.on_best_orders(result, show_orig_tickets),
-            Ok(Ok(MmRpcResponseV2 {
-                mmrpc: MmRpcVersion::V2,
-                result: MmRpcResultV2::Err(error),
-                id: _,
-            })) => {
-                error_bail!("Got error: {:?}", error)
-            },
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send BestOrdersRequestV2 request: {error}"),
-        }
+        request_v2!(
+            best_orders_command,
+            BestOrdersV2Response,
+            self,
+            on_best_orders,
+            show_orig_tickets
+        )
     }
 
     pub(crate) async fn set_price(&self, request: SetPriceReq) -> Result<()> {
@@ -416,35 +427,13 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
 
     pub(crate) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
         info!("Getting trade preimage");
-        let command = Command::builder()
+        let trade_preimage_command = Command::builder()
             .userpass(self.get_rpc_password()?)
             .v2_method(V2Method::TradePreimage)
             .flatten_data(request)
             .build_v2()?;
 
-        let transport = self
-            .transport
-            .ok_or_else(|| warn_anyhow!("Failed to send `trade_preimage`, transport is not available"))?;
-
-        match transport
-            .send::<_, MmRpcResponseV2<TradePreimageResponse>, Json>(command)
-            .await
-        {
-            Ok(Ok(MmRpcResponseV2 {
-                mmrpc: MmRpcVersion::V2,
-                result: MmRpcResultV2::Ok { result },
-                id: _,
-            })) => self.response_handler.on_trade_preimage(result),
-            Ok(Ok(MmRpcResponseV2 {
-                mmrpc: MmRpcVersion::V2,
-                result: MmRpcResultV2::Err(error),
-                id: _,
-            })) => {
-                error_bail!("Got error: {:?}", error)
-            },
-            Ok(Err(error)) => self.response_handler.print_response(error),
-            Err(error) => error_bail!("Failed to send `trade_preimage` request: {error}"),
-        }
+        request_v2!(trade_preimage_command, TradePreimageResponse, self, on_trade_preimage)
     }
 
     pub(crate) async fn get_gossip_mesh(&self) -> Result<()> {
@@ -620,12 +609,35 @@ impl<T: Transport, P: ResponseHandler, C: AdexConfig + 'static> AdexProc<'_, '_,
         )
     }
 
-    pub(crate) async fn send_raw_transaction(&self, request: SendRawTransactionRequest) -> Result<()> {
+    pub(crate) async fn send_raw_transaction(
+        &self,
+        request: SendRawTransactionRequest,
+        raw_output: bool,
+    ) -> Result<()> {
         info!("Sending raw transaction");
         let send_raw_command = Command::builder()
             .userpass(self.get_rpc_password()?)
             .flatten_data(request)
             .build()?;
-        request_legacy!(send_raw_command, BytesJson, self, on_send_raw_transaction)
+        request_legacy!(
+            send_raw_command,
+            SendRawTransactionResponse,
+            self,
+            on_send_raw_transaction,
+            raw_output
+        )
+    }
+
+    pub(crate) async fn withdraw(&self, request: WithdrawRequest, raw_output: bool) -> Result<()> {
+        info!("Getting withdraw tx_hex");
+        debug!("Getting withdraw request: {:?}", request);
+
+        let withdraw_command = Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .v2_method(V2Method::Withdraw)
+            .flatten_data(request)
+            .build_v2()?;
+
+        request_v2!(withdraw_command, WithdrawResponse, self, on_withdraw, raw_output)
     }
 }

@@ -11,8 +11,7 @@ use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, Mm2RpcResult, MyOrdersResp
 
 use super::formatters::{format_confirmation_settings, format_datetime, format_historical_changes, format_ratio,
                         get_matches_rows, taker_order_header_row, taker_order_rows, term_table_blank,
-                        write_maker_match, COMMON_INDENT, COMMON_PRECISION};
-use super::macros::writeln_field;
+                        write_maker_match, writeln_field, COMMON_INDENT, COMMON_PRECISION};
 use crate::logging::error_anyhow;
 
 pub(super) fn on_my_orders(writer: &mut dyn Write, response: Mm2RpcResult<MyOrdersResponse>) -> Result<()> {
@@ -26,9 +25,9 @@ fn format_taker_orders_table(taker_orders: &HashMap<Uuid, TakerOrderForRpc>) -> 
     let mut buff: Vec<u8> = vec![];
     let writer: &mut dyn Write = &mut buff;
     if taker_orders.is_empty() {
-        writeln_field!(writer, "Taker orders", "empty", COMMON_INDENT);
+        writeln_field(writer, "Taker orders", "empty", COMMON_INDENT);
     } else {
-        writeln_field!(writer, "Taker orders", "", COMMON_INDENT);
+        writeln_field(writer, "Taker orders", "", COMMON_INDENT);
         let mut table = term_table_blank(TableStyle::thin(), false, false, false);
         table.add_row(taker_order_header_row());
         for (_, taker_order) in taker_orders.iter().sorted_by_key(|(_, o)| o.created_at) {
@@ -44,9 +43,9 @@ fn format_maker_orders_table(maker_orders: &HashMap<Uuid, MakerOrderForMyOrdersR
     let writer: &mut dyn Write = &mut buff;
 
     if maker_orders.is_empty() {
-        writeln_field!(writer, "Maker orders", "empty", COMMON_INDENT);
+        writeln_field(writer, "Maker orders", "empty", COMMON_INDENT);
     } else {
-        writeln_field!(writer, "Maker orders", "", COMMON_INDENT);
+        writeln_field(writer, "Maker orders", "", COMMON_INDENT);
         let mut table = term_table_blank(TableStyle::thin(), false, false, false);
         table.add_row(maker_order_for_my_orders_header_row());
 

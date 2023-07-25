@@ -42,7 +42,7 @@ enum Command {
     Config(ConfigSubcommand),
     #[command(about = "Put a coin to the trading index")]
     Enable {
-        #[arg(name = "COIN", help = "Coin to be included into the trading index")]
+        #[arg(help = "Coin to be included into the trading index")]
         coin: String,
     },
     #[command(about = "Deactivates enabled coin and also cancels all active orders that use the selected coin.")]
@@ -161,6 +161,10 @@ enum Command {
         about = "Broadcasts the transaction to the network of selected coin"
     )]
     SendRawTransaction(SendRawTransactionArgs),
+    #[command(
+        about = "Generates, signs, and returns a transaction that transfers the amount of coin to the address indicated in the to argument"
+    )]
+    Withdraw(WithdrawArgs),
 }
 
 #[derive(Parser)]
@@ -247,7 +251,8 @@ impl Cli {
             Command::BanPubkey(args) => proc.ban_pubkey(args.into()).await?,
             Command::ListBannedPubkeys => proc.list_banned_pubkeys().await?,
             Command::UnbanPubkeys(args) => proc.unban_pubkeys(args.into()).await?,
-            Command::SendRawTransaction(args) => proc.send_raw_transaction(args.into()).await?,
+            Command::SendRawTransaction(args) => proc.send_raw_transaction(args.into(), args.raw_output).await?,
+            Command::Withdraw(args) => proc.withdraw(args.into(), args.raw_output).await?,
         }
         Ok(())
     }

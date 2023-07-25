@@ -38,7 +38,7 @@ pub(crate) mod prelude {
     pub(crate) use super::commands_coin::{DisableCoinArgs, SetRequiredConfArgs, SetRequiredNotaArgs};
     pub(crate) use super::commands_pubkeys::{BanPubkeyArgs, UnbanPubkeysArgs};
     pub(crate) use super::commands_swap::SwapSubcommand;
-    pub(crate) use super::commands_wallet::SendRawTransactionArgs;
+    pub(crate) use super::commands_wallet::{SendRawTransactionArgs, WithdrawArgs};
 }
 
 fn parse_mm_number(value: &str) -> Result<MmNumber, ParseBigDecimalError> {

@@ -2,35 +2,34 @@ use anyhow::Result;
 use mm2_rpc::data::legacy::MinTradingVolResponse;
 use std::io::Write;
 
-use crate::adex_proc::response_handler::formatters::{term_table_blank, ZERO_INDENT};
+use crate::adex_proc::response_handler::formatters::{term_table_blank, writeln_field, ZERO_INDENT};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_number::BigRational;
 use term_table::row::Row;
 use term_table::TableStyle;
 
-use super::formatters::{format_ratio, COMMON_PRECISION};
+use super::formatters::{format_ratio, write_field_option, COMMON_PRECISION};
 use crate::rpc_data::{MakerPreimage, MaxTakerVolResponse, TakerPreimage, TotalTradeFeeResponse, TradeFeeResponse,
                       TradePreimageResponse};
-use crate::{write_field_option, writeln_field};
 
 pub(super) fn on_min_trading_vol(writer: &mut dyn Write, response: MinTradingVolResponse) -> Result<()> {
-    writeln_field!(writer, "coin", response.coin, 0);
-    writeln_field!(
+    writeln_field(writer, "coin", response.coin, 0);
+    writeln_field(
         writer,
         "volume",
         format_ratio(&response.volume.min_trading_vol, COMMON_PRECISION)?,
-        0
+        0,
     );
     Ok(())
 }
 
 pub(super) fn on_max_taker_vol(writer: &mut dyn Write, response: MaxTakerVolResponse) -> Result<()> {
-    writeln_field!(writer, "coin", response.coin, 0);
-    writeln_field!(
+    writeln_field(writer, "coin", response.coin, 0);
+    writeln_field(
         writer,
         "result",
         format_ratio(&BigRational::from(response.result), COMMON_PRECISION)?,
-        0
+        0,
     );
     Ok(())
 }
@@ -43,56 +42,56 @@ pub(super) fn on_trade_preimage(writer: &mut dyn Write, response: TradePreimageR
 }
 
 fn write_taker_preimage(writer: &mut dyn Write, preimage: TakerPreimage) -> Result<()> {
-    writeln_field!(
+    writeln_field(
         writer,
         "base_coin_fee",
         format_trade_coin_fee(preimage.base_coin_fee)?,
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "rel_coin_fee",
         format_trade_coin_fee(preimage.rel_coin_fee)?,
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "taker_fee",
         format_trade_coin_fee(preimage.taker_fee)?,
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "fee_to_send_taker_fee",
         format_trade_coin_fee(preimage.fee_to_send_taker_fee)?,
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    writeln_field!(writer, "total_fee", "", ZERO_INDENT);
+    writeln_field(writer, "total_fee", "", ZERO_INDENT);
     write_total_trade_fee(writer, preimage.total_fees)
 }
 
 fn write_maker_preimage(writer: &mut dyn Write, preimage: MakerPreimage) -> Result<()> {
-    writeln_field!(
+    writeln_field(
         writer,
         "base_coin_fee",
         format_trade_coin_fee(preimage.base_coin_fee)?,
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    writeln_field!(
+    writeln_field(
         writer,
         "rel_coin_fee",
         format_trade_coin_fee(preimage.rel_coin_fee)?,
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    write_field_option!(
+    write_field_option(
         writer,
         "volume",
         preimage
             .volume
             .map(|v| format_ratio(&v.volume, COMMON_PRECISION).unwrap_or_else(|_| "error".to_string())),
-        ZERO_INDENT
+        ZERO_INDENT,
     );
-    writeln_field!(writer, "total_fee", "", ZERO_INDENT);
+    writeln_field(writer, "total_fee", "", ZERO_INDENT);
     write_total_trade_fee(writer, preimage.total_fees)
 }
 
@@ -107,7 +106,7 @@ fn format_trade_coin_fee(trade_coin_fee: TradeFeeResponse) -> Result<String> {
 
 fn write_total_trade_fee(writer: &mut dyn Write, total_fee: Vec<TotalTradeFeeResponse>) -> Result<()> {
     if total_fee.is_empty() {
-        writeln_field!(writer, "total_fee", "empty", ZERO_INDENT);
+        writeln_field(writer, "total_fee", "empty", ZERO_INDENT);
         return Ok(());
     }
 

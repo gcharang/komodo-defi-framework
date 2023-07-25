@@ -23,6 +23,7 @@ where
 pub(super) enum V2Method {
     BestOrders,
     TradePreimage,
+    Withdraw,
 }
 
 impl<T> Command<T>
