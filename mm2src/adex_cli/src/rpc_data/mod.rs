@@ -10,9 +10,10 @@ mod trade_preimage;
 mod utility;
 mod wallet;
 
-pub(crate) use activation::{ActivationRequest, CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinFailed,
-                            DisableCoinRequest, DisableCoinResponse, DisableCoinSuccess, GetEnabledRequest,
-                            SetRequiredConfResponse, SetRequiredNotaResponse};
+pub(crate) use activation::{bch, ActivationMethod, ActivationRequestLegacy, ActivationV2Params,
+                            CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinFailed, DisableCoinRequest,
+                            DisableCoinResponse, DisableCoinSuccess, GetEnabledRequest, SetRequiredConfResponse,
+                            SetRequiredNotaResponse, V2ActivationMethod};
 pub(crate) use network::{GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
                          GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
                          GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,

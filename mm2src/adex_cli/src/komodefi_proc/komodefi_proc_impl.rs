@@ -22,17 +22,18 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::komodefi_config::KomodefiConfig;
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
-                      DisableCoinRequest, DisableCoinResponse, GetEnabledRequest, GetGossipMeshRequest,
-                      GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
-                      GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
-                      GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse, GetRelayMeshRequest,
-                      GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse, MaxTakerVolRequest,
-                      MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
-                      MySwapStatusRequest, MySwapStatusResponse, Params, RecoverFundsOfSwapRequest,
-                      RecoverFundsOfSwapResponse, SendRawTransactionRequest, SendRawTransactionResponse,
-                      SetRequiredConfResponse, SetRequiredNotaResponse, TradePreimageRequest, TradePreimageResponse,
-                      UnbanPubkeysRequest, UnbanPubkeysResponse, WithdrawRequest, WithdrawResponse};
+use crate::rpc_data::{ActivationMethod, ActivationRequestLegacy, ActiveSwapsRequest, ActiveSwapsResponse,
+                      CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse,
+                      GetEnabledRequest, GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
+                      GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
+                      GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
+                      GetRelayMeshRequest, GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse,
+                      MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse,
+                      MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusResponse, Params,
+                      RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse, SendRawTransactionRequest,
+                      SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
+                      TradePreimageRequest, TradePreimageResponse, UnbanPubkeysRequest, UnbanPubkeysResponse,
+                      WithdrawRequest, WithdrawResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -85,12 +86,21 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         let activation_scheme = get_activation_scheme()?;
         let activation_method = activation_scheme.get_activation_method(coin)?;
 
-        let enable = Command::builder()
-            .flatten_data(activation_method)
-            .userpass(self.get_rpc_password()?)
-            .build()?;
+        match activation_method {
+            ActivationMethod::Legacy(method) => {
+                let enable = Command::builder()
+                    .flatten_data(method)
+                    .userpass(self.get_rpc_password()?)
+                    .build()?;
 
-        request_legacy!(enable, CoinInitResponse, self, on_enable_response)
+                request_legacy!(enable, CoinInitResponse, self, on_enable_response)
+            },
+            ActivationMethod::V2(mut request) => {
+                request.userpass = Some(self.get_rpc_password()?);
+                info!("Send request");
+                request_v2!(request, CoinInitResponse, self, on_enable_response)
+            },
+        }
     }
 
     pub(crate) async fn disable(&self, request: DisableCoinRequest) -> Result<()> {

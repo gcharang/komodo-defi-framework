@@ -8,14 +8,14 @@ use mm2_rpc::data::version2::{MmRpcRequest, MmRpcVersion};
 use crate::error_anyhow;
 
 #[derive(Clone, Serialize)]
-pub(super) struct Command<T>
+pub(crate) struct Command<T>
 where
     T: Serialize + Sized,
 {
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    flatten_data: Option<T>,
+    pub(crate) flatten_data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    userpass: Option<String>,
+    pub(crate) userpass: Option<String>,
 }
 
 #[derive(Clone, Display, Serialize)]

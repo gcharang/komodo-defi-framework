@@ -7,7 +7,7 @@ use crate::activation_scheme_db::{get_activation_scheme, get_activation_scheme_p
 use crate::cli::Cli;
 use crate::komodefi_config::KomodefiConfigImpl;
 use crate::komodefi_proc::ResponseHandlerImpl;
-use crate::rpc_data::ActivationRequest;
+use crate::rpc_data::ActivationRequestLegacy;
 
 const FAKE_SERVER_COOLDOWN_TIMEOUT_MS: u64 = 10;
 const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;
@@ -81,7 +81,7 @@ async fn test_activation_scheme() {
     init_activation_scheme().await.unwrap();
     let scheme = get_activation_scheme().unwrap();
     let kmd_scheme = scheme.get_activation_method("KMD");
-    let Ok(ActivationRequest::Electrum(electrum)) = kmd_scheme else {
+    let Ok(ActivationRequestLegacy::Electrum(electrum)) = kmd_scheme else {
          panic!("Failed to get electrum scheme")
     };
     assert_ne!(electrum.servers.len(), 0);
