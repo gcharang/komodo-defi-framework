@@ -93,11 +93,14 @@ enum Command {
         coin: String,
     },
     #[command(
-        visible_alias = "kick-start-coins",
+        visible_alias = "to-kick",
         about = "Return the coins that should be activated to continue the interrupted swaps"
     )]
     CoinsToKickStart,
-    #[command(about = "Return the approximate fee amounts that are paid per the whole swap")]
+    #[command(
+        visible_alias = "preimage",
+        about = "Return the approximate fee amounts that are paid per the whole swap"
+    )]
     TradePreimage(TradePreimageArgs),
     #[command(
         visible_alias = "gossip-mesh",

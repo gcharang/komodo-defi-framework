@@ -40,6 +40,9 @@ use mm2_rpc::data::version2::{BestOrdersV2Response, GetPublicKeyHashResponse, Ge
 use crate::komodefi_config::KomodefiConfig;
 use crate::komodefi_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
 use crate::logging::error_anyhow;
+use crate::rpc_data::bch::{BchWithTokensActivationResult, SlpInitResult};
+use crate::rpc_data::eth::{Erc20InitResult, EthWithTokensActivationResult};
+use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::{ActiveSwapsResponse, CoinsToKickstartResponse, DisableCoinResponse, GetGossipMeshResponse,
                       GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse, GetMyPeerIdResponse,
                       GetPeersInfoResponse, GetRelayMeshResponse, ListBannedPubkeysResponse, MaxTakerVolResponse,
@@ -58,7 +61,15 @@ pub(crate) trait ResponseHandler {
     ) -> Result<()>;
     fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
     fn on_version_response(&self, response: MmVersionResponse) -> Result<()>;
+
     fn on_enable_response(&self, response: CoinInitResponse) -> Result<()>;
+    fn on_enable_bch(&self, response: BchWithTokensActivationResult) -> Result<()>;
+    fn on_enable_slp(&self, response: SlpInitResult) -> Result<()>;
+    fn on_enable_tendermint(&self, response: TendermintActivationResult) -> Result<()>;
+    fn on_enable_tendermint_token(&self, response: TendermintTokenInitResult) -> Result<()>;
+    fn on_enable_erc20(&self, response: Erc20InitResult) -> Result<()>;
+    fn on_enable_eth_with_tokens(&self, response: EthWithTokensActivationResult) -> Result<()>;
+
     fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()>;
     fn on_balance_response(&self, response: BalanceResponse) -> Result<()>;
     fn on_sell_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
@@ -161,6 +172,36 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
             writeln_safe_io!(writer, "mature_confirmations: {}", mature_confirmations);
         }
         Ok(())
+    }
+
+    fn on_enable_bch(&self, response: BchWithTokensActivationResult) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_enable_bch(writer.deref_mut(), response)
+    }
+
+    fn on_enable_slp(&self, response: SlpInitResult) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_enable_slp(writer.deref_mut(), response)
+    }
+
+    fn on_enable_tendermint(&self, response: TendermintActivationResult) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_enable_tendermint(writer.deref_mut(), response)
+    }
+
+    fn on_enable_tendermint_token(&self, response: TendermintTokenInitResult) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_enable_tendermint_token(writer.deref_mut(), response)
+    }
+
+    fn on_enable_erc20(&self, response: Erc20InitResult) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_enable_erc20(writer.deref_mut(), response)
+    }
+
+    fn on_enable_eth_with_tokens(&self, response: EthWithTokensActivationResult) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        activation::on_enable_eth_with_tokens(writer.deref_mut(), response)
     }
 
     fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()> {

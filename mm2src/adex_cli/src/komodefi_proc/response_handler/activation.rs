@@ -1,6 +1,22 @@
-use std::io::Write;
+#[path = "activation/bch.rs"] mod bch;
+#[path = "activation/eth.rs"] mod eth;
+#[path = "activation/tendermint.rs"] mod tendermint;
 
-use super::formatters::{write_sequence, writeln_field, ZERO_INDENT};
+pub(super) use bch::{on_enable_bch, on_enable_slp};
+pub(super) use eth::{on_enable_erc20, on_enable_eth_with_tokens};
+pub(super) use tendermint::{on_enable_tendermint, on_enable_tendermint_token};
+
+use anyhow::{anyhow, Result};
+use itertools::Itertools;
+use std::collections::HashMap;
+use std::io::Write;
+use term_table::{row::Row, TableStyle};
+
+use common::log::error;
+
+use super::formatters::{format_ratio, term_table_blank, write_sequence, writeln_field, COMMON_PRECISION, ZERO_INDENT};
+use crate::error_anyhow;
+use crate::rpc_data::activation::{CoinAddressInfo, CoinBalance, TokenBalances};
 use crate::rpc_data::{CoinsToKickstartResponse, DisableCoinFailed, DisableCoinResponse, DisableCoinSuccess,
                       SetRequiredConfResponse, SetRequiredNotaResponse};
 
@@ -46,4 +62,52 @@ fn write_disable_failed(writer: &mut dyn Write, disable_failed: DisableCoinFaile
     write_sequence(writer, "orders_matching", orders_matching, ZERO_INDENT);
     let orders_cancelled = disable_failed.orders.cancelled.iter();
     write_sequence(writer, "orders_matching", orders_cancelled, ZERO_INDENT);
+}
+
+fn format_coin_balance(balance: CoinBalance) -> Result<String> {
+    Ok(format!(
+        "{}:{}",
+        format_ratio(&balance.spendable, COMMON_PRECISION)?,
+        format_ratio(&balance.unspendable, COMMON_PRECISION)?
+    ))
+}
+
+fn format_token_balances(balances: TokenBalances) -> Result<String> {
+    if balances.is_empty() {
+        return Ok("{}".to_string());
+    }
+    let mut buff: Vec<u8> = vec![];
+    let writer: &mut dyn Write = &mut buff;
+    for (token, balance) in balances {
+        writeln_field(writer, token, format_coin_balance(balance)?, ZERO_INDENT);
+    }
+    String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format token_balances: {}", error))
+}
+
+fn format_addr_infos<T, F: FnOnce(T) -> Result<String> + Copy>(
+    addr: HashMap<String, CoinAddressInfo<T>>,
+    format_balance: F,
+) -> String {
+    let mut term_table = term_table_blank(TableStyle::thin(), false, false, false);
+    term_table.add_row(Row::new(["address, pubkey", "method", "balance(sp,unsp)", "tickers"]));
+    for (address, info) in addr {
+        term_table.add_row(Row::new(vec![
+            format!("{}\n{}", address, info.pubkey),
+            info.derivation_method.to_string(),
+            format_option(
+                info.balances
+                    .map(format_balance)
+                    .map(|result| result.unwrap_or_else(|_| "error".to_string())),
+            ),
+            format_option(info.tickers.map(|tickers| tickers.iter().join("\n"))),
+        ]))
+    }
+    term_table.render()
+}
+
+fn format_option<T: ToString>(value: Option<T>) -> String {
+    let Some(value) = value else {
+        return  "none".to_string();
+    };
+    value.to_string()
 }

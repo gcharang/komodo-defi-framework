@@ -3,17 +3,16 @@
 //! *Note: it's expected that the following data types will be moved to mm2_rpc::data when mm2 is refactored to be able to handle them*
 //!
 
-mod activation;
-mod network;
-mod swaps;
-mod trade_preimage;
-mod utility;
-mod wallet;
+pub(crate) mod activation;
+pub(crate) mod network;
+pub(crate) mod swaps;
+pub(crate) mod trade_preimage;
+pub(crate) mod utility;
+pub(crate) mod wallet;
 
-pub(crate) use activation::{bch, ActivationMethod, ActivationRequestLegacy, ActivationV2Params,
-                            CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinFailed, DisableCoinRequest,
-                            DisableCoinResponse, DisableCoinSuccess, GetEnabledRequest, SetRequiredConfResponse,
-                            SetRequiredNotaResponse, V2ActivationMethod};
+pub(crate) use activation::{bch, eth, tendermint, CoinsToKickStartRequest, CoinsToKickstartResponse,
+                            DisableCoinFailed, DisableCoinRequest, DisableCoinResponse, DisableCoinSuccess,
+                            GetEnabledRequest, SetRequiredConfResponse, SetRequiredNotaResponse};
 pub(crate) use network::{GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
                          GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
                          GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,

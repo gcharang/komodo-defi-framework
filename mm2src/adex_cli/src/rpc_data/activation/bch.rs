@@ -1,68 +1,72 @@
+use rpc::v1::types::H256 as H256Json;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use common::true_f;
 use mm2_rpc::data::legacy::{ElectrumProtocol, UtxoMergeParams};
 
+use crate::rpc_data::activation::{CoinAddressInfo, CoinBalance, TokenActivationRequest, TokenBalances};
+
 #[derive(Deserialize, Serialize)]
-pub struct BchWithTokensActivationParams {
+pub(crate) struct BchWithTokensActivationParams {
     #[serde(flatten)]
     platform_request: BchActivationRequest,
     slp_tokens_requests: Vec<TokenActivationRequest<SlpActivationRequest>>,
     #[serde(default = "true_f")]
-    pub get_balances: bool,
+    pub(crate) get_balances: bool,
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct BchActivationRequest {
+pub(crate) struct BchActivationRequest {
     #[serde(default)]
     allow_slp_unsafe_conf: bool,
     bchd_urls: Vec<String>,
     #[serde(flatten)]
-    pub utxo_params: UtxoActivationParams,
+    pub(crate) utxo_params: UtxoActivationParams,
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct UtxoActivationParams {
-    pub mode: UtxoRpcMode,
+pub(crate) struct UtxoActivationParams {
+    pub(crate) mode: UtxoRpcMode,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub utxo_merge_params: Option<UtxoMergeParams>,
+    pub(crate) utxo_merge_params: Option<UtxoMergeParams>,
     #[serde(default)]
-    pub tx_history: bool,
+    pub(crate) tx_history: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_confirmations: Option<u64>,
+    pub(crate) required_confirmations: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub requires_notarization: Option<bool>,
+    pub(crate) requires_notarization: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub address_format: Option<UtxoAddressFormat>,
+    pub(crate) address_format: Option<UtxoAddressFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gap_limit: Option<u32>,
+    pub(crate) gap_limit: Option<u32>,
     #[serde(flatten)]
-    pub enable_params: EnabledCoinBalanceParams,
+    pub(crate) enable_params: EnabledCoinBalanceParams,
     #[serde(default)]
-    pub priv_key_policy: PrivKeyActivationPolicy,
+    pub(crate) priv_key_policy: PrivKeyActivationPolicy,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub check_utxo_maturity: Option<bool>,
+    pub(crate) check_utxo_maturity: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "rpc", content = "rpc_data")]
-pub enum UtxoRpcMode {
+pub(crate) enum UtxoRpcMode {
     Native,
     Electrum { servers: Vec<ElectrumRpcRequest> },
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct ElectrumRpcRequest {
-    pub url: String,
+pub(crate) struct ElectrumRpcRequest {
+    pub(crate) url: String,
     #[serde(default)]
-    pub protocol: ElectrumProtocol,
+    pub(crate) protocol: ElectrumProtocol,
     #[serde(default)]
-    pub disable_cert_verification: bool,
+    pub(crate) disable_cert_verification: bool,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "format")]
-pub enum UtxoAddressFormat {
+pub(crate) enum UtxoAddressFormat {
     /// Standard UTXO address format.
     /// In Bitcoin Cash context the standard format also known as 'legacy'.
     #[serde(rename = "standard")]
@@ -84,7 +88,7 @@ pub enum UtxoAddressFormat {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub enum PrivKeyActivationPolicy {
+pub(crate) enum PrivKeyActivationPolicy {
     ContextPrivKey,
     Trezor,
 }
@@ -94,16 +98,16 @@ impl Default for PrivKeyActivationPolicy {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct EnabledCoinBalanceParams {
+pub(crate) struct EnabledCoinBalanceParams {
     #[serde(default)]
-    pub scan_policy: EnableCoinScanPolicy,
+    pub(crate) scan_policy: EnableCoinScanPolicy,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub min_addresses_number: Option<u32>,
+    pub(crate) min_addresses_number: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum EnableCoinScanPolicy {
+pub(crate) enum EnableCoinScanPolicy {
     DoNotScan,
     ScanIfNewWallet,
     Scan,
@@ -114,14 +118,22 @@ impl Default for EnableCoinScanPolicy {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct TokenActivationRequest<Req> {
-    pub(crate) ticker: String,
-    #[serde(flatten)]
-    pub(crate) request: Req,
+pub(crate) struct SlpActivationRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) required_confirmations: Option<u64>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SlpActivationRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_confirmations: Option<u64>,
+#[derive(Debug, Deserialize)]
+pub(crate) struct BchWithTokensActivationResult {
+    pub(crate) current_block: u64,
+    pub(crate) bch_addresses_infos: HashMap<String, CoinAddressInfo<CoinBalance>>,
+    pub(crate) slp_addresses_infos: HashMap<String, CoinAddressInfo<TokenBalances>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SlpInitResult {
+    pub(crate) balances: HashMap<String, CoinBalance>,
+    pub(crate) token_id: H256Json,
+    pub(crate) platform_coin: String,
+    pub(crate) required_confirmations: u64,
 }

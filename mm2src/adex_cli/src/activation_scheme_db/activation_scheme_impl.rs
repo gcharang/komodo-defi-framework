@@ -3,13 +3,11 @@ use serde_json::Value as Json;
 use std::collections::HashMap;
 
 use common::log::{debug, error};
-use mm2_rpc::data::legacy::Mm2RpcResult;
-use mm2_rpc::data::version2::MmRpcRequest;
 
 use super::init_activation_scheme::get_activation_scheme_path;
 use crate::helpers::read_json_file;
 use crate::logging::{error_anyhow, error_bail};
-use crate::rpc_data::{bch, ActivationMethod, ActivationRequestLegacy, ActivationV2Params, V2ActivationMethod};
+use crate::rpc_data::activation::{ActivationMethod, ActivationMethodLegacy, ActivationMethodV2};
 
 #[derive(Default)]
 pub(crate) struct ActivationScheme {
@@ -25,32 +23,23 @@ impl ActivationScheme {
             .clone();
 
         if let Some(_mmrpc) = method_json.get("mmrpc") {
-            let Some(params) = method_json.get("params") else {
-                error_bail!("Todo")
-            };
-            let Some(method) = method_json.get("method") else {
-                error_bail!("Todo")
-            };
-
-            match serde_json::from_value(method.clone()) {
-                Ok(V2ActivationMethod::EnableBchWithTokens) => {
-                    let request: MmRpcRequest<V2ActivationMethod, ActivationV2Params> =
-                        serde_json::from_value(method_json.clone()).map_err(|error| {
-                            error_anyhow!("Failed to deserialize json data: {:?}, error: {}", method_json, error)
-                        })?;
-
-                    Ok(ActivationMethod::V2(request))
-                },
-                Err(error) => {
-                    error_bail!("error: {}", error)
-                },
+            match serde_json::from_value::<ActivationMethodV2>(method_json.clone()) {
+                Ok(method) => Ok(ActivationMethod::V2(method)),
+                Err(error) => error_bail!(
+                    "Failed to deserialize v2_enable_request from data: {}, error: {}",
+                    method_json,
+                    error
+                ),
             }
         } else {
-            let method: ActivationRequestLegacy = serde_json::from_value(method_json.clone()).map_err(|error| {
-                error_anyhow!("Failed to deserialize json data: {:?}, error: {}", method_json, error)
-            })?;
-
-            Ok(ActivationMethod::Legacy(method))
+            match serde_json::from_value::<ActivationMethodLegacy>(method_json.clone()) {
+                Ok(method) => Ok(ActivationMethod::Legacy(method)),
+                Err(error) => error_bail!(
+                    "Failed to deserialize legacy_enable_method from data: {}, error: {}",
+                    method_json,
+                    error
+                ),
+            }
         }
     }
 

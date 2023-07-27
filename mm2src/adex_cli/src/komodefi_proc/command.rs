@@ -27,6 +27,12 @@ pub(super) enum V2Method {
     GetPublicKey,
     GetPublicKeyHash,
     GetRawTransaction,
+    EnableBchWithTokens,
+    EnableSlp,
+    EnableTendermintWithAssets,
+    EnableTendermintToken,
+    EnableErc20,
+    EnableEthWithTokens,
 }
 
 impl<T> Command<T>

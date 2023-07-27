@@ -22,18 +22,21 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::komodefi_config::KomodefiConfig;
-use crate::rpc_data::{ActivationMethod, ActivationRequestLegacy, ActiveSwapsRequest, ActiveSwapsResponse,
-                      CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse,
-                      GetEnabledRequest, GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
-                      GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
-                      GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
-                      GetRelayMeshRequest, GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse,
-                      MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse,
-                      MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusResponse, Params,
-                      RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse, SendRawTransactionRequest,
-                      SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
-                      TradePreimageRequest, TradePreimageResponse, UnbanPubkeysRequest, UnbanPubkeysResponse,
-                      WithdrawRequest, WithdrawResponse};
+use crate::rpc_data::activation::{bch::{BchWithTokensActivationResult, SlpInitResult},
+                                  eth::{Erc20InitResult, EthWithTokensActivationResult},
+                                  tendermint::{TendermintActivationResult, TendermintTokenInitResult},
+                                  ActivationMethod, ActivationMethodV2};
+use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
+                      DisableCoinRequest, DisableCoinResponse, GetEnabledRequest, GetGossipMeshRequest,
+                      GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
+                      GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
+                      GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse, GetRelayMeshRequest,
+                      GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse, MaxTakerVolRequest,
+                      MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
+                      MySwapStatusRequest, MySwapStatusResponse, Params, RecoverFundsOfSwapRequest,
+                      RecoverFundsOfSwapResponse, SendRawTransactionRequest, SendRawTransactionResponse,
+                      SetRequiredConfResponse, SetRequiredNotaResponse, TradePreimageRequest, TradePreimageResponse,
+                      UnbanPubkeysRequest, UnbanPubkeysResponse, WithdrawRequest, WithdrawResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -52,6 +55,16 @@ macro_rules! request_legacy {
             Err(error) => error_bail!(concat!("Failed to send: `", stringify!($request), "`: {}"), error)
         }
     }};
+}
+
+macro_rules! v2_command {
+    ($self: ident, $method: ident, $params: expr) => {
+        Command::builder()
+            .userpass($self.get_rpc_password()?)
+            .v2_method(V2Method::$method)
+            .flatten_data($params)
+            .build_v2()?
+    };
 }
 
 macro_rules! request_v2 {
@@ -95,10 +108,44 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
                 request_legacy!(enable, CoinInitResponse, self, on_enable_response)
             },
-            ActivationMethod::V2(mut request) => {
-                request.userpass = Some(self.get_rpc_password()?);
-                info!("Send request");
-                request_v2!(request, CoinInitResponse, self, on_enable_response)
+            ActivationMethod::V2(ActivationMethodV2::EnableBchWithTokens(params)) => {
+                let enable_bch = v2_command!(self, EnableBchWithTokens, params);
+                request_v2!(enable_bch, BchWithTokensActivationResult, self, on_enable_bch)
+            },
+            ActivationMethod::V2(ActivationMethodV2::EnableSlp(params)) => {
+                let enable_slp = v2_command!(self, EnableSlp, params);
+                request_v2!(enable_slp, SlpInitResult, self, on_enable_slp)
+            },
+            ActivationMethod::V2(ActivationMethodV2::EnableTendermintWithAssets(params)) => {
+                let enable_tendermint = v2_command!(self, EnableTendermintWithAssets, params);
+                request_v2!(
+                    enable_tendermint,
+                    TendermintActivationResult,
+                    self,
+                    on_enable_tendermint
+                )
+            },
+            ActivationMethod::V2(ActivationMethodV2::EnableTendermintToken(params)) => {
+                let enable_tendermint_token = v2_command!(self, EnableTendermintToken, params);
+                request_v2!(
+                    enable_tendermint_token,
+                    TendermintTokenInitResult,
+                    self,
+                    on_enable_tendermint_token
+                )
+            },
+            ActivationMethod::V2(ActivationMethodV2::EnableEthWithTokens(params)) => {
+                let enable_erc20 = v2_command!(self, EnableEthWithTokens, params);
+                request_v2!(
+                    enable_erc20,
+                    EthWithTokensActivationResult,
+                    self,
+                    on_enable_eth_with_tokens
+                )
+            },
+            ActivationMethod::V2(ActivationMethodV2::EnableErc20(params)) => {
+                let enable_erc20 = v2_command!(self, EnableErc20, params);
+                request_v2!(enable_erc20, Erc20InitResult, self, on_enable_erc20)
             },
         }
     }
@@ -271,14 +318,9 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_legacy!(my_orders, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
     }
 
-    pub(crate) async fn best_orders(&self, request: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
-        info!("Getting best orders: {} {}", request.action, request.coin);
-        let best_orders_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .v2_method(V2Method::BestOrders)
-            .flatten_data(request)
-            .build_v2()?;
-
+    pub(crate) async fn best_orders(&self, params: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
+        info!("Getting best orders: {} {}", params.action, params.coin);
+        let best_orders_command = v2_command!(self, BestOrders, params);
         request_v2!(
             best_orders_command,
             BestOrdersV2Response,
@@ -439,12 +481,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
         info!("Getting trade preimage");
-        let trade_preimage_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .v2_method(V2Method::TradePreimage)
-            .flatten_data(request)
-            .build_v2()?;
-
+        let trade_preimage_command = v2_command!(self, TradePreimage, request);
         request_v2!(trade_preimage_command, TradePreimageResponse, self, on_trade_preimage)
     }
 
@@ -643,31 +680,19 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
     pub(crate) async fn withdraw(&self, request: WithdrawRequest, bare_output: bool) -> Result<()> {
         info!("Getting withdraw tx_hex");
         debug!("Getting withdraw request: {:?}", request);
-
-        let withdraw_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .v2_method(V2Method::Withdraw)
-            .flatten_data(request)
-            .build_v2()?;
-
+        let withdraw_command = v2_command!(self, Withdraw, request);
         request_v2!(withdraw_command, WithdrawResponse, self, on_withdraw, bare_output)
     }
 
     pub(crate) async fn get_public_key(&self) -> Result<()> {
         info!("Getting public key");
-        let pubkey_command = Command::<()>::builder()
-            .userpass(self.get_rpc_password()?)
-            .v2_method(V2Method::GetPublicKey)
-            .build_v2()?;
+        let pubkey_command = v2_command!(self, GetPublicKey, ());
         request_v2!(pubkey_command, GetPublicKeyResponse, self, on_public_key)
     }
 
     pub(crate) async fn get_public_key_hash(&self) -> Result<()> {
         info!("Getting public key hash");
-        let pubkey_hash_command = Command::<()>::builder()
-            .userpass(self.get_rpc_password()?)
-            .v2_method(V2Method::GetPublicKeyHash)
-            .build_v2()?;
+        let pubkey_hash_command = v2_command!(self, GetPublicKeyHash, ());
         request_v2!(pubkey_hash_command, GetPublicKeyHashResponse, self, on_public_key_hash)
     }
 
@@ -676,12 +701,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             "Getting raw transaction of coin: {}, hash: {}",
             request.coin, request.tx_hash
         );
-        let get_raw_tx_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .v2_method(V2Method::GetRawTransaction)
-            .flatten_data(request)
-            .build_v2()?;
-
+        let get_raw_tx_command = v2_command!(self, GetRawTransaction, request);
         request_v2!(
             get_raw_tx_command,
             GetRawTransactionResponse,
