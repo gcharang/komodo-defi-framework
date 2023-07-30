@@ -1,5 +1,6 @@
 mod cmd_best_orders;
 mod cmd_cancel;
+mod cmd_enable;
 mod cmd_my_balance;
 mod cmd_order_status;
 mod cmd_orderbook;
@@ -25,6 +26,7 @@ use mm2_number::{BigDecimal, MmNumber};
 pub(crate) mod prelude {
     pub(crate) use super::cmd_best_orders::BestOrderArgs;
     pub(crate) use super::cmd_cancel::CancelSubcommand;
+    pub(crate) use super::cmd_enable::EnableArgs;
     pub(crate) use super::cmd_my_balance::MyBalanceArgs;
     pub(crate) use super::cmd_order_status::OrderStatusArgs;
     pub(crate) use super::cmd_orderbook::OrderbookArgs;

@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use common::true_f;
-use mm2_rpc::data::legacy::{ElectrumProtocol, UtxoMergeParams};
+use mm2_rpc::data::legacy::UtxoMergeParams;
 
-use crate::rpc_data::activation::{CoinAddressInfo, CoinBalance, TokenActivationRequest, TokenBalances};
+use crate::rpc_data::activation::{CoinAddressInfo, CoinBalance, ElectrumRpcRequest, TokenActivationRequest,
+                                  TokenBalances};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct BchWithTokensActivationParams {
@@ -56,27 +57,12 @@ pub(crate) enum UtxoRpcMode {
 }
 
 #[derive(Deserialize, Serialize)]
-pub(crate) struct ElectrumRpcRequest {
-    pub(crate) url: String,
-    #[serde(default)]
-    pub(crate) protocol: ElectrumProtocol,
-    #[serde(default)]
-    pub(crate) disable_cert_verification: bool,
-}
-
-#[derive(Deserialize, Serialize)]
 #[serde(tag = "format")]
 pub(crate) enum UtxoAddressFormat {
-    /// Standard UTXO address format.
-    /// In Bitcoin Cash context the standard format also known as 'legacy'.
     #[serde(rename = "standard")]
     Standard,
-    /// Segwit Address
-    /// https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
     #[serde(rename = "segwit")]
     Segwit,
-    /// Bitcoin Cash specific address format.
-    /// https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/cashaddr.md
     #[serde(rename = "cashaddress")]
     CashAddress {
         network: String,

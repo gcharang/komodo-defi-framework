@@ -1,9 +1,11 @@
 use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
+use std::time::Duration;
+use uuid::Uuid;
 
-use common::log::{error, info, warn};
-use log::debug;
+use common::log::{debug, error, info, warn};
 use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, BuyRequest, CancelAllOrdersRequest,
                             CancelAllOrdersResponse, CancelBy, CancelOrderRequest, CoinInitResponse,
                             GetEnabledResponse, MakerOrderForRpc, MinTradingVolResponse, Mm2RpcResult,
@@ -13,10 +15,10 @@ use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, 
                             SetPriceReq, SetRequiredConfRequest, SetRequiredNotaRequest, Status, StopRequest,
                             UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, BestOrdersV2Response, GetPublicKeyHashResponse,
-                              GetPublicKeyResponse, GetRawTransactionRequest, GetRawTransactionResponse,
+                              GetPublicKeyResponse, GetRawTransactionRequest, GetRawTransactionResponse, MmRpcRequest,
                               MmRpcResponseV2, MmRpcResultV2, MmRpcVersion};
-use uuid::Uuid;
 
+use self::macros::{request_legacy, request_v2};
 use super::command::{Command, V2Method};
 use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
@@ -25,8 +27,10 @@ use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::activation::{bch::{BchWithTokensActivationResult, SlpInitResult},
                                   eth::{Erc20InitResult, EthWithTokensActivationResult},
                                   tendermint::{TendermintActivationResult, TendermintTokenInitResult},
-                                  ActivationMethod, ActivationMethodV2};
-use crate::rpc_data::{ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
+                                  zcoin, ActivationMethod, ActivationMethodV2, EnablePlatformCoinWithTokensReq,
+                                  InitStandaloneCoinReq, InitStandaloneCoinResponse, InitStandaloneCoinStatusRequest,
+                                  InitStandaloneCoinStatusResponse, TaskId};
+use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
                       DisableCoinRequest, DisableCoinResponse, GetEnabledRequest, GetGossipMeshRequest,
                       GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
                       GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
@@ -46,55 +50,8 @@ pub(crate) struct KomodefiProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandl
     pub(crate) config: &'cfg C,
 }
 
-macro_rules! request_legacy {
-    ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
-        let transport = $self.transport.ok_or_else(|| warn_anyhow!( concat!("Failed to send: `", stringify!($request), "`, transport is not available")))?;
-        match transport.send::<_, $response_ty, Json>($request).await {
-            Ok(Ok(ok)) => $self.response_handler.$handle_method(ok, $($opt),*),
-            Ok(Err(error)) => $self.response_handler.print_response(error),
-            Err(error) => error_bail!(concat!("Failed to send: `", stringify!($request), "`: {}"), error)
-        }
-    }};
-}
-
-macro_rules! v2_command {
-    ($self: ident, $method: ident, $params: expr) => {
-        Command::builder()
-            .userpass($self.get_rpc_password()?)
-            .v2_method(V2Method::$method)
-            .flatten_data($params)
-            .build_v2()?
-    };
-}
-
-macro_rules! request_v2 {
-    ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
-        let transport = $self.transport.ok_or_else(|| {
-            warn_anyhow!(concat!(
-                "Failed to send: `",
-                stringify!($request),
-                "`, transport is not available"
-            ))
-        })?;
-        match transport.send::<_, MmRpcResponseV2<$response_ty>, Json>($request).await {
-            Ok(Ok(MmRpcResponseV2 {
-                mmrpc: MmRpcVersion::V2,
-                result: MmRpcResultV2::Ok { result },
-                id: _,
-            })) => $self.response_handler.$handle_method(result, $($opt),*),
-            Ok(Ok(MmRpcResponseV2 {
-                mmrpc: MmRpcVersion::V2,
-                result: MmRpcResultV2::Err(error),
-                id: _,
-            })) => error_bail!(concat!("Got `", stringify!($request), "` error: {:?}"), error),
-            Ok(Err(error)) => $self.response_handler.print_response(error),
-            Err(error) => error_bail!(concat!("Failed to send `", stringify!($request), "` request: {}"), error),
-        }
-    }};
-}
-
 impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc<'_, '_, '_, T, P, C> {
-    pub(crate) async fn enable(&self, coin: &str) -> Result<()> {
+    pub(crate) async fn enable(&self, coin: &str, keep_progress: u64) -> Result<()> {
         info!("Enabling coin: {coin}");
         let activation_scheme = get_activation_scheme()?;
         let activation_method = activation_scheme.get_activation_method(coin)?;
@@ -108,16 +65,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
                 request_legacy!(enable, CoinInitResponse, self, on_enable_response)
             },
-            ActivationMethod::V2(ActivationMethodV2::EnableBchWithTokens(params)) => {
-                let enable_bch = v2_command!(self, EnableBchWithTokens, params);
-                request_v2!(enable_bch, BchWithTokensActivationResult, self, on_enable_bch)
-            },
+            ActivationMethod::V2(ActivationMethodV2::EnableBchWithTokens(params)) => self.enable_bch(params).await,
             ActivationMethod::V2(ActivationMethodV2::EnableSlp(params)) => {
-                let enable_slp = v2_command!(self, EnableSlp, params);
+                let enable_slp = self.command_v2(V2Method::EnableSlp, params)?;
                 request_v2!(enable_slp, SlpInitResult, self, on_enable_slp)
             },
             ActivationMethod::V2(ActivationMethodV2::EnableTendermintWithAssets(params)) => {
-                let enable_tendermint = v2_command!(self, EnableTendermintWithAssets, params);
+                let enable_tendermint = self.command_v2(V2Method::EnableTendermintWithAssets, params)?;
                 request_v2!(
                     enable_tendermint,
                     TendermintActivationResult,
@@ -126,7 +80,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                 )
             },
             ActivationMethod::V2(ActivationMethodV2::EnableTendermintToken(params)) => {
-                let enable_tendermint_token = v2_command!(self, EnableTendermintToken, params);
+                let enable_tendermint_token = self.command_v2(V2Method::EnableTendermintToken, params)?;
                 request_v2!(
                     enable_tendermint_token,
                     TendermintTokenInitResult,
@@ -135,7 +89,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                 )
             },
             ActivationMethod::V2(ActivationMethodV2::EnableEthWithTokens(params)) => {
-                let enable_erc20 = v2_command!(self, EnableEthWithTokens, params);
+                let enable_erc20 = self.command_v2(V2Method::EnableEthWithTokens, params)?;
                 request_v2!(
                     enable_erc20,
                     EthWithTokensActivationResult,
@@ -144,55 +98,36 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                 )
             },
             ActivationMethod::V2(ActivationMethodV2::EnableErc20(params)) => {
-                let enable_erc20 = v2_command!(self, EnableErc20, params);
+                let enable_erc20 = self.command_v2(V2Method::EnableErc20, params)?;
                 request_v2!(enable_erc20, Erc20InitResult, self, on_enable_erc20)
+            },
+
+            ActivationMethod::V2(ActivationMethodV2::EnableZCoin(params)) => {
+                self.enable_z_coin(params, keep_progress).await
             },
         }
     }
 
     pub(crate) async fn disable(&self, request: DisableCoinRequest) -> Result<()> {
         info!("Disabling coin: {}", request.coin);
-
-        let disable_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
-
-        let transport = self
-            .transport
-            .ok_or_else(|| warn_anyhow!(concat!("Failed to send: `disable_command`, transport is not available")))?;
-        match transport
-            .send::<_, DisableCoinResponse, DisableCoinResponse>(disable_command)
-            .await
-        {
-            Ok(Ok(ok)) => self.response_handler.on_disable_coin(ok),
-            Ok(Err(error)) => self.response_handler.on_disable_coin(error),
-            Err(error) => error_bail!("Failed to send: `disable_command`: {}", error),
-        }
+        let disable_command = self.command_legacy(request)?;
+        request_legacy!(disable_command, DisableCoinResponse, self, on_disable_coin)
     }
 
     pub(crate) async fn get_balance(&self, request: BalanceRequest) -> Result<()> {
         info!("Getting balance, coin: {}", request.coin);
-        let get_balance = Command::builder()
-            .flatten_data(request)
-            .userpass(self.get_rpc_password()?)
-            .build()?;
+        let get_balance = self.command_legacy(request)?;
         request_legacy!(get_balance, BalanceResponse, self, on_balance_response)
     }
 
     pub(crate) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
-
-        let enabled = Command::builder()
-            .flatten_data(GetEnabledRequest::default())
-            .userpass(self.get_rpc_password()?)
-            .build()?;
+        let enabled = self.command_legacy(GetEnabledRequest::default())?;
         request_legacy!(enabled, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
     pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, settings: OrderbookSettings) -> Result<()> {
         info!("Getting orderbook, base: {}, rel: {}", request.base, request.rel);
-
         let get_orderbook = Command::builder().flatten_data(request).build()?;
         request_legacy!(
             get_orderbook,
@@ -215,10 +150,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             request.delegate.rel,
             request.delegate.base,
         );
-        let sell = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let sell = self.command_legacy(request)?;
         request_legacy!(sell, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
     }
 
@@ -233,37 +165,25 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             request.delegate.rel,
             request.delegate.base,
         );
-        let buy = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let buy = self.command_legacy(request)?;
         request_legacy!(buy, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
     }
 
     pub(crate) async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command");
-        let stop_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(StopRequest::default())
-            .build()?;
+        let stop_command = self.command_legacy(StopRequest::default())?;
         request_legacy!(stop_command, Mm2RpcResult<Status>, self, on_stop_response)
     }
 
     pub(crate) async fn get_version(&self) -> Result<()> {
         info!("Requesting for mm2 version");
-        let get_version = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(VersionRequest::default())
-            .build()?;
+        let get_version = self.command_legacy(VersionRequest::default())?;
         request_legacy!(get_version, MmVersionResponse, self, on_version_response)
     }
 
     pub(crate) async fn cancel_order(&self, request: CancelOrderRequest) -> Result<()> {
         info!("Cancelling order: {}", request.uuid);
-        let cancel_order = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let cancel_order = self.command_legacy(request)?;
         request_legacy!(cancel_order, Mm2RpcResult<Status>, self, on_cancel_order_response)
     }
 
@@ -288,10 +208,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
     }
 
     async fn cancel_all_orders_impl(&self, request: CancelAllOrdersRequest) -> Result<()> {
-        let cancel_all = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let cancel_all = self.command_legacy(request)?;
         request_legacy!(
             cancel_all,
             Mm2RpcResult<CancelAllOrdersResponse>,
@@ -302,25 +219,19 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn order_status(&self, request: OrderStatusRequest) -> Result<()> {
         info!("Getting order status: {}", request.uuid);
-        let order_status = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let order_status = self.command_legacy(request)?;
         request_legacy!(order_status, OrderStatusResponse, self, on_order_status)
     }
 
     pub(crate) async fn my_orders(&self) -> Result<()> {
         info!("Getting my orders");
-        let my_orders = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(MyOrdersRequest::default())
-            .build()?;
+        let my_orders = self.command_legacy(MyOrdersRequest::default())?;
         request_legacy!(my_orders, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
     }
 
     pub(crate) async fn best_orders(&self, params: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
         info!("Getting best orders: {} {}", params.action, params.coin);
-        let best_orders_command = v2_command!(self, BestOrders, params);
+        let best_orders_command = self.command_v2(V2Method::BestOrders, params)?;
         request_v2!(
             best_orders_command,
             BestOrdersV2Response,
@@ -332,10 +243,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn set_price(&self, request: SetPriceReq) -> Result<()> {
         info!("Setting price for pair: {} {}", request.base, request.rel);
-        let set_price = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let set_price = self.command_legacy(request)?;
         request_legacy!(set_price, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)
     }
 
@@ -348,10 +256,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                 .map(|pair| format!("{}/{}", pair.0, pair.1))
                 .join(", ")
         );
-        let ob_depth = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let ob_depth = self.command_legacy(request)?;
         request_legacy!(ob_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
     }
 
@@ -361,10 +266,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         settings: OrdersHistorySettings,
     ) -> Result<()> {
         info!("Getting order history");
-        let get_history = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let get_history = self.command_legacy(request)?;
         request_legacy!(
             get_history,
             Mm2RpcResult<OrdersHistoryResponse>,
@@ -376,10 +278,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn update_maker_order(&self, request: UpdateMakerOrderRequest) -> Result<()> {
         info!("Updating maker order");
-        let update_maker_order = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let update_maker_order = self.command_legacy(request)?;
         request_legacy!(
             update_maker_order,
             Mm2RpcResult<MakerOrderForRpc>,
@@ -388,20 +287,9 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    fn get_rpc_password(&self) -> Result<String> {
-        self.config
-            .rpc_password()
-            .ok_or_else(|| error_anyhow!("Failed to get rpc_password, not set"))
-    }
-
     pub(crate) async fn active_swaps(&self, include_status: bool, uuids_only: bool) -> Result<()> {
         info!("Getting active swaps");
-
-        let active_swaps_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(ActiveSwapsRequest { include_status })
-            .build()?;
-
+        let active_swaps_command = self.command_legacy(ActiveSwapsRequest { include_status })?;
         request_legacy!(
             active_swaps_command,
             ActiveSwapsResponse,
@@ -429,10 +317,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn recent_swaps(&self, request: MyRecentSwapsRequest) -> Result<()> {
         info!("Getting recent swaps");
-        let recent_swaps_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let recent_swaps_command = self.command_legacy(request)?;
         request_legacy!(
             recent_swaps_command,
             Mm2RpcResult<MyRecentSwapResponse>,
@@ -443,10 +328,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn min_trading_vol(&self, coin: String) -> Result<()> {
         info!("Getting min trading vol: {}", coin);
-        let min_trading_vol_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(MinTradingVolRequest { coin })
-            .build()?;
+        let min_trading_vol_command = self.command_legacy(MinTradingVolRequest { coin })?;
         request_legacy!(
             min_trading_vol_command,
             Mm2RpcResult<MinTradingVolResponse>,
@@ -457,20 +339,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn max_taker_vol(&self, coin: String) -> Result<()> {
         info!("Getting max taker vol, {}", coin);
-        let max_taker_vol_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(MaxTakerVolRequest { coin })
-            .build()?;
-
+        let max_taker_vol_command = self.command_legacy(MaxTakerVolRequest { coin })?;
         request_legacy!(max_taker_vol_command, MaxTakerVolResponse, self, on_max_taker_vol)
     }
 
     pub(crate) async fn recover_funds_of_swap(&self, request: RecoverFundsOfSwapRequest) -> Result<()> {
         info!("Recovering funds of swap: {}", request.params.uuid);
-        let recover_funds_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let recover_funds_command = self.command_legacy(request)?;
         request_legacy!(
             recover_funds_command,
             RecoverFundsOfSwapResponse,
@@ -481,17 +356,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
         info!("Getting trade preimage");
-        let trade_preimage_command = v2_command!(self, TradePreimage, request);
+        let trade_preimage_command = self.command_v2(V2Method::TradePreimage, request)?;
         request_v2!(trade_preimage_command, TradePreimageResponse, self, on_trade_preimage)
     }
 
     pub(crate) async fn get_gossip_mesh(&self) -> Result<()> {
         info!("Getting gossip mesh");
-        let get_gossip_mesh_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(GetGossipMeshRequest::default())
-            .build()?;
-
+        let get_gossip_mesh_command = self.command_legacy(GetGossipMeshRequest::default())?;
         request_legacy!(
             get_gossip_mesh_command,
             Mm2RpcResult<GetGossipMeshResponse>,
@@ -502,10 +373,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn get_relay_mesh(&self) -> Result<()> {
         info!("Getting relay mesh");
-        let get_relay_mesh_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(GetRelayMeshRequest::default())
-            .build()?;
+        let get_relay_mesh_command = self.command_legacy(GetRelayMeshRequest::default())?;
         request_legacy!(
             get_relay_mesh_command,
             Mm2RpcResult<GetRelayMeshResponse>,
@@ -516,10 +384,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn get_gossip_peer_topics(&self) -> Result<()> {
         info!("Getting gossip peer topics");
-        let get_gossip_peer_topics_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(GetGossipPeerTopicsRequest::default())
-            .build()?;
+        let get_gossip_peer_topics_command = self.command_legacy(GetGossipPeerTopicsRequest::default())?;
         request_legacy!(
             get_gossip_peer_topics_command,
             Mm2RpcResult<GetGossipPeerTopicsResponse>,
@@ -530,11 +395,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn get_gossip_topic_peers(&self) -> Result<()> {
         info!("Getting gossip topic peers");
-        let get_gossip_topic_peers = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(GetGossipTopicPeersRequest::default())
-            .build()?;
-
+        let get_gossip_topic_peers = self.command_legacy(GetGossipTopicPeersRequest::default())?;
         request_legacy!(
             get_gossip_topic_peers,
             Mm2RpcResult<GetGossipTopicPeersResponse>,
@@ -545,11 +406,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn get_my_peer_id(&self) -> Result<()> {
         info!("Getting my peer id");
-        let get_my_peer_id_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(GetMyPeerIdRequest::default())
-            .build()?;
-
+        let get_my_peer_id_command = self.command_legacy(GetMyPeerIdRequest::default())?;
         request_legacy!(
             get_my_peer_id_command,
             Mm2RpcResult<GetMyPeerIdResponse>,
@@ -560,10 +417,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn get_peers_info(&self) -> Result<()> {
         info!("Getting peers info");
-        let peers_info_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(GetPeersInfoRequest::default())
-            .build()?;
+        let peers_info_command = self.command_legacy(GetPeersInfoRequest::default())?;
         request_legacy!(
             peers_info_command,
             Mm2RpcResult<GetPeersInfoResponse>,
@@ -577,10 +431,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             "Setting required confirmations: {}, confirmations: {}",
             request.coin, request.confirmations
         );
-        let set_required_conf_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let set_required_conf_command = self.command_legacy(request)?;
         request_legacy!(
             set_required_conf_command,
             Mm2RpcResult<SetRequiredConfResponse>,
@@ -594,10 +445,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             "Setting required nota: {}, requires_nota: {}",
             request.coin, request.requires_notarization
         );
-        let set_nota_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let set_nota_command = self.command_legacy(request)?;
         request_legacy!(
             set_nota_command,
             Mm2RpcResult<SetRequiredNotaResponse>,
@@ -608,10 +456,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn coins_to_kick_start(&self) -> Result<()> {
         info!("Getting coins needed for kickstart");
-        let coins_to_kick_start_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(CoinsToKickStartRequest::default())
-            .build()?;
+        let coins_to_kick_start_command = self.command_legacy(CoinsToKickStartRequest::default())?;
         request_legacy!(
             coins_to_kick_start_command,
             Mm2RpcResult<CoinsToKickstartResponse>,
@@ -622,19 +467,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn ban_pubkey(&self, request: BanPubkeysRequest) -> Result<()> {
         info!("Banning pubkey: {}", request.pubkey);
-        let ban_pubkey_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let ban_pubkey_command = self.command_legacy(request)?;
         request_legacy!(ban_pubkey_command, Mm2RpcResult<Status>, self, on_ban_pubkey)
     }
 
     pub(crate) async fn list_banned_pubkeys(&self) -> Result<()> {
         info!("Getting list of banned pubkeys");
-        let list_banned_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(ListBannedPubkeysRequest::default())
-            .build()?;
+        let list_banned_command = self.command_legacy(ListBannedPubkeysRequest::default())?;
         request_legacy!(
             list_banned_command,
             Mm2RpcResult<ListBannedPubkeysResponse>,
@@ -645,11 +484,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn unban_pubkeys(&self, request: UnbanPubkeysRequest) -> Result<()> {
         info!("Unbanning pubkeys");
-        let unban_pubkeys_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
-
+        let unban_pubkeys_command = self.command_legacy(request)?;
         request_legacy!(
             unban_pubkeys_command,
             Mm2RpcResult<UnbanPubkeysResponse>,
@@ -664,10 +499,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         bare_output: bool,
     ) -> Result<()> {
         info!("Sending raw transaction");
-        let send_raw_command = Command::builder()
-            .userpass(self.get_rpc_password()?)
-            .flatten_data(request)
-            .build()?;
+        let send_raw_command = self.command_legacy(request)?;
         request_legacy!(
             send_raw_command,
             SendRawTransactionResponse,
@@ -680,19 +512,19 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
     pub(crate) async fn withdraw(&self, request: WithdrawRequest, bare_output: bool) -> Result<()> {
         info!("Getting withdraw tx_hex");
         debug!("Getting withdraw request: {:?}", request);
-        let withdraw_command = v2_command!(self, Withdraw, request);
+        let withdraw_command = self.command_v2(V2Method::Withdraw, request)?;
         request_v2!(withdraw_command, WithdrawResponse, self, on_withdraw, bare_output)
     }
 
     pub(crate) async fn get_public_key(&self) -> Result<()> {
         info!("Getting public key");
-        let pubkey_command = v2_command!(self, GetPublicKey, ());
+        let pubkey_command = self.command_v2(V2Method::GetPublicKey, ())?;
         request_v2!(pubkey_command, GetPublicKeyResponse, self, on_public_key)
     }
 
     pub(crate) async fn get_public_key_hash(&self) -> Result<()> {
         info!("Getting public key hash");
-        let pubkey_hash_command = v2_command!(self, GetPublicKeyHash, ());
+        let pubkey_hash_command = self.command_v2(V2Method::GetPublicKeyHash, ())?;
         request_v2!(pubkey_hash_command, GetPublicKeyHashResponse, self, on_public_key_hash)
     }
 
@@ -701,7 +533,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             "Getting raw transaction of coin: {}, hash: {}",
             request.coin, request.tx_hash
         );
-        let get_raw_tx_command = v2_command!(self, GetRawTransaction, request);
+        let get_raw_tx_command = self.command_v2(V2Method::GetRawTransaction, request)?;
         request_v2!(
             get_raw_tx_command,
             GetRawTransactionResponse,
@@ -710,4 +542,171 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             bare_output
         )
     }
+
+    async fn enable_bch(
+        &self,
+        params: EnablePlatformCoinWithTokensReq<bch::BchWithTokensActivationParams>,
+    ) -> Result<()> {
+        let enable_bch = self.command_v2(V2Method::EnableBchWithTokens, params)?;
+        request_v2!(enable_bch, BchWithTokensActivationResult, self, on_enable_bch)
+    }
+
+    async fn enable_z_coin(
+        &self,
+        params: InitStandaloneCoinReq<zcoin::ZcoinActivationParams>,
+        track_timeout: u64,
+    ) -> Result<()> {
+        let enable_z_coin = self.command_v2(V2Method::EnableZCoin, params)?;
+
+        let transport = self.transport.ok_or_else(|| {
+            warn_anyhow!(concat!(
+                "Failed to send: `",
+                "enable_z_coin",
+                "`, transport is not available"
+            ))
+        })?;
+        match transport
+            .send::<_, MmRpcResponseV2<InitStandaloneCoinResponse>, Json>(enable_z_coin)
+            .await
+        {
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Ok { result },
+                id: _,
+            })) => {
+                let Some(task_id) = self.response_handler.on_enable_z_coin(result) else { panic!()};
+                if track_timeout != 0 {
+                    self.track_enable_z_coin_status(task_id, track_timeout).await?;
+                }
+            },
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Err(error),
+                id: _,
+            })) => self.response_handler.on_mm_rpc_error_v2(error)?,
+            Ok(Err(error)) => self.response_handler.print_response(error)?,
+            Err(error) => error_bail!(
+                concat!("Failed to send `", stringify!($request), "` request: {}"),
+                error
+            ),
+        };
+        Ok(())
+    }
+
+    async fn track_enable_z_coin_status(&self, task_id: TaskId, track_timeout: u64) -> Result<()> {
+        let z_coint_stat = self.command_v2(V2Method::EnableZCoinStatus, InitStandaloneCoinStatusRequest {
+            task_id,
+            forget_if_finished: true,
+        })?;
+
+        while self
+            .request_v2::<_, InitStandaloneCoinStatusResponse, bool, _>(&z_coint_stat, |response| {
+                self.response_handler.on_zcoin_status(response)
+            })
+            .await?
+        {
+            tokio::time::sleep(Duration::from_secs(track_timeout)).await;
+        }
+        Ok(())
+    }
+
+    fn command_legacy<R: Serialize>(&self, request: R) -> Result<Command<R>> {
+        Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .flatten_data(request)
+            .build()
+    }
+
+    fn command_v2<R: Serialize>(&self, method: V2Method, params: R) -> Result<MmRpcRequest<V2Method, R>> {
+        Command::builder()
+            .userpass(self.get_rpc_password()?)
+            .v2_method(method)
+            .flatten_data(params)
+            .build_v2()
+    }
+
+    fn get_rpc_password(&self) -> Result<String> {
+        self.config
+            .rpc_password()
+            .ok_or_else(|| error_anyhow!("Failed to get rpc_password, not set"))
+    }
+
+    async fn request_v2<
+        Req: Serialize + Send + Sync,
+        Resp: for<'a> Deserialize<'a> + Send + Sync,
+        Res: Default,
+        H: FnOnce(Resp) -> Result<Res>,
+    >(
+        &self,
+        request: &Req,
+        handle: H,
+    ) -> Result<Res> {
+        let transport = self
+            .transport
+            .ok_or_else(|| warn_anyhow!("Failed to send request, transport is not available"))?;
+        match transport.send::<_, MmRpcResponseV2<Resp>, Json>(request).await {
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Ok { result },
+                id: _,
+            })) => handle(result),
+            Ok(Ok(MmRpcResponseV2 {
+                mmrpc: MmRpcVersion::V2,
+                result: MmRpcResultV2::Err(error),
+                id: _,
+            })) => {
+                self.response_handler.on_mm_rpc_error_v2(error)?;
+                Ok(Res::default())
+            },
+            Ok(Err(error)) => {
+                self.response_handler.print_response(error)?;
+                Ok(Res::default())
+            },
+            Err(error) => error_bail!(
+                concat!("Failed to send `", stringify!($request), "` request: {}"),
+                error
+            ),
+        }
+    }
+}
+
+mod macros {
+    #[macro_export]
+    macro_rules! request_legacy {
+        ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
+            let transport = $self.transport.ok_or_else(|| warn_anyhow!( concat!("Failed to send: `", stringify!($request), "`, transport is not available")))?;
+            match transport.send::<_, $response_ty, Json>($request).await {
+                Ok(Ok(ok)) => $self.response_handler.$handle_method(ok, $($opt),*),
+                Ok(Err(error)) => $self.response_handler.print_response(error),
+                Err(error) => error_bail!(concat!("Failed to send: `", stringify!($request), "`: {}"), error)
+            }
+        }};
+    }
+    #[macro_export]
+    macro_rules! request_v2 {
+        ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
+            let transport = $self.transport.ok_or_else(|| {
+                warn_anyhow!(concat!(
+                    "Failed to send: `",
+                    stringify!($request),
+                    "`, transport is not available"
+                ))
+            })?;
+            match transport.send::<_, MmRpcResponseV2<$response_ty>, Json>($request).await {
+                Ok(Ok(MmRpcResponseV2 {
+                    mmrpc: MmRpcVersion::V2,
+                    result: MmRpcResultV2::Ok { result },
+                    id: _,
+                })) => $self.response_handler.$handle_method(result, $($opt),*),
+                Ok(Ok(MmRpcResponseV2 {
+                    mmrpc: MmRpcVersion::V2,
+                    result: MmRpcResultV2::Err(error),
+                    id: _,
+                })) => $self.response_handler.on_mm_rpc_error_v2(error),
+                Ok(Err(error)) => $self.response_handler.print_response(error),
+                Err(error) => error_bail!(concat!("Failed to send `", stringify!($request), "` request: {}"), error),
+            }
+        }};
+    }
+    pub(super) use {request_legacy, request_v2};
 }

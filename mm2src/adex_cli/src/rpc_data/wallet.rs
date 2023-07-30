@@ -1,3 +1,4 @@
+use derive_more::Display;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::{Deserialize, Serialize};
@@ -42,7 +43,7 @@ pub(crate) struct HDAccountAddressId {
     pub(crate) address_id: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Display, Deserialize, Serialize)]
 #[repr(u32)]
 pub(crate) enum Bip44Chain {
     External = 0,

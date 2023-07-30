@@ -1,10 +1,12 @@
-#[path = "activation/bch.rs"] mod bch;
-#[path = "activation/eth.rs"] mod eth;
-#[path = "activation/tendermint.rs"] mod tendermint;
+#[path = "activation/bch.rs"] pub(crate) mod bch;
+#[path = "activation/eth.rs"] pub(crate) mod eth;
+#[path = "activation/tendermint.rs"] pub(crate) mod tendermint;
+#[path = "activation/z_coin.rs"] pub(crate) mod z_coin;
 
 pub(super) use bch::{on_enable_bch, on_enable_slp};
 pub(super) use eth::{on_enable_erc20, on_enable_eth_with_tokens};
 pub(super) use tendermint::{on_enable_tendermint, on_enable_tendermint_token};
+pub(super) use z_coin::on_enable_z_coin;
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;

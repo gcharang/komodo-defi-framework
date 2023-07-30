@@ -33,6 +33,10 @@ pub(super) enum V2Method {
     EnableTendermintToken,
     EnableErc20,
     EnableEthWithTokens,
+    #[serde(rename = "task::enable_z_coin::init")]
+    EnableZCoin,
+    #[serde(rename = "task::enable_z_coin::status")]
+    EnableZCoinStatus,
 }
 
 impl<T> Command<T>

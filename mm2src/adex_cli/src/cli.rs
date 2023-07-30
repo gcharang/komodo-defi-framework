@@ -41,10 +41,7 @@ enum Command {
     #[command(subcommand, about = "Manage rpc_password and mm2 RPC URL")]
     Config(ConfigSubcommand),
     #[command(about = "Put a coin to the trading index")]
-    Enable {
-        #[arg(help = "Coin to be included into the trading index")]
-        coin: String,
-    },
+    Enable(EnableArgs),
     #[command(about = "Deactivates enabled coin and also cancels all active orders that use the selected coin.")]
     Disable(DisableCoinArgs),
     #[command(visible_alias = "balance", about = "Get coin balance")]
@@ -225,7 +222,7 @@ impl Cli {
                 set_config(*password, uri.take())?
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
-            Command::Enable { coin } => proc.enable(coin).await?,
+            Command::Enable(args) => proc.enable(&args.coin, args.keep_progress).await?,
             Command::Disable(args) => proc.disable(args.into()).await?,
             Command::MyBalance(my_balance_args) => proc.get_balance(my_balance_args.into()).await?,
             Command::GetEnabled => proc.get_enabled().await?,
