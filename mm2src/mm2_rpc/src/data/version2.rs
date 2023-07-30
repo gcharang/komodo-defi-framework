@@ -17,7 +17,7 @@ pub struct MmRpcRequest<M, T> {
     pub mmrpc: MmRpcVersion,
     pub userpass: Option<String>,
     pub method: M,
-    pub params: Option<T>,
+    pub params: T,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<usize>,
 }

@@ -86,7 +86,7 @@ where
         })
     }
 
-    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<V2Method, T>> {
+    pub(crate) fn build_v2(&mut self) -> Result<MmRpcRequest<V2Method, Option<T>>> {
         let mm2_rpc_request = MmRpcRequest {
             mmrpc: MmRpcVersion::V2,
             userpass: Some(

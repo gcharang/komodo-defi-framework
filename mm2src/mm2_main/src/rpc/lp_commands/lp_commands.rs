@@ -4,7 +4,7 @@ use derive_more::Display;
 use http::StatusCode;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use mm2_rpc::data::legacy::wallet::{GetPublicKeyHashResponse, GetPublicKeyResponse};
+use mm2_rpc::data::version2::{GetPublicKeyHashResponse, GetPublicKeyResponse};
 use rpc::v1::types::H160 as H160Json;
 use serde_json::Value as Json;
 

@@ -617,7 +617,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             .build()
     }
 
-    fn command_v2<R: Serialize>(&self, method: V2Method, params: R) -> Result<MmRpcRequest<V2Method, R>> {
+    fn command_v2<R: Serialize>(&self, method: V2Method, params: R) -> Result<MmRpcRequest<V2Method, Option<R>>> {
         Command::builder()
             .userpass(self.get_rpc_password()?)
             .v2_method(method)

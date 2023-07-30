@@ -12,8 +12,8 @@ use super::super::formatters::{term_table_blank, writeln_field, ZERO_INDENT};
 use crate::error_anyhow;
 use crate::komodefi_proc::response_handler::formatters::COMMON_INDENT;
 use crate::rpc_data::activation::{CoinBalanceReport, HDAddressBalance, HDWalletBalance, IguanaWalletBalance,
-                                  InitStandaloneCoinResponse, InitStandaloneCoinStatusResponse, RpcDerivationPath,
-                                  TaskId, ZcoinActivationResult};
+                                  InitStandaloneCoinError, InitStandaloneCoinResponse,
+                                  InitStandaloneCoinStatusResponse, RpcDerivationPath, TaskId, ZcoinActivationResult};
 
 pub(in super::super) fn on_enable_z_coin(
     writer: &mut dyn Write,
@@ -38,17 +38,11 @@ pub(in super::super) fn on_enable_zcoin_status(
             writeln_field(writer, "status", "user action required", ZERO_INDENT);
             Ok(true)
         },
-        InitStandaloneCoinStatusResponse::Error(_) => {
-            writeln_field(writer, "status", "error", ZERO_INDENT);
-            Ok(false)
-        },
+        InitStandaloneCoinStatusResponse::Error(error_status) => on_enable_zcoin_status_error(writer, error_status),
     }
 }
 
-pub(in super::super) fn on_enable_zcoin_status_ok(
-    writer: &mut dyn Write,
-    response: ZcoinActivationResult,
-) -> Result<bool> {
+fn on_enable_zcoin_status_ok(writer: &mut dyn Write, response: ZcoinActivationResult) -> Result<bool> {
     writeln_field(writer, "status", "OK", ZERO_INDENT);
     writeln_field(writer, "current_block", response.current_block, ZERO_INDENT);
     writeln_field(writer, "ticker", response.ticker, ZERO_INDENT);
@@ -56,6 +50,11 @@ pub(in super::super) fn on_enable_zcoin_status_ok(
         CoinBalanceReport::Iguana(balance) => write_iguana_balance(writer, balance)?,
         CoinBalanceReport::HD(balance) => write_hd_balance(writer, balance)?,
     }
+    Ok(false)
+}
+
+fn on_enable_zcoin_status_error(writer: &mut dyn Write, response: InitStandaloneCoinError) -> Result<bool> {
+    writeln_safe_io!(writer, "{}", response);
     Ok(false)
 }
 
