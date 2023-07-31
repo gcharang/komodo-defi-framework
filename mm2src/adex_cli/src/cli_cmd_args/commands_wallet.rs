@@ -138,7 +138,7 @@ fn parse_withdraw_fee(value: &str) -> Result<WithdrawFeeArg> {
         Qrc,
         Cosmos,
     }
-    let mut parts = value.split(":");
+    let mut parts = value.split(':');
     match parts.next() {
         Some(tag) => match WithdrawFeeTag::from_str(tag, false) {
             Ok(WithdrawFeeTag::UtxoFixed) => {

@@ -10,21 +10,16 @@
 #[path = "activation/tendermint.rs"] pub(crate) mod tendermint;
 #[path = "activation/zcoin.rs"] pub(crate) mod zcoin;
 
-use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
 use uuid::Uuid;
 
 use common::true_f;
 use derive_more::Display;
 use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::{ElectrumProtocol, Mm2RpcResult};
-use mm2_rpc::data::version2::MmRpcErrorV2;
 
-use crate::rpc_data::activation::zcoin::ZcoinActivationParams;
 use crate::rpc_data::eth::EthWithTokensActivationRequest;
-use crate::rpc_data::Bip44Chain;
 
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "get_enabled_coins")]
@@ -183,11 +178,6 @@ pub(crate) struct RpcTaskStatusRequest {
 
 pub(crate) type TaskId = u64;
 
-pub(crate) type InitStandaloneCoinResponse = InitRpcTaskResponse;
-pub(crate) type InitStandaloneCoinStatusRequest = RpcTaskStatusRequest;
-pub(crate) type InitStandaloneCoinStatusResponse = ZCoinStatus;
-pub(crate) type InitStandaloneCoinStatusError = RpcTaskStatusError;
-
 #[derive(Debug, Deserialize)]
 #[serde(tag = "status", content = "details")]
 pub(crate) enum RpcTaskStatus<Item, Error, InProgressStatus, AwaitingStatus> {
@@ -197,231 +187,18 @@ pub(crate) enum RpcTaskStatus<Item, Error, InProgressStatus, AwaitingStatus> {
     UserActionRequired(AwaitingStatus),
 }
 
-type ZCoinStatus =
-    RpcTaskStatus<ZcoinActivationResult, InitStandaloneCoinError, ZcoinInProgressStatus, ZcoinAwaitingStatus>;
-
-#[derive(Display, Deserialize)]
-#[serde(tag = "error_type", content = "error_data")]
-pub(crate) enum RpcTaskStatusError {
-    #[display(fmt = "No such task '{}'", _0)]
-    NoSuchTask(TaskId),
-    #[display(fmt = "Internal error: {}", _0)]
-    Internal(String),
+#[derive(Serialize)]
+pub(crate) struct CancelRpcTaskRequest {
+    pub(crate) task_id: TaskId,
 }
 
 #[derive(Display, Deserialize)]
 #[serde(tag = "error_type", content = "error_data")]
-pub(crate) enum InitStandaloneCoinError {
+pub(crate) enum CancelRpcTaskError {
     #[display(fmt = "No such task '{}'", _0)]
     NoSuchTask(TaskId),
-    #[display(fmt = "Initialization task has timed out {:?}", duration)]
-    TaskTimedOut { duration: Duration },
-    #[display(fmt = "Coin {} is activated already", ticker)]
-    CoinIsAlreadyActivated { ticker: String },
-    #[display(fmt = "Coin {} config is not found", _0)]
-    CoinConfigIsNotFound(String),
-    #[display(fmt = "Coin {} protocol parsing failed: {}", ticker, error)]
-    CoinProtocolParseError { ticker: String, error: String },
-    #[display(fmt = "Unexpected platform protocol {:?} for {}", protocol, ticker)]
-    UnexpectedCoinProtocol { ticker: String, protocol: CoinProtocol },
-    #[display(fmt = "Error on platform coin {} creation: {}", ticker, error)]
-    CoinCreationError { ticker: String, error: String },
-    #[display(fmt = "{}", _0)]
-    HwError(HwRpcError),
-    #[display(fmt = "Transport error: {}", _0)]
-    Transport(String),
+    #[display(fmt = "Task is finished already")]
+    TaskFinished(TaskId),
     #[display(fmt = "Internal error: {}", _0)]
     Internal(String),
 }
-
-#[derive(Clone, Debug, Display, Serialize, Deserialize)]
-pub(crate) enum HwRpcError {
-    #[display(fmt = "No Trezor device available")]
-    NoTrezorDeviceAvailable = 0,
-    #[display(fmt = "Found multiple devices. Please unplug unused devices")]
-    FoundMultipleDevices,
-    #[display(fmt = "Found unexpected device. Please re-initialize Hardware wallet")]
-    FoundUnexpectedDevice,
-    #[display(fmt = "Pin is invalid")]
-    InvalidPin,
-    #[display(fmt = "Unexpected message")]
-    UnexpectedMessage,
-    #[display(fmt = "Button expected")]
-    ButtonExpected,
-    #[display(fmt = "Got data error")]
-    DataError,
-    #[display(fmt = "Pin expected")]
-    PinExpected,
-    #[display(fmt = "Invalid signature")]
-    InvalidSignature,
-    #[display(fmt = "Got process error")]
-    ProcessError,
-    #[display(fmt = "Not enough funds")]
-    NotEnoughFunds,
-    #[display(fmt = "Not initialized")]
-    NotInitialized,
-    #[display(fmt = "Wipe code mismatch")]
-    WipeCodeMismatch,
-    #[display(fmt = "Invalid session")]
-    InvalidSession,
-    #[display(fmt = "Got firmware error")]
-    FirmwareError,
-    #[display(fmt = "Failure message not found")]
-    FailureMessageNotFound,
-    #[display(fmt = "User cancelled action")]
-    UserCancelled,
-    #[display(fmt = "PONG message mismatch after ping")]
-    PongMessageMismatch,
-}
-
-#[derive(Clone, Deserialize)]
-#[non_exhaustive]
-pub(crate) enum ZcoinInProgressStatus {
-    ActivatingCoin,
-    UpdatingBlocksCache {
-        current_scanned_block: u64,
-        latest_block: u64,
-    },
-    BuildingWalletDb {
-        current_scanned_block: u64,
-        latest_block: u64,
-    },
-    TemporaryError(String),
-    RequestingWalletBalance,
-    Finishing,
-    WaitingForTrezorToConnect,
-    WaitingForUserToConfirmPubkey,
-}
-
-pub(crate) type ZcoinAwaitingStatus = HwRpcTaskAwaitingStatus;
-
-#[derive(Deserialize)]
-pub(crate) enum HwRpcTaskAwaitingStatus {
-    EnterTrezorPin,
-    EnterTrezorPassphrase,
-}
-
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", content = "protocol_data")]
-pub(crate) enum CoinProtocol {
-    ZHTLC(ZcoinProtocolInfo),
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct ZcoinProtocolInfo {
-    consensus_params: ZcoinConsensusParams,
-    check_point_block: Option<CheckPointBlockInfo>,
-    z_derivation_path: Option<StandardHDPathToCoin>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct CheckPointBlockInfo {
-    height: u32,
-    hash: H256Json,
-    time: u32,
-    sapling_tree: BytesJson,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct ZcoinConsensusParams {
-    overwinter_activation_height: u32,
-    sapling_activation_height: u32,
-    blossom_activation_height: Option<u32>,
-    heartwood_activation_height: Option<u32>,
-    canopy_activation_height: Option<u32>,
-    coin_type: u32,
-    hrp_sapling_extended_spending_key: String,
-    hrp_sapling_extended_full_viewing_key: String,
-    hrp_sapling_payment_address: String,
-    b58_pubkey_address_prefix: [u8; 2],
-    b58_script_address_prefix: [u8; 2],
-}
-
-#[rustfmt::skip]
-pub(crate) type StandardHDPathToCoin =
-    Bip32Child<Bip32PurposeValue, // `purpose`
-    Bip32Child<HardenedValue, // `coin_type`
-    Bip44Tail>>;
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct Bip32Child<Value, Child> {
-    value: Value,
-    child: Child,
-}
-
-#[repr(u32)]
-#[derive(Debug, Deserialize)]
-pub(crate) enum Bip43Purpose {
-    Bip32 = 32,
-    Bip44 = 44,
-    Bip49 = 49,
-    Bip84 = 84,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct Bip32PurposeValue {
-    purpose: Bip43Purpose,
-}
-
-pub(crate) type HardenedValue = AnyValue<true>;
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct AnyValue<const HARDENED: bool> {
-    number: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct Bip44Tail;
-
-#[derive(Deserialize)]
-pub(crate) struct ZcoinActivationResult {
-    pub(crate) ticker: String,
-    pub(crate) current_block: u64,
-    pub(crate) wallet_balance: CoinBalanceReport,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "wallet_type")]
-pub(crate) enum CoinBalanceReport {
-    Iguana(IguanaWalletBalance),
-    HD(HDWalletBalance),
-}
-
-#[derive(Deserialize)]
-pub(crate) struct IguanaWalletBalance {
-    pub(crate) address: String,
-    pub(crate) balance: CoinBalance,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct HDWalletBalance {
-    pub(crate) accounts: Vec<HDAccountBalance>,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct HDAccountBalance {
-    pub(crate) account_index: u32,
-    pub(crate) derivation_path: RpcDerivationPath,
-    pub(crate) total_balance: CoinBalance,
-    pub(crate) addresses: Vec<HDAddressBalance>,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct HDAddressBalance {
-    pub(crate) address: String,
-    pub(crate) derivation_path: RpcDerivationPath,
-    pub(crate) chain: Bip44Chain,
-    pub(crate) balance: CoinBalance,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct RpcDerivationPath(pub(crate) DerivationPath);
-
-#[derive(Deserialize)]
-pub(crate) struct DerivationPath {
-    pub(crate) path: Vec<ChildNumber>,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct ChildNumber(pub(crate) u32);

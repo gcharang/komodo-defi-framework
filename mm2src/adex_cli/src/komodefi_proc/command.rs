@@ -37,6 +37,8 @@ pub(super) enum V2Method {
     EnableZCoin,
     #[serde(rename = "task::enable_z_coin::status")]
     EnableZCoinStatus,
+    #[serde(rename = "task::enable_z_coin::cancel")]
+    EnableZCoinCancel,
 }
 
 impl<T> Command<T>

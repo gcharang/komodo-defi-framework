@@ -10,9 +10,10 @@ pub(crate) mod trade_preimage;
 pub(crate) mod utility;
 pub(crate) mod wallet;
 
-pub(crate) use activation::{bch, eth, tendermint, CoinsToKickStartRequest, CoinsToKickstartResponse,
-                            DisableCoinFailed, DisableCoinRequest, DisableCoinResponse, DisableCoinSuccess,
-                            GetEnabledRequest, SetRequiredConfResponse, SetRequiredNotaResponse};
+pub(crate) use activation::{bch, eth, tendermint, zcoin, CancelRpcTaskError, CancelRpcTaskRequest,
+                            CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinFailed, DisableCoinRequest,
+                            DisableCoinResponse, DisableCoinSuccess, GetEnabledRequest, SetRequiredConfResponse,
+                            SetRequiredNotaResponse};
 pub(crate) use network::{GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
                          GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
                          GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,

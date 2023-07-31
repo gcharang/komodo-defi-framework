@@ -40,14 +40,15 @@ use mm2_rpc::data::version2::{BestOrdersV2Response, GetPublicKeyHashResponse, Ge
 use crate::komodefi_config::KomodefiConfig;
 use crate::komodefi_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
 use crate::logging::error_anyhow;
-use crate::rpc_data::activation::{InitStandaloneCoinResponse, InitStandaloneCoinStatusResponse, TaskId};
+use crate::rpc_data::activation::{InitRpcTaskResponse, TaskId};
 use crate::rpc_data::bch::{BchWithTokensActivationResult, SlpInitResult};
 use crate::rpc_data::eth::{Erc20InitResult, EthWithTokensActivationResult};
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
-use crate::rpc_data::{ActiveSwapsResponse, CoinsToKickstartResponse, DisableCoinResponse, GetGossipMeshResponse,
-                      GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse, GetMyPeerIdResponse,
-                      GetPeersInfoResponse, GetRelayMeshResponse, ListBannedPubkeysResponse, MaxTakerVolResponse,
-                      MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
+use crate::rpc_data::zcoin::ZCoinStatus;
+use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
+                      GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
+                      GetMyPeerIdResponse, GetPeersInfoResponse, GetRelayMeshResponse, ListBannedPubkeysResponse,
+                      MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
                       SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
                       TradePreimageResponse, UnbanPubkeysResponse, WithdrawResponse};
 
@@ -70,8 +71,8 @@ pub(crate) trait ResponseHandler {
     fn on_enable_tendermint_token(&self, response: TendermintTokenInitResult) -> Result<()>;
     fn on_enable_erc20(&self, response: Erc20InitResult) -> Result<()>;
     fn on_enable_eth_with_tokens(&self, response: EthWithTokensActivationResult) -> Result<()>;
-    fn on_enable_z_coin(&self, response: InitStandaloneCoinResponse) -> Option<TaskId>;
-    fn on_zcoin_status(&self, respone: InitStandaloneCoinStatusResponse) -> Result<bool>;
+    fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> Option<TaskId>;
+    fn on_zcoin_status(&self, respone: ZCoinStatus) -> Result<bool>;
 
     fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()>;
     fn on_balance_response(&self, response: BalanceResponse) -> Result<()>;
@@ -116,6 +117,8 @@ pub(crate) trait ResponseHandler {
     fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()>;
     fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()>;
     fn on_mm_rpc_error_v2(&self, error: MmRpcErrorV2) -> Result<()>;
+    fn on_enable_zcoin_cancel(&self, response: Status) -> Result<()>;
+    fn on_enable_zcoin_cancel_error(&self, error: CancelRpcTaskError) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -208,12 +211,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         activation::on_enable_eth_with_tokens(writer.deref_mut(), response)
     }
 
-    fn on_enable_z_coin(&self, response: InitStandaloneCoinResponse) -> Option<TaskId> {
+    fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> Option<TaskId> {
         let mut writer = self.writer.borrow_mut();
-        activation::on_enable_z_coin(writer.deref_mut(), response)
+        activation::on_enable_zcoin(writer.deref_mut(), response)
     }
 
-    fn on_zcoin_status(&self, response: InitStandaloneCoinStatusResponse) -> Result<bool> {
+    fn on_zcoin_status(&self, response: ZCoinStatus) -> Result<bool> {
         let mut writer = self.writer.borrow_mut();
         activation::z_coin::on_enable_zcoin_status(writer.deref_mut(), response)
     }
@@ -448,6 +451,20 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         writeln_field(writer, "error_path", error.error_path, ZERO_INDENT);
         writeln_field(writer, "error_trace", error.error_trace, ZERO_INDENT);
         writeln_field(writer, "error_data", error.error_data, ZERO_INDENT);
+        Ok(())
+    }
+
+    fn on_enable_zcoin_cancel(&self, response: Status) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        activation::z_coin::on_enable_zcoin_canceled(writer, response);
+        Ok(())
+    }
+
+    fn on_enable_zcoin_cancel_error(&self, error: CancelRpcTaskError) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        activation::z_coin::on_enable_zcoin_cancel_error(writer, error);
         Ok(())
     }
 }

@@ -6,7 +6,7 @@
 pub(super) use bch::{on_enable_bch, on_enable_slp};
 pub(super) use eth::{on_enable_erc20, on_enable_eth_with_tokens};
 pub(super) use tendermint::{on_enable_tendermint, on_enable_tendermint_token};
-pub(super) use z_coin::on_enable_z_coin;
+pub(super) use z_coin::on_enable_zcoin;
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;

@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use http::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 
-use common::log::{error, warn};
+use common::log::{debug, error};
 use mm2_net::native_http::slurp_post_json;
 
-use crate::{error_anyhow, error_bail, warn_bail};
+use crate::{error_anyhow, error_bail};
 
 #[async_trait]
 pub(super) trait Transport {
@@ -66,19 +66,16 @@ impl Response for (StatusCode, HeaderMap, Vec<u8>) {
                     error_bail!("Failed to deserialize response from data: {data:?}, error: {error}")
                 },
             },
-            StatusCode::INTERNAL_SERVER_ERROR => match serde_json::from_slice::<ErrT>(&data) {
-                Ok(resp_data) => Ok(Err(resp_data)),
-                Err(error) => {
-                    let data = String::from_utf8(data)
-                        .map_err(|error| error_anyhow!("Failed to get string from resp data: {error}"))?;
-                    error_bail!("Failed to deserialize response from data: {data:?}, error: {error}")
-                },
-            },
-            _ => {
-                warn_bail!(
-                    "Bad http status: {status}, data: {}",
-                    String::from_utf8(data).unwrap_or_else(|error| hex::encode(error.as_bytes()))
-                )
+            code => {
+                debug!("Remote service answered with the code: {}", code);
+                match serde_json::from_slice::<ErrT>(&data) {
+                    Ok(resp_data) => Ok(Err(resp_data)),
+                    Err(error) => {
+                        let data = String::from_utf8(data)
+                            .map_err(|error| error_anyhow!("Failed to get string from resp data: {error}"))?;
+                        error_bail!("Failed to deserialize response from data: {data:?}, error: {error}")
+                    },
+                }
             },
         }
     }

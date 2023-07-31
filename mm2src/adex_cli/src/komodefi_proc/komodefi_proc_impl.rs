@@ -27,20 +27,21 @@ use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::activation::{bch::{BchWithTokensActivationResult, SlpInitResult},
                                   eth::{Erc20InitResult, EthWithTokensActivationResult},
                                   tendermint::{TendermintActivationResult, TendermintTokenInitResult},
-                                  zcoin, ActivationMethod, ActivationMethodV2, EnablePlatformCoinWithTokensReq,
-                                  InitStandaloneCoinReq, InitStandaloneCoinResponse, InitStandaloneCoinStatusRequest,
-                                  InitStandaloneCoinStatusResponse, TaskId};
-use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CoinsToKickStartRequest, CoinsToKickstartResponse,
-                      DisableCoinRequest, DisableCoinResponse, GetEnabledRequest, GetGossipMeshRequest,
-                      GetGossipMeshResponse, GetGossipPeerTopicsRequest, GetGossipPeerTopicsResponse,
-                      GetGossipTopicPeersRequest, GetGossipTopicPeersResponse, GetMyPeerIdRequest,
-                      GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse, GetRelayMeshRequest,
-                      GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse, MaxTakerVolRequest,
-                      MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse, MyRecentSwapsRequest,
-                      MySwapStatusRequest, MySwapStatusResponse, Params, RecoverFundsOfSwapRequest,
-                      RecoverFundsOfSwapResponse, SendRawTransactionRequest, SendRawTransactionResponse,
-                      SetRequiredConfResponse, SetRequiredNotaResponse, TradePreimageRequest, TradePreimageResponse,
-                      UnbanPubkeysRequest, UnbanPubkeysResponse, WithdrawRequest, WithdrawResponse};
+                                  zcoin::{ZCoinStatus, ZcoinActivationParams},
+                                  ActivationMethod, ActivationMethodV2, EnablePlatformCoinWithTokensReq,
+                                  InitRpcTaskResponse, InitStandaloneCoinReq, RpcTaskStatusRequest, TaskId};
+use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskError, CancelRpcTaskRequest,
+                      CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse,
+                      GetEnabledRequest, GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
+                      GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
+                      GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
+                      GetRelayMeshRequest, GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse,
+                      MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse,
+                      MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusResponse, Params,
+                      RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse, SendRawTransactionRequest,
+                      SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
+                      TradePreimageRequest, TradePreimageResponse, UnbanPubkeysRequest, UnbanPubkeysResponse,
+                      WithdrawRequest, WithdrawResponse};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -68,38 +69,38 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             ActivationMethod::V2(ActivationMethodV2::EnableBchWithTokens(params)) => self.enable_bch(params).await,
             ActivationMethod::V2(ActivationMethodV2::EnableSlp(params)) => {
                 let enable_slp = self.command_v2(V2Method::EnableSlp, params)?;
-                request_v2!(enable_slp, SlpInitResult, self, on_enable_slp)
+                request_v2!(enable_slp, SlpInitResult ; Json, self, on_enable_slp ; print_response)
             },
             ActivationMethod::V2(ActivationMethodV2::EnableTendermintWithAssets(params)) => {
                 let enable_tendermint = self.command_v2(V2Method::EnableTendermintWithAssets, params)?;
                 request_v2!(
                     enable_tendermint,
-                    TendermintActivationResult,
+                    TendermintActivationResult ; Json,
                     self,
-                    on_enable_tendermint
+                    on_enable_tendermint ; print_response
                 )
             },
             ActivationMethod::V2(ActivationMethodV2::EnableTendermintToken(params)) => {
                 let enable_tendermint_token = self.command_v2(V2Method::EnableTendermintToken, params)?;
                 request_v2!(
                     enable_tendermint_token,
-                    TendermintTokenInitResult,
+                    TendermintTokenInitResult ; Json,
                     self,
-                    on_enable_tendermint_token
+                    on_enable_tendermint_token ; print_response
                 )
             },
             ActivationMethod::V2(ActivationMethodV2::EnableEthWithTokens(params)) => {
                 let enable_erc20 = self.command_v2(V2Method::EnableEthWithTokens, params)?;
                 request_v2!(
                     enable_erc20,
-                    EthWithTokensActivationResult,
+                    EthWithTokensActivationResult ; Json,
                     self,
-                    on_enable_eth_with_tokens
+                    on_enable_eth_with_tokens ; print_response
                 )
             },
             ActivationMethod::V2(ActivationMethodV2::EnableErc20(params)) => {
                 let enable_erc20 = self.command_v2(V2Method::EnableErc20, params)?;
-                request_v2!(enable_erc20, Erc20InitResult, self, on_enable_erc20)
+                request_v2!(enable_erc20, Erc20InitResult ; Json, self, on_enable_erc20 ; print_response)
             },
 
             ActivationMethod::V2(ActivationMethodV2::EnableZCoin(params)) => {
@@ -234,10 +235,10 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         let best_orders_command = self.command_v2(V2Method::BestOrders, params)?;
         request_v2!(
             best_orders_command,
-            BestOrdersV2Response,
+            BestOrdersV2Response ; Json,
             self,
             on_best_orders,
-            show_orig_tickets
+            show_orig_tickets ; print_response
         )
     }
 
@@ -357,7 +358,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
     pub(crate) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
         info!("Getting trade preimage");
         let trade_preimage_command = self.command_v2(V2Method::TradePreimage, request)?;
-        request_v2!(trade_preimage_command, TradePreimageResponse, self, on_trade_preimage)
+        request_v2!(trade_preimage_command, TradePreimageResponse ; Json, self, on_trade_preimage ; print_response)
     }
 
     pub(crate) async fn get_gossip_mesh(&self) -> Result<()> {
@@ -513,19 +514,19 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         info!("Getting withdraw tx_hex");
         debug!("Getting withdraw request: {:?}", request);
         let withdraw_command = self.command_v2(V2Method::Withdraw, request)?;
-        request_v2!(withdraw_command, WithdrawResponse, self, on_withdraw, bare_output)
+        request_v2!(withdraw_command, WithdrawResponse ; Json, self, on_withdraw, bare_output ; print_response)
     }
 
     pub(crate) async fn get_public_key(&self) -> Result<()> {
         info!("Getting public key");
         let pubkey_command = self.command_v2(V2Method::GetPublicKey, ())?;
-        request_v2!(pubkey_command, GetPublicKeyResponse, self, on_public_key)
+        request_v2!(pubkey_command, GetPublicKeyResponse ; Json, self, on_public_key ; print_response)
     }
 
     pub(crate) async fn get_public_key_hash(&self) -> Result<()> {
         info!("Getting public key hash");
         let pubkey_hash_command = self.command_v2(V2Method::GetPublicKeyHash, ())?;
-        request_v2!(pubkey_hash_command, GetPublicKeyHashResponse, self, on_public_key_hash)
+        request_v2!(pubkey_hash_command, GetPublicKeyHashResponse ; Json, self, on_public_key_hash ; print_response)
     }
 
     pub(crate) async fn get_raw_transaction(&self, request: GetRawTransactionRequest, bare_output: bool) -> Result<()> {
@@ -536,10 +537,10 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         let get_raw_tx_command = self.command_v2(V2Method::GetRawTransaction, request)?;
         request_v2!(
             get_raw_tx_command,
-            GetRawTransactionResponse,
+            GetRawTransactionResponse ; Json,
             self,
             on_raw_transaction,
-            bare_output
+            bare_output ; print_response
         )
     }
 
@@ -548,12 +549,12 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         params: EnablePlatformCoinWithTokensReq<bch::BchWithTokensActivationParams>,
     ) -> Result<()> {
         let enable_bch = self.command_v2(V2Method::EnableBchWithTokens, params)?;
-        request_v2!(enable_bch, BchWithTokensActivationResult, self, on_enable_bch)
+        request_v2!(enable_bch, BchWithTokensActivationResult ; Json, self, on_enable_bch ; print_response)
     }
 
     async fn enable_z_coin(
         &self,
-        params: InitStandaloneCoinReq<zcoin::ZcoinActivationParams>,
+        params: InitStandaloneCoinReq<ZcoinActivationParams>,
         track_timeout: u64,
     ) -> Result<()> {
         let enable_z_coin = self.command_v2(V2Method::EnableZCoin, params)?;
@@ -566,7 +567,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             ))
         })?;
         match transport
-            .send::<_, MmRpcResponseV2<InitStandaloneCoinResponse>, Json>(enable_z_coin)
+            .send::<_, MmRpcResponseV2<InitRpcTaskResponse>, Json>(enable_z_coin)
             .await
         {
             Ok(Ok(MmRpcResponseV2 {
@@ -576,7 +577,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             })) => {
                 let Some(task_id) = self.response_handler.on_enable_z_coin(result) else { panic!()};
                 if track_timeout != 0 {
-                    self.track_enable_z_coin_status(task_id, track_timeout).await?;
+                    self.enable_zcoin_status(task_id, Some(track_timeout)).await?;
                 }
             },
             Ok(Ok(MmRpcResponseV2 {
@@ -593,21 +594,35 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         Ok(())
     }
 
-    async fn track_enable_z_coin_status(&self, task_id: TaskId, track_timeout: u64) -> Result<()> {
-        let z_coint_stat = self.command_v2(V2Method::EnableZCoinStatus, InitStandaloneCoinStatusRequest {
+    pub(crate) async fn enable_zcoin_status(&self, task_id: TaskId, track_timeout: Option<u64>) -> Result<()> {
+        let zcoint_stat = self.command_v2(V2Method::EnableZCoinStatus, RpcTaskStatusRequest {
             task_id,
             forget_if_finished: true,
         })?;
 
         while self
-            .request_v2::<_, InitStandaloneCoinStatusResponse, bool, _>(&z_coint_stat, |response| {
+            .request_v2::<_, ZCoinStatus, bool, _>(&zcoint_stat, |response| {
                 self.response_handler.on_zcoin_status(response)
             })
             .await?
         {
-            tokio::time::sleep(Duration::from_secs(track_timeout)).await;
+            if let Some(track_timeout) = track_timeout {
+                tokio::time::sleep(Duration::from_secs(track_timeout)).await;
+            } else {
+                break;
+            }
         }
         Ok(())
+    }
+
+    pub(crate) async fn enable_zcoin_cancel(&self, task_id: u64) -> Result<()> {
+        let zcoin_cancel = self.command_v2(V2Method::EnableZCoinCancel, CancelRpcTaskRequest { task_id })?;
+        request_v2!(
+            zcoin_cancel,
+            Status ; CancelRpcTaskError,
+            self,
+            on_enable_zcoin_cancel ; on_enable_zcoin_cancel_error
+        )
     }
 
     fn command_legacy<R: Serialize>(&self, request: R) -> Result<Command<R>> {
@@ -684,7 +699,7 @@ mod macros {
     }
     #[macro_export]
     macro_rules! request_v2 {
-        ($request: ident, $response_ty: ty, $self: ident, $handle_method: ident$ (, $opt:expr)*) => {{
+        ($request: ident, $response_ty: ty ; $err_response_ty: ty, $self: ident, $handle_method: ident$(, $opt:expr)* ; $handle_err_method: ident) => {{
             let transport = $self.transport.ok_or_else(|| {
                 warn_anyhow!(concat!(
                     "Failed to send: `",
@@ -692,7 +707,7 @@ mod macros {
                     "`, transport is not available"
                 ))
             })?;
-            match transport.send::<_, MmRpcResponseV2<$response_ty>, Json>($request).await {
+            match transport.send::<_, MmRpcResponseV2<$response_ty>, $err_response_ty>($request).await {
                 Ok(Ok(MmRpcResponseV2 {
                     mmrpc: MmRpcVersion::V2,
                     result: MmRpcResultV2::Ok { result },
@@ -703,10 +718,11 @@ mod macros {
                     result: MmRpcResultV2::Err(error),
                     id: _,
                 })) => $self.response_handler.on_mm_rpc_error_v2(error),
-                Ok(Err(error)) => $self.response_handler.print_response(error),
+                Ok(Err(error)) => $self.response_handler.$handle_err_method(error),
                 Err(error) => error_bail!(concat!("Failed to send `", stringify!($request), "` request: {}"), error),
             }
         }};
+
     }
     pub(super) use {request_legacy, request_v2};
 }

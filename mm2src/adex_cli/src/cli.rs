@@ -180,6 +180,8 @@ enum Command {
         about = "Returns the full signed raw transaction hex for any transaction that is confirmed or within the mempool"
     )]
     GetRawTransaction(GetRawTransactionArgs),
+    #[command(subcommand, about = "Tracking the status of long-running commands")]
+    Task(TaskSubcommand),
 }
 
 #[derive(Parser)]
@@ -271,6 +273,12 @@ impl Cli {
             Command::GetPublicKey => proc.get_public_key().await?,
             Command::GetPublicKeyHash => proc.get_public_key_hash().await?,
             Command::GetRawTransaction(args) => proc.get_raw_transaction(args.into(), args.bare_output).await?,
+            Command::Task(TaskSubcommand::Status(TaskSubcommandStatus::Zcoin { task_id })) => {
+                proc.enable_zcoin_status(*task_id, None).await?
+            },
+            Command::Task(TaskSubcommand::Cancel(TaskSubcommandCancel::Zcoin { task_id })) => {
+                proc.enable_zcoin_cancel(*task_id).await?
+            },
         }
         Ok(())
     }
