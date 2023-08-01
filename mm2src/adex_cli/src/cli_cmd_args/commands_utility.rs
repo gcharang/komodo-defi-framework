@@ -1,10 +1,42 @@
-use clap::Args;
+use clap::{Args, Subcommand};
 use rpc::v1::types::H256 as H256Json;
 use std::mem::take;
 use std::str::FromStr;
 
-use crate::rpc_data::UnbanPubkeysRequest;
 use mm2_rpc::data::legacy::{BanPubkeysRequest, UnbanPubkeysReq};
+
+use crate::rpc_data::UnbanPubkeysRequest;
+
+#[derive(Subcommand)]
+pub(crate) enum UtilityCommands {
+    #[command(
+        visible_alias = "ban",
+        about = "Bans the selected pubkey ignoring its order matching messages and preventing its \
+                     orders from displaying in the orderbook. \
+                     Use the secp256k1 pubkey without prefix for this method input"
+    )]
+    BanPubkey(BanPubkeyArgs),
+    #[command(
+        visible_aliases = ["ban-list", "list-banned"],
+        about = "Returns a list of public keys of nodes that are banned from interacting with the node executing the method"
+    )]
+    ListBannedPubkeys,
+    #[command(
+        visible_alias = "unban",
+        about = "Remove all currently banned pubkeys from ban list, or specific pubkeys"
+    )]
+    UnbanPubkeys(UnbanPubkeysArgs),
+    #[command(
+        visible_aliases = ["get-public", "public-key", "public"],
+        about = "Returns the compressed secp256k1 pubkey corresponding to the user's seed phrase"
+    )]
+    GetPublicKey,
+    #[command(
+        visible_aliases = ["pubkey-hash", "hash", "pubhash"],
+        about = "Returns the RIPEMD-160 hash version of your public key"
+    )]
+    GetPublicKeyHash,
+}
 
 #[derive(Args)]
 pub(crate) struct BanPubkeyArgs {

@@ -4,7 +4,7 @@ use std::mem::take;
 use mm2_number::MmNumber;
 use mm2_rpc::data::version2::{BestOrdersAction, BestOrdersByRequest, BestOrdersRequestV2};
 
-use super::parse_mm_number;
+use crate::cli_cmd_args::parse_mm_number;
 
 #[derive(Args)]
 pub(crate) struct BestOrderArgs {

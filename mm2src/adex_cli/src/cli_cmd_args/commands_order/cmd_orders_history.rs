@@ -5,7 +5,7 @@ use derive_more::Display;
 use mm2_number::MmNumber;
 use mm2_rpc::data::legacy::OrdersHistoryRequest;
 
-use super::{parse_datetime, parse_mm_number};
+use crate::cli_cmd_args::{parse_datetime, parse_mm_number};
 use crate::komodefi_proc;
 
 #[derive(Clone, Display, ValueEnum)]

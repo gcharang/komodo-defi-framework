@@ -71,7 +71,7 @@ pub(crate) trait ResponseHandler {
     fn on_enable_tendermint_token(&self, response: TendermintTokenInitResult) -> Result<()>;
     fn on_enable_erc20(&self, response: Erc20InitResult) -> Result<()>;
     fn on_enable_eth_with_tokens(&self, response: EthWithTokensActivationResult) -> Result<()>;
-    fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> Option<TaskId>;
+    fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> TaskId;
     fn on_zcoin_status(&self, respone: ZCoinStatus) -> Result<bool>;
 
     fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()>;
@@ -211,7 +211,7 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         activation::on_enable_eth_with_tokens(writer.deref_mut(), response)
     }
 
-    fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> Option<TaskId> {
+    fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> TaskId {
         let mut writer = self.writer.borrow_mut();
         activation::on_enable_zcoin(writer.deref_mut(), response)
     }

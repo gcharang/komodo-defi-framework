@@ -1,21 +1,16 @@
-mod cmd_best_orders;
-mod cmd_cancel;
-mod cmd_enable;
-mod cmd_my_balance;
-mod cmd_order_status;
-mod cmd_orderbook;
-mod cmd_orderbook_depth;
-mod cmd_orders_history;
 mod cmd_sell_buy;
 mod cmd_set_config;
 mod cmd_set_price;
 mod cmd_task;
-mod cmd_trade_preimage;
 mod cmd_update_maker_order;
 
+mod commands_cancel;
 mod commands_coin;
-mod commands_pubkeys;
+mod commands_mm2;
+mod commands_network;
+mod commands_order;
 mod commands_swap;
+mod commands_utility;
 mod commands_wallet;
 
 use anyhow::Result;
@@ -26,24 +21,19 @@ use mm2_number::bigdecimal::ParseBigDecimalError;
 use mm2_number::{BigDecimal, MmNumber};
 
 pub(crate) mod prelude {
-    pub(crate) use super::cmd_best_orders::BestOrderArgs;
-    pub(crate) use super::cmd_cancel::CancelSubcommand;
-    pub(crate) use super::cmd_enable::EnableArgs;
-    pub(crate) use super::cmd_my_balance::MyBalanceArgs;
-    pub(crate) use super::cmd_order_status::OrderStatusArgs;
-    pub(crate) use super::cmd_orderbook::OrderbookArgs;
-    pub(crate) use super::cmd_orderbook_depth::OrderbookDepthArgs;
-    pub(crate) use super::cmd_orders_history::OrdersHistoryArgs;
     pub(crate) use super::cmd_sell_buy::{BuyOrderArgs, SellOrderArgs};
     pub(crate) use super::cmd_set_config::SetConfigArgs;
     pub(crate) use super::cmd_set_price::SetPriceArgs;
     pub(crate) use super::cmd_task::{TaskSubcommand, TaskSubcommandCancel, TaskSubcommandStatus};
-    pub(crate) use super::cmd_trade_preimage::TradePreimageArgs;
     pub(crate) use super::cmd_update_maker_order::UpdateMakerOrderArgs;
-    pub(crate) use super::commands_coin::{DisableCoinArgs, SetRequiredConfArgs, SetRequiredNotaArgs};
-    pub(crate) use super::commands_pubkeys::{BanPubkeyArgs, UnbanPubkeysArgs};
-    pub(crate) use super::commands_swap::SwapSubcommand;
-    pub(crate) use super::commands_wallet::{GetRawTransactionArgs, SendRawTransactionArgs, WithdrawArgs};
+    pub(crate) use super::commands_cancel::CancelSubcommand;
+    pub(crate) use super::commands_coin::CoinCommands;
+    pub(crate) use super::commands_mm2::Mm2Commands;
+    pub(crate) use super::commands_network::NetworkCommands;
+    pub(crate) use super::commands_order::OrderCommands;
+    pub(crate) use super::commands_swap::SwapCommands;
+    pub(crate) use super::commands_utility::UtilityCommands;
+    pub(crate) use super::commands_wallet::WalletCommands;
 }
 
 fn parse_mm_number(value: &str) -> Result<MmNumber, ParseBigDecimalError> {

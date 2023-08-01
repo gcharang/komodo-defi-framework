@@ -1,9 +1,10 @@
-use crate::rpc_data::{TradePreimageMethod, TradePreimageRequest};
 use clap::{Args, ValueEnum};
-use mm2_number::MmNumber;
 use std::mem::take;
 
-use super::parse_mm_number;
+use mm2_number::MmNumber;
+
+use crate::cli_cmd_args::parse_mm_number;
+use crate::rpc_data::{TradePreimageMethod, TradePreimageRequest};
 
 #[derive(Args)]
 pub(crate) struct TradePreimageArgs {
@@ -64,7 +65,7 @@ struct TradePreimageVol {
 }
 
 #[derive(Clone, ValueEnum)]
-pub enum TradePreimageMethodArg {
+enum TradePreimageMethodArg {
     SetPrice,
     Buy,
     Sell,

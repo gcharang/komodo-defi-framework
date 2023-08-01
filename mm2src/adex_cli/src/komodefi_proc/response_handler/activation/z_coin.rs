@@ -19,9 +19,9 @@ use crate::rpc_data::activation::zcoin::{CheckPointBlockInfo, CoinBalanceReport,
 use crate::rpc_data::activation::{InitRpcTaskResponse, TaskId};
 use crate::rpc_data::CancelRpcTaskError;
 
-pub(in super::super) fn on_enable_zcoin(writer: &mut dyn Write, response: InitRpcTaskResponse) -> Option<TaskId> {
+pub(in super::super) fn on_enable_zcoin(writer: &mut dyn Write, response: InitRpcTaskResponse) -> TaskId {
     writeln_field(writer, "Enabling zcoin started, task_id", response.task_id, ZERO_INDENT);
-    Some(response.task_id)
+    response.task_id
 }
 
 pub(in super::super) fn on_enable_zcoin_status(writer: &mut dyn Write, response: ZCoinStatus) -> Result<bool> {

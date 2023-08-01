@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Result};
-use clap::{Args, ValueEnum};
+use clap::{Args, Subcommand, ValueEnum};
 use hex::FromHexError;
 use rpc::v1::types::Bytes as BytesJson;
 use std::mem::take;
@@ -8,11 +8,48 @@ use std::{f64, u64};
 
 use common::log::error;
 use mm2_number::BigDecimal;
+use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
+
+#[derive(Subcommand)]
+pub(crate) enum WalletCommands {
+    #[command(visible_alias = "balance", about = "Get coin balance")]
+    MyBalance(MyBalanceArgs),
+    #[command(
+        about = "Generates, signs, and returns a transaction that transfers the amount of coin to \
+                 the address indicated in the to argument"
+    )]
+    Withdraw(WithdrawArgs),
+    #[command(
+        visible_aliases = ["send-raw", "send"],
+        about = "Broadcasts the transaction to the network of selected coin"
+    )]
+    SendRawTransaction(SendRawTransactionArgs),
+    #[command(
+        visible_aliases = ["get-raw", "raw-tx", "get"],
+        about = "Returns the full signed raw transaction hex for any transaction that is confirmed \
+                 or within the mempool"
+    )]
+    GetRawTransaction(GetRawTransactionArgs),
+}
+
+#[derive(Args)]
+pub(crate) struct MyBalanceArgs {
+    #[arg(name = "COIN", help = "Coin to get balance")]
+    coin: String,
+}
+
+impl From<&mut MyBalanceArgs> for BalanceRequest {
+    fn from(value: &mut MyBalanceArgs) -> Self {
+        BalanceRequest {
+            coin: take(&mut value.coin),
+        }
+    }
+}
 
 #[derive(Args)]
 pub(crate) struct SendRawTransactionArgs {

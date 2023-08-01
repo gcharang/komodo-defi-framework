@@ -1,12 +1,18 @@
+#[path = "commands_swap/cmd_trade_preimage.rs"]
+mod cmd_trade_preimage;
+
+pub(crate) use cmd_trade_preimage::TradePreimageArgs;
+
 use clap::{Args, Subcommand};
-use mm2_rpc::data::legacy::MySwapsFilter;
 use uuid::Uuid;
+
+use mm2_rpc::data::legacy::MySwapsFilter;
 
 use super::parse_datetime;
 use crate::rpc_data::{MyRecentSwapsRequest, Params, RecoverFundsOfSwapRequest};
 
 #[derive(Subcommand)]
-pub(crate) enum SwapSubcommand {
+pub(crate) enum SwapCommands {
     #[command(
         short_flag = 'a',
         visible_alias = "active",
@@ -31,6 +37,18 @@ pub(crate) enum SwapSubcommand {
         about = "Reclaim the user funds from the swap-payment address, if possible"
     )]
     RecoverFundsOfSwap(RecoverFundsOfSwapArgs),
+    #[command(about = "Return the minimum required volume for buy/sell/setprice methods for the selected coin")]
+    MinTradingVol { coin: String },
+    #[command(
+        about = "Return the maximum available volume for buy/sell methods for selected coin. \
+                 The result should be used as is for sell method or divided by price for buy method."
+    )]
+    MaxTakerVol { coin: String },
+    #[command(
+        visible_alias = "preimage",
+        about = "Return the approximate fee amounts that are paid per the whole swap"
+    )]
+    TradePreimage(TradePreimageArgs),
 }
 
 #[derive(Args, Debug)]
