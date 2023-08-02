@@ -104,7 +104,12 @@ where
         }
     }
 
-    fn prev_script(&self) -> Script { Builder::build_p2pkh(&self.sender_address().hash) }
+    fn prev_script(&self) -> Script { 
+        match self.sender_address().addr_format {
+            UtxoAddressFormat::Segwit => Builder::build_p2witness(&self.sender_address().hash),
+            _ => Builder::build_p2pkh(&self.sender_address().hash),
+        }
+    }
 
     #[allow(clippy::result_large_err)]
     fn on_generating_transaction(&self) -> Result<(), MmError<WithdrawError>>;
