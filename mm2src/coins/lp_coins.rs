@@ -312,6 +312,9 @@ pub type TxHistoryResult<T> = Result<T, MmError<TxHistoryError>>;
 pub type RawTransactionResult = Result<RawTransactionRes, MmError<RawTransactionError>>;
 pub type RawTransactionFut<'a> =
     Box<dyn Future<Item = RawTransactionRes, Error = MmError<RawTransactionError>> + Send + 'a>;
+pub type SignRawTransactionResult = Result<SignRawTransactionRes, MmError<RawTransactionError>>;
+pub type SignRawTransactionFut =
+    Box<dyn Future<Item = SignRawTransactionRes, Error = MmError<RawTransactionError>> + Send>;
 pub type RefundResult<T> = Result<T, MmError<RefundError>>;
 /// Helper type used for swap transactions' spend preimage generation result
 pub type GenPreimageResult<Coin> = MmResult<TxPreimageWithSig<Coin>, TxGenError>;
@@ -348,17 +351,25 @@ pub enum RawTransactionError {
     HashNotExist(String),
     #[display(fmt = "Internal error: {}", _0)]
     InternalError(String),
+    #[display(fmt = "Invalid param: {}", _0)]
+    InvalidParam(String),
+    #[display(fmt = "Non-existent previous output: {}", _0)]
+    NonExistentPrevOutputError(String),
+    #[display(fmt = "Signing error: {}", _0)]
+    SigningError(String),
+    #[display(fmt = "UTXO RPC server error: {}", _0)]
+    RpcError(String),
+    #[display(fmt = "Not implemented for this coin {}", coin)]
+    NotImplemented { coin: String },
 }
 
 impl HttpStatusCode for RawTransactionError {
     fn status_code(&self) -> StatusCode {
         match self {
-            RawTransactionError::NoSuchCoin { .. }
-            | RawTransactionError::InvalidHashError(_)
-            | RawTransactionError::HashNotExist(_) => StatusCode::BAD_REQUEST,
-            RawTransactionError::Transport(_) | RawTransactionError::InternalError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            },
+            RawTransactionError::Transport(_)
+            | RawTransactionError::InternalError(_)
+            | RawTransactionError::RpcError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::BAD_REQUEST,
         }
     }
 }
@@ -412,6 +423,30 @@ pub struct RawTransactionRequest {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RawTransactionRes {
     /// Raw bytes of signed transaction in hexadecimal string, this should be return hexadecimal encoded signed transaction for get_raw_transaction
+    pub tx_hex: BytesJson,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PrevTxns {
+    pub tx_hash: String,
+    pub index: u32,
+    pub script_pub_key: String,
+    pub redeem_script: Option<String>,
+    pub amount: BigDecimal,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct SignRawTransactionRequest {
+    pub coin: String,
+    pub tx_hex: String,
+    pub prev_txns: Option<Vec<PrevTxns>>,
+    pub sig_type: Option<String>,
+    pub branch_id: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SignRawTransactionRes {
+    /// Raw bytes of signed transaction in hexadecimal string which is the response from the signrawtransaction request
     pub tx_hex: BytesJson,
 }
 
@@ -1440,6 +1475,9 @@ pub trait MarketCoinOps {
 
     /// Receives raw transaction bytes as input and returns tx hash in hexadecimal format
     fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send>;
+
+    /// Signs raw transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
+    fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionFut;
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send>;
 
@@ -3872,6 +3910,11 @@ pub async fn verify_message(ctx: MmArc, req: VerificationRequest) -> Verificatio
     let is_valid = coin.verify_message(&req.signature, &req.message, &req.address)?;
 
     Ok(VerificationResponse { is_valid })
+}
+
+pub async fn sign_raw_transaction(ctx: MmArc, req: SignRawTransactionRequest) -> SignRawTransactionResult {
+    let coin = lp_coinfind_or_err(&ctx, &req.coin).await?;
+    coin.sign_raw_tx(&req).compat().await
 }
 
 pub async fn remove_delegation(ctx: MmArc, req: RemoveDelegateRequest) -> DelegationResult {
