@@ -10,6 +10,7 @@ use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use super::formatters::{format_bytes, format_datetime, format_ratio, term_table_blank, write_field_option,
                         writeln_field, COMMON_PRECISION, ZERO_INDENT};
 use crate::error_anyhow;
+use crate::komodefi_proc::response_handler::formatters::format_datetime_sec;
 use crate::rpc_data::{ActiveSwapsResponse, MakerNegotiationData, MakerSavedEvent, MakerSavedSwap, MakerSwapData,
                       MakerSwapEvent, MyRecentSwapResponse, MySwapStatusResponse, PaymentInstructions,
                       RecoverFundsOfSwapResponse, SavedSwap, SavedTradeFee, SwapError, TakerNegotiationData,
@@ -56,7 +57,12 @@ pub(super) fn on_my_swap_status(writer: &mut dyn Write, response: MySwapStatusRe
             format_ratio(&my_info.other_amount, COMMON_PRECISION)?,
             0,
         );
-        writeln_field(writer, "started_at", format_datetime(my_info.started_at)?, ZERO_INDENT);
+        writeln_field(
+            writer,
+            "started_at",
+            format_datetime_sec(my_info.started_at)?,
+            ZERO_INDENT,
+        );
     }
     writeln_field(writer, "recoverable", response.recoverable, ZERO_INDENT);
     match response.swap {
@@ -209,7 +215,7 @@ fn taker_swap_started_row(timestamp: u64, swap_data: TakerSwapData) -> Result<Ro
     writeln_field(
         writer,
         "started_at",
-        format_datetime(swap_data.started_at)?,
+        format_datetime_sec(swap_data.started_at)?,
         ZERO_INDENT,
     );
     writeln_field(writer, "taker_coin", swap_data.taker_coin, ZERO_INDENT);
@@ -254,13 +260,13 @@ fn taker_swap_started_row(timestamp: u64, swap_data: TakerSwapData) -> Result<Ro
     writeln_field(
         writer,
         "tacker_payment_lock",
-        format_datetime(swap_data.taker_payment_lock)?,
+        format_datetime_sec(swap_data.taker_payment_lock)?,
         0,
     );
     writeln_field(
         writer,
         "maker_payment_wait",
-        format_datetime(swap_data.maker_payment_wait)?,
+        format_datetime_sec(swap_data.maker_payment_wait)?,
         0,
     );
     writeln_field(
@@ -330,7 +336,7 @@ fn maker_negotiated_data_row(timestamp: u64, neg_data: MakerNegotiationData) -> 
     writeln_field(
         writer,
         "maker_payment_locktime",
-        format_datetime(neg_data.maker_payment_locktime)?,
+        format_datetime_sec(neg_data.maker_payment_locktime)?,
         0,
     );
     writeln_field(writer, "maker_pubkey", format_h264(neg_data.maker_pubkey), ZERO_INDENT);
@@ -589,7 +595,7 @@ fn maker_swap_started_row(timestamp: u64, swap_data: MakerSwapData) -> Result<Ro
     writeln_field(
         writer,
         "started_at",
-        format_datetime(swap_data.started_at)?,
+        format_datetime_sec(swap_data.started_at)?,
         ZERO_INDENT,
     );
     writeln_field(writer, "taker_coin", swap_data.taker_coin, ZERO_INDENT);

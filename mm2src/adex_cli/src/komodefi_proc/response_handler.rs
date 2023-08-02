@@ -50,6 +50,7 @@ use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, Verifi
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::version_stat::NodeVersionError;
+use crate::rpc_data::wallet::MyTxHistoryResponse;
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
                       GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
@@ -121,6 +122,7 @@ pub(crate) trait ResponseHandler {
     fn on_get_current_mtp_error(&self, response: GetCurrentMtpError);
     fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()>;
     fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()>;
+    fn on_tx_history(&self, response: Mm2RpcResult<MyTxHistoryResponse>) -> Result<()>;
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()>;
     fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()>;
     fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()>;
@@ -452,6 +454,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         wallet::on_withdraw(writer.deref_mut(), response, bare_output)
+    }
+
+    fn on_tx_history(&self, response: Mm2RpcResult<MyTxHistoryResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_tx_history(writer.deref_mut(), response.result);
+        Ok(())
     }
 
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()> {

@@ -297,6 +297,14 @@ pub(super) fn format_datetime(datetime: u64) -> Result<String> {
     Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
 }
 
+pub(super) fn format_datetime_sec(datetime: u64) -> Result<String> {
+    let datetime = Utc
+        .timestamp_opt((datetime) as i64, 0)
+        .single()
+        .ok_or_else(|| error_anyhow!("Failed to get datetime formatted datetime"))?;
+    Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
+}
+
 pub(super) fn format_ratio<T: ToPrimitive + Debug>(rational: &T, precision: SmartFractPrecision) -> Result<String> {
     format_f64(
         rational

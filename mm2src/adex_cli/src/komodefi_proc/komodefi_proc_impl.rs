@@ -29,6 +29,7 @@ use crate::rpc_data::message_signing::{SignatureRequest, VerificationRequest};
 use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
                                     VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
+use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryResponse};
 use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
                       CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse, GetEnabledRequest,
                       GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
@@ -524,6 +525,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_v2!(self, withdraw_command, on_withdraw, bare_output ; print_response).await
     }
 
+    pub(in super::super) async fn tx_history(&self, request: MyTxHistoryRequest) -> Result<()> {
+        info!("Getting tx history, coin: {}", request.coin);
+        debug!("Getting tx history request: {:?}", request);
+        let tx_history = self.command_legacy(request)?;
+        request_legacy!(tx_history, Mm2RpcResult<MyTxHistoryResponse>, self, on_tx_history)
+    }
+
     pub(in super::super) async fn get_public_key(&self) -> Result<()> {
         info!("Getting public key");
         let pubkey_command = self.command_v2(V2Method::GetPublicKey, ())?;
@@ -769,6 +777,15 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             Err(error) => error_bail!("Failed to send request: {}", error),
         }
     }
+
+    // async fn request_legacy<Req: Serialize + Send + Sync, Resp: for<'a> Deserialize<'a> + Send + Sync>(&self, request: Req) -> Result<()> {
+    //     let transport = self.transport.ok_or_else(|| warn_anyhow!( concat!("Failed to send: request, transport is not available")))?;
+    //     match transport.send::<_, $response_ty, Json>($request).await {
+    //         Ok(Ok(ok)) => self.response_handler.handle_method(ok),
+    //         Ok(Err(error)) => self.response_handler.print_response(error),
+    //         Err(error) => error_bail!("Failed to send request: {}", error)
+    //     }
+    // }
 }
 
 mod macros {

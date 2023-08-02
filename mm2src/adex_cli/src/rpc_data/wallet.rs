@@ -85,3 +85,36 @@ pub(crate) struct KmdRewardsDetails {
     pub(crate) amount: BigDecimal,
     pub(crate) claimed_by_me: bool,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "method", rename = "my_tx_history")]
+pub(crate) struct MyTxHistoryRequest {
+    pub(crate) coin: String,
+    pub(crate) from_id: Option<BytesJson>,
+    pub(crate) max: bool,
+    pub(crate) limit: usize,
+    pub(crate) page_number: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct MyTxHistoryResponse {
+    pub(crate) transactions: Vec<Json>,
+    pub(crate) limit: usize,
+    pub(crate) skipped: usize,
+    pub(crate) from_id: Option<BytesJson>,
+    pub(crate) total: usize,
+    pub(crate) current_block: u64,
+    pub(crate) sync_status: HistorySyncState,
+    pub(crate) page_number: Option<usize>,
+    pub(crate) total_pages: Option<usize>,
+}
+
+#[derive(Display, Deserialize)]
+#[serde(tag = "state", content = "additional_info")]
+pub enum HistorySyncState {
+    NotEnabled,
+    NotStarted,
+    InProgress(Json),
+    Error(Json),
+    Finished,
+}

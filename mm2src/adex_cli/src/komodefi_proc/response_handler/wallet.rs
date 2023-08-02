@@ -6,6 +6,7 @@ use mm2_rpc::data::version2::{GetPublicKeyHashResponse, GetPublicKeyResponse, Ge
 
 use super::formatters::{format_bytes, write_field_option, write_sequence, writeln_field};
 use crate::komodefi_proc::response_handler::formatters::{format_datetime, ZERO_INDENT};
+use crate::rpc_data::wallet::MyTxHistoryResponse;
 use crate::rpc_data::{KmdRewardsDetails, SendRawTransactionResponse, WithdrawResponse};
 
 pub(super) fn on_send_raw_transaction(writer: &mut dyn Write, response: SendRawTransactionResponse, bare_output: bool) {
@@ -46,6 +47,24 @@ pub(super) fn on_withdraw(writer: &mut dyn Write, response: WithdrawResponse, ba
     writeln_field(writer, "tx_hex", format_bytes(response.tx_hex), ZERO_INDENT);
 
     Ok(())
+}
+
+pub(super) fn on_tx_history(writer: &mut dyn Write, response: MyTxHistoryResponse) {
+    write_field_option(writer, "from_id", response.from_id.map(format_bytes), ZERO_INDENT);
+    writeln_field(writer, "limit", response.limit, ZERO_INDENT);
+    writeln_field(writer, "skipped", response.skipped, ZERO_INDENT);
+    writeln_field(writer, "total", response.total, ZERO_INDENT);
+    write_field_option(writer, "page_number", response.page_number, ZERO_INDENT);
+    write_field_option(writer, "total_pages", response.total_pages, ZERO_INDENT);
+    writeln_field(writer, "current_block", response.current_block, ZERO_INDENT);
+    writeln_field(writer, "sync_status", response.sync_status, ZERO_INDENT);
+    if response.transactions.is_empty() {
+        writeln_field(writer, "transactions", "not found", ZERO_INDENT);
+    } else {
+        for tx in response.transactions {
+            writeln_safe_io!(writer, "{}", tx)
+        }
+    }
 }
 
 fn format_kmd_rewards(kmd_rewards: KmdRewardsDetails) -> String {

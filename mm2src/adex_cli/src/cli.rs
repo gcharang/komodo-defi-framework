@@ -160,6 +160,7 @@ impl Cli {
             Command::Wallet(WalletCommands::GetRawTransaction(args)) => {
                 proc.get_raw_transaction(args.into(), args.bare_output).await?
             },
+            Command::Wallet(WalletCommands::TxHistory(args)) => proc.tx_history(args.into()).await?,
             Command::Task(TaskSubcommand::Status(TaskSubcommandStatus::Zcoin { task_id })) => {
                 proc.enable_zcoin_status(*task_id, None).await?
             },

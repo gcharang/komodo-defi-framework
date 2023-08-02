@@ -11,6 +11,7 @@ use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
+use crate::rpc_data::wallet::MyTxHistoryRequest;
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -35,6 +36,11 @@ pub(crate) enum WalletCommands {
                  or within the mempool"
     )]
     GetRawTransaction(GetRawTransactionArgs),
+    #[command(
+        visible_aliases = ["history"],
+        about = "Returns the blockchain transactions involving the Komodo DeFi Framework node's coin address"
+    )]
+    TxHistory(TxHistoryLegacyArgs),
 }
 
 #[derive(Args)]
@@ -342,6 +348,49 @@ impl From<&mut GetRawTransactionArgs> for GetRawTransactionRequest {
         GetRawTransactionRequest {
             coin: take(&mut value.coin),
             tx_hash: hex::encode(value.tx_hash.as_slice()),
+        }
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct TxHistoryLegacyArgs {
+    #[arg(long, short, help = "the name of the coin for the history request")]
+    coin: String,
+    #[arg(
+        long,
+        short,
+        value_parser=parse_bytes,
+        help = "the name of the coin for the history request"
+    )]
+    from_id: Option<BytesJson>,
+    #[command(flatten)]
+    limit: TxHistoryLimitGroup,
+    #[arg(long, short = 'n', help = "the name of the coin for the history request")]
+    page_number: Option<usize>,
+}
+
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+struct TxHistoryLimitGroup {
+    #[arg(long, short, help = "limits the number of returned transactions")]
+    limit: Option<usize>,
+    #[arg(
+        long,
+        short,
+        default_value_t = false,
+        help = "whether to return all available records"
+    )]
+    max: bool,
+}
+
+impl From<&mut TxHistoryLegacyArgs> for MyTxHistoryRequest {
+    fn from(value: &mut TxHistoryLegacyArgs) -> Self {
+        MyTxHistoryRequest {
+            coin: take(&mut value.coin),
+            from_id: value.from_id.take(),
+            max: value.limit.max,
+            limit: value.limit.limit.unwrap_or_default(),
+            page_number: value.page_number.take(),
         }
     }
 }
