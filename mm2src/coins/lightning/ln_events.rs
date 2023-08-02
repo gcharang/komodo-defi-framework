@@ -529,7 +529,7 @@ impl LightningEventHandler {
         let keys_manager = self.keys_manager.clone();
 
         let fut = async move {
-            let change_destination_script = Builder::build_witness_script(&my_address.hash).to_bytes().take().into();
+            let change_destination_script = Builder::build_p2witness(&my_address.hash).to_bytes().take().into();
             let feerate_sat_per_1000_weight = platform.get_est_sat_per_1000_weight(ConfirmationTarget::Normal);
             let output_descriptors = outputs.iter().collect::<Vec<_>>();
             let claiming_tx = match keys_manager.spend_spendable_outputs(
