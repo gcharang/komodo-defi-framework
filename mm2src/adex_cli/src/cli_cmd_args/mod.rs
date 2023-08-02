@@ -6,6 +6,7 @@ mod cmd_update_maker_order;
 
 mod commands_cancel;
 mod commands_coin;
+mod commands_message;
 mod commands_mm2;
 mod commands_network;
 mod commands_order;
@@ -29,6 +30,7 @@ pub(crate) mod prelude {
     pub(crate) use super::cmd_update_maker_order::UpdateMakerOrderArgs;
     pub(crate) use super::commands_cancel::CancelSubcommand;
     pub(crate) use super::commands_coin::CoinCommands;
+    pub(crate) use super::commands_message::MessageCommands;
     pub(crate) use super::commands_mm2::Mm2Commands;
     pub(crate) use super::commands_network::NetworkCommands;
     pub(crate) use super::commands_order::OrderCommands;

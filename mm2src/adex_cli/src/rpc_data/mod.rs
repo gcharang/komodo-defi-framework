@@ -4,6 +4,7 @@
 //!
 
 pub(crate) mod activation;
+pub(crate) mod message_signing;
 pub(crate) mod network;
 pub(crate) mod swaps;
 pub(crate) mod trade_preimage;

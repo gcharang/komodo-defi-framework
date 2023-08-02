@@ -2,6 +2,8 @@
 #[path = "response_handler/best_orders.rs"] mod best_orders;
 #[path = "response_handler/formatters.rs"] mod formatters;
 #[path = "response_handler/macros.rs"] mod macros;
+#[path = "response_handler/message_signing.rs"]
+mod message_signing;
 #[path = "response_handler/my_orders.rs"] mod my_orders;
 #[path = "response_handler/network.rs"] mod network;
 #[path = "response_handler/order_status.rs"] mod order_status;
@@ -44,6 +46,7 @@ use crate::logging::error_anyhow;
 use crate::rpc_data::activation::{InitRpcTaskResponse, TaskId};
 use crate::rpc_data::bch::{BchWithTokensActivationResult, SlpInitResult};
 use crate::rpc_data::eth::{Erc20InitResult, EthWithTokensActivationResult};
+use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, VerificationError, VerificationResponse};
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::version_stat::NodeVersionError;
 use crate::rpc_data::zcoin::ZCoinStatus;
@@ -127,6 +130,10 @@ pub(crate) trait ResponseHandler {
     fn on_vstat_start_collection(&self, response: Status) -> Result<()>;
     fn on_vstat_stop_collection(&self, response: Status) -> Result<()>;
     fn on_vstat_update_collection(&self, response: Status) -> Result<()>;
+    fn on_sign_message(&self, response: SignatureResponse) -> Result<()>;
+    fn on_verify_message(&self, response: VerificationResponse) -> Result<()>;
+    fn on_signature_error(&self, error: SignatureError);
+    fn on_verificaton_error(&self, error: VerificationError);
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -468,48 +475,65 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
 
     fn on_enable_zcoin_cancel_error(&self, error: CancelRpcTaskError) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        activation::z_coin::on_enable_zcoin_cancel_error(writer, error);
+        activation::z_coin::on_enable_zcoin_cancel_error(writer.deref_mut(), error);
         Ok(())
     }
 
     fn on_vstat_add_node(&self, response: Status) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        version_stat::on_vstat_add_node(writer, response);
+        version_stat::on_vstat_add_node(writer.deref_mut(), response);
         Ok(())
     }
 
     fn on_vstat_error(&self, error: NodeVersionError) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        version_stat::on_node_version_error(writer, error);
+        version_stat::on_node_version_error(writer.deref_mut(), error);
         Ok(())
     }
 
     fn on_vstat_rem_node(&self, response: Status) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        version_stat::on_vstat_rem_node(writer, response);
+        version_stat::on_vstat_rem_node(writer.deref_mut(), response);
         Ok(())
     }
 
     fn on_vstat_start_collection(&self, response: Status) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        version_stat::on_vstat_start_collection(writer, response);
+        version_stat::on_vstat_start_collection(writer.deref_mut(), response);
         Ok(())
     }
+
     fn on_vstat_stop_collection(&self, response: Status) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        version_stat::on_vstat_stop_collection(writer, response);
+        version_stat::on_vstat_stop_collection(writer.deref_mut(), response);
         Ok(())
     }
+
     fn on_vstat_update_collection(&self, response: Status) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        let writer = writer.deref_mut();
-        version_stat::on_vstat_update_collection(writer, response);
+        version_stat::on_vstat_update_collection(writer.deref_mut(), response);
         Ok(())
+    }
+
+    fn on_sign_message(&self, response: SignatureResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        message_signing::on_sign_message(writer.deref_mut(), response);
+        Ok(())
+    }
+
+    fn on_signature_error(&self, error: SignatureError) {
+        let mut writer = self.writer.borrow_mut();
+        message_signing::on_signature_error(writer.deref_mut(), error);
+    }
+
+    fn on_verify_message(&self, response: VerificationResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        message_signing::on_verify_message(writer.deref_mut(), response);
+        Ok(())
+    }
+
+    fn on_verificaton_error(&self, error: VerificationError) {
+        let mut writer = self.writer.borrow_mut();
+        message_signing::on_verification_error(writer.deref_mut(), error);
     }
 }

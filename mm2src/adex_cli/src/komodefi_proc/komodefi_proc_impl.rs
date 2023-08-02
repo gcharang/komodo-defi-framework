@@ -25,6 +25,7 @@ use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::activation::{zcoin::ZcoinActivationParams, ActivationMethod, ActivationMethodV2,
                                   EnablePlatformCoinWithTokensReq, InitRpcTaskResponse, InitStandaloneCoinReq,
                                   RpcTaskStatusRequest, TaskId};
+use crate::rpc_data::message_signing::{SignatureRequest, VerificationRequest};
 use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
                                     VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
 use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
@@ -335,13 +336,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn max_taker_vol(&self, coin: String) -> Result<()> {
+    pub(in super::super) async fn max_taker_vol(&self, coin: String) -> Result<()> {
         info!("Getting max taker vol, {}", coin);
         let max_taker_vol_command = self.command_legacy(MaxTakerVolRequest { coin })?;
         request_legacy!(max_taker_vol_command, MaxTakerVolResponse, self, on_max_taker_vol)
     }
 
-    pub(crate) async fn recover_funds_of_swap(&self, request: RecoverFundsOfSwapRequest) -> Result<()> {
+    pub(in super::super) async fn recover_funds_of_swap(&self, request: RecoverFundsOfSwapRequest) -> Result<()> {
         info!("Recovering funds of swap: {}", request.params.uuid);
         let recover_funds_command = self.command_legacy(request)?;
         request_legacy!(
@@ -352,13 +353,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
+    pub(in super::super) async fn trade_preimage(&self, request: TradePreimageRequest) -> Result<()> {
         info!("Getting trade preimage");
         let trade_preimage_command = self.command_v2(V2Method::TradePreimage, request)?;
         request_v2!(self, trade_preimage_command, on_trade_preimage ; print_response).await
     }
 
-    pub(crate) async fn get_gossip_mesh(&self) -> Result<()> {
+    pub(in super::super) async fn get_gossip_mesh(&self) -> Result<()> {
         info!("Getting gossip mesh");
         let get_gossip_mesh_command = self.command_legacy(GetGossipMeshRequest::default())?;
         request_legacy!(
@@ -369,7 +370,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn get_relay_mesh(&self) -> Result<()> {
+    pub(in super::super) async fn get_relay_mesh(&self) -> Result<()> {
         info!("Getting relay mesh");
         let get_relay_mesh_command = self.command_legacy(GetRelayMeshRequest::default())?;
         request_legacy!(
@@ -380,7 +381,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn get_gossip_peer_topics(&self) -> Result<()> {
+    pub(in super::super) async fn get_gossip_peer_topics(&self) -> Result<()> {
         info!("Getting gossip peer topics");
         let get_gossip_peer_topics_command = self.command_legacy(GetGossipPeerTopicsRequest::default())?;
         request_legacy!(
@@ -391,7 +392,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn get_gossip_topic_peers(&self) -> Result<()> {
+    pub(in super::super) async fn get_gossip_topic_peers(&self) -> Result<()> {
         info!("Getting gossip topic peers");
         let get_gossip_topic_peers = self.command_legacy(GetGossipTopicPeersRequest::default())?;
         request_legacy!(
@@ -402,7 +403,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn get_my_peer_id(&self) -> Result<()> {
+    pub(in super::super) async fn get_my_peer_id(&self) -> Result<()> {
         info!("Getting my peer id");
         let get_my_peer_id_command = self.command_legacy(GetMyPeerIdRequest::default())?;
         request_legacy!(
@@ -413,7 +414,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn get_peers_info(&self) -> Result<()> {
+    pub(in super::super) async fn get_peers_info(&self) -> Result<()> {
         info!("Getting peers info");
         let peers_info_command = self.command_legacy(GetPeersInfoRequest::default())?;
         request_legacy!(
@@ -424,7 +425,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn set_required_confirmations(&self, request: SetRequiredConfRequest) -> Result<()> {
+    pub(in super::super) async fn set_required_confirmations(&self, request: SetRequiredConfRequest) -> Result<()> {
         info!(
             "Setting required confirmations: {}, confirmations: {}",
             request.coin, request.confirmations
@@ -438,7 +439,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn set_required_nota(&self, request: SetRequiredNotaRequest) -> Result<()> {
+    pub(in super::super) async fn set_required_nota(&self, request: SetRequiredNotaRequest) -> Result<()> {
         info!(
             "Setting required nota: {}, requires_nota: {}",
             request.coin, request.requires_notarization
@@ -452,7 +453,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn coins_to_kick_start(&self) -> Result<()> {
+    pub(in super::super) async fn coins_to_kick_start(&self) -> Result<()> {
         info!("Getting coins needed for kickstart");
         let coins_to_kick_start_command = self.command_legacy(CoinsToKickStartRequest::default())?;
         request_legacy!(
@@ -463,13 +464,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn ban_pubkey(&self, request: BanPubkeysRequest) -> Result<()> {
+    pub(in super::super) async fn ban_pubkey(&self, request: BanPubkeysRequest) -> Result<()> {
         info!("Banning pubkey: {}", request.pubkey);
         let ban_pubkey_command = self.command_legacy(request)?;
         request_legacy!(ban_pubkey_command, Mm2RpcResult<Status>, self, on_ban_pubkey)
     }
 
-    pub(crate) async fn list_banned_pubkeys(&self) -> Result<()> {
+    pub(in super::super) async fn list_banned_pubkeys(&self) -> Result<()> {
         info!("Getting list of banned pubkeys");
         let list_banned_command = self.command_legacy(ListBannedPubkeysRequest::default())?;
         request_legacy!(
@@ -480,7 +481,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn unban_pubkeys(&self, request: UnbanPubkeysRequest) -> Result<()> {
+    pub(in super::super) async fn unban_pubkeys(&self, request: UnbanPubkeysRequest) -> Result<()> {
         info!("Unbanning pubkeys");
         let unban_pubkeys_command = self.command_legacy(request)?;
         request_legacy!(
@@ -491,7 +492,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn send_raw_transaction(
+    pub(in super::super) async fn send_raw_transaction(
         &self,
         request: SendRawTransactionRequest,
         bare_output: bool,
@@ -507,26 +508,30 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn withdraw(&self, request: WithdrawRequest, bare_output: bool) -> Result<()> {
+    pub(in super::super) async fn withdraw(&self, request: WithdrawRequest, bare_output: bool) -> Result<()> {
         info!("Getting withdraw tx_hex");
         debug!("Getting withdraw request: {:?}", request);
         let withdraw_command = self.command_v2(V2Method::Withdraw, request)?;
         request_v2!(self, withdraw_command, on_withdraw, bare_output ; print_response).await
     }
 
-    pub(crate) async fn get_public_key(&self) -> Result<()> {
+    pub(in super::super) async fn get_public_key(&self) -> Result<()> {
         info!("Getting public key");
         let pubkey_command = self.command_v2(V2Method::GetPublicKey, ())?;
         request_v2!(self, pubkey_command, on_public_key ; print_response).await
     }
 
-    pub(crate) async fn get_public_key_hash(&self) -> Result<()> {
+    pub(in super::super) async fn get_public_key_hash(&self) -> Result<()> {
         info!("Getting public key hash");
         let pubkey_hash_command = self.command_v2(V2Method::GetPublicKeyHash, ())?;
         request_v2!(self, pubkey_hash_command, on_public_key_hash ; print_response).await
     }
 
-    pub(crate) async fn get_raw_transaction(&self, request: GetRawTransactionRequest, bare_output: bool) -> Result<()> {
+    pub(in super::super) async fn get_raw_transaction(
+        &self,
+        request: GetRawTransactionRequest,
+        bare_output: bool,
+    ) -> Result<()> {
         info!(
             "Getting raw transaction of coin: {}, hash: {}",
             request.coin, request.tx_hash
@@ -545,6 +550,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         &self,
         params: EnablePlatformCoinWithTokensReq<bch::BchWithTokensActivationParams>,
     ) -> Result<()> {
+        info!("Enabling bch");
         let enable_bch = self.command_v2(V2Method::EnableBchWithTokens, params)?;
         request_v2!(self, enable_bch, on_enable_bch ; print_response).await
     }
@@ -554,6 +560,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         params: InitStandaloneCoinReq<ZcoinActivationParams>,
         track_timeout_sec: u64,
     ) -> Result<()> {
+        info!("Starting enable zcoin task");
         let enable_z_coin = self.command_v2(V2Method::EnableZCoin, params)?;
 
         let transport = self.transport.ok_or_else(|| {
@@ -591,7 +598,12 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         Ok(())
     }
 
-    pub(crate) async fn enable_zcoin_status(&self, task_id: TaskId, track_timeout_sec: Option<u64>) -> Result<()> {
+    pub(in super::super) async fn enable_zcoin_status(
+        &self,
+        task_id: TaskId,
+        track_timeout_sec: Option<u64>,
+    ) -> Result<()> {
+        info!("Getting enable zcoin task status");
         let zcoint_stat = self.command_v2(V2Method::EnableZCoinStatus, RpcTaskStatusRequest {
             task_id,
             forget_if_finished: true,
@@ -607,7 +619,8 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         Ok(())
     }
 
-    pub(crate) async fn enable_zcoin_cancel(&self, task_id: u64) -> Result<()> {
+    pub(in super::super) async fn enable_zcoin_cancel(&self, task_id: u64) -> Result<()> {
+        info!("Canceling enable zcoin task");
         let zcoin_cancel = self.command_v2(V2Method::EnableZCoinCancel, CancelRpcTaskRequest { task_id })?;
         request_v2!(self,
             zcoin_cancel,
@@ -616,7 +629,8 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(crate) async fn version_stat_add_node(&self, node: VersionStatAddNodeRequest) -> Result<()> {
+    pub(in super::super) async fn version_stat_add_node(&self, node: VersionStatAddNodeRequest) -> Result<()> {
+        info!("Adding stat collection node");
         let vstat_add_node = self.command_v2(V2Method::AddNodeToVersionStat, node)?;
         request_v2!(self,
             vstat_add_node,
@@ -625,12 +639,17 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(crate) async fn version_stat_remove_node(&self, request: VersionStatRemoveNodeRequest) -> Result<()> {
+    pub(in super::super) async fn version_stat_remove_node(&self, request: VersionStatRemoveNodeRequest) -> Result<()> {
+        info!("Removing stat collection node");
         let vstat_rem_node = self.command_v2(V2Method::RemoveNodeFromVersionStat, request)?;
         request_v2!(self, vstat_rem_node, on_vstat_rem_node ; on_vstat_error ).await
     }
 
-    pub(crate) async fn version_stat_start_collection(&self, request: VStatStartCollectionRequest) -> Result<()> {
+    pub(in super::super) async fn version_stat_start_collection(
+        &self,
+        request: VStatStartCollectionRequest,
+    ) -> Result<()> {
+        info!("Starting stat collection");
         let vstat_start_collection = self.command_v2(V2Method::StartVersionStatCollection, request)?;
         request_v2!(
             self,
@@ -640,7 +659,8 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(crate) async fn version_stat_stop_collection(&self) -> Result<()> {
+    pub(in super::super) async fn version_stat_stop_collection(&self) -> Result<()> {
+        info!("Stopping stat collection");
         let vstat_stop_collection = self.command_v2(V2Method::StopVersionStatCollection, ())?;
         request_v2!(
             self,
@@ -650,7 +670,11 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(crate) async fn version_stat_update_collection(&self, request: VStatUpdateCollectionRequest) -> Result<()> {
+    pub(in super::super) async fn version_stat_update_collection(
+        &self,
+        request: VStatUpdateCollectionRequest,
+    ) -> Result<()> {
+        info!("Updating stat collection");
         let vstat_update_collection = self.command_v2(V2Method::UpdateVersionStatCollection, request)?;
         request_v2!(
             self,
@@ -658,6 +682,18 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             on_vstat_update_collection ; on_vstat_error
         )
         .await
+    }
+
+    pub(in super::super) async fn sign_message(&self, request: SignatureRequest) -> Result<()> {
+        info!("Signing message");
+        let sign_message = self.command_v2(V2Method::SignMessage, request)?;
+        request_v2!(self, sign_message, on_sign_message ; on_signature_error).await
+    }
+
+    pub(in super::super) async fn verify_message(&self, request: VerificationRequest) -> Result<()> {
+        info!("Verifying message");
+        let verify_message = self.command_v2(V2Method::VerifyMessage, request)?;
+        request_v2!(self, verify_message, on_verify_message ; on_verificaton_error).await
     }
 
     fn command_legacy<R: Serialize>(&self, request: R) -> Result<Command<R>> {
@@ -746,5 +782,5 @@ mod macros {
 
         }};
     }
-    pub(super) use {request_legacy, request_v2};
+    pub(in super::super) use {request_legacy, request_v2};
 }

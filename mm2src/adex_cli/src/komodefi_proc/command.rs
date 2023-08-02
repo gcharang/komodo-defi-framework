@@ -44,6 +44,8 @@ pub(super) enum V2Method {
     StartVersionStatCollection,
     StopVersionStatCollection,
     UpdateVersionStatCollection,
+    SignMessage,
+    VerifyMessage,
 }
 
 impl<T> Command<T>

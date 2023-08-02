@@ -43,6 +43,8 @@ enum Command {
     Utility(UtilityCommands),
     #[command(subcommand, visible_aliases = ["stat", "vstat"], about = "Version statistic commands")]
     VersionStat(VersionStatCommands),
+    #[command(subcommand, about = "Message signing commands: sign, verify)")]
+    Message(MessageCommands),
     Sell(SellOrderArgs),
     Buy(BuyOrderArgs),
     SetPrice(SetPriceArgs),
@@ -174,6 +176,8 @@ impl Cli {
             Command::VersionStat(VersionStatCommands::UpdateCollect(args)) => {
                 proc.version_stat_update_collection(args.into()).await?
             },
+            Command::Message(MessageCommands::Sign(args)) => proc.sign_message(args.into()).await?,
+            Command::Message(MessageCommands::Verify(args)) => proc.verify_message(args.into()).await?,
         }
         Ok(())
     }
