@@ -26,6 +26,7 @@ use crate::rpc_data::activation::{zcoin::ZcoinActivationParams, ActivationMethod
                                   EnablePlatformCoinWithTokensReq, InitRpcTaskResponse, InitStandaloneCoinReq,
                                   RpcTaskStatusRequest, TaskId};
 use crate::rpc_data::message_signing::{SignatureRequest, VerificationRequest};
+use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
                                     VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
 use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
@@ -50,7 +51,7 @@ pub(crate) struct KomodefiProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandl
 }
 
 impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc<'_, '_, '_, T, P, C> {
-    pub(crate) async fn enable(&self, coin: &str, keep_progress: u64) -> Result<()> {
+    pub(in super::super) async fn enable(&self, coin: &str, keep_progress: u64) -> Result<()> {
         info!("Enabling coin: {coin}");
         let activation_scheme = get_activation_scheme()?;
         let activation_method = activation_scheme.get_activation_method(coin)?;
@@ -107,25 +108,29 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         }
     }
 
-    pub(crate) async fn disable(&self, request: DisableCoinRequest) -> Result<()> {
+    pub(in super::super) async fn disable(&self, request: DisableCoinRequest) -> Result<()> {
         info!("Disabling coin: {}", request.coin);
         let disable_command = self.command_legacy(request)?;
         request_legacy!(disable_command, DisableCoinResponse, self, on_disable_coin)
     }
 
-    pub(crate) async fn get_balance(&self, request: BalanceRequest) -> Result<()> {
+    pub(in super::super) async fn get_balance(&self, request: BalanceRequest) -> Result<()> {
         info!("Getting balance, coin: {}", request.coin);
         let get_balance = self.command_legacy(request)?;
         request_legacy!(get_balance, BalanceResponse, self, on_balance_response)
     }
 
-    pub(crate) async fn get_enabled(&self) -> Result<()> {
+    pub(in super::super) async fn get_enabled(&self) -> Result<()> {
         info!("Getting list of enabled coins ...");
         let enabled = self.command_legacy(GetEnabledRequest::default())?;
         request_legacy!(enabled, Mm2RpcResult<GetEnabledResponse>, self, on_get_enabled_response)
     }
 
-    pub(crate) async fn get_orderbook(&self, request: OrderbookRequest, settings: OrderbookSettings) -> Result<()> {
+    pub(in super::super) async fn get_orderbook(
+        &self,
+        request: OrderbookRequest,
+        settings: OrderbookSettings,
+    ) -> Result<()> {
         info!("Getting orderbook, base: {}, rel: {}", request.base, request.rel);
         let get_orderbook = Command::builder().flatten_data(request).build()?;
         request_legacy!(
@@ -138,7 +143,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn sell(&self, request: SellRequest) -> Result<()> {
+    pub(in super::super) async fn sell(&self, request: SellRequest) -> Result<()> {
         info!(
             "Selling: {} {} for: {} {} at the price of {} {} per {}",
             request.delegate.volume,
@@ -153,7 +158,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_legacy!(sell, Mm2RpcResult<SellBuyResponse>, self, on_sell_response)
     }
 
-    pub(crate) async fn buy(&self, request: BuyRequest) -> Result<()> {
+    pub(in super::super) async fn buy(&self, request: BuyRequest) -> Result<()> {
         info!(
             "Buying: {} {} with: {} {} at the price of {} {} per {}",
             request.delegate.volume,
@@ -168,25 +173,25 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_legacy!(buy, Mm2RpcResult<SellBuyResponse>, self, on_buy_response)
     }
 
-    pub(crate) async fn send_stop(&self) -> Result<()> {
+    pub(in super::super) async fn send_stop(&self) -> Result<()> {
         info!("Sending stop command");
         let stop_command = self.command_legacy(StopRequest::default())?;
         request_legacy!(stop_command, Mm2RpcResult<Status>, self, on_stop_response)
     }
 
-    pub(crate) async fn get_version(&self) -> Result<()> {
+    pub(in super::super) async fn get_version(&self) -> Result<()> {
         info!("Requesting for mm2 version");
         let get_version = self.command_legacy(VersionRequest::default())?;
         request_legacy!(get_version, MmVersionResponse, self, on_version_response)
     }
 
-    pub(crate) async fn cancel_order(&self, request: CancelOrderRequest) -> Result<()> {
+    pub(in super::super) async fn cancel_order(&self, request: CancelOrderRequest) -> Result<()> {
         info!("Cancelling order: {}", request.uuid);
         let cancel_order = self.command_legacy(request)?;
         request_legacy!(cancel_order, Mm2RpcResult<Status>, self, on_cancel_order_response)
     }
 
-    pub(crate) async fn cancel_all_orders(&self) -> Result<()> {
+    pub(in super::super) async fn cancel_all_orders(&self) -> Result<()> {
         info!("Cancelling all orders");
         self.cancel_all_orders_impl(CancelAllOrdersRequest {
             cancel_by: CancelBy::All,
@@ -194,13 +199,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(crate) async fn cancel_by_pair(&self, request: CancelAllOrdersRequest) -> Result<()> {
+    pub(in super::super) async fn cancel_by_pair(&self, request: CancelAllOrdersRequest) -> Result<()> {
         let CancelBy::Pair { base, rel } = &request.cancel_by else {panic!("Bad cast to CancelBy::Pair")};
         info!("Cancelling by pair, base: {base}, rel: {rel}");
         self.cancel_all_orders_impl(request).await
     }
 
-    pub(crate) async fn cancel_by_coin(&self, request: CancelAllOrdersRequest) -> Result<()> {
+    pub(in super::super) async fn cancel_by_coin(&self, request: CancelAllOrdersRequest) -> Result<()> {
         let CancelBy::Coin { ticker } = &request.cancel_by else {panic!("Bad cast to CancelBy::Coin")};
         info!("Cancelling by coin: {ticker}");
         self.cancel_all_orders_impl(request).await
@@ -216,19 +221,23 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn order_status(&self, request: OrderStatusRequest) -> Result<()> {
+    pub(in super::super) async fn order_status(&self, request: OrderStatusRequest) -> Result<()> {
         info!("Getting order status: {}", request.uuid);
         let order_status = self.command_legacy(request)?;
         request_legacy!(order_status, OrderStatusResponse, self, on_order_status)
     }
 
-    pub(crate) async fn my_orders(&self) -> Result<()> {
+    pub(in super::super) async fn my_orders(&self) -> Result<()> {
         info!("Getting my orders");
         let my_orders = self.command_legacy(MyOrdersRequest::default())?;
         request_legacy!(my_orders, Mm2RpcResult<MyOrdersResponse>, self, on_my_orders)
     }
 
-    pub(crate) async fn best_orders(&self, params: BestOrdersRequestV2, show_orig_tickets: bool) -> Result<()> {
+    pub(in super::super) async fn best_orders(
+        &self,
+        params: BestOrdersRequestV2,
+        show_orig_tickets: bool,
+    ) -> Result<()> {
         info!("Getting best orders: {} {}", params.action, params.coin);
         let best_orders_command = self.command_v2(V2Method::BestOrders, params)?;
         request_v2!(
@@ -240,13 +249,13 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(crate) async fn set_price(&self, request: SetPriceReq) -> Result<()> {
+    pub(in super::super) async fn set_price(&self, request: SetPriceReq) -> Result<()> {
         info!("Setting price for pair: {} {}", request.base, request.rel);
         let set_price = self.command_legacy(request)?;
         request_legacy!(set_price, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)
     }
 
-    pub(crate) async fn orderbook_depth(&self, request: OrderbookDepthRequest) -> Result<()> {
+    pub(in super::super) async fn orderbook_depth(&self, request: OrderbookDepthRequest) -> Result<()> {
         info!(
             "Getting orderbook depth for pairs: {}",
             request
@@ -259,7 +268,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_legacy!(ob_depth, Mm2RpcResult<Vec<PairWithDepth>>, self, on_orderbook_depth)
     }
 
-    pub(crate) async fn orders_history(
+    pub(in super::super) async fn orders_history(
         &self,
         request: OrdersHistoryRequest,
         settings: OrdersHistorySettings,
@@ -275,7 +284,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn update_maker_order(&self, request: UpdateMakerOrderRequest) -> Result<()> {
+    pub(in super::super) async fn update_maker_order(&self, request: UpdateMakerOrderRequest) -> Result<()> {
         info!("Updating maker order");
         let update_maker_order = self.command_legacy(request)?;
         request_legacy!(
@@ -286,7 +295,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn active_swaps(&self, include_status: bool, uuids_only: bool) -> Result<()> {
+    pub(in super::super) async fn active_swaps(&self, include_status: bool, uuids_only: bool) -> Result<()> {
         info!("Getting active swaps");
         let active_swaps_command = self.command_legacy(ActiveSwapsRequest { include_status })?;
         request_legacy!(
@@ -298,7 +307,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn swap_status(&self, uuid: Uuid) -> Result<()> {
+    pub(in super::super) async fn swap_status(&self, uuid: Uuid) -> Result<()> {
         info!("Getting swap status: {}", uuid);
         let my_swap_status_command = Command::builder()
             .userpass(self.get_rpc_password()?)
@@ -314,7 +323,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn recent_swaps(&self, request: MyRecentSwapsRequest) -> Result<()> {
+    pub(in super::super) async fn recent_swaps(&self, request: MyRecentSwapsRequest) -> Result<()> {
         info!("Getting recent swaps");
         let recent_swaps_command = self.command_legacy(request)?;
         request_legacy!(
@@ -325,7 +334,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(crate) async fn min_trading_vol(&self, coin: String) -> Result<()> {
+    pub(in super::super) async fn min_trading_vol(&self, coin: String) -> Result<()> {
         info!("Getting min trading vol: {}", coin);
         let min_trading_vol_command = self.command_legacy(MinTradingVolRequest { coin })?;
         request_legacy!(
@@ -525,6 +534,12 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         info!("Getting public key hash");
         let pubkey_hash_command = self.command_v2(V2Method::GetPublicKeyHash, ())?;
         request_v2!(self, pubkey_hash_command, on_public_key_hash ; print_response).await
+    }
+
+    pub(in super::super) async fn get_current_mtp(&self, request: GetCurrentMtpRequest) -> Result<()> {
+        info!("Getting current MTP, coin: {}", request.coin);
+        let get_current_mtp = self.command_v2(V2Method::GetCurrentMtp, request)?;
+        request_v2!(self, get_current_mtp, on_current_mtp ; on_get_current_mtp_error).await
     }
 
     pub(in super::super) async fn get_raw_transaction(
@@ -782,5 +797,5 @@ mod macros {
 
         }};
     }
-    pub(in super::super) use {request_legacy, request_v2};
+    pub(super) use {request_legacy, request_v2};
 }

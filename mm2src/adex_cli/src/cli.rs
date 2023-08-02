@@ -39,7 +39,7 @@ enum Command {
         about = "Order listing commands: book, history, depth etc."
     )]
     Order(OrderCommands),
-    #[command(subcommand, visible_aliases = ["pubkeys", "pubkey"], about = "Utility commands")]
+    #[command(subcommand, visible_aliases = ["util", "pubkeys", "pubkey"], about = "Utility commands")]
     Utility(UtilityCommands),
     #[command(subcommand, visible_aliases = ["stat", "vstat"], about = "Version statistic commands")]
     VersionStat(VersionStatCommands),
@@ -149,6 +149,7 @@ impl Cli {
             Command::Utility(UtilityCommands::UnbanPubkeys(args)) => proc.unban_pubkeys(args.into()).await?,
             Command::Utility(UtilityCommands::GetPublicKey) => proc.get_public_key().await?,
             Command::Utility(UtilityCommands::GetPublicKeyHash) => proc.get_public_key_hash().await?,
+            Command::Utility(UtilityCommands::GetCurrentMtp(args)) => proc.get_current_mtp(args.into()).await?,
             Command::Wallet(WalletCommands::MyBalance(my_balance_args)) => {
                 proc.get_balance(my_balance_args.into()).await?
             },

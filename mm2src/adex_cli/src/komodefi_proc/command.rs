@@ -46,6 +46,7 @@ pub(super) enum V2Method {
     UpdateVersionStatCollection,
     SignMessage,
     VerifyMessage,
+    GetCurrentMtp,
 }
 
 impl<T> Command<T>

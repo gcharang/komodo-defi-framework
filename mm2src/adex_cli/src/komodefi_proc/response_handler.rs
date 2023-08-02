@@ -48,6 +48,7 @@ use crate::rpc_data::bch::{BchWithTokensActivationResult, SlpInitResult};
 use crate::rpc_data::eth::{Erc20InitResult, EthWithTokensActivationResult};
 use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, VerificationError, VerificationResponse};
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
+use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::version_stat::NodeVersionError;
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
@@ -116,6 +117,8 @@ pub(crate) trait ResponseHandler {
     fn on_ban_pubkey(&self, response: Mm2RpcResult<Status>) -> Result<()>;
     fn on_list_banned_pubkeys(&self, response: Mm2RpcResult<ListBannedPubkeysResponse>) -> Result<()>;
     fn on_unban_pubkeys(&self, response: Mm2RpcResult<UnbanPubkeysResponse>) -> Result<()>;
+    fn on_current_mtp(&self, response: GetCurrentMtpResponse) -> Result<()>;
+    fn on_get_current_mtp_error(&self, response: GetCurrentMtpError);
     fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()>;
     fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()>;
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()>;
@@ -427,6 +430,17 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         let mut writer = self.writer.borrow_mut();
         utility::on_unban_pubkeys(writer.deref_mut(), response.result);
         Ok(())
+    }
+
+    fn on_current_mtp(&self, response: GetCurrentMtpResponse) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        utility::on_current_mtp(writer.deref_mut(), response);
+        Ok(())
+    }
+
+    fn on_get_current_mtp_error(&self, error: GetCurrentMtpError) {
+        let mut writer = self.writer.borrow_mut();
+        utility::on_get_current_mtp_error(writer.deref_mut(), error);
     }
 
     fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()> {

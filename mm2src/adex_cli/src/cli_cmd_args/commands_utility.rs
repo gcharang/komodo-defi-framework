@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use mm2_rpc::data::legacy::{BanPubkeysRequest, UnbanPubkeysReq};
 
+use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::UnbanPubkeysRequest;
 
 #[derive(Subcommand)]
@@ -36,6 +37,11 @@ pub(crate) enum UtilityCommands {
         about = "Returns the RIPEMD-160 hash version of your public key"
     )]
     GetPublicKeyHash,
+    #[command(
+        visible_aliases = ["current-mtp", "mtp"],
+        about = "Returns the Median Time Past (MTP) from electrum servers for UTXO coins"
+    )]
+    GetCurrentMtp(GetCurrentMtpArgs),
 }
 
 #[derive(Args)]
@@ -89,6 +95,20 @@ impl From<&mut UnbanPubkeysArgs> for UnbanPubkeysRequest {
             } else {
                 UnbanPubkeysReq::Few(take(&mut value.pubkey))
             },
+        }
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct GetCurrentMtpArgs {
+    #[arg(help = "A compatible (UTXO) coin's ticker")]
+    coin: String,
+}
+
+impl From<&mut GetCurrentMtpArgs> for GetCurrentMtpRequest {
+    fn from(value: &mut GetCurrentMtpArgs) -> Self {
+        GetCurrentMtpRequest {
+            coin: take(&mut value.coin),
         }
     }
 }

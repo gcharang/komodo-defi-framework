@@ -2,10 +2,12 @@ use rpc::v1::types::H256 as H256Json;
 use std::io::Write;
 use term_table::{row::Row, TableStyle};
 
-use crate::komodefi_proc::response_handler::formatters::{term_table_blank, write_sequence, writeln_field};
+use crate::komodefi_proc::response_handler::formatters::{format_datetime, term_table_blank, write_sequence,
+                                                         writeln_field};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 
 use super::ZERO_INDENT;
+use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::{BanReason, ListBannedPubkeysResponse, UnbanPubkeysResponse};
 
 pub(super) fn on_list_banned_pubkeys(writer: &mut dyn Write, response: ListBannedPubkeysResponse) {
@@ -38,6 +40,19 @@ pub(super) fn on_unban_pubkeys(writer: &mut dyn Write, response: UnbanPubkeysRes
     write_sequence(writer, "unbanned", unbanned, ZERO_INDENT);
     let were_not_banned = response.were_not_banned.iter();
     write_sequence(writer, "were_not_banned", were_not_banned, ZERO_INDENT);
+}
+
+pub(super) fn on_current_mtp(writer: &mut dyn Write, response: GetCurrentMtpResponse) {
+    writeln_field(
+        writer,
+        "Current mtp",
+        format_datetime(response.mtp as u64 * 1000).unwrap(),
+        ZERO_INDENT,
+    );
+}
+
+pub(super) fn on_get_current_mtp_error(writer: &mut dyn Write, error: GetCurrentMtpError) {
+    writeln_field(writer, "Failed to get current mtp", error, ZERO_INDENT);
 }
 
 fn format_ban_reason((pubkey, ban_reason): (&H256Json, &BanReason)) -> String {
