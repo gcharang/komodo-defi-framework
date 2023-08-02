@@ -16,6 +16,7 @@ pub(crate) use cmd_orderbook::OrderbookArgs;
 pub(crate) use cmd_orderbook_depth::OrderbookDepthArgs;
 pub(crate) use cmd_orders_history::OrdersHistoryArgs;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub(crate) enum OrderCommands {
     #[command(visible_aliases = ["book"], about = "Get orderbook")]

@@ -11,6 +11,7 @@ mod commands_network;
 mod commands_order;
 mod commands_swap;
 mod commands_utility;
+mod commands_version_stat;
 mod commands_wallet;
 
 use anyhow::Result;
@@ -33,6 +34,7 @@ pub(crate) mod prelude {
     pub(crate) use super::commands_order::OrderCommands;
     pub(crate) use super::commands_swap::SwapCommands;
     pub(crate) use super::commands_utility::UtilityCommands;
+    pub(crate) use super::commands_version_stat::VersionStatCommands;
     pub(crate) use super::commands_wallet::WalletCommands;
 }
 

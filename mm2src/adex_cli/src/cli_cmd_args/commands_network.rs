@@ -1,5 +1,6 @@
 use clap::Subcommand;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Subcommand)]
 pub(crate) enum NetworkCommands {
     #[command(

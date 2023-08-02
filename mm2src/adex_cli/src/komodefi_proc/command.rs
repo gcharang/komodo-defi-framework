@@ -39,6 +39,11 @@ pub(super) enum V2Method {
     EnableZCoinStatus,
     #[serde(rename = "task::enable_z_coin::cancel")]
     EnableZCoinCancel,
+    AddNodeToVersionStat,
+    RemoveNodeFromVersionStat,
+    StartVersionStatCollection,
+    StopVersionStatCollection,
+    UpdateVersionStatCollection,
 }
 
 impl<T> Command<T>

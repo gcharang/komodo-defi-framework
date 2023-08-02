@@ -14,8 +14,7 @@ use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, 
                             OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, SellRequest,
                             SetPriceReq, SetRequiredConfRequest, SetRequiredNotaRequest, Status, StopRequest,
                             UpdateMakerOrderRequest, VersionRequest};
-use mm2_rpc::data::version2::{BestOrdersRequestV2, GetRawTransactionRequest, MmRpcRequest, MmRpcResponseV2,
-                              MmRpcResultV2, MmRpcVersion};
+use mm2_rpc::data::version2::{BestOrdersRequestV2, GetRawTransactionRequest, MmRpcRequest, MmRpcVersion};
 
 use self::macros::{request_legacy, request_v2};
 use super::command::{Command, V2Method};
@@ -26,17 +25,20 @@ use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::activation::{zcoin::ZcoinActivationParams, ActivationMethod, ActivationMethodV2,
                                   EnablePlatformCoinWithTokensReq, InitRpcTaskResponse, InitStandaloneCoinReq,
                                   RpcTaskStatusRequest, TaskId};
-use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskError, CancelRpcTaskRequest,
-                      CoinsToKickStartRequest, CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse,
-                      GetEnabledRequest, GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
+use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
+                                    VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
+use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
+                      CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse, GetEnabledRequest,
+                      GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
                       GetGossipPeerTopicsResponse, GetGossipTopicPeersRequest, GetGossipTopicPeersResponse,
                       GetMyPeerIdRequest, GetMyPeerIdResponse, GetPeersInfoRequest, GetPeersInfoResponse,
                       GetRelayMeshRequest, GetRelayMeshResponse, ListBannedPubkeysRequest, ListBannedPubkeysResponse,
-                      MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest, MyRecentSwapResponse,
-                      MyRecentSwapsRequest, MySwapStatusRequest, MySwapStatusResponse, Params,
-                      RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse, SendRawTransactionRequest,
-                      SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
-                      TradePreimageRequest, UnbanPubkeysRequest, UnbanPubkeysResponse, WithdrawRequest};
+                      MaxTakerVolRequest, MaxTakerVolResponse, MinTradingVolRequest, MmRpcErrorV2, MmRpcResponseV2,
+                      MmRpcResultV2, MyRecentSwapResponse, MyRecentSwapsRequest, MySwapStatusRequest,
+                      MySwapStatusResponse, Params, RecoverFundsOfSwapRequest, RecoverFundsOfSwapResponse,
+                      SendRawTransactionRequest, SendRawTransactionResponse, SetRequiredConfResponse,
+                      SetRequiredNotaResponse, TradePreimageRequest, UnbanPubkeysRequest, UnbanPubkeysResponse,
+                      WithdrawRequest};
 use crate::transport::Transport;
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
@@ -562,7 +564,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             ))
         })?;
         match transport
-            .send::<_, MmRpcResponseV2<InitRpcTaskResponse>, Json>(enable_z_coin)
+            .send::<_, MmRpcResponseV2<InitRpcTaskResponse>, MmRpcErrorV2>(enable_z_coin)
             .await
         {
             Ok(Ok(MmRpcResponseV2 {
@@ -579,8 +581,8 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                 mmrpc: MmRpcVersion::V2,
                 result: MmRpcResultV2::Err(error),
                 id: _,
-            })) => self.response_handler.on_mm_rpc_error_v2(error)?,
-            Ok(Err(error)) => self.response_handler.print_response(error)?,
+            })) => self.response_handler.on_mm_rpc_error_v2(error),
+            Ok(Err(error)) => self.response_handler.on_mm_rpc_error_v2(error),
             Err(error) => error_bail!(
                 concat!("Failed to send `", stringify!($request), "` request: {}"),
                 error
@@ -607,12 +609,55 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
 
     pub(crate) async fn enable_zcoin_cancel(&self, task_id: u64) -> Result<()> {
         let zcoin_cancel = self.command_v2(V2Method::EnableZCoinCancel, CancelRpcTaskRequest { task_id })?;
-        request_v2!(
+        request_v2!(self,
             zcoin_cancel,
-            Status ; CancelRpcTaskError,
-            self,
             on_enable_zcoin_cancel ; on_enable_zcoin_cancel_error
         )
+        .await
+    }
+
+    pub(crate) async fn version_stat_add_node(&self, node: VersionStatAddNodeRequest) -> Result<()> {
+        let vstat_add_node = self.command_v2(V2Method::AddNodeToVersionStat, node)?;
+        request_v2!(self,
+            vstat_add_node,
+            on_vstat_add_node ; on_vstat_error
+        )
+        .await
+    }
+
+    pub(crate) async fn version_stat_remove_node(&self, request: VersionStatRemoveNodeRequest) -> Result<()> {
+        let vstat_rem_node = self.command_v2(V2Method::RemoveNodeFromVersionStat, request)?;
+        request_v2!(self, vstat_rem_node, on_vstat_rem_node ; on_vstat_error ).await
+    }
+
+    pub(crate) async fn version_stat_start_collection(&self, request: VStatStartCollectionRequest) -> Result<()> {
+        let vstat_start_collection = self.command_v2(V2Method::StartVersionStatCollection, request)?;
+        request_v2!(
+            self,
+            vstat_start_collection,
+            on_vstat_start_collection ; on_vstat_error
+        )
+        .await
+    }
+
+    pub(crate) async fn version_stat_stop_collection(&self) -> Result<()> {
+        let vstat_stop_collection = self.command_v2(V2Method::StopVersionStatCollection, ())?;
+        request_v2!(
+            self,
+            vstat_stop_collection,
+            on_vstat_stop_collection ; on_vstat_error
+        )
+        .await
+    }
+
+    pub(crate) async fn version_stat_update_collection(&self, request: VStatUpdateCollectionRequest) -> Result<()> {
+        let vstat_update_collection = self.command_v2(V2Method::UpdateVersionStatCollection, request)?;
+        request_v2!(
+            self,
+            vstat_update_collection,
+            on_vstat_update_collection ; on_vstat_error
+        )
+        .await
     }
 
     fn command_legacy<R: Serialize>(&self, request: R) -> Result<Command<R>> {
@@ -657,23 +702,20 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                 mmrpc: MmRpcVersion::V2,
                 result: MmRpcResultV2::Ok { result },
                 id: _,
-            })) => handle(result),
+            })) => handle(result), // server responded with 200 with success
             Ok(Ok(MmRpcResponseV2 {
                 mmrpc: MmRpcVersion::V2,
                 result: MmRpcResultV2::Err(error),
                 id: _,
             })) => {
-                self.response_handler.on_mm_rpc_error_v2(error)?;
+                self.response_handler.on_mm_rpc_error_v2(error); // server responded with 200 with error
                 Ok(Res::default())
             },
             Ok(Err(error)) => {
-                let _ = err_handle(error);
+                err_handle(error);
                 Ok(Res::default())
             },
-            Err(error) => error_bail!(
-                concat!("Failed to send `", stringify!($request), "` request: {}"),
-                error
-            ),
+            Err(error) => error_bail!("Failed to send request: {}", error),
         }
     }
 }
@@ -703,30 +745,6 @@ mod macros {
             )
 
         }};
-        ($request: ident, $response_ty: ty ; $err_response_ty: ty, $self: ident, $handle_method: ident$(, $opt:expr)* ; $handle_err_method: ident) => {{
-            let transport = $self.transport.ok_or_else(|| {
-                warn_anyhow!(concat!(
-                    "Failed to send: `",
-                    stringify!($request),
-                    "`, transport is not available"
-                ))
-            })?;
-            match transport.send::<_, MmRpcResponseV2<$response_ty>, $err_response_ty>($request).await {
-                Ok(Ok(MmRpcResponseV2 {
-                    mmrpc: MmRpcVersion::V2,
-                    result: MmRpcResultV2::Ok { result },
-                    id: _,
-                })) => $self.response_handler.$handle_method(result, $($opt),*),
-                Ok(Ok(MmRpcResponseV2 {
-                    mmrpc: MmRpcVersion::V2,
-                    result: MmRpcResultV2::Err(error),
-                    id: _,
-                })) => $self.response_handler.on_mm_rpc_error_v2(error),
-                Ok(Err(error)) => $self.response_handler.$handle_err_method(error),
-                Err(error) => error_bail!(concat!("Failed to send `", stringify!($request), "` request: {}"), error),
-            }
-        }};
-
     }
     pub(super) use {request_legacy, request_v2};
 }

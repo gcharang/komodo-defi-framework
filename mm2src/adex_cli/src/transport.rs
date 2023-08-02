@@ -56,7 +56,6 @@ impl Response for (StatusCode, HeaderMap, Vec<u8>) {
         ErrT: for<'a> Deserialize<'a>,
     {
         let (status, _headers, data) = self;
-
         match status {
             StatusCode::OK => match serde_json::from_slice::<OkT>(&data) {
                 Ok(resp_data) => Ok(Ok(resp_data)),

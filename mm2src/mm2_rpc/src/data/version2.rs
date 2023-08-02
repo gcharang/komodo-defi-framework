@@ -28,30 +28,6 @@ pub enum MmRpcVersion {
     V2,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct MmRpcErrorV2 {
-    pub error: String,
-    pub error_path: String,
-    pub error_trace: String,
-    pub error_type: String,
-    pub error_data: String,
-}
-
-#[derive(Deserialize)]
-pub struct MmRpcResponseV2<T> {
-    pub mmrpc: MmRpcVersion,
-    #[serde(flatten)]
-    pub result: MmRpcResultV2<T>,
-    pub id: Option<usize>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(untagged)]
-pub enum MmRpcResultV2<T> {
-    Ok { result: T },
-    Err(MmRpcErrorV2),
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BestOrdersRequestV2 {
     pub coin: String,

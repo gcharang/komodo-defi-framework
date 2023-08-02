@@ -41,6 +41,8 @@ enum Command {
     Order(OrderCommands),
     #[command(subcommand, visible_aliases = ["pubkeys", "pubkey"], about = "Utility commands")]
     Utility(UtilityCommands),
+    #[command(subcommand, visible_aliases = ["stat", "vstat"], about = "Version statistic commands")]
+    VersionStat(VersionStatCommands),
     Sell(SellOrderArgs),
     Buy(BuyOrderArgs),
     SetPrice(SetPriceArgs),
@@ -160,6 +162,17 @@ impl Cli {
             },
             Command::Task(TaskSubcommand::Cancel(TaskSubcommandCancel::Zcoin { task_id })) => {
                 proc.enable_zcoin_cancel(*task_id).await?
+            },
+            Command::VersionStat(VersionStatCommands::AddNode(args)) => proc.version_stat_add_node(args.into()).await?,
+            Command::VersionStat(VersionStatCommands::RemoveNode(args)) => {
+                proc.version_stat_remove_node(args.into()).await?
+            },
+            Command::VersionStat(VersionStatCommands::StartCollect(args)) => {
+                proc.version_stat_start_collection(args.into()).await?
+            },
+            Command::VersionStat(VersionStatCommands::StopCollect) => proc.version_stat_stop_collection().await?,
+            Command::VersionStat(VersionStatCommands::UpdateCollect(args)) => {
+                proc.version_stat_update_collection(args.into()).await?
             },
         }
         Ok(())

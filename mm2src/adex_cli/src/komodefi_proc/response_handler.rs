@@ -15,6 +15,7 @@ mod smart_fraction_fmt;
 #[path = "response_handler/swaps.rs"] mod swaps;
 #[path = "response_handler/trading.rs"] mod trading;
 #[path = "response_handler/utility.rs"] mod utility;
+#[path = "response_handler/version_stat.rs"] mod version_stat;
 #[path = "response_handler/wallet.rs"] mod wallet;
 
 pub(crate) use orderbook::OrderbookSettings;
@@ -35,7 +36,7 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
                             MyOrdersResponse, OrderStatusResponse, OrderbookResponse, OrdersHistoryResponse,
                             PairWithDepth, SellBuyResponse, Status};
 use mm2_rpc::data::version2::{BestOrdersV2Response, GetPublicKeyHashResponse, GetPublicKeyResponse,
-                              GetRawTransactionResponse, MmRpcErrorV2};
+                              GetRawTransactionResponse};
 
 use crate::komodefi_config::KomodefiConfig;
 use crate::komodefi_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
@@ -44,13 +45,14 @@ use crate::rpc_data::activation::{InitRpcTaskResponse, TaskId};
 use crate::rpc_data::bch::{BchWithTokensActivationResult, SlpInitResult};
 use crate::rpc_data::eth::{Erc20InitResult, EthWithTokensActivationResult};
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
+use crate::rpc_data::version_stat::NodeVersionError;
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
                       GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
                       GetMyPeerIdResponse, GetPeersInfoResponse, GetRelayMeshResponse, ListBannedPubkeysResponse,
-                      MaxTakerVolResponse, MyRecentSwapResponse, MySwapStatusResponse, RecoverFundsOfSwapResponse,
-                      SendRawTransactionResponse, SetRequiredConfResponse, SetRequiredNotaResponse,
-                      TradePreimageResponse, UnbanPubkeysResponse, WithdrawResponse};
+                      MaxTakerVolResponse, MmRpcErrorV2, MyRecentSwapResponse, MySwapStatusResponse,
+                      RecoverFundsOfSwapResponse, SendRawTransactionResponse, SetRequiredConfResponse,
+                      SetRequiredNotaResponse, TradePreimageResponse, UnbanPubkeysResponse, WithdrawResponse};
 
 pub(crate) trait ResponseHandler {
     fn print_response(&self, response: Json) -> Result<()>;
@@ -116,9 +118,15 @@ pub(crate) trait ResponseHandler {
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()>;
     fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()>;
     fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()>;
-    fn on_mm_rpc_error_v2(&self, error: MmRpcErrorV2) -> Result<()>;
+    fn on_mm_rpc_error_v2(&self, error: MmRpcErrorV2);
     fn on_enable_zcoin_cancel(&self, response: Status) -> Result<()>;
     fn on_enable_zcoin_cancel_error(&self, error: CancelRpcTaskError) -> Result<()>;
+    fn on_vstat_add_node(&self, response: Status) -> Result<()>;
+    fn on_vstat_error(&self, error: NodeVersionError) -> Result<()>;
+    fn on_vstat_rem_node(&self, response: Status) -> Result<()>;
+    fn on_vstat_start_collection(&self, response: Status) -> Result<()>;
+    fn on_vstat_stop_collection(&self, response: Status) -> Result<()>;
+    fn on_vstat_update_collection(&self, response: Status) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -443,15 +451,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         Ok(())
     }
 
-    fn on_mm_rpc_error_v2(&self, error: MmRpcErrorV2) -> Result<()> {
+    fn on_mm_rpc_error_v2(&self, error: MmRpcErrorV2) {
         let mut writer = self.writer.borrow_mut();
         let writer = writer.deref_mut();
         writeln_field(writer, "error", error.error, ZERO_INDENT);
-        writeln_field(writer, "error_type", error.error_type, ZERO_INDENT);
         writeln_field(writer, "error_path", error.error_path, ZERO_INDENT);
         writeln_field(writer, "error_trace", error.error_trace, ZERO_INDENT);
-        writeln_field(writer, "error_data", error.error_data, ZERO_INDENT);
-        Ok(())
     }
 
     fn on_enable_zcoin_cancel(&self, response: Status) -> Result<()> {
@@ -465,6 +470,46 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         let mut writer = self.writer.borrow_mut();
         let writer = writer.deref_mut();
         activation::z_coin::on_enable_zcoin_cancel_error(writer, error);
+        Ok(())
+    }
+
+    fn on_vstat_add_node(&self, response: Status) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        version_stat::on_vstat_add_node(writer, response);
+        Ok(())
+    }
+
+    fn on_vstat_error(&self, error: NodeVersionError) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        version_stat::on_node_version_error(writer, error);
+        Ok(())
+    }
+
+    fn on_vstat_rem_node(&self, response: Status) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        version_stat::on_vstat_rem_node(writer, response);
+        Ok(())
+    }
+
+    fn on_vstat_start_collection(&self, response: Status) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        version_stat::on_vstat_start_collection(writer, response);
+        Ok(())
+    }
+    fn on_vstat_stop_collection(&self, response: Status) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        version_stat::on_vstat_stop_collection(writer, response);
+        Ok(())
+    }
+    fn on_vstat_update_collection(&self, response: Status) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        let writer = writer.deref_mut();
+        version_stat::on_vstat_update_collection(writer, response);
         Ok(())
     }
 }
