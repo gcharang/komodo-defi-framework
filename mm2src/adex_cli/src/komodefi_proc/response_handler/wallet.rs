@@ -7,11 +7,12 @@ use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io, PagingOptionsEnum};
 use mm2_rpc::data::version2::{GetPublicKeyHashResponse, GetPublicKeyResponse, GetRawTransactionResponse};
 
-use super::formatters::{format_bytes, format_datetime, format_datetime_sec, format_ratio, term_table_blank,
+use super::formatters::{format_bytes, format_datetime_msec, format_datetime_sec, format_ratio, term_table_blank,
                         write_field_option, write_sequence, writeln_field, COMMON_INDENT, COMMON_PRECISION,
                         ZERO_INDENT};
 use crate::error_anyhow;
-use crate::rpc_data::wallet::{MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2};
+use crate::rpc_data::wallet::{KmdRewardsInfoResponse, MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2,
+                              ShowPrivateKeyResponse, ValidateAddressResponse};
 use crate::rpc_data::{KmdRewardsDetails, SendRawTransactionResponse, WithdrawResponse};
 
 pub(super) fn on_send_raw_transaction(writer: &mut dyn Write, response: SendRawTransactionResponse, bare_output: bool) {
@@ -36,7 +37,12 @@ pub(super) fn on_withdraw(writer: &mut dyn Write, response: WithdrawResponse, ba
     writeln_field(writer, "received_by_me", response.received_by_me, ZERO_INDENT);
     writeln_field(writer, "my_balance_change", response.my_balance_change, ZERO_INDENT);
     writeln_field(writer, "block_height", response.block_height, ZERO_INDENT);
-    writeln_field(writer, "timestamp", format_datetime(response.timestamp)?, ZERO_INDENT);
+    writeln_field(
+        writer,
+        "timestamp",
+        format_datetime_msec(response.timestamp)?,
+        ZERO_INDENT,
+    );
     write_field_option(writer, "fee_details", response.fee_details, ZERO_INDENT);
     writeln_field(writer, "internal_id", format_bytes(response.internal_id), ZERO_INDENT);
     write_field_option(
@@ -193,4 +199,64 @@ pub(super) fn on_raw_transaction(writer: &mut dyn Write, response: GetRawTransac
     } else {
         writeln_field(writer, "tx_hex", format_bytes(response.tx_hex), ZERO_INDENT);
     }
+}
+
+pub(super) fn on_private_key(writer: &mut dyn Write, response: ShowPrivateKeyResponse) {
+    writeln_field(writer, "coin", response.coin, ZERO_INDENT);
+    writeln_field(writer, "priv_key", response.priv_key, ZERO_INDENT);
+}
+
+pub(super) fn on_validate_address(writer: &mut dyn Write, response: ValidateAddressResponse) {
+    writeln_field(
+        writer,
+        "valid",
+        if response.is_valid { "valid" } else { "invalid" },
+        ZERO_INDENT,
+    );
+    write_field_option(writer, "reason", response.reason, ZERO_INDENT);
+}
+
+pub(super) fn on_kmd_rewards_info(writer: &mut dyn Write, response: KmdRewardsInfoResponse) -> Result<()> {
+    if response.is_empty() {
+        writeln_field(writer, "rewards_info", "not found", ZERO_INDENT);
+    } else {
+        writeln_field(writer, "rewards_info", "", ZERO_INDENT);
+        for info in response {
+            writeln_field(writer, "tx_hash", hex::encode(info.tx_hash.0), ZERO_INDENT);
+            write_field_option(writer, "height", info.height, ZERO_INDENT);
+            writeln_field(writer, "output_index", info.output_index, ZERO_INDENT);
+            writeln_field(
+                writer,
+                "amount",
+                format_ratio(&info.amount, COMMON_PRECISION)?,
+                ZERO_INDENT,
+            );
+            writeln_field(writer, "locktime", format_datetime_sec(info.locktime)?, ZERO_INDENT);
+            writeln_field(
+                writer,
+                "accrued_rewards",
+                format_datetime_sec(info.locktime)?,
+                ZERO_INDENT,
+            );
+            writeln_field(writer, "accrued_rewards", info.accrued_rewards, ZERO_INDENT);
+            if let Some(accrue_start_at) = info.accrue_start_at {
+                writeln_field(
+                    writer,
+                    "accrue_start_at",
+                    format_datetime_sec(accrue_start_at)?,
+                    ZERO_INDENT,
+                );
+            }
+            if let Some(accrue_stop_at) = info.accrue_stop_at {
+                writeln_field(
+                    writer,
+                    "accrue_stop_at",
+                    format_datetime_sec(accrue_stop_at)?,
+                    ZERO_INDENT,
+                );
+            }
+            writeln_safe_io!(writer, "");
+        }
+    }
+    Ok(())
 }

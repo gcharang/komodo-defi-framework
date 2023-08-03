@@ -16,7 +16,7 @@ const FAKE_SERVER_WARMUP_TIMEOUT_MS: u64 = 100;
 async fn test_get_version() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/version.http");
-    let command = &["komodefi-cli", "version"];
+    let command = &["komodefi-cli", "mm2", "version"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7784).await;
     assert_eq!(VERSION_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -25,7 +25,7 @@ async fn test_get_version() {
 async fn test_get_orderbook() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook.http");
-    let command = &["komodefi-cli", "orderbook", "RICK", "MORTY"];
+    let command = &["komodefi-cli", "orders", "book", "RICK", "MORTY"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7785).await;
     assert_eq!(RICK_AND_MORTY_ORDERBOOK, String::from_utf8(buffer).unwrap());
 }
@@ -34,7 +34,7 @@ async fn test_get_orderbook() {
 async fn test_get_orderbook_with_uuids() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook.http");
-    let command = &["komodefi-cli", "orderbook", "RICK", "MORTY", "--uuids"];
+    let command = &["komodefi-cli", "orders", "book", "RICK", "MORTY", "--uuids"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7786).await;
     assert_eq!(RICK_AND_MORTY_ORDERBOOK_WITH_UUIDS, String::from_utf8(buffer).unwrap());
 }
@@ -43,7 +43,7 @@ async fn test_get_orderbook_with_uuids() {
 async fn test_get_orderbook_with_publics() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook.http");
-    let command = &["komodefi-cli", "orderbook", "RICK", "MORTY", "--publics"];
+    let command = &["komodefi-cli", "orders", "book", "RICK", "MORTY", "--publics"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7787).await;
     assert_eq!(ORDERBOOK_WITH_PUBLICS, String::from_utf8(buffer).unwrap());
 }
@@ -52,7 +52,7 @@ async fn test_get_orderbook_with_publics() {
 async fn test_get_enabled() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/get_enabled.http");
-    let command = &["komodefi-cli", "get-enabled"];
+    let command = &["komodefi-cli", "coin", "get-enabled"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7788).await;
     assert_eq!(ENABLED_COINS, String::from_utf8(buffer).unwrap());
 }
@@ -61,7 +61,7 @@ async fn test_get_enabled() {
 async fn test_get_balance() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/balance.http");
-    let command = &["komodefi-cli", "balance", "RICK"];
+    let command = &["komodefi-cli", "wallet", "balance", "RICK"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7789).await;
     assert_eq!(RICK_BALANCE, String::from_utf8(buffer).unwrap());
 }
@@ -71,7 +71,7 @@ async fn test_enable() {
     test_activation_scheme().await;
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/enable.http");
-    let command = &["komodefi-cli", "enable", "ETH"];
+    let command = &["komodefi-cli", "coin", "enable", "ETH"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7790).await;
     assert_eq!(ENABLE_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -103,7 +103,12 @@ async fn test_buy_morty_for_rick() {
 async fn test_order_status() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/taker_status.http");
-    let command = &["komodefi-cli", "status", "b7611502-eae8-4855-8bd7-16d992f952bf"];
+    let command = &[
+        "komodefi-cli",
+        "order",
+        "status",
+        "b7611502-eae8-4855-8bd7-16d992f952bf",
+    ];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7792).await;
     assert_eq!(TAKER_STATUS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -112,7 +117,7 @@ async fn test_order_status() {
 async fn test_my_orders() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/my_orders.http");
-    let command = &["komodefi-cli", "my-orders"];
+    let command = &["komodefi-cli", "orders", "mine"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7793).await;
     assert_eq!(MY_ORDERS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -121,7 +126,7 @@ async fn test_my_orders() {
 async fn test_best_orders() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/best_orders.http");
-    let command = &["komodefi-cli", "best", "--number", "2", "RICK", "buy"];
+    let command = &["komodefi-cli", "orders", "best", "--number", "2", "RICK", "buy"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7794).await;
     assert_eq!(BEST_ORDERS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -130,7 +135,7 @@ async fn test_best_orders() {
 async fn test_orderbook_depth() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/orderbook_depth.http");
-    let command = &["komodefi-cli", "orderbook-depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
+    let command = &["komodefi-cli", "orders", "depth", "RICK/MORTY", "BTC/KMD", "BTC/ETH"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7795).await;
     assert_eq!(ORDERBOOK_DEPTH_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -139,7 +144,7 @@ async fn test_orderbook_depth() {
 async fn test_history_common() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/history-common.http");
-    let command = &["komodefi-cli", "history", "--all"];
+    let command = &["komodefi-cli", "orders", "history", "--all"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7796).await;
     assert_eq!(HISTORY_COMMON_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -148,7 +153,7 @@ async fn test_history_common() {
 async fn test_history_takers_detailed() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/history-takers-detailed.http");
-    let command = &["komodefi-cli", "history", "--takers"];
+    let command = &["komodefi-cli", "orders", "history", "--takers"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7797).await;
     assert_eq!(HISTORY_TAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -157,7 +162,7 @@ async fn test_history_takers_detailed() {
 async fn test_history_makers_detailed() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/history-makers-detailed.http");
-    let command = &["komodefi-cli", "history", "--makers"];
+    let command = &["komodefi-cli", "orders", "history", "--makers"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7798).await;
     assert_eq!(HISTORY_MAKERS_DETAILED_OUTPUT, String::from_utf8(buffer).unwrap());
 }

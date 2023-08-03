@@ -16,7 +16,7 @@ const COINS_FILE_DEFAULT: &str = "coins";
 enum Command {
     #[command(about = "Initialize a predefined coin set and configuration to start mm2 instance with")]
     Init {
-        #[arg(long, visible_alias = "coins", help = "coin set file path", default_value = COINS_FILE_DEFAULT)]
+        #[arg(long, visible_alias = "coins", help = "Coin set file path", default_value = COINS_FILE_DEFAULT)]
         mm_coins_path: String,
         #[arg(long, visible_alias = "conf", help = "mm2 configuration file path", default_value = MM2_CONFIG_FILE_DEFAULT)]
         mm_conf_path: String,
@@ -162,13 +162,10 @@ impl Cli {
             Command::Wallet(WalletCommands::GetRawTransaction(args)) => {
                 proc.get_raw_transaction(args.into(), args.bare_output).await?
             },
-            Command::Wallet(WalletCommands::TxHistory(args)) => {
-                // if args.v2 {
-                //     proc.tx_history_v2(args.into()).await?
-                // } else {
-                proc.tx_history(args.into()).await?
-                // }
-            },
+            Command::Wallet(WalletCommands::TxHistory(args)) => proc.tx_history(args.into()).await?,
+            Command::Wallet(WalletCommands::ShowPrivKey(args)) => proc.show_priv_key(args.into()).await?,
+            Command::Wallet(WalletCommands::ValidateAddress(args)) => proc.validate_address(args.into()).await?,
+            Command::Wallet(WalletCommands::KmdRewardsInfo) => proc.get_kmd_rewards_info().await?,
             Command::Task(TaskSubcommand::Status(TaskSubcommandStatus::Zcoin { task_id })) => {
                 proc.enable_zcoin_status(*task_id, None).await?
             },

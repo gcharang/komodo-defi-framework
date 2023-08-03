@@ -7,7 +7,7 @@ use term_table::{row::Row, TableStyle};
 use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 
-use super::formatters::{format_bytes, format_datetime, format_ratio, term_table_blank, write_field_option,
+use super::formatters::{format_bytes, format_datetime_msec, format_ratio, term_table_blank, write_field_option,
                         writeln_field, COMMON_PRECISION, ZERO_INDENT};
 use crate::error_anyhow;
 use crate::komodefi_proc::response_handler::formatters::format_datetime_sec;
@@ -208,14 +208,14 @@ fn write_taker_swap_events(writer: &mut dyn Write, taker_swap_events: Vec<TakerS
 }
 
 fn taker_swap_started_row(timestamp: u64, swap_data: TakerSwapData) -> Result<Row<'static>> {
-    let caption = format!("Started\n{}\n", format_datetime(timestamp)?);
+    let caption = format!("Started\n{}\n", format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(writer, "uuid", swap_data.uuid, ZERO_INDENT);
     writeln_field(
         writer,
         "started_at",
-        format_datetime_sec(swap_data.started_at)?,
+        format_datetime_msec(swap_data.started_at)?,
         ZERO_INDENT,
     );
     writeln_field(writer, "taker_coin", swap_data.taker_coin, ZERO_INDENT);
@@ -260,13 +260,13 @@ fn taker_swap_started_row(timestamp: u64, swap_data: TakerSwapData) -> Result<Ro
     writeln_field(
         writer,
         "tacker_payment_lock",
-        format_datetime_sec(swap_data.taker_payment_lock)?,
+        format_datetime_msec(swap_data.taker_payment_lock)?,
         0,
     );
     writeln_field(
         writer,
         "maker_payment_wait",
-        format_datetime_sec(swap_data.maker_payment_wait)?,
+        format_datetime_msec(swap_data.maker_payment_wait)?,
         0,
     );
     writeln_field(
@@ -320,7 +320,7 @@ fn taker_swap_started_row(timestamp: u64, swap_data: TakerSwapData) -> Result<Ro
 }
 
 fn swap_error_row(caption: &str, timestamp: u64, swap_error: SwapError) -> Result<Row<'static>> {
-    let caption = format!("{}\n{}\n", caption, format_datetime(timestamp)?);
+    let caption = format!("{}\n{}\n", caption, format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(writer, "swap_error", swap_error.error, ZERO_INDENT);
@@ -330,13 +330,13 @@ fn swap_error_row(caption: &str, timestamp: u64, swap_error: SwapError) -> Resul
 }
 
 fn maker_negotiated_data_row(timestamp: u64, neg_data: MakerNegotiationData) -> Result<Row<'static>> {
-    let caption = format!("Negotiated\n{}\n", format_datetime(timestamp)?);
+    let caption = format!("Negotiated\n{}\n", format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(
         writer,
         "maker_payment_locktime",
-        format_datetime_sec(neg_data.maker_payment_locktime)?,
+        format_datetime_msec(neg_data.maker_payment_locktime)?,
         0,
     );
     writeln_field(writer, "maker_pubkey", format_h264(neg_data.maker_pubkey), ZERO_INDENT);
@@ -372,7 +372,7 @@ fn maker_negotiated_data_row(timestamp: u64, neg_data: MakerNegotiationData) -> 
 }
 
 fn tx_id_row(caption: &str, timestamp: u64, tx_id: TransactionIdentifier) -> Result<Row<'static>> {
-    let caption = format!("{}\n{}\n", caption, format_datetime(timestamp)?);
+    let caption = format!("{}\n{}\n", caption, format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(writer, "tx_hex", format_bytes(tx_id.tx_hex), ZERO_INDENT);
@@ -387,7 +387,7 @@ fn payment_instructions_row(
     timestamp: u64,
     payment_instrs: PaymentInstructions,
 ) -> Result<Row<'static>> {
-    let caption = format!("{}\n{}\n", caption, format_datetime(timestamp)?);
+    let caption = format!("{}\n{}\n", caption, format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     match payment_instrs {
@@ -407,7 +407,7 @@ fn payment_instructions_row(
 }
 
 fn named_event_row(caption: &str, timestamp: u64) -> Result<Row<'static>> {
-    let caption = format!("{}\n{}\n", caption, format_datetime(timestamp)?);
+    let caption = format!("{}\n{}\n", caption, format_datetime_msec(timestamp)?);
     Ok(Row::new([caption, "".to_string()]))
 }
 
@@ -416,7 +416,7 @@ fn watcher_message_row(
     maker_spend_preimage: Option<Vec<u8>>,
     taker_refund_preimage: Option<Vec<u8>>,
 ) -> Result<Row<'static>> {
-    let caption = format!("WatcherMessageSent\n{}\n", format_datetime(timestamp)?);
+    let caption = format!("WatcherMessageSent\n{}\n", format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     write_field_option(
@@ -437,7 +437,7 @@ fn watcher_message_row(
 }
 
 fn taker_spent_data_row(timestamp: u64, taker_spent_data: TakerPaymentSpentData) -> Result<Row<'static>> {
-    let caption = format!("TakerPaymentSpent\n{}\n", format_datetime(timestamp)?);
+    let caption = format!("TakerPaymentSpent\n{}\n", format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(
@@ -459,10 +459,10 @@ fn taker_spent_data_row(timestamp: u64, taker_spent_data: TakerPaymentSpentData)
 }
 
 fn wait_refund_row(caption: &str, timestamp: u64, wait_until: u64) -> Result<Row<'static>> {
-    let caption = format!("{}\n{}\n", caption, format_datetime(timestamp)?);
+    let caption = format!("{}\n{}\n", caption, format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
-    writeln_field(writer, "wait_until", format_datetime(wait_until)?, ZERO_INDENT);
+    writeln_field(writer, "wait_until", format_datetime_msec(wait_until)?, ZERO_INDENT);
     let data = String::from_utf8(buff)
         .map_err(|error| error_anyhow!("Failed to get taker_spent_data from buffer: {error}"))?;
     Ok(Row::new([caption, data]))
@@ -588,7 +588,7 @@ fn write_maker_swap_events(writer: &mut dyn Write, maker_swap_event: Vec<MakerSa
 }
 
 fn maker_swap_started_row(timestamp: u64, swap_data: MakerSwapData) -> Result<Row<'static>> {
-    let caption = format!("Started\n{}\n", format_datetime(timestamp)?);
+    let caption = format!("Started\n{}\n", format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(writer, "uuid", swap_data.uuid, ZERO_INDENT);
@@ -648,7 +648,7 @@ fn maker_swap_started_row(timestamp: u64, swap_data: MakerSwapData) -> Result<Ro
     writeln_field(
         writer,
         "macker_payment_lock",
-        format_datetime(swap_data.maker_payment_lock)?,
+        format_datetime_msec(swap_data.maker_payment_lock)?,
         0,
     );
 
@@ -700,13 +700,13 @@ fn maker_swap_started_row(timestamp: u64, swap_data: MakerSwapData) -> Result<Ro
 }
 
 fn taker_negotiated_data_row(timestamp: u64, neg_data: TakerNegotiationData) -> Result<Row<'static>> {
-    let caption = format!("Negotiated\n{}\n", format_datetime(timestamp)?);
+    let caption = format!("Negotiated\n{}\n", format_datetime_msec(timestamp)?);
     let mut buff = vec![];
     let writer: &mut dyn Write = &mut buff;
     writeln_field(
         writer,
         "taker_payment_locktime",
-        format_datetime(neg_data.taker_payment_locktime)?,
+        format_datetime_msec(neg_data.taker_payment_locktime)?,
         0,
     );
     writeln_field(writer, "taker_pubkey", format_h264(neg_data.taker_pubkey), ZERO_INDENT);
@@ -754,7 +754,7 @@ fn get_opt_value_row<T, F: Fn(&str, u64, T) -> Result<Row<'static>>>(
 }
 
 fn get_none_value_row(caption: &str, timestamp: u64) -> Result<Row<'static>> {
-    let caption = format!("{}\n{}\n", caption, format_datetime(timestamp)?);
+    let caption = format!("{}\n{}\n", caption, format_datetime_msec(timestamp)?);
     Ok(Row::new([caption, "none".to_string()]))
 }
 

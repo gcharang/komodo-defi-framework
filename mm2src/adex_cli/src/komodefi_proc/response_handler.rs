@@ -50,7 +50,8 @@ use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, Verifi
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::version_stat::NodeVersionError;
-use crate::rpc_data::wallet::{MyTxHistoryResponse, MyTxHistoryResponseV2};
+use crate::rpc_data::wallet::{KmdRewardsInfoResponse, MyTxHistoryResponse, MyTxHistoryResponseV2,
+                              ShowPrivateKeyResponse, ValidateAddressResponse};
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
                       GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
@@ -139,6 +140,9 @@ pub(crate) trait ResponseHandler {
     fn on_verify_message(&self, response: VerificationResponse) -> Result<()>;
     fn on_signature_error(&self, error: SignatureError);
     fn on_verificaton_error(&self, error: VerificationError);
+    fn on_private_key(&self, response: Mm2RpcResult<ShowPrivateKeyResponse>) -> Result<()>;
+    fn on_validate_address(&self, response: Mm2RpcResult<ValidateAddressResponse>) -> Result<()>;
+    fn on_kmd_rewards_info(&self, response: Mm2RpcResult<KmdRewardsInfoResponse>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -482,6 +486,23 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         let mut writer = self.writer.borrow_mut();
         wallet::on_raw_transaction(writer.deref_mut(), response, bare_output);
         Ok(())
+    }
+
+    fn on_private_key(&self, response: Mm2RpcResult<ShowPrivateKeyResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_private_key(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_validate_address(&self, response: Mm2RpcResult<ValidateAddressResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_validate_address(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_kmd_rewards_info(&self, response: Mm2RpcResult<KmdRewardsInfoResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_kmd_rewards_info(writer.deref_mut(), response.result)
     }
 
     fn on_mm_rpc_error_v2(&self, error: MmRpcErrorV2) {

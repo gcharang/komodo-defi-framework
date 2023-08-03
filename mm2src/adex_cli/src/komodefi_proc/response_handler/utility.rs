@@ -2,7 +2,7 @@ use rpc::v1::types::H256 as H256Json;
 use std::io::Write;
 use term_table::{row::Row, TableStyle};
 
-use crate::komodefi_proc::response_handler::formatters::{format_datetime, term_table_blank, write_sequence,
+use crate::komodefi_proc::response_handler::formatters::{format_datetime_msec, term_table_blank, write_sequence,
                                                          writeln_field};
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 
@@ -46,7 +46,7 @@ pub(super) fn on_current_mtp(writer: &mut dyn Write, response: GetCurrentMtpResp
     writeln_field(
         writer,
         "Current mtp",
-        format_datetime(response.mtp as u64 * 1000).unwrap(),
+        format_datetime_msec(response.mtp as u64 * 1000).unwrap(),
         ZERO_INDENT,
     );
 }

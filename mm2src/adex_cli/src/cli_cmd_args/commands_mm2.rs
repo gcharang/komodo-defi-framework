@@ -6,9 +6,9 @@ pub(crate) enum Mm2Commands {
     Start {
         #[arg(long, visible_alias = "conf", help = "mm2 configuration file path")]
         mm_conf_path: Option<String>,
-        #[arg(long, visible_alias = "coins", help = "coin set file path")]
+        #[arg(long, visible_alias = "coins", help = "Coin set file path")]
         mm_coins_path: Option<String>,
-        #[arg(long, visible_alias = "log", help = "log file path")]
+        #[arg(long, visible_alias = "log", help = "Log file path")]
         mm_log: Option<String>,
     },
     #[command(about = "Stop mm2 using API")]

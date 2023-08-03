@@ -30,7 +30,9 @@ use crate::rpc_data::message_signing::{SignatureRequest, VerificationRequest};
 use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
                                     VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
-use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryRequestV2, MyTxHistoryResponse};
+use crate::rpc_data::wallet::{KmdRewardsInfoRequest, KmdRewardsInfoResponse, MyTxHistoryRequest, MyTxHistoryRequestV2,
+                              MyTxHistoryResponse, ShowPrivateKeyRequest, ShowPrivateKeyResponse,
+                              ValidateAddressRequest, ValidateAddressResponse};
 use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
                       CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse, GetEnabledRequest,
                       GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
@@ -542,6 +544,42 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
                     .await
             },
         }
+    }
+
+    pub(in super::super) async fn show_priv_key(&self, request: ShowPrivateKeyRequest) -> Result<()> {
+        info!("Getting private key, coin: {}", request.coin);
+        let show_priv_key = self.command_legacy(request)?;
+        request_legacy!(
+            show_priv_key,
+            Mm2RpcResult<ShowPrivateKeyResponse>,
+            self,
+            on_private_key
+        )
+    }
+
+    pub(in super::super) async fn validate_address(&self, request: ValidateAddressRequest) -> Result<()> {
+        info!(
+            "Validating address, coin: {}, address: {}",
+            request.coin, request.address
+        );
+        let validate_address = self.command_legacy(request)?;
+        request_legacy!(
+            validate_address,
+            Mm2RpcResult<ValidateAddressResponse>,
+            self,
+            on_validate_address
+        )
+    }
+
+    pub(in super::super) async fn get_kmd_rewards_info(&self) -> Result<()> {
+        info!("Getting kmd rewards info");
+        let get_kmd_rewards = self.command_legacy(KmdRewardsInfoRequest::default())?;
+        request_legacy!(
+            get_kmd_rewards,
+            Mm2RpcResult<KmdRewardsInfoResponse>,
+            self,
+            on_kmd_rewards_info
+        )
     }
 
     async fn tx_history_legacy_impl(&self, request: MyTxHistoryRequest) -> Result<()> {

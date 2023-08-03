@@ -10,9 +10,10 @@ use mm2_rpc::data::legacy::{FilteringOrder, MakerOrderForRpc, Mm2RpcResult, Orde
                             UuidParseError};
 
 use super::formatters::{term_table_blank, write_maker_match};
-use crate::komodefi_proc::response_handler::formatters::{format_confirmation_settings, format_datetime, format_f64,
-                                                         format_historical_changes, format_ratio, get_matches_rows,
-                                                         taker_order_header_row, taker_order_rows, COMMON_PRECISION};
+use crate::komodefi_proc::response_handler::formatters::{format_confirmation_settings, format_datetime_msec,
+                                                         format_f64, format_historical_changes, format_ratio,
+                                                         get_matches_rows, taker_order_header_row, taker_order_rows,
+                                                         COMMON_PRECISION};
 
 pub(crate) struct OrdersHistorySettings {
     pub(crate) takers_detailed: bool,
@@ -119,9 +120,14 @@ fn order_row(order: FilteringOrder) -> Result<Row<'static>> {
             false,
         ),
         TableCell::new_with_alignment_and_padding(&order.status, 1, Alignment::Left, false),
-        TableCell::new_with_alignment_and_padding(format_datetime(order.created_at as u64)?, 1, Alignment::Left, false),
         TableCell::new_with_alignment_and_padding(
-            format_datetime(order.last_updated as u64)?,
+            format_datetime_msec(order.created_at as u64)?,
+            1,
+            Alignment::Left,
+            false,
+        ),
+        TableCell::new_with_alignment_and_padding(
+            format_datetime_msec(order.last_updated as u64)?,
             1,
             Alignment::Left,
             false,
@@ -160,8 +166,8 @@ fn maker_order_rows(order: &MakerOrderForRpc) -> Result<Vec<Row<'static>>> {
         TableCell::new(order.uuid),
         TableCell::new(format!(
             "{},\n{}",
-            format_datetime(order.created_at)?,
-            order.updated_at.map_or(Ok("".to_string()), format_datetime)?
+            format_datetime_msec(order.created_at)?,
+            order.updated_at.map_or(Ok("".to_string()), format_datetime_msec)?
         )),
         TableCell::new(format!(
             "{},\n{}",

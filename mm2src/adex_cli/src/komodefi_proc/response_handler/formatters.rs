@@ -42,9 +42,14 @@ pub(super) fn write_maker_order(writer: &mut dyn Write, order: &MakerOrderForRpc
         COMMON_INDENT,
     );
     writeln_field(writer, "uuid", order.uuid, COMMON_INDENT);
-    writeln_field(writer, "created at", format_datetime(order.created_at)?, COMMON_INDENT);
+    writeln_field(
+        writer,
+        "created at",
+        format_datetime_msec(order.created_at)?,
+        COMMON_INDENT,
+    );
     if let Some(updated_at) = order.updated_at {
-        writeln_field(writer, "updated at", format_datetime(updated_at)?, COMMON_INDENT);
+        writeln_field(writer, "updated at", format_datetime_msec(updated_at)?, COMMON_INDENT);
     }
     writeln_field(
         writer,
@@ -128,7 +133,12 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
     if let Some(ref connect) = connect {
         write_connected!(writer, connect, NESTED_INDENT);
     }
-    writeln_field(writer, "last_updated", format_datetime(m.last_updated)?, NESTED_INDENT);
+    writeln_field(
+        writer,
+        "last_updated",
+        format_datetime_msec(m.last_updated)?,
+        NESTED_INDENT,
+    );
     Ok(())
 }
 
@@ -175,7 +185,7 @@ pub(super) fn taker_order_rows(taker_order: &TakerOrderForRpc) -> Result<Vec<Row
         TableCell::new(format!(
             "{}\n{}\n{}",
             taker_order.order_type,
-            format_datetime(taker_order.created_at)?,
+            format_datetime_msec(taker_order.created_at)?,
             req.conf_settings
                 .as_ref()
                 .map_or_else(|| "none".to_string(), format_confirmation_settings),
@@ -227,7 +237,7 @@ pub(super) fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMa
     let last_updated = if m.last_updated.is_zero() {
         "none".to_string()
     } else {
-        format_datetime(m.last_updated)?
+        format_datetime_msec(m.last_updated)?
     };
     writeln_field(writer, "last_updated", last_updated, NESTED_INDENT);
     write_connected!(writer, connect, NESTED_INDENT);
@@ -256,7 +266,7 @@ pub(super) fn format_historical_changes(historical_order: &HistoricalOrder, deli
         result.push(format!("price: {}", format_ratio(price, COMMON_PRECISION)?));
     }
     if let Some(updated_at) = historical_order.updated_at {
-        result.push(format!("updated_at: {}", format_datetime(updated_at)?));
+        result.push(format!("updated_at: {}", format_datetime_msec(updated_at)?));
     }
     if let Some(ref conf_settings) = historical_order.conf_settings {
         result.push(format!(
@@ -289,17 +299,11 @@ pub(super) fn format_match_by(match_by: &MatchBy, delimiter: &str) -> String {
     }
 }
 
-pub(super) fn format_datetime(datetime: u64) -> Result<String> {
-    let datetime = Utc
-        .timestamp_opt((datetime / 1000) as i64, 0)
-        .single()
-        .ok_or_else(|| error_anyhow!("Failed to get datetime formatted datetime"))?;
-    Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))
-}
+pub(super) fn format_datetime_msec(datetime_msec: u64) -> Result<String> { format_datetime_sec(datetime_msec / 1000) }
 
 pub(super) fn format_datetime_sec(datetime: u64) -> Result<String> {
     let datetime = Utc
-        .timestamp_opt((datetime) as i64, 0)
+        .timestamp_opt(datetime as i64, 0)
         .single()
         .ok_or_else(|| error_anyhow!("Failed to get datetime formatted datetime"))?;
     Ok(format!("{}", datetime.format("%y-%m-%d %H:%M:%S")))

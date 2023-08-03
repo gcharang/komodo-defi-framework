@@ -1,5 +1,5 @@
 use derive_more::Display;
-use rpc::v1::types::Bytes as BytesJson;
+use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::mem::take;
@@ -185,7 +185,7 @@ pub(crate) enum CustomTendermintMsgType {
 }
 
 #[derive(Debug, Serialize)]
-pub struct MyTxHistoryRequestV2<T> {
+pub(crate) struct MyTxHistoryRequestV2<T> {
     pub(crate) coin: String,
     pub(crate) limit: usize,
     pub(crate) paging_options: PagingOptionsEnum<T>,
@@ -292,3 +292,62 @@ pub(crate) struct Bip44ChainValue {
 }
 
 pub(crate) type NonHardenedValue = AnyValue<false>;
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "method", rename = "show_priv_key")]
+pub(crate) struct ShowPrivateKeyRequest {
+    pub(crate) coin: String,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ShowPrivateKeyResponse {
+    pub(crate) coin: String,
+    pub(crate) priv_key: String,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "validateaddress")]
+pub(crate) struct ValidateAddressRequest {
+    pub(crate) coin: String,
+    pub(crate) address: String,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ValidateAddressResponse {
+    pub(crate) is_valid: bool,
+    pub(crate) reason: Option<String>,
+}
+
+#[derive(Default, Serialize)]
+#[serde(tag = "method", rename = "kmd_rewards_info")]
+pub(crate) struct KmdRewardsInfoRequest {}
+
+pub(crate) type KmdRewardsInfoResponse = Vec<KmdRewardsInfoElement>;
+
+#[derive(Deserialize)]
+pub(crate) struct KmdRewardsInfoElement {
+    pub(crate) tx_hash: H256Json,
+    pub(crate) height: Option<u64>,
+    pub(crate) output_index: u32,
+    pub(crate) amount: BigDecimal,
+    pub(crate) locktime: u64,
+    pub(crate) accrued_rewards: KmdRewardsAccrueInfo,
+    pub(crate) accrue_start_at: Option<u64>,
+    pub(crate) accrue_stop_at: Option<u64>,
+}
+
+#[derive(Display, Deserialize)]
+pub(crate) enum KmdRewardsAccrueInfo {
+    Accrued(BigDecimal),
+    NotAccruedReason(KmdRewardsNotAccruedReason),
+}
+
+#[derive(Display, Deserialize)]
+pub(crate) enum KmdRewardsNotAccruedReason {
+    LocktimeNotSet,
+    LocktimeLessThanThreshold,
+    UtxoHeightGreaterThanEndOfEra,
+    UtxoAmountLessThanTen,
+    OneHourNotPassedYet,
+    TransactionInMempool,
+}

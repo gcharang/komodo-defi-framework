@@ -9,7 +9,7 @@ use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, Mm2RpcResult, MyOrdersResponse, TakerOrderForRpc};
 
-use super::formatters::{format_confirmation_settings, format_datetime, format_historical_changes, format_ratio,
+use super::formatters::{format_confirmation_settings, format_datetime_msec, format_historical_changes, format_ratio,
                         get_matches_rows, taker_order_header_row, taker_order_rows, term_table_blank,
                         write_maker_match, writeln_field, COMMON_INDENT, COMMON_PRECISION};
 use crate::logging::error_anyhow;
@@ -80,8 +80,8 @@ fn maker_order_for_my_orders_row(maker_order: &MakerOrderForMyOrdersRpc) -> Resu
         TableCell::new(order.uuid),
         TableCell::new(format!(
             "{},\n{}",
-            format_datetime(order.created_at)?,
-            order.updated_at.map_or(Ok("".to_string()), format_datetime)?
+            format_datetime_msec(order.created_at)?,
+            order.updated_at.map_or(Ok("".to_string()), format_datetime_msec)?
         )),
         TableCell::new(format!(
             "{},\n{}",

@@ -11,7 +11,7 @@ use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
-use crate::rpc_data::wallet::MyTxHistoryRequest;
+use crate::rpc_data::wallet::{MyTxHistoryRequest, ShowPrivateKeyRequest, ValidateAddressRequest};
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -41,6 +41,21 @@ pub(crate) enum WalletCommands {
         about = "Returns the blockchain transactions involving the Komodo DeFi Framework node's coin address"
     )]
     TxHistory(TxHistoryArgs),
+    #[command(
+        visible_aliases = ["private", "private-key"],
+        about = "Returns the private key of the specified coin in a format compatible with coin wallets"
+    )]
+    ShowPrivKey(ShowPrivKeyArgs),
+    #[command(
+        visible_aliases = ["validate"],
+        about = "Checks if an input string is a valid address of the specified coin"
+    )]
+    ValidateAddress(ValidateAddressArgs),
+    #[command(
+        visible_aliases = ["rewards"],
+        about = "Informs about the active user rewards that can be claimed by an address's unspent outputs"
+    )]
+    KmdRewardsInfo,
 }
 
 #[derive(Args)]
@@ -354,7 +369,7 @@ impl From<&mut GetRawTransactionArgs> for GetRawTransactionRequest {
 
 #[derive(Args)]
 pub(crate) struct TxHistoryArgs {
-    #[arg(long, short, help = "the name of the coin for the history request")]
+    #[arg(help = "The name of the coin for the history request")]
     coin: String,
     #[command(flatten)]
     limit: TxHistoryLimitGroup,
@@ -362,10 +377,10 @@ pub(crate) struct TxHistoryArgs {
         long,
         short,
         value_parser=parse_bytes,
-        help = "the name of the coin for the history request"
+        help = "The name of the coin for the history request"
     )]
     from_id: Option<BytesJson>,
-    #[arg(long, short = 'n', help = "the name of the coin for the history request")]
+    #[arg(long, short = 'n', help = "The name of the coin for the history request")]
     page_number: Option<usize>,
 }
 
@@ -376,7 +391,7 @@ struct TxHistoryLimitGroup {
         group = "limit-group",
         long,
         short,
-        help = "limits the number of returned transactions"
+        help = "Wimits the number of returned transactions"
     )]
     limit: Option<usize>,
     #[arg(
@@ -384,7 +399,7 @@ struct TxHistoryLimitGroup {
         long,
         short,
         default_value_t = false,
-        help = "whether to return all available records"
+        help = "Whether to return all available records"
     )]
     max: bool,
 }
@@ -397,6 +412,37 @@ impl From<&mut TxHistoryArgs> for MyTxHistoryRequest {
             max: value.limit.max,
             limit: value.limit.limit.unwrap_or(10),
             page_number: value.page_number.take(),
+        }
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct ShowPrivKeyArgs {
+    #[arg(help = "The name of the coin of the private key to show")]
+    coin: String,
+}
+
+impl From<&mut ShowPrivKeyArgs> for ShowPrivateKeyRequest {
+    fn from(value: &mut ShowPrivKeyArgs) -> Self {
+        ShowPrivateKeyRequest {
+            coin: take(&mut value.coin),
+        }
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct ValidateAddressArgs {
+    #[arg(help = "The coin to validate address for")]
+    coin: String,
+    #[arg(help = "The input string to validate")]
+    address: String,
+}
+
+impl From<&mut ValidateAddressArgs> for ValidateAddressRequest {
+    fn from(value: &mut ValidateAddressArgs) -> Self {
+        ValidateAddressRequest {
+            coin: take(&mut value.coin),
+            address: take(&mut value.address),
         }
     }
 }

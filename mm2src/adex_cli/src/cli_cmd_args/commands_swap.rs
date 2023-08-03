@@ -145,7 +145,7 @@ impl From<&mut MyRecentSwapsArgs> for MyRecentSwapsRequest {
 
 #[derive(Args, Debug)]
 pub(crate) struct RecoverFundsOfSwapArgs {
-    #[arg(help = "uuid of the swap to recover the funds")]
+    #[arg(help = "Uuid of the swap to recover the funds")]
     pub(crate) uuid: Uuid,
 }
 

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, OrderStatusResponse, TakerMatchForRpc, TakerOrderForRpc};
 
-use super::formatters::{format_confirmation_settings, format_datetime, format_match_by, format_ratio,
+use super::formatters::{format_confirmation_settings, format_datetime_msec, format_match_by, format_ratio,
                         write_field_option, write_maker_matches, write_maker_order, write_taker_match, writeln_field,
                         COMMON_INDENT, COMMON_PRECISION};
 use super::macros::{write_base_rel, write_confirmation_settings};
@@ -54,7 +54,7 @@ fn write_taker_order(writer: &mut dyn Write, taker_status: &TakerOrderForRpc) ->
     writeln_field(
         writer,
         "created_at",
-        format_datetime(taker_status.created_at)?,
+        format_datetime_msec(taker_status.created_at)?,
         COMMON_INDENT,
     );
     writeln_field(writer, "order_type", &taker_status.order_type, COMMON_INDENT);

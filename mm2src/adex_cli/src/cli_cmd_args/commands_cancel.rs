@@ -40,9 +40,9 @@ impl From<&mut CancelOrderArgs> for CancelOrderRequest {
 
 #[derive(Args)]
 pub(crate) struct CancelByPairArgs {
-    #[arg(help = "base coin of the pair; ")]
+    #[arg(help = "Base coin of the pair")]
     base: String,
-    #[arg(help = "rel coin of the pair; ")]
+    #[arg(help = "Rel coin of the pair")]
     rel: String,
 }
 
@@ -59,7 +59,7 @@ impl From<&mut CancelByPairArgs> for CancelAllOrdersRequest {
 
 #[derive(Args)]
 pub(crate) struct CancelByCoinArgs {
-    #[arg(help = "order is cancelled if it uses ticker as base or rel")]
+    #[arg(help = "Order is cancelled if it uses ticker as base or rel")]
     ticker: String,
 }
 
