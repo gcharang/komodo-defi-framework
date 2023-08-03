@@ -37,7 +37,7 @@ pub(crate) mod prelude {
     pub(crate) use super::commands_swap::SwapCommands;
     pub(crate) use super::commands_utility::UtilityCommands;
     pub(crate) use super::commands_version_stat::VersionStatCommands;
-    pub(crate) use super::commands_wallet::WalletCommands;
+    pub(crate) use super::commands_wallet::{TxHistoryArgs, WalletCommands};
 }
 
 fn parse_mm_number(value: &str) -> Result<MmNumber, ParseBigDecimalError> {

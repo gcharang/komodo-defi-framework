@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
+use rpc::v1::types::Bytes as BytesJson;
 use std::io::Write;
 use term_table::{row::Row, TableStyle};
 
@@ -12,7 +13,7 @@ use super::formatters::{format_bytes, format_datetime_msec, format_datetime_sec,
                         ZERO_INDENT};
 use crate::error_anyhow;
 use crate::rpc_data::wallet::{KmdRewardsInfoResponse, MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2,
-                              ShowPrivateKeyResponse, ValidateAddressResponse};
+                              ShowPrivateKeyResponse, ValidateAddressResponse, ZcoinTxDetails};
 use crate::rpc_data::{KmdRewardsDetails, SendRawTransactionResponse, WithdrawResponse};
 
 pub(super) fn on_send_raw_transaction(writer: &mut dyn Write, response: SendRawTransactionResponse, bare_output: bool) {
@@ -73,7 +74,10 @@ pub(super) fn on_tx_history(writer: &mut dyn Write, response: MyTxHistoryRespons
     Ok(())
 }
 
-pub(super) fn on_tx_history_v2(writer: &mut dyn Write, response: MyTxHistoryResponseV2) -> Result<()> {
+pub(super) fn on_tx_history_v2(
+    writer: &mut dyn Write,
+    response: MyTxHistoryResponseV2<MyTxHistoryDetails, BytesJson>,
+) -> Result<()> {
     writeln_field(writer, "coin", response.coin, ZERO_INDENT);
     writeln_field(writer, "target", format!("{:?}", response.target), ZERO_INDENT);
     writeln_field(writer, "current_block", response.current_block, ZERO_INDENT);
@@ -166,6 +170,82 @@ fn write_transactions(writer: &mut dyn Write, transactions: Vec<MyTxHistoryDetai
 
             let data =
                 String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format tx_history row: {error}"))?;
+            term_table.add_row(Row::new([data]))
+        }
+        writeln_safe_io!(writer, "{}", term_table.render())
+    }
+    Ok(())
+}
+
+pub(super) fn on_tx_history_zcoin(
+    writer: &mut dyn Write,
+    response: MyTxHistoryResponseV2<ZcoinTxDetails, i64>,
+) -> Result<()> {
+    writeln_field(writer, "coin", response.coin, ZERO_INDENT);
+    writeln_field(writer, "target", format!("{:?}", response.target), ZERO_INDENT);
+    writeln_field(writer, "current_block", response.current_block, ZERO_INDENT);
+    writeln_field(writer, "sync_status", response.sync_status, ZERO_INDENT);
+    writeln_field(writer, "limit", response.limit, ZERO_INDENT);
+    writeln_field(writer, "skipped", response.skipped, ZERO_INDENT);
+    writeln_field(writer, "total", response.total, ZERO_INDENT);
+    writeln_field(writer, "total_pages", response.total_pages, ZERO_INDENT);
+    match response.paging_options {
+        PagingOptionsEnum::FromId(id) => writeln_field(writer, "from_id", id, ZERO_INDENT),
+        PagingOptionsEnum::PageNumber(page_number) => writeln_field(writer, "page_number", page_number, ZERO_INDENT),
+    }
+    write_zcoin_transactions(writer, response.transactions)
+}
+
+fn write_zcoin_transactions(writer: &mut dyn Write, transactions: Vec<ZcoinTxDetails>) -> Result<()> {
+    if transactions.is_empty() {
+        writeln_field(writer, "transactions", "not found", ZERO_INDENT);
+    } else {
+        writeln_field(writer, "transactions", "", ZERO_INDENT);
+        let mut term_table = term_table_blank(TableStyle::thin(), true, false, false);
+        term_table.max_column_width = 150;
+        for tx in transactions {
+            let mut buff: Vec<u8> = vec![];
+            let row_writer: &mut dyn Write = &mut buff;
+            let timestamp = tx
+                .timestamp
+                .try_into()
+                .map_err(|err| error_anyhow!("Failed to cast timestamp to u64: {}", err))?;
+            writeln_field(row_writer, "coin", tx.coin, ZERO_INDENT);
+            writeln_field(row_writer, "timestamp", format_datetime_sec(timestamp)?, ZERO_INDENT);
+            writeln_field(row_writer, "tx_hash", tx.tx_hash, ZERO_INDENT);
+            writeln_field(row_writer, "from", tx.from.iter().join(", "), ZERO_INDENT);
+            writeln_field(row_writer, "to", tx.to.iter().join(", "), ZERO_INDENT);
+            writeln_field(
+                row_writer,
+                "spent_by_me",
+                format_ratio(&tx.spent_by_me, COMMON_PRECISION)?,
+                ZERO_INDENT,
+            );
+            writeln_field(
+                row_writer,
+                "received_by_me",
+                format_ratio(&tx.received_by_me, COMMON_PRECISION)?,
+                ZERO_INDENT,
+            );
+            writeln_field(
+                row_writer,
+                "my_balance_change",
+                format_ratio(&tx.my_balance_change, COMMON_PRECISION)?,
+                ZERO_INDENT,
+            );
+            writeln_field(row_writer, "block_height", tx.block_height, ZERO_INDENT);
+            writeln_field(row_writer, "confirmations", tx.confirmations, ZERO_INDENT);
+            writeln_field(
+                row_writer,
+                "transaction_fee",
+                format_ratio(&tx.transaction_fee, COMMON_PRECISION)?,
+                ZERO_INDENT,
+            );
+            writeln_field(row_writer, "internal_id", tx.internal_id, ZERO_INDENT);
+
+            let data =
+                String::from_utf8(buff).map_err(|error| error_anyhow!("Failed to format tx_history row: {error}"))?;
+
             term_table.add_row(Row::new([data]))
         }
         writeln_safe_io!(writer, "{}", term_table.render())

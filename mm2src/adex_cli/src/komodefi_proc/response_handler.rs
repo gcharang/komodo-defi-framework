@@ -26,6 +26,7 @@ pub(crate) use smart_fraction_fmt::SmartFractPrecision;
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
+use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::Write;
@@ -50,8 +51,8 @@ use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, Verifi
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::version_stat::NodeVersionError;
-use crate::rpc_data::wallet::{KmdRewardsInfoResponse, MyTxHistoryResponse, MyTxHistoryResponseV2,
-                              ShowPrivateKeyResponse, ValidateAddressResponse};
+use crate::rpc_data::wallet::{KmdRewardsInfoResponse, MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2,
+                              ShowPrivateKeyResponse, ValidateAddressResponse, ZcoinTxDetails};
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
                       GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
@@ -71,7 +72,6 @@ pub(crate) trait ResponseHandler {
     ) -> Result<()>;
     fn on_get_enabled_response(&self, response: Mm2RpcResult<GetEnabledResponse>) -> Result<()>;
     fn on_version_response(&self, response: MmVersionResponse) -> Result<()>;
-
     fn on_enable_response(&self, response: CoinInitResponse) -> Result<()>;
     fn on_enable_bch(&self, response: BchWithTokensActivationResult) -> Result<()>;
     fn on_enable_slp(&self, response: SlpInitResult) -> Result<()>;
@@ -123,7 +123,8 @@ pub(crate) trait ResponseHandler {
     fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()>;
     fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()>;
     fn on_tx_history(&self, response: Mm2RpcResult<MyTxHistoryResponse>) -> Result<()>;
-    fn on_tx_history_v2(&self, response: MyTxHistoryResponseV2) -> Result<()>;
+    fn on_tx_history_v2(&self, response: MyTxHistoryResponseV2<MyTxHistoryDetails, BytesJson>) -> Result<()>;
+    fn on_tx_history_zcoin(&self, response: MyTxHistoryResponseV2<ZcoinTxDetails, i64>) -> Result<()>;
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()>;
     fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()>;
     fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()>;
@@ -465,9 +466,14 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
         wallet::on_tx_history(writer.deref_mut(), response.result)
     }
 
-    fn on_tx_history_v2(&self, response: MyTxHistoryResponseV2) -> Result<()> {
+    fn on_tx_history_v2(&self, response: MyTxHistoryResponseV2<MyTxHistoryDetails, BytesJson>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         wallet::on_tx_history_v2(writer.deref_mut(), response)
+    }
+
+    fn on_tx_history_zcoin(&self, response: MyTxHistoryResponseV2<ZcoinTxDetails, i64>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_tx_history_zcoin(writer.deref_mut(), response)
     }
 
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()> {

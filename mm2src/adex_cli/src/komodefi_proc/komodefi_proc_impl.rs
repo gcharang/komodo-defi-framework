@@ -22,6 +22,7 @@ use super::command::{Command, V2Method};
 use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
+use crate::cli_cmd_args::prelude::TxHistoryArgs;
 use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::activation::{zcoin::ZcoinActivationParams, ActivationMethod, ActivationMethodV2,
                                   EnablePlatformCoinWithTokensReq, InitRpcTaskResponse, InitStandaloneCoinReq,
@@ -46,6 +47,7 @@ use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTas
                       SetRequiredNotaResponse, TradePreimageRequest, UnbanPubkeysRequest, UnbanPubkeysResponse,
                       WithdrawRequest};
 use crate::transport::Transport;
+
 use crate::{error_anyhow, error_bail, warn_anyhow};
 
 pub(crate) struct KomodefiProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandler, C: KomodefiConfig + ?Sized> {
@@ -529,20 +531,14 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_v2!(self, withdraw_command, on_withdraw, bare_output ; on_mm_rpc_error_v2).await
     }
 
-    pub(in super::super) async fn tx_history(&self, request: MyTxHistoryRequest) -> Result<()> {
-        info!("Getting tx history, coin: {}", request.coin);
+    pub(in super::super) async fn tx_history(&self, args: &mut TxHistoryArgs) -> Result<()> {
+        info!("Getting tx history, coin: {}", args.coin);
         let activation_scheme = get_activation_scheme()?;
-        let activation_method = activation_scheme.get_activation_method(request.coin.as_str())?;
+        let activation_method = activation_scheme.get_activation_method(args.coin.as_str())?;
         match activation_method {
-            ActivationMethod::Legacy(_) => self.tx_history_legacy_impl(request).await,
-            ActivationMethod::V2(ActivationMethodV2::EnableZCoin(_)) => {
-                self.tx_history_zcash_impl(MyTxHistoryRequestV2::<i64>::from(request))
-                    .await
-            },
-            ActivationMethod::V2(_) => {
-                self.tx_history_v2_impl(MyTxHistoryRequestV2::<BytesJson>::from(request))
-                    .await
-            },
+            ActivationMethod::Legacy(_) => self.tx_history_legacy_impl(args.into()).await,
+            ActivationMethod::V2(ActivationMethodV2::EnableZCoin(_)) => self.tx_history_zcash_impl(args.into()).await,
+            ActivationMethod::V2(_) => self.tx_history_v2_impl(args.into()).await,
         }
     }
 
@@ -597,7 +593,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
     async fn tx_history_zcash_impl(&self, request: MyTxHistoryRequestV2<i64>) -> Result<()> {
         debug!("Getting tx history request: {:?}", request);
         let tx_history_v2 = self.command_v2(V2Method::ZCoinTxHistory, request)?;
-        request_v2!(self, tx_history_v2, on_tx_history_v2 ; on_mm_rpc_error_v2).await
+        request_v2!(self, tx_history_v2, on_tx_history_zcoin ; on_mm_rpc_error_v2).await
     }
 
     pub(in super::super) async fn get_public_key(&self) -> Result<()> {

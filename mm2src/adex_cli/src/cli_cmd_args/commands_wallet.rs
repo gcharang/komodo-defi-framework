@@ -3,15 +3,17 @@ use clap::{Args, Subcommand, ValueEnum};
 use hex::FromHexError;
 use rpc::v1::types::Bytes as BytesJson;
 use std::mem::take;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::{f64, u64};
 
 use common::log::error;
+use common::PagingOptionsEnum;
 use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
-use crate::rpc_data::wallet::{MyTxHistoryRequest, ShowPrivateKeyRequest, ValidateAddressRequest};
+use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryRequestV2, ShowPrivateKeyRequest, ValidateAddressRequest};
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -370,18 +372,31 @@ impl From<&mut GetRawTransactionArgs> for GetRawTransactionRequest {
 #[derive(Args)]
 pub(crate) struct TxHistoryArgs {
     #[arg(help = "The name of the coin for the history request")]
-    coin: String,
+    pub(crate) coin: String,
     #[command(flatten)]
     limit: TxHistoryLimitGroup,
+    #[command(flatten)]
+    from_id: FromIdGroup,
+    #[arg(long, short = 'n', help = "The name of the coin for the history request")]
+    page_number: Option<usize>,
+}
+
+#[derive(Args)]
+#[group(required = false, multiple = false)]
+struct FromIdGroup {
     #[arg(
         long,
         short,
-        value_parser=parse_bytes,
-        help = "The name of the coin for the history request"
+        value_parser = parse_bytes,
+        help = "Skips records until it reaches this ID, skipping the from_id as well"
     )]
-    from_id: Option<BytesJson>,
-    #[arg(long, short = 'n', help = "The name of the coin for the history request")]
-    page_number: Option<usize>,
+    from_tx_hash: Option<BytesJson>,
+    #[arg(
+        long,
+        short,
+        help = "For zcoin compatibility, skips records until it reaches this ID, skipping the from_id as well"
+    )]
+    from_tx_id: Option<i64>,
 }
 
 #[derive(Args)]
@@ -391,7 +406,7 @@ struct TxHistoryLimitGroup {
         group = "limit-group",
         long,
         short,
-        help = "Wimits the number of returned transactions"
+        help = "Limits the number of returned transactions"
     )]
     limit: Option<usize>,
     #[arg(
@@ -408,10 +423,74 @@ impl From<&mut TxHistoryArgs> for MyTxHistoryRequest {
     fn from(value: &mut TxHistoryArgs) -> Self {
         MyTxHistoryRequest {
             coin: take(&mut value.coin),
-            from_id: value.from_id.take(),
+            from_id: value.from_id.from_tx_hash.take(),
             max: value.limit.max,
             limit: value.limit.limit.unwrap_or(10),
             page_number: value.page_number.take(),
+        }
+    }
+}
+
+impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<i64> {
+    fn from(value: &mut TxHistoryArgs) -> Self {
+        let paging_options = if let Some(from_id) = value.from_id.from_tx_id.take() {
+            PagingOptionsEnum::FromId(from_id)
+        } else if let Some(page_number) = value.page_number.take() {
+            if page_number > 0 {
+                PagingOptionsEnum::PageNumber(
+                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
+                )
+            } else {
+                PagingOptionsEnum::default()
+            }
+        } else {
+            PagingOptionsEnum::default()
+        };
+
+        MyTxHistoryRequestV2 {
+            coin: take(&mut value.coin),
+            limit: if value.limit.max {
+                let mm2_compatible_max = u32::MAX as usize;
+                mm2_compatible_max
+            } else {
+                value
+                    .limit
+                    .limit
+                    .expect("limit option is expected to be set due to group rules")
+            },
+            paging_options,
+        }
+    }
+}
+
+impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<BytesJson> {
+    fn from(value: &mut TxHistoryArgs) -> Self {
+        let paging_options = if let Some(from_id) = value.from_id.from_tx_hash.take() {
+            PagingOptionsEnum::FromId(from_id)
+        } else if let Some(page_number) = value.page_number.take() {
+            if page_number > 0 {
+                PagingOptionsEnum::PageNumber(
+                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
+                )
+            } else {
+                PagingOptionsEnum::default()
+            }
+        } else {
+            PagingOptionsEnum::default()
+        };
+
+        MyTxHistoryRequestV2 {
+            coin: take(&mut value.coin),
+            limit: if value.limit.max {
+                let mm2_compatible_max = u32::MAX as usize;
+                mm2_compatible_max
+            } else {
+                value
+                    .limit
+                    .limit
+                    .expect("limit option is expected to be set due to group rules")
+            },
+            paging_options,
         }
     }
 }

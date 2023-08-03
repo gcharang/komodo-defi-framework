@@ -162,7 +162,7 @@ impl Cli {
             Command::Wallet(WalletCommands::GetRawTransaction(args)) => {
                 proc.get_raw_transaction(args.into(), args.bare_output).await?
             },
-            Command::Wallet(WalletCommands::TxHistory(args)) => proc.tx_history(args.into()).await?,
+            Command::Wallet(WalletCommands::TxHistory(args)) => proc.tx_history(args).await?,
             Command::Wallet(WalletCommands::ShowPrivKey(args)) => proc.show_priv_key(args.into()).await?,
             Command::Wallet(WalletCommands::ValidateAddress(args)) => proc.validate_address(args.into()).await?,
             Command::Wallet(WalletCommands::KmdRewardsInfo) => proc.get_kmd_rewards_info().await?,

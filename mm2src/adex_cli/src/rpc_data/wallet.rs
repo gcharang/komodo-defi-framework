@@ -2,8 +2,7 @@ use derive_more::Display;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use std::mem::take;
-use std::num::NonZeroUsize;
+use std::collections::HashSet;
 
 use crate::rpc_data::zcoin::{AnyValue, Bip32Child, Bip32PurposeValue, Bip44Tail, HardenedValue};
 use common::PagingOptionsEnum;
@@ -191,76 +190,18 @@ pub(crate) struct MyTxHistoryRequestV2<T> {
     pub(crate) paging_options: PagingOptionsEnum<T>,
 }
 
-impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2<BytesJson> {
-    fn from(mut value: MyTxHistoryRequest) -> Self {
-        let paging_options = if let Some(from_id) = value.from_id.take() {
-            PagingOptionsEnum::FromId(from_id)
-        } else if let Some(page_number) = value.page_number.take() {
-            if page_number > 0 {
-                PagingOptionsEnum::PageNumber(
-                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
-                )
-            } else {
-                PagingOptionsEnum::default()
-            }
-        } else {
-            PagingOptionsEnum::default()
-        };
-
-        MyTxHistoryRequestV2 {
-            coin: take(&mut value.coin),
-            limit: if value.max {
-                let mm2_compatible_max = u32::MAX as usize;
-                mm2_compatible_max
-            } else {
-                value.limit
-            },
-            paging_options,
-        }
-    }
-}
-
-impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2<i64> {
-    fn from(mut value: MyTxHistoryRequest) -> Self {
-        let paging_options = if let Some(_from_id) = value.from_id.take() {
-            PagingOptionsEnum::FromId(0)
-        } else if let Some(page_number) = value.page_number.take() {
-            if page_number > 0 {
-                PagingOptionsEnum::PageNumber(
-                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
-                )
-            } else {
-                PagingOptionsEnum::default()
-            }
-        } else {
-            PagingOptionsEnum::default()
-        };
-
-        MyTxHistoryRequestV2 {
-            coin: take(&mut value.coin),
-            limit: if value.max {
-                let mm2_compatible_max = u32::MAX as usize;
-                mm2_compatible_max
-            } else {
-                value.limit
-            },
-            paging_options,
-        }
-    }
-}
-
 #[derive(Deserialize)]
-pub(crate) struct MyTxHistoryResponseV2 {
+pub struct MyTxHistoryResponseV2<Tx, Id> {
     pub(crate) coin: String,
     pub(crate) target: MyTxHistoryTarget,
     pub(crate) current_block: u64,
-    pub(crate) transactions: Vec<MyTxHistoryDetails>,
+    pub(crate) transactions: Vec<Tx>,
     pub(crate) sync_status: HistorySyncState,
     pub(crate) limit: usize,
     pub(crate) skipped: usize,
     pub(crate) total: usize,
     pub(crate) total_pages: usize,
-    pub(crate) paging_options: PagingOptionsEnum<BytesJson>,
+    pub(crate) paging_options: PagingOptionsEnum<Id>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -350,4 +291,20 @@ pub(crate) enum KmdRewardsNotAccruedReason {
     UtxoAmountLessThanTen,
     OneHourNotPassedYet,
     TransactionInMempool,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ZcoinTxDetails {
+    pub(crate) tx_hash: String,
+    pub(crate) from: HashSet<String>,
+    pub(crate) to: HashSet<String>,
+    pub(crate) spent_by_me: BigDecimal,
+    pub(crate) received_by_me: BigDecimal,
+    pub(crate) my_balance_change: BigDecimal,
+    pub(crate) block_height: i64,
+    pub(crate) confirmations: i64,
+    pub(crate) timestamp: i64,
+    pub(crate) transaction_fee: BigDecimal,
+    pub(crate) coin: String,
+    pub(crate) internal_id: i64,
 }
