@@ -209,8 +209,12 @@ impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2 {
 
         MyTxHistoryRequestV2 {
             coin: take(&mut value.coin),
-            let mm2_compatible_max = u32::MAX as usize;
-            limit: if value.max { mm2_compatible_max } else { value.limit },
+            limit: if value.max {
+                let mm2_compatible_max = u32::MAX as usize;
+                mm2_compatible_max
+            } else {
+                value.limit
+            },
             paging_options,
         }
     }
