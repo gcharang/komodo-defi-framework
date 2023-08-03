@@ -1,6 +1,8 @@
 use mm2_rpc::data::legacy::{ElectrumProtocol, UtxoMergeParams};
 use serde::{Deserialize, Serialize};
 
+use super::SetTxHistory;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct ElectrumRequest {
     coin: String,
@@ -9,7 +11,7 @@ pub(crate) struct ElectrumRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     mm2: Option<u8>,
     #[serde(default)]
-    tx_history: bool,
+    pub(crate) tx_history: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     required_confirmations: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -29,4 +31,8 @@ pub(crate) struct Server {
     protocol: ElectrumProtocol,
     #[serde(default)]
     disable_cert_verification: bool,
+}
+
+impl SetTxHistory for ElectrumRequest {
+    fn set_tx_history_impl(&mut self) { self.tx_history = true; }
 }

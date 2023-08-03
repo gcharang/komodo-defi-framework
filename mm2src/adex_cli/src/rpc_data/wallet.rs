@@ -1,8 +1,13 @@
 use derive_more::Display;
-use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
+use std::mem::take;
+use std::num::NonZeroUsize;
+
+use crate::rpc_data::zcoin::{AnyValue, Bip32Child, Bip32PurposeValue, Bip44Tail, HardenedValue};
+use common::PagingOptionsEnum;
+use mm2_number::BigDecimal;
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "method", rename = "send_raw_transaction")]
@@ -36,7 +41,7 @@ pub(crate) enum WithdrawFrom {
     DerivationPath { derivation_path: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct HDAccountAddressId {
     pub(crate) account_id: u32,
     pub(crate) chain: Bip44Chain,
@@ -98,7 +103,7 @@ pub(crate) struct MyTxHistoryRequest {
 
 #[derive(Deserialize)]
 pub(crate) struct MyTxHistoryResponse {
-    pub(crate) transactions: Vec<Json>,
+    pub(crate) transactions: Vec<MyTxHistoryDetails>,
     pub(crate) limit: usize,
     pub(crate) skipped: usize,
     pub(crate) from_id: Option<BytesJson>,
@@ -111,10 +116,146 @@ pub(crate) struct MyTxHistoryResponse {
 
 #[derive(Display, Deserialize)]
 #[serde(tag = "state", content = "additional_info")]
-pub enum HistorySyncState {
+pub(crate) enum HistorySyncState {
     NotEnabled,
     NotStarted,
     InProgress(Json),
     Error(Json),
     Finished,
 }
+
+#[derive(Deserialize)]
+pub(crate) struct MyTxHistoryDetails {
+    #[serde(flatten)]
+    pub(crate) details: TransactionDetails,
+    pub(crate) confirmations: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct TransactionDetails {
+    pub(crate) tx_hex: BytesJson,
+    pub(crate) tx_hash: String,
+    pub(crate) from: Vec<String>,
+    pub(crate) to: Vec<String>,
+    pub(crate) total_amount: BigDecimal,
+    pub(crate) spent_by_me: BigDecimal,
+    pub(crate) received_by_me: BigDecimal,
+    pub(crate) my_balance_change: BigDecimal,
+    pub(crate) block_height: u64,
+    pub(crate) timestamp: u64,
+    pub(crate) fee_details: Option<Json>,
+    pub(crate) coin: String,
+    pub(crate) internal_id: BytesJson,
+    pub(crate) kmd_rewards: Option<KmdRewardsDetails>,
+    pub(crate) transaction_type: TransactionType,
+    pub(crate) memo: Option<String>,
+}
+
+#[derive(Debug, Display, Deserialize)]
+pub(crate) enum TransactionType {
+    StakingDelegation,
+    RemoveDelegation,
+    StandardTransfer,
+    #[display(fmt = "TokenTransfer: {}", "hex::encode(&_0.0)")]
+    TokenTransfer(BytesJson),
+    FeeForTokenTx,
+    #[display(fmt = "msg_type: {}, token_id: {}", "_0.msg_type", "format_bytes_json(&_0.token_id)")]
+    CustomTendermintMsg(CustomTendermintMsg),
+    NftTransfer,
+}
+
+fn format_bytes_json(bytes: &Option<BytesJson>) -> String {
+    bytes
+        .as_ref()
+        .map(|v| hex::encode(&v.0))
+        .unwrap_or_else(|| "none".to_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct CustomTendermintMsg {
+    msg_type: CustomTendermintMsgType,
+    token_id: Option<BytesJson>,
+}
+
+#[derive(Debug, Display, Deserialize)]
+pub(crate) enum CustomTendermintMsgType {
+    SendHtlcAmount,
+    ClaimHtlcAmount,
+    SignClaimHtlc,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct MyTxHistoryRequestV2 {
+    pub(crate) coin: String,
+    pub(crate) limit: usize,
+    pub(crate) paging_options: PagingOptionsEnum<BytesJson>,
+}
+
+impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2 {
+    fn from(mut value: MyTxHistoryRequest) -> Self {
+        let paging_options = if let Some(from_id) = value.from_id.take() {
+            PagingOptionsEnum::FromId(from_id)
+        } else if let Some(page_number) = value.page_number.take() {
+            if page_number > 0 {
+                PagingOptionsEnum::PageNumber(
+                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
+                )
+            } else {
+                PagingOptionsEnum::default()
+            }
+        } else {
+            PagingOptionsEnum::default()
+        };
+
+        MyTxHistoryRequestV2 {
+            coin: take(&mut value.coin),
+            let mm2_compatible_max = u32::MAX as usize;
+            limit: if value.max { mm2_compatible_max } else { value.limit },
+            paging_options,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct MyTxHistoryResponseV2 {
+    pub(crate) coin: String,
+    pub(crate) target: MyTxHistoryTarget,
+    pub(crate) current_block: u64,
+    pub(crate) transactions: Vec<MyTxHistoryDetails>,
+    pub(crate) sync_status: HistorySyncState,
+    pub(crate) limit: usize,
+    pub(crate) skipped: usize,
+    pub(crate) total: usize,
+    pub(crate) total_pages: usize,
+    pub(crate) paging_options: PagingOptionsEnum<BytesJson>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MyTxHistoryTarget {
+    Iguana,
+    #[allow(dead_code)]
+    AccountId {
+        account_id: u32,
+    },
+    AddressId(HDAccountAddressId),
+    AddressDerivationPath(StandardHDPath),
+}
+
+#[rustfmt::skip]
+pub(crate) type StandardHDPath =
+Bip32Child<Bip32PurposeValue, // `purpose`
+Bip32Child<HardenedValue, // `coin_type`
+Bip32Child<HardenedValue, // `account_id`
+Bip32Child<Bip44ChainValue, // `chain`
+Bip32Child<NonHardenedValue, // `address_id`
+Bip44Tail>>>>>;
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct Bip44ChainValue {
+    #[allow(dead_code)]
+    chain: Bip44Chain,
+}
+
+pub(crate) type NonHardenedValue = AnyValue<false>;

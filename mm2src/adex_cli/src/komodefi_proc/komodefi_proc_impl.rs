@@ -24,12 +24,12 @@ use crate::activation_scheme_db::get_activation_scheme;
 use crate::komodefi_config::KomodefiConfig;
 use crate::rpc_data::activation::{zcoin::ZcoinActivationParams, ActivationMethod, ActivationMethodV2,
                                   EnablePlatformCoinWithTokensReq, InitRpcTaskResponse, InitStandaloneCoinReq,
-                                  RpcTaskStatusRequest, TaskId};
+                                  RpcTaskStatusRequest, SetTxHistory, TaskId};
 use crate::rpc_data::message_signing::{SignatureRequest, VerificationRequest};
 use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
                                     VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
-use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryResponse};
+use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryRequestV2, MyTxHistoryResponse};
 use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
                       CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse, GetEnabledRequest,
                       GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
@@ -52,13 +52,14 @@ pub(crate) struct KomodefiProc<'trp, 'hand, 'cfg, T: Transport, H: ResponseHandl
 }
 
 impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc<'_, '_, '_, T, P, C> {
-    pub(in super::super) async fn enable(&self, coin: &str, keep_progress: u64) -> Result<()> {
+    pub(in super::super) async fn enable(&self, coin: &str, keep_progress: u64, tx_history: bool) -> Result<()> {
         info!("Enabling coin: {coin}");
         let activation_scheme = get_activation_scheme()?;
-        let activation_method = activation_scheme.get_activation_method(coin)?;
+        let mut activation_method = activation_scheme.get_activation_method(coin)?;
 
+        activation_method.set_tx_history(tx_history);
         match activation_method {
-            ActivationMethod::Legacy(method) => {
+            ActivationMethod::Legacy(ref mut method) => {
                 let enable = Command::builder()
                     .flatten_data(method)
                     .userpass(self.get_rpc_password()?)
@@ -522,26 +523,42 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         info!("Getting withdraw tx_hex");
         debug!("Getting withdraw request: {:?}", request);
         let withdraw_command = self.command_v2(V2Method::Withdraw, request)?;
-        request_v2!(self, withdraw_command, on_withdraw, bare_output ; print_response).await
+        request_v2!(self, withdraw_command, on_withdraw, bare_output ; on_mm_rpc_error_v2).await
     }
 
     pub(in super::super) async fn tx_history(&self, request: MyTxHistoryRequest) -> Result<()> {
         info!("Getting tx history, coin: {}", request.coin);
+        let activation_scheme = get_activation_scheme()?;
+        let activation_method = activation_scheme.get_activation_method(request.coin.as_str())?;
+        match activation_method {
+            ActivationMethod::Legacy(_) => self.tx_history_legacy_impl(request).await,
+            // ActivationMethod::V2(ActivationMethodV2::EnableZCoin(_)) => panic!("Tx history for zcoin not implemented"),
+            ActivationMethod::V2(_) => self.tx_history_v2_impl(request.into()).await,
+        }
+    }
+
+    async fn tx_history_legacy_impl(&self, request: MyTxHistoryRequest) -> Result<()> {
         debug!("Getting tx history request: {:?}", request);
         let tx_history = self.command_legacy(request)?;
         request_legacy!(tx_history, Mm2RpcResult<MyTxHistoryResponse>, self, on_tx_history)
     }
 
+    async fn tx_history_v2_impl(&self, request: MyTxHistoryRequestV2) -> Result<()> {
+        debug!("Getting tx history request: {:?}", request);
+        let tx_history_v2 = self.command_v2(V2Method::MyTxHistory, request)?;
+        request_v2!(self, tx_history_v2, on_tx_history_v2 ; on_mm_rpc_error_v2).await
+    }
+
     pub(in super::super) async fn get_public_key(&self) -> Result<()> {
         info!("Getting public key");
         let pubkey_command = self.command_v2(V2Method::GetPublicKey, ())?;
-        request_v2!(self, pubkey_command, on_public_key ; print_response).await
+        request_v2!(self, pubkey_command, on_public_key ; on_mm_rpc_error_v2).await
     }
 
     pub(in super::super) async fn get_public_key_hash(&self) -> Result<()> {
         info!("Getting public key hash");
         let pubkey_hash_command = self.command_v2(V2Method::GetPublicKeyHash, ())?;
-        request_v2!(self, pubkey_hash_command, on_public_key_hash ; print_response).await
+        request_v2!(self, pubkey_hash_command, on_public_key_hash ; on_mm_rpc_error_v2).await
     }
 
     pub(in super::super) async fn get_current_mtp(&self, request: GetCurrentMtpRequest) -> Result<()> {
@@ -564,7 +581,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             self,
             get_raw_tx_command,
             on_raw_transaction, bare_output ;
-            print_response
+            on_mm_rpc_error_v2
         )
         .await
     }
@@ -573,9 +590,8 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         &self,
         params: EnablePlatformCoinWithTokensReq<bch::BchWithTokensActivationParams>,
     ) -> Result<()> {
-        info!("Enabling bch");
         let enable_bch = self.command_v2(V2Method::EnableBchWithTokens, params)?;
-        request_v2!(self, enable_bch, on_enable_bch ; print_response).await
+        request_v2!(self, enable_bch, on_enable_bch ; on_mm_rpc_error_v2).await
     }
 
     async fn enable_z_coin(
@@ -583,7 +599,6 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         params: InitStandaloneCoinReq<ZcoinActivationParams>,
         track_timeout_sec: u64,
     ) -> Result<()> {
-        info!("Starting enable zcoin task");
         let enable_z_coin = self.command_v2(V2Method::EnableZCoin, params)?;
 
         let transport = self.transport.ok_or_else(|| {
@@ -632,7 +647,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             forget_if_finished: true,
         })?;
 
-        while request_v2!(self, zcoint_stat, on_zcoin_status ; print_response).await? {
+        while request_v2!(self, zcoint_stat, on_zcoin_status ; on_mm_rpc_error_v2).await? {
             if let Some(track_timeout) = track_timeout_sec {
                 tokio::time::sleep(Duration::from_secs(track_timeout)).await;
             } else {
@@ -777,15 +792,6 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             Err(error) => error_bail!("Failed to send request: {}", error),
         }
     }
-
-    // async fn request_legacy<Req: Serialize + Send + Sync, Resp: for<'a> Deserialize<'a> + Send + Sync>(&self, request: Req) -> Result<()> {
-    //     let transport = self.transport.ok_or_else(|| warn_anyhow!( concat!("Failed to send: request, transport is not available")))?;
-    //     match transport.send::<_, $response_ty, Json>($request).await {
-    //         Ok(Ok(ok)) => self.response_handler.handle_method(ok),
-    //         Ok(Err(error)) => self.response_handler.print_response(error),
-    //         Err(error) => error_bail!("Failed to send request: {}", error)
-    //     }
-    // }
 }
 
 mod macros {

@@ -3,15 +3,17 @@ use clap::{Args, Subcommand, ValueEnum};
 use hex::FromHexError;
 use rpc::v1::types::Bytes as BytesJson;
 use std::mem::take;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::{f64, u64};
 
 use common::log::error;
+use common::PagingOptionsEnum;
 use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
-use crate::rpc_data::wallet::MyTxHistoryRequest;
+use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryRequestV2};
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -40,7 +42,7 @@ pub(crate) enum WalletCommands {
         visible_aliases = ["history"],
         about = "Returns the blockchain transactions involving the Komodo DeFi Framework node's coin address"
     )]
-    TxHistory(TxHistoryLegacyArgs),
+    TxHistory(TxHistoryArgs),
 }
 
 #[derive(Args)]
@@ -353,9 +355,11 @@ impl From<&mut GetRawTransactionArgs> for GetRawTransactionRequest {
 }
 
 #[derive(Args)]
-pub(crate) struct TxHistoryLegacyArgs {
+pub(crate) struct TxHistoryArgs {
     #[arg(long, short, help = "the name of the coin for the history request")]
     coin: String,
+    #[command(flatten)]
+    limit: TxHistoryLimitGroup,
     #[arg(
         long,
         short,
@@ -363,8 +367,6 @@ pub(crate) struct TxHistoryLegacyArgs {
         help = "the name of the coin for the history request"
     )]
     from_id: Option<BytesJson>,
-    #[command(flatten)]
-    limit: TxHistoryLimitGroup,
     #[arg(long, short = 'n', help = "the name of the coin for the history request")]
     page_number: Option<usize>,
 }
@@ -372,9 +374,15 @@ pub(crate) struct TxHistoryLegacyArgs {
 #[derive(Args)]
 #[group(required = true, multiple = false)]
 struct TxHistoryLimitGroup {
-    #[arg(long, short, help = "limits the number of returned transactions")]
+    #[arg(
+        group = "limit-group",
+        long,
+        short,
+        help = "limits the number of returned transactions"
+    )]
     limit: Option<usize>,
     #[arg(
+        group = "limit-group",
         long,
         short,
         default_value_t = false,
@@ -383,14 +391,42 @@ struct TxHistoryLimitGroup {
     max: bool,
 }
 
-impl From<&mut TxHistoryLegacyArgs> for MyTxHistoryRequest {
-    fn from(value: &mut TxHistoryLegacyArgs) -> Self {
+impl From<&mut TxHistoryArgs> for MyTxHistoryRequest {
+    fn from(value: &mut TxHistoryArgs) -> Self {
         MyTxHistoryRequest {
             coin: take(&mut value.coin),
             from_id: value.from_id.take(),
             max: value.limit.max,
-            limit: value.limit.limit.unwrap_or_default(),
+            limit: value.limit.limit.unwrap_or(10),
             page_number: value.page_number.take(),
+        }
+    }
+}
+
+impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2 {
+    fn from(value: &mut TxHistoryArgs) -> Self {
+        let paging_options = if let Some(from_id) = value.from_id.take() {
+            PagingOptionsEnum::FromId(from_id)
+        } else if let Some(page_number) = value.page_number.take() {
+            if page_number > 0 {
+                PagingOptionsEnum::PageNumber(
+                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
+                )
+            } else {
+                PagingOptionsEnum::default()
+            }
+        } else {
+            PagingOptionsEnum::default()
+        };
+
+        MyTxHistoryRequestV2 {
+            coin: take(&mut value.coin),
+            limit: if value.limit.max {
+                usize::MAX
+            } else {
+                value.limit.limit.expect("Failed to get limit from tx_history_args")
+            },
+            paging_options,
         }
     }
 }

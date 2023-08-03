@@ -202,3 +202,30 @@ pub(crate) enum CancelRpcTaskError {
     #[display(fmt = "Internal error: {}", _0)]
     Internal(String),
 }
+
+pub(crate) trait SetTxHistory {
+    fn set_tx_history_impl(&mut self);
+    fn set_tx_history(&mut self, tx_history: bool) {
+        if tx_history {
+            self.set_tx_history_impl();
+        }
+    }
+}
+
+impl SetTxHistory for ActivationMethodLegacy {
+    fn set_tx_history_impl(&mut self) {
+        match self {
+            Self::Enable(ref mut method) => method.set_tx_history_impl(),
+            Self::Electrum(ref mut method) => method.set_tx_history_impl(),
+        }
+    }
+}
+
+impl SetTxHistory for ActivationMethod {
+    fn set_tx_history_impl(&mut self) {
+        match self {
+            Self::Legacy(method) => method.set_tx_history_impl(),
+            _ => {},
+        }
+    }
+}

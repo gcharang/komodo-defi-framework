@@ -42,6 +42,14 @@ pub(crate) struct EnableArgs {
         help = "Whether to keep progress on task based commands"
     )]
     pub(crate) keep_progress: u64,
+    #[arg(
+        long,
+        default_value_t = false,
+        visible_alias = "history",
+        short = 'H',
+        help = "Whether to save tx history for the coin"
+    )]
+    pub(crate) tx_history: bool,
 }
 
 #[derive(Args)]

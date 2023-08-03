@@ -96,7 +96,9 @@ impl Cli {
                 set_config(*password, uri.take())?
             },
             Command::Config(ConfigSubcommand::Get) => get_config(),
-            Command::Coin(CoinCommands::Enable(args)) => proc.enable(&args.coin, args.keep_progress).await?,
+            Command::Coin(CoinCommands::Enable(args)) => {
+                proc.enable(&args.coin, args.keep_progress, args.tx_history).await?
+            },
             Command::Coin(CoinCommands::Disable(args)) => proc.disable(args.into()).await?,
             Command::Coin(CoinCommands::GetEnabled) => proc.get_enabled().await?,
             Command::Coin(CoinCommands::SetRequiredConf(args)) => proc.set_required_confirmations(args.into()).await?,
@@ -160,7 +162,13 @@ impl Cli {
             Command::Wallet(WalletCommands::GetRawTransaction(args)) => {
                 proc.get_raw_transaction(args.into(), args.bare_output).await?
             },
-            Command::Wallet(WalletCommands::TxHistory(args)) => proc.tx_history(args.into()).await?,
+            Command::Wallet(WalletCommands::TxHistory(args)) => {
+                // if args.v2 {
+                //     proc.tx_history_v2(args.into()).await?
+                // } else {
+                proc.tx_history(args.into()).await?
+                // }
+            },
             Command::Task(TaskSubcommand::Status(TaskSubcommandStatus::Zcoin { task_id })) => {
                 proc.enable_zcoin_status(*task_id, None).await?
             },

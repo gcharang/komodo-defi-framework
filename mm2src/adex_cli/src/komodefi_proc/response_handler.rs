@@ -50,7 +50,7 @@ use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, Verifi
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::version_stat::NodeVersionError;
-use crate::rpc_data::wallet::MyTxHistoryResponse;
+use crate::rpc_data::wallet::{MyTxHistoryResponse, MyTxHistoryResponseV2};
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
                       GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
@@ -80,7 +80,6 @@ pub(crate) trait ResponseHandler {
     fn on_enable_eth_with_tokens(&self, response: EthWithTokensActivationResult) -> Result<()>;
     fn on_enable_z_coin(&self, response: InitRpcTaskResponse) -> TaskId;
     fn on_zcoin_status(&self, respone: ZCoinStatus) -> Result<bool>;
-
     fn on_disable_coin(&self, response: DisableCoinResponse) -> Result<()>;
     fn on_balance_response(&self, response: BalanceResponse) -> Result<()>;
     fn on_sell_response(&self, response: Mm2RpcResult<SellBuyResponse>) -> Result<()>;
@@ -123,6 +122,7 @@ pub(crate) trait ResponseHandler {
     fn on_send_raw_transaction(&self, response: SendRawTransactionResponse, bare_output: bool) -> Result<()>;
     fn on_withdraw(&self, response: WithdrawResponse, bare_output: bool) -> Result<()>;
     fn on_tx_history(&self, response: Mm2RpcResult<MyTxHistoryResponse>) -> Result<()>;
+    fn on_tx_history_v2(&self, response: MyTxHistoryResponseV2) -> Result<()>;
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()>;
     fn on_public_key_hash(&self, response: GetPublicKeyHashResponse) -> Result<()>;
     fn on_raw_transaction(&self, response: GetRawTransactionResponse, bare_output: bool) -> Result<()>;
@@ -458,8 +458,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
 
     fn on_tx_history(&self, response: Mm2RpcResult<MyTxHistoryResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
-        wallet::on_tx_history(writer.deref_mut(), response.result);
-        Ok(())
+        wallet::on_tx_history(writer.deref_mut(), response.result)
+    }
+
+    fn on_tx_history_v2(&self, response: MyTxHistoryResponseV2) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_tx_history_v2(writer.deref_mut(), response)
     }
 
     fn on_public_key(&self, response: GetPublicKeyResponse) -> Result<()> {
