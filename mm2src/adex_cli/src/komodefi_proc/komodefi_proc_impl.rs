@@ -31,9 +31,10 @@ use crate::rpc_data::message_signing::{SignatureRequest, VerificationRequest};
 use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::version_stat::{VStatStartCollectionRequest, VStatUpdateCollectionRequest,
                                     VersionStatAddNodeRequest, VersionStatRemoveNodeRequest};
-use crate::rpc_data::wallet::{KmdRewardsInfoRequest, KmdRewardsInfoResponse, MyTxHistoryRequest, MyTxHistoryRequestV2,
-                              MyTxHistoryResponse, ShowPrivateKeyRequest, ShowPrivateKeyResponse,
-                              ValidateAddressRequest, ValidateAddressResponse};
+use crate::rpc_data::wallet::{ConvertAddressRequest, ConvertAddressResponse, KmdRewardsInfoRequest,
+                              KmdRewardsInfoResponse, MyTxHistoryRequest, MyTxHistoryRequestV2, MyTxHistoryResponse,
+                              ShowPrivateKeyRequest, ShowPrivateKeyResponse, ValidateAddressRequest,
+                              ValidateAddressResponse};
 use crate::rpc_data::{bch, ActiveSwapsRequest, ActiveSwapsResponse, CancelRpcTaskRequest, CoinsToKickStartRequest,
                       CoinsToKickstartResponse, DisableCoinRequest, DisableCoinResponse, GetEnabledRequest,
                       GetGossipMeshRequest, GetGossipMeshResponse, GetGossipPeerTopicsRequest,
@@ -575,6 +576,17 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             Mm2RpcResult<KmdRewardsInfoResponse>,
             self,
             on_kmd_rewards_info
+        )
+    }
+
+    pub(in super::super) async fn convert_address(&self, request: ConvertAddressRequest) -> Result<()> {
+        info!("Converting address");
+        let convert_address = self.command_legacy(request)?;
+        request_legacy!(
+            convert_address,
+            Mm2RpcResult<ConvertAddressResponse>,
+            self,
+            on_convert_address
         )
     }
 

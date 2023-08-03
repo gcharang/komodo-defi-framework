@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use hex::FromHexError;
 use rpc::v1::types::Bytes as BytesJson;
@@ -13,7 +13,9 @@ use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
-use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryRequestV2, ShowPrivateKeyRequest, ValidateAddressRequest};
+use crate::rpc_data::wallet::{CashAddressNetwork as RpcCashAddressNetwork,
+                              ConvertAddressFormat as RpcConvertAddressFormat, ConvertAddressRequest,
+                              MyTxHistoryRequest, MyTxHistoryRequestV2, ShowPrivateKeyRequest, ValidateAddressRequest};
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -58,6 +60,11 @@ pub(crate) enum WalletCommands {
         about = "Informs about the active user rewards that can be claimed by an address's unspent outputs"
     )]
     KmdRewardsInfo,
+    #[command(
+        visible_aliases = ["convert"],
+        about = "Converts an input address to a specified address format"
+    )]
+    ConvertAddress(ConvertAddressArgs),
 }
 
 #[derive(Args)]
@@ -523,5 +530,61 @@ impl From<&mut ValidateAddressArgs> for ValidateAddressRequest {
             coin: take(&mut value.coin),
             address: take(&mut value.address),
         }
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct ConvertAddressArgs {
+    #[arg(long, short, help = "The name of the coin address context")]
+    coin: String,
+    #[arg(long, short, help = "Input address")]
+    from: String,
+    #[arg(
+        long,
+        short = 'F',
+        value_enum,
+        help = "Address format to which the input address should be converted"
+    )]
+    format: ConvertAddressFormat,
+    #[arg(long, short = 'C', value_enum, help = "Network prefix for cashaddress format")]
+    cash_address_network: Option<CashAddressNetwork>,
+}
+
+#[derive(Clone, ValueEnum)]
+pub(crate) enum ConvertAddressFormat {
+    MixedCase,
+    CashAddress,
+    Standard,
+}
+
+#[derive(Clone, ValueEnum)]
+pub(crate) enum CashAddressNetwork {
+    BitcoinCash,
+    BchTest,
+    BchReg,
+}
+
+impl TryFrom<&mut ConvertAddressArgs> for ConvertAddressRequest {
+    type Error = Error;
+    fn try_from(value: &mut ConvertAddressArgs) -> Result<Self> {
+        let to_address_format = match value.format {
+            ConvertAddressFormat::Standard => RpcConvertAddressFormat::Standard,
+            ConvertAddressFormat::MixedCase => RpcConvertAddressFormat::MixedCase,
+            ConvertAddressFormat::CashAddress => match value.cash_address_network {
+                Some(CashAddressNetwork::BitcoinCash) => {
+                    RpcConvertAddressFormat::CashAddress(RpcCashAddressNetwork::BitcoinCash)
+                },
+                Some(CashAddressNetwork::BchReg) => RpcConvertAddressFormat::CashAddress(RpcCashAddressNetwork::BchReg),
+                Some(CashAddressNetwork::BchTest) => {
+                    RpcConvertAddressFormat::CashAddress(RpcCashAddressNetwork::BchTest)
+                },
+                None => error_bail!("Failed to construct request from arguments, cash_address is not set"),
+            },
+        };
+        Ok(ConvertAddressRequest {
+            coin: take(&mut value.coin),
+            from: take(&mut value.from),
+            to_address_format,
+        })
     }
 }

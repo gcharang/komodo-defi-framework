@@ -308,3 +308,32 @@ pub(crate) struct ZcoinTxDetails {
     pub(crate) coin: String,
     pub(crate) internal_id: i64,
 }
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "convertaddress")]
+pub(crate) struct ConvertAddressRequest {
+    pub(crate) coin: String,
+    pub(crate) from: String,
+    pub(crate) to_address_format: ConvertAddressFormat,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "format", content = "network", rename_all = "lowercase")]
+pub(crate) enum ConvertAddressFormat {
+    MixedCase,
+    CashAddress(CashAddressNetwork),
+    Standard,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum CashAddressNetwork {
+    BitcoinCash,
+    BchTest,
+    BchReg,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ConvertAddressResponse {
+    pub(crate) address: String,
+}
