@@ -185,16 +185,45 @@ pub(crate) enum CustomTendermintMsgType {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct MyTxHistoryRequestV2 {
+pub struct MyTxHistoryRequestV2<T> {
     pub(crate) coin: String,
     pub(crate) limit: usize,
-    pub(crate) paging_options: PagingOptionsEnum<BytesJson>,
+    pub(crate) paging_options: PagingOptionsEnum<T>,
 }
 
-impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2 {
+impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2<BytesJson> {
     fn from(mut value: MyTxHistoryRequest) -> Self {
         let paging_options = if let Some(from_id) = value.from_id.take() {
             PagingOptionsEnum::FromId(from_id)
+        } else if let Some(page_number) = value.page_number.take() {
+            if page_number > 0 {
+                PagingOptionsEnum::PageNumber(
+                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
+                )
+            } else {
+                PagingOptionsEnum::default()
+            }
+        } else {
+            PagingOptionsEnum::default()
+        };
+
+        MyTxHistoryRequestV2 {
+            coin: take(&mut value.coin),
+            limit: if value.max {
+                let mm2_compatible_max = u32::MAX as usize;
+                mm2_compatible_max
+            } else {
+                value.limit
+            },
+            paging_options,
+        }
+    }
+}
+
+impl From<MyTxHistoryRequest> for MyTxHistoryRequestV2<i64> {
+    fn from(mut value: MyTxHistoryRequest) -> Self {
+        let paging_options = if let Some(_from_id) = value.from_id.take() {
+            PagingOptionsEnum::FromId(0)
         } else if let Some(page_number) = value.page_number.take() {
             if page_number > 0 {
                 PagingOptionsEnum::PageNumber(

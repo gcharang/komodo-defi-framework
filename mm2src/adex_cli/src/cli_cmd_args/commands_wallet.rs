@@ -3,17 +3,15 @@ use clap::{Args, Subcommand, ValueEnum};
 use hex::FromHexError;
 use rpc::v1::types::Bytes as BytesJson;
 use std::mem::take;
-use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::{f64, u64};
 
 use common::log::error;
-use common::PagingOptionsEnum;
 use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::BalanceRequest;
 use mm2_rpc::data::version2::GetRawTransactionRequest;
 
-use crate::rpc_data::wallet::{MyTxHistoryRequest, MyTxHistoryRequestV2};
+use crate::rpc_data::wallet::MyTxHistoryRequest;
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -399,34 +397,6 @@ impl From<&mut TxHistoryArgs> for MyTxHistoryRequest {
             max: value.limit.max,
             limit: value.limit.limit.unwrap_or(10),
             page_number: value.page_number.take(),
-        }
-    }
-}
-
-impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2 {
-    fn from(value: &mut TxHistoryArgs) -> Self {
-        let paging_options = if let Some(from_id) = value.from_id.take() {
-            PagingOptionsEnum::FromId(from_id)
-        } else if let Some(page_number) = value.page_number.take() {
-            if page_number > 0 {
-                PagingOptionsEnum::PageNumber(
-                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
-                )
-            } else {
-                PagingOptionsEnum::default()
-            }
-        } else {
-            PagingOptionsEnum::default()
-        };
-
-        MyTxHistoryRequestV2 {
-            coin: take(&mut value.coin),
-            limit: if value.limit.max {
-                usize::MAX
-            } else {
-                value.limit.limit.expect("Failed to get limit from tx_history_args")
-            },
-            paging_options,
         }
     }
 }

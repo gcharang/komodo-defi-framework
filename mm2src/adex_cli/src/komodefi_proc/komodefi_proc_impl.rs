@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
+use rpc::v1::types::Bytes as BytesJson;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::time::Duration;
@@ -532,8 +533,14 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         let activation_method = activation_scheme.get_activation_method(request.coin.as_str())?;
         match activation_method {
             ActivationMethod::Legacy(_) => self.tx_history_legacy_impl(request).await,
-            // ActivationMethod::V2(ActivationMethodV2::EnableZCoin(_)) => panic!("Tx history for zcoin not implemented"),
-            ActivationMethod::V2(_) => self.tx_history_v2_impl(request.into()).await,
+            ActivationMethod::V2(ActivationMethodV2::EnableZCoin(_)) => {
+                self.tx_history_zcash_impl(MyTxHistoryRequestV2::<i64>::from(request))
+                    .await
+            },
+            ActivationMethod::V2(_) => {
+                self.tx_history_v2_impl(MyTxHistoryRequestV2::<BytesJson>::from(request))
+                    .await
+            },
         }
     }
 
@@ -543,9 +550,15 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         request_legacy!(tx_history, Mm2RpcResult<MyTxHistoryResponse>, self, on_tx_history)
     }
 
-    async fn tx_history_v2_impl(&self, request: MyTxHistoryRequestV2) -> Result<()> {
+    async fn tx_history_v2_impl(&self, request: MyTxHistoryRequestV2<BytesJson>) -> Result<()> {
         debug!("Getting tx history request: {:?}", request);
         let tx_history_v2 = self.command_v2(V2Method::MyTxHistory, request)?;
+        request_v2!(self, tx_history_v2, on_tx_history_v2 ; on_mm_rpc_error_v2).await
+    }
+
+    async fn tx_history_zcash_impl(&self, request: MyTxHistoryRequestV2<i64>) -> Result<()> {
+        debug!("Getting tx history request: {:?}", request);
+        let tx_history_v2 = self.command_v2(V2Method::ZCoinTxHistory, request)?;
         request_v2!(self, tx_history_v2, on_tx_history_v2 ; on_mm_rpc_error_v2).await
     }
 

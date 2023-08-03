@@ -48,6 +48,7 @@ pub(super) enum V2Method {
     VerifyMessage,
     GetCurrentMtp,
     MyTxHistory,
+    ZCoinTxHistory,
 }
 
 impl<T> Command<T>
