@@ -8,6 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::helpers::rewrite_json_file;
+#[cfg(unix)] use crate::helpers::set_file_permissions;
 use crate::komodefi_proc::SmartFractPrecision;
 use crate::logging::{error_anyhow, warn_bail};
 
@@ -22,6 +23,8 @@ const VOLUME_PRECISION_MIN: usize = 2;
 const VOLUME_PRECISION_MAX: usize = 5;
 const VOLUME_PRECISION: SmartFractPrecision = (VOLUME_PRECISION_MIN, VOLUME_PRECISION_MAX);
 const PRICE_PRECISION: SmartFractPrecision = (PRICE_PRECISION_MIN, PRICE_PRECISION_MAX);
+#[cfg(unix)]
+const CFG_FILE_PERM_MODE: u32 = 0o660;
 
 pub(super) fn get_config() {
     let Ok(komodefi_cfg) = KomodefiConfigImpl::from_config_path() else { return; };
@@ -120,7 +123,6 @@ impl KomodefiConfigImpl {
 
     pub(crate) fn get_config_path() -> Result<PathBuf> {
         let config_path = if let Ok(config_path) = std::env::var("KOMODO_CLI_CFG") {
-            info!("KOMODO_CLI_CFG: {}", config_path);
             PathBuf::from(config_path)
         } else {
             let mut config_path = KomodefiConfigImpl::get_config_dir()?;
@@ -158,7 +160,12 @@ impl KomodefiConfigImpl {
         let komodefi_path_str = cfg_path
             .to_str()
             .ok_or_else(|| error_anyhow!("Failed to get cfg_path as str"))?;
-        rewrite_json_file(self, komodefi_path_str)
+        rewrite_json_file(self, komodefi_path_str)?;
+        #[cfg(unix)]
+        {
+            set_file_permissions(komodefi_path_str, CFG_FILE_PERM_MODE)?;
+        }
+        Ok(())
     }
 
     fn set_rpc_password(&mut self, rpc_password: String) { self.rpc_password.replace(rpc_password); }
