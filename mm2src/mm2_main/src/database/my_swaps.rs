@@ -8,7 +8,6 @@ use db_common::sqlite::offset_by_uuid;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
-/// This module contains code to work with my_swaps table in MM2 SQLite DB
 use mm2_rpc::data::legacy::MySwapsFilter;
 use std::convert::TryInto;
 use uuid::Error as UuidError;
