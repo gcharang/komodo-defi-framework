@@ -337,3 +337,12 @@ pub(crate) enum CashAddressNetwork {
 pub(crate) struct ConvertAddressResponse {
     pub(crate) address: String,
 }
+
+#[derive(Serialize)]
+#[serde(tag = "method", rename = "convert_utxo_address")]
+pub(crate) struct ConvertUtxoAddressRequest {
+    pub(crate) address: String,
+    pub(crate) to_coin: String,
+}
+
+pub(crate) type ConvertUtxoAddressResponse = String;

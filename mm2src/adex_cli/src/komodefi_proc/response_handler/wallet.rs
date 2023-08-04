@@ -12,8 +12,9 @@ use super::formatters::{format_bytes, format_datetime_msec, format_datetime_sec,
                         write_field_option, write_sequence, writeln_field, COMMON_INDENT, COMMON_PRECISION,
                         ZERO_INDENT};
 use crate::error_anyhow;
-use crate::rpc_data::wallet::{ConvertAddressResponse, KmdRewardsInfoResponse, MyTxHistoryDetails, MyTxHistoryResponse,
-                              MyTxHistoryResponseV2, ShowPrivateKeyResponse, ValidateAddressResponse, ZcoinTxDetails};
+use crate::rpc_data::wallet::{ConvertAddressResponse, ConvertUtxoAddressResponse, KmdRewardsInfoResponse,
+                              MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2, ShowPrivateKeyResponse,
+                              ValidateAddressResponse, ZcoinTxDetails};
 use crate::rpc_data::{KmdRewardsDetails, SendRawTransactionResponse, WithdrawResponse};
 
 pub(super) fn on_send_raw_transaction(writer: &mut dyn Write, response: SendRawTransactionResponse, bare_output: bool) {
@@ -343,4 +344,8 @@ pub(super) fn on_kmd_rewards_info(writer: &mut dyn Write, response: KmdRewardsIn
 
 pub(super) fn on_convert_address(writer: &mut dyn Write, response: ConvertAddressResponse) {
     writeln_field(writer, "address", response.address, ZERO_INDENT);
+}
+
+pub(super) fn on_convert_utxo_address(writer: &mut dyn Write, response: ConvertUtxoAddressResponse) {
+    writeln_field(writer, "address", response, ZERO_INDENT);
 }

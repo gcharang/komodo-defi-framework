@@ -15,7 +15,8 @@ use mm2_rpc::data::version2::GetRawTransactionRequest;
 
 use crate::rpc_data::wallet::{CashAddressNetwork as RpcCashAddressNetwork,
                               ConvertAddressFormat as RpcConvertAddressFormat, ConvertAddressRequest,
-                              MyTxHistoryRequest, MyTxHistoryRequestV2, ShowPrivateKeyRequest, ValidateAddressRequest};
+                              ConvertUtxoAddressRequest, MyTxHistoryRequest, MyTxHistoryRequestV2,
+                              ShowPrivateKeyRequest, ValidateAddressRequest};
 use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
                       WithdrawRequest};
 use crate::{error_anyhow, error_bail};
@@ -65,6 +66,11 @@ pub(crate) enum WalletCommands {
         about = "Converts an input address to a specified address format"
     )]
     ConvertAddress(ConvertAddressArgs),
+    #[command(
+        visible_aliases = ["convert-utxo"],
+        about = "Takes a UTXO address as input, and returns the equivalent address for another \
+                 UTXO coin (e.g. from BTC address to RVN address)")]
+    ConvertUtxoAddress(ConvertUtxoArgs),
 }
 
 #[derive(Args)]
@@ -586,5 +592,22 @@ impl TryFrom<&mut ConvertAddressArgs> for ConvertAddressRequest {
             from: take(&mut value.from),
             to_address_format,
         })
+    }
+}
+
+#[derive(Args)]
+pub(crate) struct ConvertUtxoArgs {
+    #[arg(help = "Input UTXO address")]
+    address: String,
+    #[arg(help = "Input address to convert from")]
+    to_coin: String,
+}
+
+impl From<&mut ConvertUtxoArgs> for ConvertUtxoAddressRequest {
+    fn from(value: &mut ConvertUtxoArgs) -> Self {
+        ConvertUtxoAddressRequest {
+            address: take(&mut value.address),
+            to_coin: take(&mut value.to_coin),
+        }
     }
 }

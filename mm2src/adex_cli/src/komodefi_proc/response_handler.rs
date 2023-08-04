@@ -51,8 +51,9 @@ use crate::rpc_data::message_signing::{SignatureError, SignatureResponse, Verifi
 use crate::rpc_data::tendermint::{TendermintActivationResult, TendermintTokenInitResult};
 use crate::rpc_data::utility::{GetCurrentMtpError, GetCurrentMtpResponse};
 use crate::rpc_data::version_stat::NodeVersionError;
-use crate::rpc_data::wallet::{ConvertAddressResponse, KmdRewardsInfoResponse, MyTxHistoryDetails, MyTxHistoryResponse,
-                              MyTxHistoryResponseV2, ShowPrivateKeyResponse, ValidateAddressResponse, ZcoinTxDetails};
+use crate::rpc_data::wallet::{ConvertAddressResponse, ConvertUtxoAddressResponse, KmdRewardsInfoResponse,
+                              MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2, ShowPrivateKeyResponse,
+                              ValidateAddressResponse, ZcoinTxDetails};
 use crate::rpc_data::zcoin::ZCoinStatus;
 use crate::rpc_data::{ActiveSwapsResponse, CancelRpcTaskError, CoinsToKickstartResponse, DisableCoinResponse,
                       GetGossipMeshResponse, GetGossipPeerTopicsResponse, GetGossipTopicPeersResponse,
@@ -145,6 +146,7 @@ pub(crate) trait ResponseHandler {
     fn on_validate_address(&self, response: Mm2RpcResult<ValidateAddressResponse>) -> Result<()>;
     fn on_kmd_rewards_info(&self, response: Mm2RpcResult<KmdRewardsInfoResponse>) -> Result<()>;
     fn on_convert_address(&self, response: Mm2RpcResult<ConvertAddressResponse>) -> Result<()>;
+    fn on_convert_utxo_address(&self, response: Mm2RpcResult<ConvertUtxoAddressResponse>) -> Result<()>;
 }
 
 pub(crate) struct ResponseHandlerImpl<'a> {
@@ -515,6 +517,12 @@ impl ResponseHandler for ResponseHandlerImpl<'_> {
     fn on_convert_address(&self, response: Mm2RpcResult<ConvertAddressResponse>) -> Result<()> {
         let mut writer = self.writer.borrow_mut();
         wallet::on_convert_address(writer.deref_mut(), response.result);
+        Ok(())
+    }
+
+    fn on_convert_utxo_address(&self, response: Mm2RpcResult<ConvertUtxoAddressResponse>) -> Result<()> {
+        let mut writer = self.writer.borrow_mut();
+        wallet::on_convert_utxo_address(writer.deref_mut(), response.result);
         Ok(())
     }
 

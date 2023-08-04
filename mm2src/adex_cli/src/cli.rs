@@ -167,6 +167,7 @@ impl Cli {
             Command::Wallet(WalletCommands::ValidateAddress(args)) => proc.validate_address(args.into()).await?,
             Command::Wallet(WalletCommands::KmdRewardsInfo) => proc.get_kmd_rewards_info().await?,
             Command::Wallet(WalletCommands::ConvertAddress(args)) => proc.convert_address(args.try_into()?).await?,
+            Command::Wallet(WalletCommands::ConvertUtxoAddress(args)) => proc.convert_utxo_address(args.into()).await?,
             Command::Task(TaskSubcommand::Status(TaskSubcommandStatus::Zcoin { task_id })) => {
                 proc.enable_zcoin_status(*task_id, None).await?
             },
