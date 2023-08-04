@@ -463,8 +463,7 @@ impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<i64> {
         MyTxHistoryRequestV2 {
             coin: take(&mut value.coin),
             limit: if value.limit.max {
-                let mm2_compatible_max = u32::MAX as usize;
-                mm2_compatible_max
+                u32::MAX as usize
             } else {
                 value
                     .limit
@@ -495,8 +494,7 @@ impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<BytesJson> {
         MyTxHistoryRequestV2 {
             coin: take(&mut value.coin),
             limit: if value.limit.max {
-                let mm2_compatible_max = u32::MAX as usize;
-                mm2_compatible_max
+                u32::MAX as usize
             } else {
                 value
                     .limit

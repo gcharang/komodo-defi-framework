@@ -223,9 +223,8 @@ impl SetTxHistory for ActivationMethodLegacy {
 
 impl SetTxHistory for ActivationMethod {
     fn set_tx_history_impl(&mut self) {
-        match self {
-            Self::Legacy(method) => method.set_tx_history_impl(),
-            _ => {},
+        if let Self::Legacy(method) = self {
+            method.set_tx_history_impl()
         }
     }
 }
