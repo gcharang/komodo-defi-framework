@@ -394,7 +394,7 @@ pub(crate) struct TxHistoryArgs {
     page_number: Option<usize>,
 }
 
-#[derive(Args)]
+#[derive(Default, Args)]
 #[group(required = false, multiple = false)]
 struct FromIdGroup {
     #[arg(
@@ -444,40 +444,24 @@ impl From<&mut TxHistoryArgs> for MyTxHistoryRequest {
     }
 }
 
-impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<i64> {
-    fn from(value: &mut TxHistoryArgs) -> Self {
-        let paging_options = if let Some(from_id) = value.from_id.from_tx_id.take() {
-            PagingOptionsEnum::FromId(from_id)
-        } else if let Some(page_number) = value.page_number.take() {
-            if page_number > 0 {
-                PagingOptionsEnum::PageNumber(
-                    NonZeroUsize::new(page_number).expect("Page number is expected to be greater than zero"),
-                )
-            } else {
-                PagingOptionsEnum::default()
-            }
-        } else {
-            PagingOptionsEnum::default()
-        };
-
-        MyTxHistoryRequestV2 {
-            coin: take(&mut value.coin),
-            limit: if value.limit.max {
-                u32::MAX as usize
-            } else {
-                value
-                    .limit
-                    .limit
-                    .expect("limit option is expected to be set due to group rules")
-            },
-            paging_options,
-        }
-    }
+trait FromId<T> {
+    fn get(self) -> Option<T>;
 }
 
-impl From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<BytesJson> {
+impl FromId<BytesJson> for FromIdGroup {
+    fn get(mut self) -> Option<BytesJson> { self.from_tx_hash.take() }
+}
+
+impl FromId<i64> for FromIdGroup {
+    fn get(mut self) -> Option<i64> { self.from_tx_id.take() }
+}
+
+impl<T> From<&mut TxHistoryArgs> for MyTxHistoryRequestV2<T>
+where
+    FromIdGroup: FromId<T>,
+{
     fn from(value: &mut TxHistoryArgs) -> Self {
-        let paging_options = if let Some(from_id) = value.from_id.from_tx_hash.take() {
+        let paging_options = if let Some(from_id) = take(&mut value.from_id).get() {
             PagingOptionsEnum::FromId(from_id)
         } else if let Some(page_number) = value.page_number.take() {
             if page_number > 0 {
