@@ -13,7 +13,7 @@ use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, BanPubkeysRequest, 
                             MmVersionResponse, MyOrdersRequest, MyOrdersResponse, OrderStatusRequest,
                             OrderStatusResponse, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
                             OrdersHistoryRequest, OrdersHistoryResponse, PairWithDepth, SellBuyResponse, SellRequest,
-                            SetPriceReq, SetRequiredConfRequest, SetRequiredNotaRequest, Status, StopRequest,
+                            SetPriceRequest, SetRequiredConfRequest, SetRequiredNotaRequest, Status, StopRequest,
                             UpdateMakerOrderRequest, VersionRequest};
 use mm2_rpc::data::version2::{BestOrdersRequestV2, GetRawTransactionRequest, MmRpcRequest, MmRpcVersion};
 
@@ -257,7 +257,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         .await
     }
 
-    pub(in super::super) async fn set_price(&self, request: SetPriceReq) -> Result<()> {
+    pub(in super::super) async fn set_price(&self, request: SetPriceRequest) -> Result<()> {
         info!("Setting price for pair: {} {}", request.base, request.rel);
         let set_price = self.command_legacy(request)?;
         request_legacy!(set_price, Mm2RpcResult<MakerOrderForRpc>, self, on_set_price)

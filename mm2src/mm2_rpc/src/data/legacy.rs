@@ -13,7 +13,7 @@ pub use orders::{AggregatedOrderbookEntry, BuyRequest, CancelAllOrdersRequest, C
                  MyOrdersRequest, MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest,
                  OrderStatusResponse, OrderType, OrderbookDepthRequest, OrderbookRequest, OrderbookResponse,
                  OrdersHistoryRequest, OrdersHistoryResponse, PairDepth, PairWithDepth, RpcOrderbookEntry,
-                 SellBuyRequest, SellBuyResponse, SellRequest, SetPriceReq, TakerAction, TakerConnectForRpc,
+                 SellBuyRequest, SellBuyResponse, SellRequest, SetPriceRequest, TakerAction, TakerConnectForRpc,
                  TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc, UpdateMakerOrderRequest, UuidParseError};
 pub use swaps::{MySwapsFilter, RecoveredSwapAction};
 pub use utility::{BanPubkeysRequest, MmVersionResponse, StopRequest, UnbanPubkeysReq, VersionRequest};

@@ -50,7 +50,7 @@ use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelAllOrdersResponse, Can
                             MakerOrderForMyOrdersRpc, MakerOrderForRpc, MakerReservedForRpc, MatchBy, Mm2RpcResult,
                             MyOrdersResponse, OrderConfirmationsSettings, OrderForRpc, OrderStatusRequest,
                             OrderStatusResponse, OrderType, OrdersHistoryRequest, OrdersHistoryResponse,
-                            RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, SetPriceReq, Status, TakerAction,
+                            RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, SetPriceRequest, Status, TakerAction,
                             TakerConnectForRpc, TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc,
                             UpdateMakerOrderRequest, UuidParseError};
 use mm2_rpc::data::version2::{BestOrdersAction, OrderbookAddress, RpcOrderbookEntryV2};
@@ -4357,7 +4357,7 @@ impl<'a> From<&'a MakerOrder> for MakerOrderForRpc {
 
 /// Cancels the orders in case of error on different checks
 /// https://github.com/KomodoPlatform/atomicDEX-API/issues/794
-async fn cancel_orders_on_error<T, E>(ctx: &MmArc, req: &SetPriceReq, error: E) -> Result<T, E> {
+async fn cancel_orders_on_error<T, E>(ctx: &MmArc, req: &SetPriceRequest, error: E) -> Result<T, E> {
     if req.cancel_previous {
         let ordermatch_ctx = OrdermatchContext::from_ctx(ctx).unwrap();
         cancel_previous_maker_orders(ctx, &ordermatch_ctx, &req.base, &req.rel).await;
@@ -4397,7 +4397,7 @@ pub async fn check_balance_update_loop(ctx: MmWeak, ticker: String, balance: Opt
     }
 }
 
-pub async fn create_maker_order(ctx: &MmArc, req: SetPriceReq) -> Result<MakerOrder, String> {
+pub async fn create_maker_order(ctx: &MmArc, req: SetPriceRequest) -> Result<MakerOrder, String> {
     let base_coin: MmCoinEnum = match try_s!(lp_coinfind(ctx, &req.base).await) {
         Some(coin) => coin,
         None => return ERR!("Base coin {} is not found", req.base),
@@ -4490,7 +4490,7 @@ pub async fn create_maker_order(ctx: &MmArc, req: SetPriceReq) -> Result<MakerOr
 }
 
 pub async fn set_price(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let req: SetPriceReq = try_s!(json::from_value(req));
+    let req: SetPriceRequest = try_s!(json::from_value(req));
     let maker_order = create_maker_order(&ctx, req).await?;
     let rpc_result = MakerOrderForRpc::from(&maker_order);
     let res = try_s!(json::to_vec(&Mm2RpcResult::new(rpc_result)));

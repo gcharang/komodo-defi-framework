@@ -2,7 +2,7 @@ use clap::Args;
 use std::mem::take;
 
 use mm2_number::MmNumber;
-use mm2_rpc::data::legacy::SetPriceReq;
+use mm2_rpc::data::legacy::SetPriceRequest;
 
 use super::parse_mm_number;
 
@@ -70,9 +70,9 @@ pub(crate) struct SetPriceArgs {
     save_in_history: bool,
 }
 
-impl From<&mut SetPriceArgs> for SetPriceReq {
+impl From<&mut SetPriceArgs> for SetPriceRequest {
     fn from(set_price_args: &mut SetPriceArgs) -> Self {
-        SetPriceReq {
+        SetPriceRequest {
             base: take(&mut set_price_args.base),
             rel: take(&mut set_price_args.rel),
             price: take(&mut set_price_args.price),

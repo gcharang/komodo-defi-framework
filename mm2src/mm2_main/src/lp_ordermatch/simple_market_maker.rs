@@ -17,7 +17,7 @@ use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::MmNumber;
-use mm2_rpc::data::legacy::{CancelBy, CancelOrderRequest, SetPriceReq, UpdateMakerOrderRequest};
+use mm2_rpc::data::legacy::{CancelBy, CancelOrderRequest, SetPriceRequest, UpdateMakerOrderRequest};
 use serde_json::Value as Json;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -561,7 +561,7 @@ async fn create_single_order(
 ) -> OrderProcessingResult {
     let (min_vol, volume, calculated_price, is_max) = prepare_order(rates, &cfg, &key_trade_pair, &ctx).await?;
 
-    let req = SetPriceReq {
+    let req = SetPriceRequest {
         base: cfg.base.clone(),
         rel: cfg.rel.clone(),
         price: calculated_price.clone(),

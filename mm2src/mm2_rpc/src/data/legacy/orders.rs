@@ -381,7 +381,7 @@ pub struct MyOrdersResponse {
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", rename = "setprice")]
-pub struct SetPriceReq {
+pub struct SetPriceRequest {
     pub base: String,
     pub rel: String,
     pub price: MmNumber,
