@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use common::true_f;
 use mm2_rpc::data::legacy::UtxoMergeParams;
 
-use crate::rpc_data::activation::{CoinAddressInfo, CoinBalance, ElectrumRpcRequest, TokenActivationRequest,
-                                  TokenBalances};
+use super::{CoinAddressInfo, CoinBalance, ElectrumRpcRequest, SetTxHistory, TokenActivationRequest, TokenBalances};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct BchWithTokensActivationParams {
@@ -15,6 +14,10 @@ pub(crate) struct BchWithTokensActivationParams {
     slp_tokens_requests: Vec<TokenActivationRequest<SlpActivationRequest>>,
     #[serde(default = "true_f")]
     pub(crate) get_balances: bool,
+}
+
+impl SetTxHistory for BchWithTokensActivationParams {
+    fn set_tx_history_impl(&mut self) { self.platform_request.utxo_params.tx_history = true; }
 }
 
 #[derive(Deserialize, Serialize)]

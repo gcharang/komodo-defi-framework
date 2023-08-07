@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use common::true_f;
 
-use super::{CoinBalance, TokenActivationRequest};
+use super::{CoinBalance, SetTxHistory, TokenActivationRequest};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct TendermintActivationParams {
@@ -13,6 +13,10 @@ pub(crate) struct TendermintActivationParams {
     tx_history: bool,
     #[serde(default = "true_f")]
     get_balances: bool,
+}
+
+impl SetTxHistory for TendermintActivationParams {
+    fn set_tx_history_impl(&mut self) { self.tx_history = true; }
 }
 
 #[derive(Deserialize, Serialize)]

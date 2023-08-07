@@ -57,6 +57,10 @@ pub(crate) struct EnablePlatformCoinWithTokensReq<T: Serialize> {
     request: T,
 }
 
+impl<T: SetTxHistory + Serialize> SetTxHistory for EnablePlatformCoinWithTokensReq<T> {
+    fn set_tx_history_impl(&mut self) { self.request.set_tx_history_impl() }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct TokenActivationRequest<Req> {
     ticker: String,
@@ -162,8 +166,6 @@ pub(crate) struct InitStandaloneCoinReq<T> {
     activation_params: T,
 }
 
-//--------------------------------------------------------------------------------------------------
-
 #[derive(Deserialize)]
 pub(crate) struct InitRpcTaskResponse {
     pub(crate) task_id: TaskId,
@@ -212,6 +214,15 @@ pub(crate) trait SetTxHistory {
     }
 }
 
+impl SetTxHistory for ActivationMethod {
+    fn set_tx_history_impl(&mut self) {
+        match self {
+            Self::Legacy(method) => method.set_tx_history_impl(),
+            Self::V2(method) => method.set_tx_history_impl(),
+        }
+    }
+}
+
 impl SetTxHistory for ActivationMethodLegacy {
     fn set_tx_history_impl(&mut self) {
         match self {
@@ -221,10 +232,16 @@ impl SetTxHistory for ActivationMethodLegacy {
     }
 }
 
-impl SetTxHistory for ActivationMethod {
+impl SetTxHistory for ActivationMethodV2 {
     fn set_tx_history_impl(&mut self) {
-        if let Self::Legacy(method) = self {
-            method.set_tx_history_impl()
+        match self {
+            Self::EnableBchWithTokens(method) => method.set_tx_history_impl(),
+            Self::EnableSlp(_) => {},
+            Self::EnableEthWithTokens(_) => {},
+            Self::EnableErc20(_) => {},
+            Self::EnableTendermintWithAssets(method) => method.set_tx_history_impl(),
+            Self::EnableTendermintToken(_) => {},
+            Self::EnableZCoin(_) => {},
         }
     }
 }
