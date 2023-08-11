@@ -1,6 +1,7 @@
 use derive_more::Display;
 use rpc::v1::types::H256 as H256Json;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -45,6 +46,7 @@ construct_detailed!(TotalAsksRelVol, total_asks_rel_vol);
 construct_detailed!(TotalBidsBaseVol, total_bids_base_vol);
 construct_detailed!(TotalBidsRelVol, total_bids_rel_vol);
 
+#[skip_serializing_none]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RpcOrderbookEntry {
     pub coin: String,
@@ -107,6 +109,7 @@ pub struct BuyRequest {
     pub delegate: SellBuyRequest,
 }
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 pub struct SellBuyRequest {
     pub base: String,
@@ -138,6 +141,7 @@ pub struct SellBuyRequest {
     pub save_in_history: bool,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 pub struct SellBuyResponse {
     #[serde(flatten)]
@@ -151,6 +155,7 @@ pub struct SellBuyResponse {
 
 construct_detailed!(DetailedMinVolume, min_volume);
 
+#[skip_serializing_none]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TakerRequestForRpc {
     pub uuid: Uuid,
@@ -255,6 +260,7 @@ pub enum OrderStatusResponse {
     Taker(TakerOrderForRpc),
 }
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 pub struct MakerOrderForRpc {
     pub uuid: Uuid,
@@ -271,12 +277,12 @@ pub struct MakerOrderForRpc {
     pub matches: HashMap<Uuid, MakerMatchForRpc>,
     pub started_swaps: Vec<Uuid>,
     pub conf_settings: Option<OrderConfirmationsSettings>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub changes_history: Option<Vec<HistoricalOrder>>,
     pub base_orderbook_ticker: Option<String>,
     pub rel_orderbook_ticker: Option<String>,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 pub struct TakerOrderForRpc {
     pub request: TakerRequestForRpc,
@@ -288,17 +294,13 @@ pub struct TakerOrderForRpc {
     pub rel_orderbook_ticker: Option<String>,
 }
 
+#[skip_serializing_none]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HistoricalOrder {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_base_vol: Option<BigRational>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub min_base_vol: Option<BigRational>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub price: Option<BigRational>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub conf_settings: Option<OrderConfirmationsSettings>,
 }
 
@@ -310,6 +312,7 @@ pub struct MakerOrderForMyOrdersRpc {
     pub available_amount: BigDecimal,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 pub struct TakerMatchForRpc {
     pub reserved: MakerReservedForRpc,
@@ -326,6 +329,7 @@ pub enum OrderForRpc {
     Taker(TakerOrderForRpc),
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MakerMatchForRpc {
     pub request: TakerRequestForRpc,
@@ -335,6 +339,7 @@ pub struct MakerMatchForRpc {
     pub last_updated: u64,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MakerReservedForRpc {
     pub base: String,
@@ -379,6 +384,7 @@ pub struct MyOrdersResponse {
     pub taker_orders: HashMap<Uuid, TakerOrderForRpc>,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", rename = "setprice")]
 pub struct SetPriceRequest {
@@ -392,13 +398,9 @@ pub struct SetPriceRequest {
     pub min_volume: Option<MmNumber>,
     #[serde(default = "true_f")]
     pub cancel_previous: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub base_confs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub base_nota: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub rel_confs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub rel_nota: Option<bool>,
     #[serde(default = "true_f")]
     pub save_in_history: bool,
@@ -422,32 +424,21 @@ pub struct PairDepth {
     pub bids: usize,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename = "orders_history_by_filter")]
 pub struct OrdersHistoryRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub order_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_action: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub rel: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_price: Option<MmNumber>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_price: Option<MmNumber>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_volume: Option<MmNumber>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_volume: Option<MmNumber>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_timestamp: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_timestamp: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub was_taker: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     pub include_details: bool,
 }
@@ -481,6 +472,7 @@ pub struct UuidParseError {
     pub warning: String,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "method", rename = "update_maker_order")]
 pub struct UpdateMakerOrderRequest {

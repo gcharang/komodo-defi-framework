@@ -1,5 +1,6 @@
 use rpc::v1::types::H256 as H256Json;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 
 use common::true_f;
@@ -29,26 +30,21 @@ pub(crate) struct BchActivationRequest {
     pub(crate) utxo_params: UtxoActivationParams,
 }
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct UtxoActivationParams {
     pub(crate) mode: UtxoRpcMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) utxo_merge_params: Option<UtxoMergeParams>,
     #[serde(default)]
     pub(crate) tx_history: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) required_confirmations: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) requires_notarization: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) address_format: Option<UtxoAddressFormat>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) gap_limit: Option<u32>,
     #[serde(flatten)]
     pub(crate) enable_params: EnabledCoinBalanceParams,
     #[serde(default)]
     pub(crate) priv_key_policy: PrivKeyActivationPolicy,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) check_utxo_maturity: Option<bool>,
 }
 
@@ -86,11 +82,11 @@ impl Default for PrivKeyActivationPolicy {
     fn default() -> Self { PrivKeyActivationPolicy::ContextPrivKey }
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct EnabledCoinBalanceParams {
     #[serde(default)]
     pub(crate) scan_policy: EnableCoinScanPolicy,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) min_addresses_number: Option<u32>,
 }
 
@@ -106,9 +102,9 @@ impl Default for EnableCoinScanPolicy {
     fn default() -> Self { EnableCoinScanPolicy::ScanIfNewWallet }
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct SlpActivationRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) required_confirmations: Option<u64>,
 }
 

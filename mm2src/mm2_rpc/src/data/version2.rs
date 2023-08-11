@@ -4,6 +4,7 @@ pub use wallet::{GetPublicKeyHashResponse, GetPublicKeyResponse, GetRawTransacti
 
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -11,6 +12,7 @@ use mm2_number::{MmNumber, MmNumberMultiRepr};
 
 use super::legacy::OrderConfirmationsSettings;
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MmRpcRequest<M, T> {
@@ -18,7 +20,6 @@ pub struct MmRpcRequest<M, T> {
     pub userpass: Option<String>,
     pub method: M,
     pub params: T,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<usize>,
 }
 
@@ -52,6 +53,7 @@ pub enum BestOrdersAction {
     Sell,
 }
 
+#[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcOrderbookEntryV2 {
     pub uuid: Uuid,

@@ -1,5 +1,6 @@
 use ethereum_types::Address;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 
 use common::true_f;
@@ -16,6 +17,7 @@ pub(crate) struct EthWithTokensActivationRequest {
     pub(crate) get_balances: bool,
 }
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct EthActivationV2Request {
     #[serde(default)]
@@ -65,6 +67,7 @@ impl Default for EthPrivKeyActivationPolicy {
     fn default() -> Self { EthPrivKeyActivationPolicy::ContextPrivKey }
 }
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct Erc20TokenActivationRequest {
     required_confirmations: Option<u64>,

@@ -2,6 +2,7 @@ use derive_more::Display;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
+use serde_with::skip_serializing_none;
 use std::collections::HashSet;
 
 use crate::rpc_data::zcoin::{AnyValue, Bip32Child, Bip32PurposeValue, Bip44Tail, HardenedValue};
@@ -20,6 +21,7 @@ pub(crate) struct SendRawTransactionResponse {
     pub(crate) tx_hash: BytesJson,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Serialize)]
 #[serde(tag = "method", rename = "withdraw")]
 pub(crate) struct WithdrawRequest {
@@ -90,6 +92,7 @@ pub(crate) struct KmdRewardsDetails {
     pub(crate) claimed_by_me: bool,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Serialize)]
 #[serde(tag = "method", rename = "my_tx_history")]
 pub(crate) struct MyTxHistoryRequest {

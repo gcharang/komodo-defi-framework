@@ -1,6 +1,7 @@
 use derive_more::Display;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::time::Duration;
 
 use common::one_thousand_u32;
@@ -8,14 +9,12 @@ use common::one_thousand_u32;
 use super::{CoinBalance, ElectrumRpcRequest, RpcTaskStatus, TaskId};
 use crate::rpc_data::Bip44Chain;
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct ZcoinActivationParams {
     pub(crate) mode: ZcoinRpcMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) required_confirmations: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) requires_notarization: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) zcash_params_path: Option<String>,
     #[serde(default = "one_thousand_u32")]
     pub(crate) scan_blocks_per_iteration: u32,

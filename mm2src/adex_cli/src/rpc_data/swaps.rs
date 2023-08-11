@@ -1,6 +1,7 @@
 use lightning_invoice::Invoice;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json, H264 as H264Json};
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -162,9 +163,7 @@ pub(crate) struct MakerSwapData {
     /// A transaction fee that should be paid to spend a `TakerPayment`.
     /// Note this value is used to calculate locked amount only.
     pub(crate) taker_payment_spend_trade_fee: Option<SavedTradeFee>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) maker_coin_swap_contract_address: Option<BytesJson>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) taker_coin_swap_contract_address: Option<BytesJson>,
     /// Temporary pubkey used in HTLC redeem script when applicable for maker coin
     pub(crate) maker_coin_htlc_pubkey: Option<H264Json>,
@@ -280,9 +279,7 @@ pub(crate) struct TakerSwapData {
     /// A transaction fee that should be paid to spend a `MakerPayment`.
     /// Note this value is used to calculate locked amount only.
     pub(crate) maker_payment_spend_trade_fee: Option<SavedTradeFee>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) maker_coin_swap_contract_address: Option<BytesJson>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) taker_coin_swap_contract_address: Option<BytesJson>,
     /// Temporary pubkey used in HTLC redeem script when applicable for maker coin
     pub(crate) maker_coin_htlc_pubkey: Option<H264Json>,
@@ -328,15 +325,14 @@ pub(crate) struct MySwapInfo {
     pub(crate) started_at: u64,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "my_recent_swaps")]
 pub(crate) struct MyRecentSwapsRequest {
     #[serde(flatten)]
     pub(crate) filter: MySwapsFilter,
     pub(crate) limit: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) from_uuid: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) page_number: Option<usize>,
 }
 

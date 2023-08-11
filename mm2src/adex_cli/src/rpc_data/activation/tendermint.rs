@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 
 use common::true_f;
@@ -22,16 +23,14 @@ impl SetTxHistory for TendermintActivationParams {
 #[derive(Deserialize, Serialize)]
 pub(crate) struct TendermintTokenActivationParams {}
 
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct TendermintActivationResult {
     pub(crate) ticker: String,
     pub(crate) address: String,
     pub(crate) current_block: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) balance: Option<CoinBalance>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tokens_balances: Option<HashMap<String, CoinBalance>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tokens_tickers: Option<HashSet<String>>,
 }
 

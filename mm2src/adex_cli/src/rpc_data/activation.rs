@@ -135,9 +135,7 @@ pub(crate) struct CoinBalance {
 pub(crate) struct CoinAddressInfo<Balance> {
     pub(crate) derivation_method: DerivationMethod,
     pub(crate) pubkey: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) balances: Option<Balance>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tickers: Option<HashSet<String>>,
 }
 

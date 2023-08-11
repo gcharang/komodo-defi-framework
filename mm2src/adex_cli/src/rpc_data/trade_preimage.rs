@@ -1,6 +1,7 @@
 use common::serde_derive::Deserialize;
 use mm2_number::{construct_detailed, Fraction, MmNumber};
 use serde::Serialize;
+use serde_with::skip_serializing_none;
 
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "min_trading_vol")]
@@ -20,13 +21,13 @@ pub(crate) struct MaxTakerVolResponse {
     pub(crate) result: Fraction,
 }
 
+#[skip_serializing_none]
 #[derive(Serialize)]
 pub(crate) struct TradePreimageRequest {
     pub(crate) base: String,
     pub(crate) rel: String,
     pub(crate) swap_method: TradePreimageMethod,
     pub(crate) price: MmNumber,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) volume: Option<MmNumber>,
     pub(crate) max: bool,
 }
