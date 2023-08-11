@@ -440,6 +440,7 @@ pub struct OrdersHistoryRequest {
     pub to_timestamp: Option<u64>,
     pub was_taker: Option<bool>,
     pub status: Option<String>,
+    #[serde(default)]
     pub include_details: bool,
 }
 
