@@ -24,7 +24,7 @@ pub struct BanPubkeysRequest {
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum UnbanPubkeysReq {
+pub enum UnbanPubkeysRequest {
     All,
     Few(Vec<H256Json>),
 }

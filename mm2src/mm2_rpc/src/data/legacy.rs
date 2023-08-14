@@ -16,7 +16,7 @@ pub use orders::{AggregatedOrderbookEntry, BuyRequest, CancelAllOrdersRequest, C
                  SellBuyRequest, SellBuyResponse, SellRequest, SetPriceRequest, TakerAction, TakerConnectForRpc,
                  TakerMatchForRpc, TakerOrderForRpc, TakerRequestForRpc, UpdateMakerOrderRequest, UuidParseError};
 pub use swaps::{MySwapsFilter, RecoveredSwapAction};
-pub use utility::{BanPubkeysRequest, MmVersionResponse, StopRequest, UnbanPubkeysReq, VersionRequest};
+pub use utility::{BanPubkeysRequest, MmVersionResponse, StopRequest, UnbanPubkeysRequest, VersionRequest};
 pub use wallet::{BalanceRequest, BalanceResponse};
 
 use derive_more::Display;

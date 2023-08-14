@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use mm2_rpc::data::legacy::UnbanPubkeysReq;
+use mm2_rpc::data::legacy::UnbanPubkeysRequest as UnbanPubkeysRequestImpl;
 
 #[derive(Default, Serialize)]
 #[serde(tag = "method", rename = "list_banned_pubkeys")]
@@ -23,7 +23,7 @@ pub(crate) enum BanReason {
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "unban_pubkeys")]
 pub(crate) struct UnbanPubkeysRequest {
-    pub(crate) unban_by: UnbanPubkeysReq,
+    pub(crate) unban_by: UnbanPubkeysRequestImpl,
 }
 
 #[derive(Deserialize)]

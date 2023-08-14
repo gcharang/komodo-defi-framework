@@ -2,7 +2,7 @@ use super::{SwapEvent, SwapsContext};
 use chain::hash::H256;
 use http::Response;
 use mm2_core::mm_ctx::MmArc;
-use mm2_rpc::data::legacy::{BanPubkeysRequest, UnbanPubkeysReq};
+use mm2_rpc::data::legacy::{BanPubkeysRequest, UnbanPubkeysRequest};
 use rpc::v1::types::H256 as H256Json;
 use serde_json::{self as json, Value as Json};
 use std::collections::hash_map::{Entry, HashMap};
@@ -62,16 +62,16 @@ pub async fn ban_pubkey_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, 
 }
 
 pub async fn unban_pubkeys_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let req: UnbanPubkeysReq = try_s!(json::from_value(req["unban_by"].clone()));
+    let req: UnbanPubkeysRequest = try_s!(json::from_value(req["unban_by"].clone()));
     let ctx = try_s!(SwapsContext::from_ctx(&ctx));
     let mut banned_pubs = try_s!(ctx.banned_pubkeys.lock());
     let mut unbanned = HashMap::new();
     let mut were_not_banned = vec![];
     match req {
-        UnbanPubkeysReq::All => {
+        UnbanPubkeysRequest::All => {
             unbanned = banned_pubs.drain().collect();
         },
-        UnbanPubkeysReq::Few(pubkeys) => {
+        UnbanPubkeysRequest::Few(pubkeys) => {
             for pubkey in pubkeys {
                 match banned_pubs.remove(&pubkey) {
                     Some(removed) => {

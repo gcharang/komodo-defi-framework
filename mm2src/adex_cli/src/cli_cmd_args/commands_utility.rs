@@ -3,7 +3,7 @@ use rpc::v1::types::H256 as H256Json;
 use std::mem::take;
 use std::str::FromStr;
 
-use mm2_rpc::data::legacy::{BanPubkeysRequest, UnbanPubkeysReq};
+use mm2_rpc::data::legacy::{BanPubkeysRequest, UnbanPubkeysRequest as UnbanPubkeysRequestImpl};
 
 use crate::rpc_data::utility::GetCurrentMtpRequest;
 use crate::rpc_data::UnbanPubkeysRequest;
@@ -91,9 +91,9 @@ impl From<&mut UnbanPubkeysArgs> for UnbanPubkeysRequest {
     fn from(value: &mut UnbanPubkeysArgs) -> Self {
         UnbanPubkeysRequest {
             unban_by: if value.all {
-                UnbanPubkeysReq::All
+                UnbanPubkeysRequestImpl::All
             } else {
-                UnbanPubkeysReq::Few(take(&mut value.pubkey))
+                UnbanPubkeysRequestImpl::Few(take(&mut value.pubkey))
             },
         }
     }
