@@ -33,7 +33,7 @@ use crate::{MmCoinEnum, WatcherReward, WatcherRewardError};
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
 use chain::constants::SEQUENCE_FINAL;
-use chain::{OutPoint, TransactionOutput};
+use chain::{OutPoint, TransactionOutput, TransactionInput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
 use common::log::{error, warn};
@@ -2943,28 +2943,94 @@ pub fn send_raw_tx_bytes(
     )
 }
 
+/// Helper to load unspent outputs from cache or rpc
+/// also returns first previous scriptpubkey
+async fn get_unspents_for_inputs(
+    coin: &UtxoCoinFields,
+    inputs: &Vec<TransactionInput>,
+) -> Result<(Option<Script>, Vec<UnspentInfo>), RawTransactionError> {
+    let txids_reversed = inputs
+        .iter()
+        .map(|input| input.previous_output.hash.reversed().into()) // reverse hashes to send to electrum
+        .collect::<HashSet<H256Json>>();
+
+    if txids_reversed.is_empty() {
+        return Ok((None, vec![]));
+    }
+
+    let prev_txns_loaded = utxo_common::get_verbose_transactions_from_cache_or_rpc(coin, txids_reversed)
+        .await
+        .map_err(|err| RawTransactionError::InvalidParam(err.to_string()))?;
+
+    let mut prev_script = None;
+    let mut unspents_loaded = vec![];
+
+    for input in inputs {
+        let prev_tx = prev_txns_loaded
+            .iter()
+            .find(|prev_tx| (*prev_tx.0).reversed() == input.previous_output.hash.into())
+            .ok_or_else(|| {
+                RawTransactionError::NonExistentPrevOutputError(format!(
+                    "{}/{}",
+                    input.previous_output.hash, input.previous_output.index
+                ))
+            });
+        let prev_tx = prev_tx?.1.to_inner();
+        if (input.previous_output.index as usize) >= prev_tx.vout.len() {
+            return Err(RawTransactionError::NonExistentPrevOutputError(format!(
+                "{}/{}",
+                input.previous_output.hash, input.previous_output.index
+            )));
+        }
+        if prev_script.is_none() {
+            // get first previous script pubkey
+            let script_bytes: Vec<u8> = prev_tx.vout[input.previous_output.index as usize]
+                .clone()
+                .script
+                .hex
+                .into();
+            prev_script = Some(Script::from(script_bytes));
+        }
+        let prev_amount = prev_tx.vout[input.previous_output.index as usize]
+            .value
+            .ok_or_else(|| {
+                RawTransactionError::NonExistentPrevOutputError(String::from("No amount in transaction vout"))
+            })?;
+        let prev_amount = prev_amount.try_into().expect("Amount conversion must succeed");
+
+        unspents_loaded.push(UnspentInfo {
+            outpoint: OutPoint {
+                hash: input.previous_output.hash,
+                index: input.previous_output.index,
+            },
+            value: sat_from_big_decimal(&prev_amount, coin.decimals)
+                .expect("Conversion to satoshi from bigdecimal must be valid"),
+            height: None,
+        });
+    }
+    Ok((prev_script, unspents_loaded))
+}
+
 /// Takes args with a raw transaction in hexadecimal format and previous transactions data as input
 /// Returns signed tx in hexadecimal format
-pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps + std::marker::Sync>(
-    coin: T,
-    args: SignRawTransactionRequest,
+pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
+    coin: &T,
+    args: &SignRawTransactionRequest,
 ) -> SignRawTransactionResult {
     let tx_bytes =
-        hex::decode(args.tx_hex.as_bytes()).map_to_mm(|e| RawTransactionError::InvalidParam(e.to_string()))?;
-    let tx: UtxoTx =
-        deserialize(tx_bytes.as_slice()).map_to_mm(|e| RawTransactionError::InvalidParam(e.to_string()))?;
+        hex::decode(args.tx_hex.as_bytes()).map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
+    let tx: UtxoTx = deserialize(tx_bytes.as_slice()).map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
 
     let mut prev_script = None;
     let mut unspents = vec![];
 
-    if let Some(prev_txns) = args.prev_txns {
+    if let Some(prev_txns) = &args.prev_txns {
         for prev_utxo in prev_txns.iter() {
             if prev_script.is_none() {
-                // get any previous utxo script assuming all are the same
-                prev_script = Some(
-                    hex::decode(prev_utxo.clone().script_pub_key)
-                        .map_to_mm(|e| RawTransactionError::InvalidParam(e.to_string()))?,
-                );
+                // get first previous utxo script assuming all are the same
+                let script_bytes = hex::decode(prev_utxo.clone().script_pub_key)
+                    .map_to_mm(|e| RawTransactionError::InvalidParam(e.to_string()))?;
+                prev_script = Some(Script::from(script_bytes));
             }
 
             let prev_hash = hex::decode(prev_utxo.tx_hash.as_bytes())
@@ -2982,66 +3048,26 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps + std::m
         }
     }
 
-    let txids_not_passed: HashSet<H256Json> = tx
+    let inputs_to_load = tx
         .inputs()
         .iter()
-        .filter(|input| !unspents.iter().any(|u| u.outpoint.hash == input.previous_output.hash))
-        .map(|input| input.previous_output.hash.into())
-        .collect::<HashSet<_>>();
+        .cloned()
+        .filter(|input| {
+            !unspents.iter().any(|u| {
+                u.outpoint.hash == input.previous_output.hash && u.outpoint.index == input.previous_output.index
+            })
+        })
+        .collect::<Vec<TransactionInput>>();
 
     // If some previous utxos are not provided in the params load them from the chain
-    if !txids_not_passed.is_empty() {
-        let txids_reversed = txids_not_passed
-            .iter()
-            .map(|txid| txid.reversed())
-            .collect::<HashSet<_>>(); // reverse hashes to send to electrum
-        let prev_txns_loaded = utxo_common::get_verbose_transactions_from_cache_or_rpc(coin.as_ref(), txids_reversed)
-            .await
-            .map_err(|err| RawTransactionError::InvalidParam(err.get_inner().to_string()))?;
-
-        let mut unspents_loaded = vec![];
-        for input in tx.inputs() {
-            if let Some(prev_tx) = prev_txns_loaded
-                .iter()
-                .find(|p| (*p.0).reversed() == input.previous_output.hash.into())
-            {
-                let prev_tx = prev_tx.1.to_inner();
-                if (input.previous_output.index as usize) < prev_tx.vout.len() {
-                    if prev_script.is_none() {
-                        prev_script = Some(
-                            prev_tx.vout[input.previous_output.index as usize]
-                                .clone()
-                                .script
-                                .hex
-                                .into(),
-                        ); // get first prev script assuming all are the same
-                    }
-                    let prev_amount = prev_tx.vout[input.previous_output.index as usize]
-                        .value
-                        .ok_or_else(|| {
-                            RawTransactionError::NonExistentPrevOutputError(String::from("no previous amount"))
-                        })?;
-                    let prev_amount = prev_amount.try_into().expect("Amount conversion must succeed");
-
-                    unspents_loaded.push(UnspentInfo {
-                        outpoint: OutPoint {
-                            hash: input.previous_output.hash,
-                            index: input.previous_output.index,
-                        },
-                        value: sat_from_big_decimal(&prev_amount, coin.as_ref().decimals)
-                            .expect("Conversion to satoshi from bigdecimal must be valid"),
-                        height: None,
-                    });
-                    continue;
-                }
-            }
-            return Err(RawTransactionError::NonExistentPrevOutputError(format!(
-                "{}/{}",
-                input.previous_output.hash, input.previous_output.index
-            ))
-            .into());
-        }
-        unspents.extend(unspents_loaded.into_iter());
+    if !inputs_to_load.is_empty() {
+        let (loaded_script, loaded_unspents) = get_unspents_for_inputs(coin.as_ref(), &inputs_to_load).await?;
+        unspents.extend(loaded_unspents.into_iter());
+        prev_script = if prev_script.is_none() {
+            loaded_script
+        } else {
+            prev_script
+        };
     }
 
     let key_pair = coin.as_ref().priv_key_policy.key_pair_or_err().unwrap();
@@ -3049,7 +3075,7 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps + std::m
     let mut input_signer_incomplete = TransactionInputSigner::from(tx);
     input_signer_incomplete.consensus_branch_id = coin.as_ref().conf.consensus_branch_id;
 
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = UtxoTxBuilder::new(coin)
         .with_transaction_input_signer(input_signer_incomplete)
         .add_available_inputs(unspents);
     let unsigned = builder
@@ -3058,10 +3084,8 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps + std::m
         .map_err(|e| RawTransactionError::InvalidParam(e.to_string()))?;
     log!("Unsigned tx = {:?} for signing", unsigned);
 
-    let prev_script =
-        prev_script.ok_or_else(|| RawTransactionError::InvalidParam(String::from("previous outputs not found")))?;
-    let prev_script = Script::from(prev_script);
-
+    let prev_script = prev_script
+        .ok_or_else(|| RawTransactionError::NonExistentPrevOutputError(String::from("no previous script")))?;
     let signature_version = match prev_script.is_pay_to_witness_key_hash() {
         true => SignatureVersion::WitnessV0,
         _ => coin.as_ref().conf.signature_version,
@@ -3073,10 +3097,10 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps + std::m
         signature_version,
         coin.as_ref().conf.fork_id,
     )
-    .map_err(|err| RawTransactionError::SigningError(err.get_inner().to_string()))?;
+    .map_err(|err| RawTransactionError::SigningError(err.to_string()))?;
 
     let tx_signed_bytes = serialize_with_flags(&tx_signed, SERIALIZE_TRANSACTION_WITNESS);
-    Ok(SignRawTransactionRes {
+    Ok(SignRawTransactionResponse {
         tx_hex: tx_signed_bytes.into(),
     })
 }
