@@ -15,7 +15,7 @@ macro_rules! writeln_safe_io {
     }};
 }
 
-pub trait WriteSafeIO: std::io::Write {
+pub trait WriteSafeIO: Write {
     fn write_safe(&mut self, args: fmt::Arguments<'_>) {
         Write::write_fmt(self, args).expect("`write_fmt` should never fail for `WriteSafeIO` types")
     }
