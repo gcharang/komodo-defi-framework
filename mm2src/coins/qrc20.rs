@@ -1183,6 +1183,7 @@ impl WatcherOps for Qrc20Coin {
     }
 }
 
+#[async_trait]
 impl MarketCoinOps for Qrc20Coin {
     fn ticker(&self) -> &str { &self.utxo.conf.ticker }
 
@@ -1254,8 +1255,8 @@ impl MarketCoinOps for Qrc20Coin {
     }
 
     #[inline(always)]
-    fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionFut {
-        Box::new(utxo_common::sign_raw_tx(self.clone(), args.clone()).boxed().compat())
+    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+        utxo_common::sign_raw_tx(self, args).await
     }
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {

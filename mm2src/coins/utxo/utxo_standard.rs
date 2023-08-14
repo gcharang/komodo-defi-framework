@@ -717,8 +717,8 @@ impl MarketCoinOps for UtxoStandardCoin {
     }
 
     #[inline(always)]
-    fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionFut {
-        Box::new(utxo_common::sign_raw_tx(self.clone(), args.clone()).boxed().compat())
+    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+        utxo_common::sign_raw_tx(self, args).await
     }
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {

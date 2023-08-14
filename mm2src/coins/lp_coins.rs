@@ -312,9 +312,7 @@ pub type TxHistoryResult<T> = Result<T, MmError<TxHistoryError>>;
 pub type RawTransactionResult = Result<RawTransactionRes, MmError<RawTransactionError>>;
 pub type RawTransactionFut<'a> =
     Box<dyn Future<Item = RawTransactionRes, Error = MmError<RawTransactionError>> + Send + 'a>;
-pub type SignRawTransactionResult = Result<SignRawTransactionRes, MmError<RawTransactionError>>;
-pub type SignRawTransactionFut =
-    Box<dyn Future<Item = SignRawTransactionRes, Error = MmError<RawTransactionError>> + Send>;
+pub type SignRawTransactionResult = Result<SignRawTransactionResponse, MmError<RawTransactionError>>;
 pub type RefundResult<T> = Result<T, MmError<RefundError>>;
 /// Helper type used for swap transactions' spend preimage generation result
 pub type GenPreimageResult<Coin> = MmResult<TxPreimageWithSig<Coin>, TxGenError>;
@@ -351,14 +349,14 @@ pub enum RawTransactionError {
     HashNotExist(String),
     #[display(fmt = "Internal error: {}", _0)]
     InternalError(String),
+    #[display(fmt = "Transaction decode error: {}", _0)]
+    DecodeError(String),
     #[display(fmt = "Invalid param: {}", _0)]
     InvalidParam(String),
     #[display(fmt = "Non-existent previous output: {}", _0)]
     NonExistentPrevOutputError(String),
     #[display(fmt = "Signing error: {}", _0)]
     SigningError(String),
-    #[display(fmt = "UTXO RPC server error: {}", _0)]
-    RpcError(String),
     #[display(fmt = "Not implemented for this coin {}", coin)]
     NotImplemented { coin: String },
 }
@@ -366,10 +364,17 @@ pub enum RawTransactionError {
 impl HttpStatusCode for RawTransactionError {
     fn status_code(&self) -> StatusCode {
         match self {
-            RawTransactionError::Transport(_)
-            | RawTransactionError::InternalError(_)
-            | RawTransactionError::RpcError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            _ => StatusCode::BAD_REQUEST,
+            RawTransactionError::Transport(_) | RawTransactionError::InternalError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            },
+            RawTransactionError::NoSuchCoin { .. }
+            | RawTransactionError::InvalidHashError(_)
+            | RawTransactionError::HashNotExist(_)
+            | RawTransactionError::DecodeError(_)
+            | RawTransactionError::InvalidParam(_)
+            | RawTransactionError::NonExistentPrevOutputError(_)
+            | RawTransactionError::SigningError(_)
+            | RawTransactionError::NotImplemented { .. } => StatusCode::BAD_REQUEST,
         }
     }
 }
@@ -445,7 +450,7 @@ pub struct SignRawTransactionRequest {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct SignRawTransactionRes {
+pub struct SignRawTransactionResponse {
     /// Raw bytes of signed transaction in hexadecimal string which is the response from the signrawtransaction request
     pub tx_hex: BytesJson,
 }
@@ -1436,6 +1441,7 @@ pub trait SwapOpsV2: CoinAssocTypes + Send + Sync + 'static {
 
 /// Operations that coins have independently from the MarketMaker.
 /// That is, things implemented by the coin wallets or public coin services.
+#[async_trait]
 pub trait MarketCoinOps {
     fn ticker(&self) -> &str;
 
@@ -1477,7 +1483,7 @@ pub trait MarketCoinOps {
     fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send>;
 
     /// Signs raw transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
-    fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionFut;
+    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult;
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send>;
 
@@ -3914,7 +3920,7 @@ pub async fn verify_message(ctx: MmArc, req: VerificationRequest) -> Verificatio
 
 pub async fn sign_raw_transaction(ctx: MmArc, req: SignRawTransactionRequest) -> SignRawTransactionResult {
     let coin = lp_coinfind_or_err(&ctx, &req.coin).await?;
-    coin.sign_raw_tx(&req).compat().await
+    coin.sign_raw_tx(&req).await
 }
 
 pub async fn remove_delegation(ctx: MmArc, req: RemoveDelegateRequest) -> DelegationResult {

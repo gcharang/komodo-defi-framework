@@ -4,7 +4,7 @@ use crate::solana::solana_common::{ui_amount_to_amount, PrepareTransferData, Suf
 use crate::solana::{solana_common, AccountError, SolanaCommonOps, SolanaFeeDetails};
 use crate::{BalanceFut, CheckIfMyPaymentSentArgs, CoinFutSpawner, ConfirmPaymentInput, DexFee, FeeApproxStage,
             FoundSwapTxSpend, MakerSwapTakerCoin, MmCoinEnum, NegotiateSwapContractAddrErr, PaymentInstructionArgs,
-            PaymentInstructions, PaymentInstructionsErr, RawTransactionFut, RawTransactionRequest, RefundError,
+            PaymentInstructions, PaymentInstructionsErr, RawTransactionError, RawTransactionFut, RawTransactionRequest, RefundError,
             RefundPaymentArgs, RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
             SendPaymentArgs, SignRawTransactionFut, SignRawTransactionRequest, SignatureResult, SolanaCoin,
             SpendPaymentArgs, TakerSwapMakerCoin, TradePreimageFut, TradePreimageResult, TradePreimageValue,
@@ -231,6 +231,7 @@ impl SplToken {
     }
 }
 
+#[async_trait]
 impl MarketCoinOps for SplToken {
     fn ticker(&self) -> &str { &self.conf.ticker }
 
@@ -268,9 +269,12 @@ impl MarketCoinOps for SplToken {
     }
 
     #[inline(always)]
-    fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionFut {
-        Box::new(utxo_common::sign_raw_tx(self.clone(), args.clone()).boxed().compat())
-    }
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+        Err(RawTransactionError::NotImplemented {
+            coin: self.ticker().to_string(),
+        }
+        .into())
+    }    
 
     fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
         unimplemented!()

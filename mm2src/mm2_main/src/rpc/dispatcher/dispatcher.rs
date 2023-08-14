@@ -29,9 +29,8 @@ use coins::utxo::bch::BchCoin;
 use coins::utxo::qtum::QtumCoin;
 use coins::utxo::slp::SlpToken;
 use coins::utxo::utxo_standard::UtxoStandardCoin;
-use coins::{add_delegation, get_my_address, get_raw_transaction, get_staking_infos, remove_delegation, sign_message,
-            verify_message, withdraw};
-use coins::{nft, sign_raw_transaction};
+use coins::{add_delegation, get_my_address, get_raw_transaction, get_staking_infos, nft, remove_delegation,
+            sign_message, sign_raw_transaction, verify_message, withdraw};
 #[cfg(all(
     feature = "enable-solana",
     not(target_os = "ios"),

@@ -2214,6 +2214,7 @@ impl MmCoin for TendermintCoin {
     fn on_token_deactivated(&self, _ticker: &str) {}
 }
 
+#[async_trait]
 impl MarketCoinOps for TendermintCoin {
     fn ticker(&self) -> &str { &self.ticker }
 
@@ -2304,13 +2305,11 @@ impl MarketCoinOps for TendermintCoin {
     }
 
     #[inline(always)]
-    fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionFut {
-        let ticker = self.ticker.clone();
-        Box::new(
-            async move { Err(RawTransactionError::NotImplemented { coin: ticker }.into()) }
-                .boxed()
-                .compat(),
-        )
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+        Err(RawTransactionError::NotImplemented {
+            coin: self.ticker().to_string(),
+        }
+        .into())
     }
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {

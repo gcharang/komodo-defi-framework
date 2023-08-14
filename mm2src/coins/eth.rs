@@ -89,8 +89,8 @@ use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut,
             PrivKeyBuildPolicy, PrivKeyPolicyNotAllowed, RawTransactionError, RawTransactionFut,
             RawTransactionRequest, RawTransactionRes, RawTransactionResult, RefundError, RefundPaymentArgs,
             RefundResult, RewardTarget, RpcClientType, RpcTransportEventHandler, RpcTransportEventHandlerShared,
-            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignRawTransactionFut,
-            SignRawTransactionRequest, SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin,
+            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignRawTransactionRequest,
+            SignRawTransactionResult, SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin,
             TradeFee, TradePreimageError, TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction,
             TransactionDetails, TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
             UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
@@ -2058,6 +2058,7 @@ impl WatcherOps for EthCoin {
     }
 }
 
+#[async_trait]
 #[cfg_attr(test, mockable)]
 impl MarketCoinOps for EthCoin {
     fn ticker(&self) -> &str { &self.ticker[..] }
@@ -2170,13 +2171,11 @@ impl MarketCoinOps for EthCoin {
     }
 
     #[inline(always)]
-    fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionFut {
-        let ticker = self.ticker.clone();
-        Box::new(
-            async move { Err(RawTransactionError::NotImplemented { coin: ticker }.into()) }
-                .boxed()
-                .compat(),
-        )
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+        Err(RawTransactionError::NotImplemented {
+            coin: self.ticker().to_string(),
+        }
+        .into())
     }
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {

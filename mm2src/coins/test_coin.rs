@@ -54,6 +54,7 @@ impl TestCoin {
     pub fn new(ticker: &str) -> TestCoin { TestCoin(Arc::new(TestCoinImpl { ticker: ticker.into() })) }
 }
 
+#[async_trait]
 #[mockable]
 impl MarketCoinOps for TestCoin {
     fn ticker(&self) -> &str { &self.ticker }
@@ -82,7 +83,7 @@ impl MarketCoinOps for TestCoin {
     fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send> { unimplemented!() }
 
     #[inline(always)]
-    fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionFut { unimplemented!() }
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult { unimplemented!() }
 
     fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
         unimplemented!()
