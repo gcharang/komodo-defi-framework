@@ -274,7 +274,7 @@ impl MarketCoinOps for SplToken {
             coin: self.ticker().to_string(),
         }
         .into())
-    }    
+    }
 
     fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
         unimplemented!()

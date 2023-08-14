@@ -33,7 +33,7 @@ use crate::{MmCoinEnum, WatcherReward, WatcherRewardError};
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
 use chain::constants::SEQUENCE_FINAL;
-use chain::{OutPoint, TransactionOutput, TransactionInput};
+use chain::{OutPoint, TransactionInput, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
 use common::log::{error, warn};

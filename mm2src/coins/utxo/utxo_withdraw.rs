@@ -104,7 +104,7 @@ where
         }
     }
 
-    fn prev_script(&self) -> Script { 
+    fn prev_script(&self) -> Script {
         match self.sender_address().addr_format {
             UtxoAddressFormat::Segwit => Builder::build_p2witness(&self.sender_address().hash),
             _ => Builder::build_p2pkh(&self.sender_address().hash),
