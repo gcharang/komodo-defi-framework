@@ -22,8 +22,7 @@
 //
 use super::eth::Action::{Call, Create};
 use crate::lp_price::get_base_price_in_rel;
-use crate::nft::nft_structs::{ContractType, ConvertChain, NftListReq, TransactionNftDetails, WithdrawErc1155,
-                              WithdrawErc721};
+use crate::nft::nft_structs::{ContractType, ConvertChain, TransactionNftDetails, WithdrawErc1155, WithdrawErc721};
 use async_trait::async_trait;
 use bitcrypto::{keccak256, ripemd160, sha256};
 use common::custom_futures::repeatable::{Ready, Retry, RetryOnError};
@@ -53,6 +52,7 @@ use mm2_err_handle::prelude::*;
 use mm2_net::transport::{slurp_url, GuiAuthValidation, GuiAuthValidationGenerator, SlurpError};
 use mm2_number::bigdecimal_custom::CheckedDivision;
 use mm2_number::{BigDecimal, MmNumber};
+use mm2_rpc::data::legacy::GasStationPricePolicy;
 #[cfg(test)] use mocktopus::macros::*;
 use rand::seq::SliceRandom;
 use rpc::v1::types::Bytes as BytesJson;
@@ -67,7 +67,6 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
-use url::Url;
 use web3::types::{Action as TraceAction, BlockId, BlockNumber, Bytes, CallRequest, FilterBuilder, Log, Trace,
                   TraceFilterBuilder, Transaction as Web3Transaction, TransactionId, U64};
 use web3::{self, Web3};
@@ -107,7 +106,7 @@ pub use rlp;
 mod web3_transport;
 
 #[path = "eth/v2_activation.rs"] pub mod v2_activation;
-use crate::nft::{find_wallet_amount, WithdrawNftResult};
+use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
 
 mod nonce;
@@ -875,26 +874,19 @@ async fn withdraw_impl(coin: EthCoin, req: WithdrawRequest) -> WithdrawResult {
 
 /// `withdraw_erc1155` function returns details of `ERC-1155` transaction including tx hex,
 /// which should be sent to`send_raw_transaction` RPC to broadcast the transaction.
-pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155, url: Url) -> WithdrawNftResult {
+pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> WithdrawNftResult {
     let coin = lp_coinfind_or_err(&ctx, &withdraw_type.chain.to_ticker()).await?;
     let (to_addr, token_addr, eth_coin) =
         get_valid_nft_add_to_withdraw(coin, &withdraw_type.to, &withdraw_type.token_address)?;
     let my_address = eth_coin.my_address()?;
 
-    // todo check amount in nft cache, instead of sending new moralis req
-    // dont use `get_nft_metadata` for erc1155, it can return info related to other owner.
-    let nft_req = NftListReq {
-        chains: vec![withdraw_type.chain],
-        url,
-    };
-    let wallet_amount = find_wallet_amount(
-        ctx,
-        nft_req,
-        withdraw_type.token_address.clone(),
+    let wallet_amount = find_wallet_nft_amount(
+        &ctx,
+        &withdraw_type.chain,
+        withdraw_type.token_address.to_lowercase(),
         withdraw_type.token_id.clone(),
     )
     .await?;
-
     let amount_dec = if withdraw_type.max {
         wallet_amount.clone()
     } else {
@@ -1390,7 +1382,7 @@ impl SwapOps for EthCoin {
     }
 
     fn is_supported_by_watchers(&self) -> bool {
-        false
+        std::env::var("USE_WATCHER_REWARD").is_ok()
         //self.contract_supports_watchers
     }
 }
@@ -1797,7 +1789,7 @@ impl WatcherOps for EthCoin {
             },
         };
 
-        let send_contract_reward_on_spend = true;
+        let send_contract_reward_on_spend = other_coin.is_eth();
 
         Ok(Some(WatcherReward {
             amount,
@@ -4256,7 +4248,7 @@ impl EthCoin {
             // TODO refactor to error_log_passthrough once simple maker bot is merged
             let gas_station_price = match &coin.gas_station_url {
                 Some(url) => {
-                    match GasStationData::get_gas_price(url, coin.gas_station_decimals, coin.gas_station_policy)
+                    match GasStationData::get_gas_price(url, coin.gas_station_decimals, coin.gas_station_policy.clone())
                         .compat()
                         .await
                     {
@@ -5009,21 +5001,6 @@ pub struct GasStationData {
     fast: MmNumber,
 }
 
-/// Using tagged representation to allow adding variants with coefficients, percentage, etc in the future.
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(tag = "policy", content = "additional_data")]
-pub enum GasStationPricePolicy {
-    /// Use mean between average and fast values, default and recommended to use on ETH mainnet due to
-    /// gas price big spikes.
-    MeanAverageFast,
-    /// Use average value only. Useful for non-heavily congested networks (Matic, etc.)
-    Average,
-}
-
-impl Default for GasStationPricePolicy {
-    fn default() -> Self { GasStationPricePolicy::MeanAverageFast }
-}
-
 impl GasStationData {
     fn average_gwei(&self, decimals: u8, gas_price_policy: GasStationPricePolicy) -> NumConversResult<U256> {
         let gas_price = match gas_price_policy {
@@ -5302,6 +5279,10 @@ fn checksum_address(addr: &str) -> String {
     result
 }
 
+/// `eth_addr_to_hex` converts Address to hex format.
+/// Note: the result will be in lowercase.
+pub(crate) fn eth_addr_to_hex(address: &Address) -> String { format!("{:#02x}", address) }
+
 /// Checks that input is valid mixed-case checksum form address
 /// The input must be 0x prefixed hex string
 fn is_valid_checksum_addr(addr: &str) -> bool { addr == checksum_address(addr) }
@@ -5417,6 +5398,7 @@ impl From<CryptoCtxError> for GetEthAddressError {
 }
 
 /// `get_eth_address` returns wallet address for coin with `ETH` protocol type.
+/// Note: result address has mixed-case checksum form.
 pub async fn get_eth_address(ctx: &MmArc, ticker: &str) -> MmResult<MyWalletAddress, GetEthAddressError> {
     let priv_key_policy = PrivKeyBuildPolicy::detect_priv_key_policy(ctx)?;
     // Convert `PrivKeyBuildPolicy` to `EthPrivKeyBuildPolicy` if it's possible.

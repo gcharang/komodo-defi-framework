@@ -1,3 +1,56 @@
+## v1.0.6-beta - 2023-07-24
+
+**Features:**
+- Komodo DeFi Framework was introduced in [#1903](https://github.com/KomodoPlatform/atomicDEX-API/issues/1903)
+   - The project/repo was renamed from AtomicDEX-API to Komodo-DeFi Framework
+   - The readme file, logo, links, and some references in the documentation were updated to reflect the new name/brand
+   - CI was updated to use the new name where it's needed.
+- Swap watcher nodes [#1431](https://github.com/KomodoPlatform/atomicDEX-API/issues/1431)
+  - Using watcher nodes for swaps were enabled by default for UTXO coins in [#1859](https://github.com/KomodoPlatform/atomicDEX-API/pull/1859)
+    - `use_watchers` configuration was set to true by default. It was later disabled in [#1897](https://github.com/KomodoPlatform/atomicDEX-API/pull/1897) due to this issue [#1887](https://github.com/KomodoPlatform/atomicDEX-API/issues/1887) 
+    - All nodes doing a swap will broadcast a watcher message after the taker payment is sent if the swapped coins are supported by watchers (currently only UTXO). This was also disabled in [#1897](https://github.com/KomodoPlatform/atomicDEX-API/pull/1897) due to this issue [#1887](https://github.com/KomodoPlatform/atomicDEX-API/issues/1887)
+    - This update also fixes an issue that caused nodes to broadcast two consecutive watcher messages after the taker payment was sent.
+- NFT integration [#900](https://github.com/KomodoPlatform/atomicDEX-API/issues/900)
+  - Cache support was added for sqlite (non-wasm targets) in [#1833](https://github.com/KomodoPlatform/atomicDEX-API/pull/1833)
+  - IndexedDb support for wasm was added in [#1877](https://github.com/KomodoPlatform/atomicDEX-API/pull/1877)
+  - DB unit tests were added in [#1877](https://github.com/KomodoPlatform/atomicDEX-API/pull/1877)
+  - Handling of `bafy` in IPFS Moralis links in a correct way was done in [#1877](https://github.com/KomodoPlatform/atomicDEX-API/pull/1877)
+  - `get_uri_meta` function was added to optimize the retrieval of `UriMeta` from `token_uri` and `metadata` in [#1877](https://github.com/KomodoPlatform/atomicDEX-API/pull/1877)
+  - `protect_from_spam` feature was added to redact URLs in specific fields and flag them as possible spam in [#1877](https://github.com/KomodoPlatform/atomicDEX-API/pull/1877)
+  - Address is now used instead of string in NFT and transaction objects in [#1914](https://github.com/KomodoPlatform/atomicDEX-API/pull/1914)
+  - `guard: Arc<AsyncMutex<()>>` from struct `NftCtx` is added to lock nft functions which uses db in [#1914](https://github.com/KomodoPlatform/atomicDEX-API/pull/1914)
+  - IndexedDB Cursor collect method was used to fix uncaught Error in [#1914](https://github.com/KomodoPlatform/atomicDEX-API/pull/1914)
+- HTTPS support was added for the RPC server in [#1861](https://github.com/KomodoPlatform/atomicDEX-API/pull/1861)
+- Adex-CLI [#1682](https://github.com/KomodoPlatform/atomicDEX-API/issues/1682)
+  - New commands `enable`, `get-enabled`, `orderbook`,`sell`, `buy` were added to adex-cli in [#1768](https://github.com/KomodoPlatform/atomicDEX-API/pull/1768)
+
+**Enhancements/Fixes:**
+- Some RUSTSEC advisories where resolved in [#1853](https://github.com/KomodoPlatform/atomicDEX-API/pull/1853)
+- ARRR/ZCOIN code was refactored to be compiled in WebAssembly (WASM) in [#1805](https://github.com/KomodoPlatform/atomicDEX-API/pull/1805)
+  - The PR for this paves the way for subsequent implementation of the empty/todo functions related to WASM storage and other functionalities.
+- Orderbook response now returns the right age for the age field, this was fixed in [#1851](https://github.com/KomodoPlatform/atomicDEX-API/pull/1851)
+- A bug that caused `best_orders` rpc to return `is_mine: false` for the user's orders was fixed in [#1846](https://github.com/KomodoPlatform/atomicDEX-API/pull/1846)
+  - An optional parameter `exclude_mine` was also added to the `best_orders` request that allows users to exclude their own orders from the response.
+  - `exclude_mine` defaults to false to maintain the same behaviour before the PR.
+- Watchtower integration tests were moved to the new ethereum testnet and the ignore attributes were removed in [#1846](https://github.com/KomodoPlatform/atomicDEX-API/pull/1846)
+  - The PR also adds a new test case for watcher rewards.
+  - It also fixes the unstable `send_and_refund_eth_payment`, `send_and_refund_erc20_payment`, `test_nonce_lock` and `test_withdraw_and_send tests` tests that were failing due to concurrency issues.
+- Infrastructure DNS rotation for default seednodes was done in [#1868](https://github.com/KomodoPlatform/atomicDEX-API/pull/1868)
+- Price endpoints were updated in [#1869](https://github.com/KomodoPlatform/atomicDEX-API/pull/1869)
+- A fix removed the passed config string from the error logs during mm2 initialization if there was a deserialization error was done in [#1872](https://github.com/KomodoPlatform/atomicDEX-API/pull/1872)
+- The time needed for CI completion was reduced by caching the downloaded dependencies in [#1880](https://github.com/KomodoPlatform/atomicDEX-API/pull/1880)
+- Label validation on PRs was added. This validation will only succeed if one of the following labels is used but not both: `under review` or `in progress` [#1881](https://github.com/KomodoPlatform/atomicDEX-API/pull/1881)
+- `orderbook` mod of adex-cli was refactored by moving it from the internal `response_handler` to its appropriate folder, enhancing code organization and clarity in [#1879](https://github.com/KomodoPlatform/atomicDEX-API/pull/1879)
+- A bug was fixed for adex-cli to allow starting if configuration does not exist in [#1889](https://github.com/KomodoPlatform/atomicDEX-API/pull/1889)
+- IBC and standard withdrawals for Cosmos now allow users to specify the gas price and gas limit for each transaction [#1894](https://github.com/KomodoPlatform/atomicDEX-API/pull/1894)
+- A fix was introduced to adex-cli to allow starting mm2 from cli under regular user in macOS [#1856](https://github.com/KomodoPlatform/atomicDEX-API/pull/1856)
+- The repo logo was updated to be visible in GitHub light theme in [#1904](https://github.com/KomodoPlatform/atomicDEX-API/issues/1904)
+- A CI job was added to check if mm2 version was bumped before merging any pull request to main in [#1899](https://github.com/KomodoPlatform/atomicDEX-API/issues/1899)
+- All CI tests now run with the `--no-fail-fast` flag, allowing other tests to proceed despite any failures [#1907](https://github.com/KomodoPlatform/atomicDEX-API/issues/1907)
+- Index out of bounds errors in the `tx_details_by_hash` functions was fixed in [#1915](https://github.com/KomodoPlatform/atomicDEX-API/issues/1915)
+- Adex-CLI `test_activation_scheme` was fixed by removing the old file in [#1920](https://github.com/KomodoPlatform/atomicDEX-API/issues/1920)
+
+
 ## v1.0.5-beta - 2023-06-08
 
 **Features:**

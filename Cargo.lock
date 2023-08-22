@@ -1052,6 +1052,7 @@ dependencies = [
  "mm2_metrics",
  "mm2_net",
  "mm2_number",
+ "mm2_rpc",
  "mm2_test_helpers",
  "mocktopus",
  "num-traits",
@@ -1061,6 +1062,7 @@ dependencies = [
  "prost-build",
  "protobuf",
  "rand 0.7.3",
+ "regex",
  "rlp",
  "rmp-serde",
  "rpc",
@@ -3087,12 +3089,12 @@ checksum = "5a9d968042a4902e08810946fc7cd5851eb75e80301342305af755ca06cb82ce"
 
 [[package]]
 name = "indexmap"
-version = "1.7.0"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
+checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg 1.1.0",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
 ]
 
 [[package]]
@@ -4106,7 +4108,7 @@ dependencies = [
 
 [[package]]
 name = "mm2_bin_lib"
-version = "1.0.5-beta"
+version = "1.0.7-beta"
 dependencies = [
  "chrono",
  "common",
@@ -4137,6 +4139,7 @@ dependencies = [
  "db_common",
  "derive_more",
  "futures 0.3.15",
+ "futures-rustls 0.21.1",
  "gstuff",
  "hex 0.4.3",
  "lazy_static",
@@ -4317,10 +4320,13 @@ dependencies = [
  "primitives",
  "rand 0.6.5",
  "rand 0.7.3",
+ "rcgen",
  "regex",
  "rmp-serde",
  "rpc",
  "rpc_task",
+ "rustls 0.20.4",
+ "rustls-pemfile 1.0.2",
  "script",
  "secp256k1 0.20.3",
  "ser_error",
@@ -4399,6 +4405,7 @@ dependencies = [
  "derive_more",
  "ethkey",
  "futures 0.3.15",
+ "futures-util",
  "gstuff",
  "http 0.2.7",
  "hyper",
@@ -4408,8 +4415,11 @@ dependencies = [
  "mm2_err_handle",
  "prost",
  "rand 0.7.3",
+ "rustls 0.20.4",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-rustls",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -4439,10 +4449,13 @@ dependencies = [
  "gstuff",
  "http 0.2.7",
  "mm2_err_handle",
+ "mm2_number",
+ "rpc",
  "ser_error",
  "ser_error_derive",
  "serde",
  "serde_json",
+ "uuid 1.2.2",
 ]
 
 [[package]]
@@ -4464,6 +4477,7 @@ dependencies = [
  "mm2_metrics",
  "mm2_net",
  "mm2_number",
+ "mm2_rpc",
  "rand 0.7.3",
  "regex",
  "rpc",
@@ -4974,6 +4988,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c719dcf55f09a3a7e764c6649ab594c18a177e3599c467983cdf644bfc0a4088"
 
 [[package]]
+name = "pem"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8835c273a76a90455d7344889b0964598e3316e2a79ede8e36f16bdcf2228b8"
+dependencies = [
+ "base64 0.13.0",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4981,9 +5004,9 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
 name = "petgraph"
-version = "0.6.1"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b305cc4569dd4e8765bab46261f67ef5d4d11a4b6e745100ee5dad8948b46c"
+checksum = "4dd7d28ee937e54fe3080c91faa1c3a46c06de6252988a7f4592ba2310ef22a4"
 dependencies = [
  "fixedbitset",
  "indexmap",
@@ -5656,6 +5679,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcgen"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
+dependencies = [
+ "pem",
+ "ring",
+ "time 0.3.11",
+ "yasna",
+]
+
+[[package]]
 name = "rdrand"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5845,9 +5880,9 @@ dependencies = [
 
 [[package]]
 name = "rmp-serde"
-version = "1.1.1"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5b13be192e0220b8afb7222aa5813cb62cc269ebb5cac346ca6487681d2913e"
+checksum = "4ce7d70c926fe472aed493b902010bccc17fa9f7284145cb8772fd22fdb052d8"
 dependencies = [
  "byteorder 1.4.3",
  "rmp",
@@ -6025,11 +6060,11 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "1.0.0"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7522c9de787ff061458fe9a829dc790a3f5b22dc571694fc5883f448b94d9a9"
+checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
- "base64 0.13.0",
+ "base64 0.21.2",
 ]
 
 [[package]]
@@ -6245,9 +6280,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.136"
+version = "1.0.164"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce31e24b01e1e524df96f1c2fdd054405f8d7376249a5110886fb4b658484789"
+checksum = "9e8c8cf938e98f769bc164923b06dce91cea1751522f46f8466461af04c9027d"
 dependencies = [
  "serde_derive",
 ]
@@ -6274,13 +6309,13 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.136"
+version = "1.0.164"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08597e7152fcd306f41838ed3e37be9eaeed2b61c42e2117266a554fab4662f9"
+checksum = "d9735b638ccc51c28bf6914d90a2e9725b377144fc612c49a611fddd1b631d68"
 dependencies = [
  "proc-macro2 1.0.58",
  "quote 1.0.27",
- "syn 1.0.95",
+ "syn 2.0.16",
 ]
 
 [[package]]
@@ -7981,7 +8016,7 @@ dependencies = [
  "pin-project 1.0.10",
  "prost",
  "prost-derive",
- "rustls-pemfile 1.0.0",
+ "rustls-pemfile 1.0.2",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
@@ -8892,6 +8927,15 @@ dependencies = [
  "parking_lot 0.12.0",
  "rand 0.8.4",
  "static_assertions",
+]
+
+[[package]]
+name = "yasna"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
+dependencies = [
+ "time 0.3.11",
 ]
 
 [[package]]

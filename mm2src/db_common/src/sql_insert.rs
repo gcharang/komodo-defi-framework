@@ -1,7 +1,7 @@
 use crate::sql_value::{FromQuoted, SqlValueOptional, SqlValueToString};
 use crate::sqlite::{OwnedSqlParam, OwnedSqlParams, SqlParamsBuilder, ToValidSqlIdent};
-use common::fmt::{WriteSafe, WriteSafeJoin};
 use common::write_safe;
+use common::write_safe::fmt::{WriteSafe, WriteSafeJoin};
 use log::debug;
 use rusqlite::{params_from_iter, Connection, Result as SqlResult};
 use std::fmt;
