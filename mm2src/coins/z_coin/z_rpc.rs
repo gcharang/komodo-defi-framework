@@ -38,7 +38,7 @@ cfg_native!(
     use tokio::task::block_in_place;
     use tonic::transport::{Channel, ClientTlsConfig};
     use zcash_client_backend::data_api::{WalletRead, WalletWrite};
-    use zcash_client_backend::data_api::chain::{scan_cached_blocks, validate_chain};
+    use zcash_client_backend::with_async::data_api::{scan_cached_blocks, validate_chain};
     use zcash_client_backend::data_api::error::Error as ChainError;
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::zip32::ExtendedFullViewingKey;
@@ -596,11 +596,11 @@ impl SaplingSyncLoopHandle {
         ));
         let mut wallet_ops_lock = wallet_ops.lock().unwrap();
 
-        if let Err(e) = validate_chain(
+        if let Err(e) = block_on(validate_chain(
             &self.consensus_params,
             &self.blocks_db,
             wallet_ops_lock.get_max_height_hash()?,
-        ) {
+        )) {
             match e {
                 ZcashClientError::BackendError(ChainError::InvalidChain(lower_bound, _)) => {
                     let rewind_height = if lower_bound > BlockHeight::from_u32(10) {
@@ -629,12 +629,12 @@ impl SaplingSyncLoopHandle {
                 None => self.notify_building_wallet_db(0, current_block.into()),
             }
 
-            scan_cached_blocks(
-                self.consensus_params.clone(),
+            block_on(scan_cached_blocks(
+                &self.consensus_params.clone(),
                 &self.blocks_db,
                 wallet_ops.clone(),
                 Some(self.scan_blocks_per_iteration),
-            )?;
+            ))?;
             if self.scan_interval_ms > 0 {
                 std::thread::sleep(Duration::from_millis(self.scan_interval_ms));
             }
