@@ -1,6 +1,6 @@
 use mm2_rpc::data::legacy::{ElectrumProtocol, UtxoMergeParams};
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 
 use super::SetTxHistory;
 

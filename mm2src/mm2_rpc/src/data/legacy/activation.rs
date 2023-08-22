@@ -1,7 +1,7 @@
 #[path = "activation/eth.rs"] pub mod eth;
 #[path = "activation/utxo.rs"] pub mod utxo;
 
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 
 use common::serde_derive::{Deserialize, Serialize};
 use mm2_number::BigDecimal;

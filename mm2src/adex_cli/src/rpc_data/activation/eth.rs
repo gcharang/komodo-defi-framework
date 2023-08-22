@@ -1,6 +1,6 @@
 use ethereum_types::Address;
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 use std::collections::HashMap;
 
 use common::true_f;

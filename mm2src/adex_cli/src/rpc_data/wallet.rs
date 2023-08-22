@@ -2,7 +2,7 @@ use derive_more::Display;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 use std::collections::HashSet;
 
 use crate::rpc_data::zcoin::{AnyValue, Bip32Child, Bip32PurposeValue, Bip44Tail, HardenedValue};

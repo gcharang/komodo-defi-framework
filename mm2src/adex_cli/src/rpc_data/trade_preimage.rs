@@ -1,7 +1,7 @@
 use common::serde_derive::Deserialize;
 use mm2_number::{construct_detailed, Fraction, MmNumber};
 use serde::Serialize;
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 
 #[derive(Serialize)]
 #[serde(tag = "method", rename = "min_trading_vol")]

@@ -1,7 +1,7 @@
 use lightning_invoice::Invoice;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json, H264 as H264Json};
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 use std::collections::HashMap;
 use uuid::Uuid;
 

@@ -1,7 +1,7 @@
 use derive_more::Display;
 use rpc::v1::types::H256 as H256Json;
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 

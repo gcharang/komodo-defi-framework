@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use skip_serializing_none::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 
 use common::true_f;
