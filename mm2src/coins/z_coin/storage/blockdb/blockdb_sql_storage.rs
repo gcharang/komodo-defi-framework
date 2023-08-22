@@ -98,7 +98,7 @@ impl BlockDbImpl {
             .map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
     }
 
-    async fn with_blocks<F>(
+    pub(crate) async fn with_blocks<F>(
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
@@ -147,7 +147,12 @@ impl BlockDbImpl {
 impl BlockSource for BlockDbImpl {
     type Error = SqliteClientError;
 
-    async fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
+    async fn with_blocks<F>(
+        &self,
+        from_height: BlockHeight,
+        limit: Option<u32>,
+        with_row: Box<F>,
+    ) -> Result<(), Self::Error>
     where
         F: FnMut(CompactBlock) -> Result<(), Self::Error>,
     {

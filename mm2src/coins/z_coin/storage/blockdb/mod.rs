@@ -73,8 +73,6 @@ mod block_db_storage_tests {
     use crate::z_coin::storage::BlockDbImpl;
 
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
-    use zcash_client_backend::data_api::BlockSource;
-    use zcash_primitives::consensus::BlockHeight;
 
     const TICKER: &str = "ARRR";
 
@@ -146,10 +144,9 @@ mod block_db_storage_tests {
             assert_eq!(1, inserted_id);
         }
 
-        // get last height - we expect it to be 1900000
-        db.with_blocks(BlockHeight::from_u32(1900000), None, |_| Ok(()))
-            .await
-            .unwrap();
+        // get last height - we expect it to be 1900002
+        let block_height = db.get_latest_block().await.unwrap();
+        assert_eq!(1900002, block_height)
     }
 }
 
