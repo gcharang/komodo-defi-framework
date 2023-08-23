@@ -19,6 +19,7 @@ pub struct MmRpcRequest<M, T> {
     pub mmrpc: MmRpcVersion,
     pub userpass: Option<String>,
     pub method: M,
+    #[serde(default)]
     pub params: T,
     pub id: Option<usize>,
 }
