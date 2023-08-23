@@ -321,7 +321,6 @@ pub struct TakerMatchForRpc {
     pub last_updated: u64,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "order")]
 pub enum OrderForRpc {
