@@ -358,7 +358,7 @@ pub extern "C" fn spawn_rpc(ctx_h: u32) {
     let make_svc_fut = move |remote_addr: SocketAddr| async move {
         Ok::<_, Infallible>(service_fn(move |req: Request<Body>| async move {
             if req.uri().path() == SSE_ENDPOINT {
-                let res = handle_sse_events(ctx_h).await?;
+                let res = handle_sse_events(req, ctx_h).await?;
                 return Ok::<_, Infallible>(res);
             }
 

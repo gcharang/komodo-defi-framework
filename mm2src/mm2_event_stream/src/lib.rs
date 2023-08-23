@@ -14,6 +14,10 @@ impl Event {
             message,
         }
     }
+
+    pub fn event_type(&self) -> &str { &self._type }
+
+    pub fn message(&self) -> &str { &self.message }
 }
 
 pub mod controller;
