@@ -21,6 +21,7 @@
 //
 
 use crate::mm2::rpc::rate_limiter::RateLimitError;
+use crate::mm2::rpc::sse::{handle_sse_events, SSE_ENDPOINT};
 use common::log::{error, info};
 use common::{err_to_rpc_json_string, err_tp_rpc_json, HttpStatusCode, APPLICATION_JSON};
 use derive_more::Display;
@@ -47,6 +48,7 @@ mod dispatcher_legacy;
 #[path = "rpc/lp_commands/lp_commands_legacy.rs"]
 pub mod lp_commands_legacy;
 #[path = "rpc/rate_limiter.rs"] mod rate_limiter;
+mod sse;
 
 /// Lists the RPC method not requiring the "userpass" authentication.  
 /// None is also public to skip auth and display proper error in case of method is missing
@@ -301,6 +303,8 @@ async fn rpc_service(req: Request<Body>, ctx_h: u32, client: SocketAddr) -> Resp
     Response::from_parts(parts, Body::from(body_escaped))
 }
 
+// TODO: This should exclude TCP internals, as including them results in having to
+// handle various protocols within this function.
 #[cfg(not(target_arch = "wasm32"))]
 pub extern "C" fn spawn_rpc(ctx_h: u32) {
     use common::now_sec;
@@ -353,6 +357,11 @@ pub extern "C" fn spawn_rpc(ctx_h: u32) {
 
     let make_svc_fut = move |remote_addr: SocketAddr| async move {
         Ok::<_, Infallible>(service_fn(move |req: Request<Body>| async move {
+            if req.uri().path() == SSE_ENDPOINT {
+                let res = handle_sse_events(ctx_h).await?;
+                return Ok::<_, Infallible>(res);
+            }
+
             let res = rpc_service(req, ctx_h, remote_addr).await;
             Ok::<_, Infallible>(res)
         }))

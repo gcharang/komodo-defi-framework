@@ -6,6 +6,7 @@ use common::log::{self, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
+use mm2_event_stream::{controller::Controller, Event};
 use mm2_metrics::{MetricsArc, MetricsOps};
 use primitives::hash::H160;
 use rand::Rng;
@@ -72,6 +73,8 @@ pub struct MmCtx {
     pub initialized: Constructible<bool>,
     /// True if the RPC HTTP server was started.
     pub rpc_started: Constructible<bool>,
+    /// Channels for continuously streaming data to clients via SSE.
+    pub stream_channel_controller: Controller<Event>,
     /// True if the MarketMaker instance needs to stop.
     pub stop: Constructible<bool>,
     /// Unique context identifier, allowing us to more easily pass the context through the FFI boundaries.  
@@ -133,6 +136,7 @@ impl MmCtx {
             metrics: MetricsArc::new(),
             initialized: Constructible::default(),
             rpc_started: Constructible::default(),
+            stream_channel_controller: Controller::new(),
             stop: Constructible::default(),
             ffi_handle: Constructible::default(),
             ordermatch_ctx: Mutex::new(None),

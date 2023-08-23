@@ -4114,6 +4114,7 @@ dependencies = [
  "gstuff",
  "hex 0.4.3",
  "lazy_static",
+ "mm2_event_stream",
  "mm2_metrics",
  "mm2_rpc",
  "primitives",
@@ -4183,6 +4184,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm2_event_stream"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "parking_lot 0.12.0",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "mm2_git"
 version = "0.1.0"
 dependencies = [
@@ -4237,6 +4249,7 @@ name = "mm2_main"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "async-stream",
  "async-trait",
  "bitcrypto",
  "blake2",
@@ -4277,6 +4290,7 @@ dependencies = [
  "mm2_core",
  "mm2_db",
  "mm2_err_handle",
+ "mm2_event_stream",
  "mm2_gui_storage",
  "mm2_io",
  "mm2_metrics",
