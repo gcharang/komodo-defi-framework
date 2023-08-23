@@ -22,7 +22,7 @@ use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, Coi
             RefundPaymentArgs, RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
             SendPaymentArgs, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee,
             TradePreimageError, TradePreimageFut, TradePreimageResult, TradePreimageValue, TransactionDetails,
-            TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
+            TransactionEnum, TransactionErr, TransactionFut, TransactionResult, TransactionType, TxMarshalingErr,
             UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
             ValidateOtherPubKeyErr, ValidatePaymentFut, ValidatePaymentInput, VerificationResult,
             WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
@@ -833,33 +833,23 @@ impl SwapOps for Qrc20Coin {
     }
 
     #[inline]
-    fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs) -> TransactionFut {
+    async fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {
         let payment_tx: UtxoTx =
-            try_tx_fus!(deserialize(taker_refunds_payment_args.payment_tx).map_err(|e| ERRL!("{:?}", e)));
-        let swap_contract_address = try_tx_fus!(taker_refunds_payment_args.swap_contract_address.try_to_address());
+            try_tx_s!(deserialize(taker_refunds_payment_args.payment_tx).map_err(|e| ERRL!("{:?}", e)));
+        let swap_contract_address = try_tx_s!(taker_refunds_payment_args.swap_contract_address.try_to_address());
 
-        let selfi = self.clone();
-        let fut = async move {
-            selfi
-                .refund_hash_time_locked_payment(swap_contract_address, payment_tx)
-                .await
-        };
-        Box::new(fut.boxed().compat())
+        self.refund_hash_time_locked_payment(swap_contract_address, payment_tx)
+            .await
     }
 
     #[inline]
-    fn send_maker_refunds_payment(&self, maker_refunds_payment_args: RefundPaymentArgs) -> TransactionFut {
+    async fn send_maker_refunds_payment(&self, maker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {
         let payment_tx: UtxoTx =
-            try_tx_fus!(deserialize(maker_refunds_payment_args.payment_tx).map_err(|e| ERRL!("{:?}", e)));
-        let swap_contract_address = try_tx_fus!(maker_refunds_payment_args.swap_contract_address.try_to_address());
+            try_tx_s!(deserialize(maker_refunds_payment_args.payment_tx).map_err(|e| ERRL!("{:?}", e)));
+        let swap_contract_address = try_tx_s!(maker_refunds_payment_args.swap_contract_address.try_to_address());
 
-        let selfi = self.clone();
-        let fut = async move {
-            selfi
-                .refund_hash_time_locked_payment(swap_contract_address, payment_tx)
-                .await
-        };
-        Box::new(fut.boxed().compat())
+        self.refund_hash_time_locked_payment(swap_contract_address, payment_tx)
+            .await
     }
 
     #[inline]

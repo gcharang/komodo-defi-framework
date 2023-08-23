@@ -14,11 +14,11 @@ use crate::{BlockHeightAndTime, CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBal
             NegotiateSwapContractAddrErr, PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr,
             PrivKeyBuildPolicy, RawTransactionFut, RefundError, RefundPaymentArgs, RefundResult,
             SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignatureResult,
-            SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradePreimageValue, TransactionFut, TransactionType,
-            TxFeeDetails, TxMarshalingErr, UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs,
-            ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut,
-            ValidatePaymentInput, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward,
-            WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
+            SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradePreimageValue, TransactionFut, TransactionResult,
+            TransactionType, TxFeeDetails, TxMarshalingErr, UnexpectedDerivationMethod, ValidateAddressResult,
+            ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentError,
+            ValidatePaymentFut, ValidatePaymentInput, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps,
+            WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
             WatcherValidateTakerFeeInput, WithdrawFut};
 use common::executor::{AbortableSystem, AbortedError};
 use common::log::warn;
@@ -865,13 +865,13 @@ impl SwapOps for BchCoin {
     }
 
     #[inline]
-    fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs) -> TransactionFut {
-        utxo_common::send_taker_refunds_payment(self.clone(), taker_refunds_payment_args)
+    async fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {
+        utxo_common::send_taker_refunds_payment(self.clone(), taker_refunds_payment_args).await
     }
 
     #[inline]
-    fn send_maker_refunds_payment(&self, maker_refunds_payment_args: RefundPaymentArgs) -> TransactionFut {
-        utxo_common::send_maker_refunds_payment(self.clone(), maker_refunds_payment_args)
+    async fn send_maker_refunds_payment(&self, maker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {
+        utxo_common::send_maker_refunds_payment(self.clone(), maker_refunds_payment_args).await
     }
 
     fn validate_fee(&self, validate_fee_args: ValidateFeeArgs) -> ValidatePaymentFut<()> {

@@ -13,7 +13,7 @@ use crate::{big_decimal_from_sat_unsigned, utxo::sat_from_big_decimal, BalanceFu
             RefundPaymentArgs, RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
             SendPaymentArgs, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee,
             TradePreimageFut, TradePreimageResult, TradePreimageValue, TransactionDetails, TransactionEnum,
-            TransactionErr, TransactionFut, TransactionType, TxFeeDetails, TxMarshalingErr,
+            TransactionErr, TransactionFut, TransactionResult, TransactionType, TxFeeDetails, TxMarshalingErr,
             UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
             ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput,
             VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherSearchForSwapTxSpendInput,
@@ -276,16 +276,16 @@ impl SwapOps for TendermintToken {
             .send_taker_spends_maker_payment(taker_spends_payment_args)
     }
 
-    fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs) -> TransactionFut {
-        Box::new(futures01::future::err(TransactionErr::Plain(
+    async fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::Plain(
             "Doesn't need transaction broadcast to be refunded".into(),
-        )))
+        ))
     }
 
-    fn send_maker_refunds_payment(&self, maker_refunds_payment_args: RefundPaymentArgs) -> TransactionFut {
-        Box::new(futures01::future::err(TransactionErr::Plain(
+    async fn send_maker_refunds_payment(&self, maker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::Plain(
             "Doesn't need transaction broadcast to be refunded".into(),
-        )))
+        ))
     }
 
     fn validate_fee(&self, validate_fee_args: ValidateFeeArgs) -> ValidatePaymentFut<()> {
