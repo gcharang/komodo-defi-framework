@@ -1,4 +1,5 @@
-# AtomicDEX-API WASM example
+# Examples
+## komodo-defi-framework WASM example
 
 **wasm_build** is an example of using **MarketMaker2** in webpages
 via [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly)
@@ -16,3 +17,19 @@ via [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly)
    Read more about
    [running a simple local HTTP server](https://developer.mozilla.org/en-US/docs/Learn/Common_questions/set_up_a_local_testing_server#running_a_simple_local_http_server)
 3. Open webpage in your browser http://localhost:8000/wasm_build/index.html
+
+## Listening event-stream from komodo-defi-framework
+
+1. Sart komodo-defi-framework with event streaming activated
+2. Change directory to `sse`.
+3. Run a local HTTP server
+    - if you use Python 3, run:
+   ```
+   python3 -m http.server 8000
+   ```
+    - if you use Python 2, run:
+   ```
+   python -m SimpleHTTPServer 8000
+   ```
+
+You should now be able to observe events from the komodo-defi-framework through the SSE.
