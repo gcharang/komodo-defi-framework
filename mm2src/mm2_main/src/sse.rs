@@ -19,6 +19,8 @@ pub async fn handle_sse_events(request: Request<Body>, ctx_h: u32) -> Result<Res
         events_param.split(',').map(|event| event.to_string()).collect()
     }
 
+    // This is only called once for per client on the initialization,
+    // meaning this is not a resource intensive computation.
     let ctx = match MmArc::from_ffi_handle(ctx_h) {
         Ok(ctx) => ctx,
         Err(err) => return handle_internal_error(err).await,
@@ -52,6 +54,7 @@ pub async fn handle_sse_events(request: Request<Body>, ctx_h: u32) -> Result<Res
     }
 }
 
+/// Fallback function for handling errors in SSE connections
 async fn handle_internal_error(message: String) -> Result<Response<Body>, Infallible> {
     let response = Response::builder()
         .status(500)
