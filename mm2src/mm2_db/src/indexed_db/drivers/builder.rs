@@ -130,7 +130,7 @@ impl IdbDatabaseBuilder {
         };
 
         // imo more clear / readable "if let" pattern version - as opposed to the "idiomatic" Rust version above
-        // (idiomatic Rust because favor extensive pattern matching () over if / else chains)
+        // (idiomatic Rust because we favor extensive pattern matching over if / else chains)
         // following commented-out code serves educational purposes - ca333
 
         // let indexed_db_result: Result<IdbFactory, InitDbError> = if let Some(window) = global.dyn_ref::<Window>() {
