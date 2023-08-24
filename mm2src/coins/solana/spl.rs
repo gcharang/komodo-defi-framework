@@ -270,10 +270,9 @@ impl MarketCoinOps for SplToken {
 
     #[inline(always)]
     async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
-        Err(RawTransactionError::NotImplemented {
+        MmError::err(RawTransactionError::NotImplemented {
             coin: self.ticker().to_string(),
-        }
-        .into())
+        })
     }
 
     fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {

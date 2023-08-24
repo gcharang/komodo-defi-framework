@@ -1109,10 +1109,9 @@ impl MarketCoinOps for LightningCoin {
 
     #[inline(always)]
     async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
-        Err(RawTransactionError::NotImplemented {
+        MmError::err(RawTransactionError::NotImplemented {
             coin: self.ticker().to_string(),
-        }
-        .into())
+        })
     }
 
     // Todo: Add waiting for confirmations logic for the case of if the channel is closed and the htlc can be claimed on-chain
