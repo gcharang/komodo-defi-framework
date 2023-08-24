@@ -1,13 +1,11 @@
-// TODO: handle this module inside the `mm2_event_stream` crate.
-
 use hyper::{body::Bytes, Body, Request, Response};
 use mm2_core::mm_ctx::MmArc;
 use std::convert::Infallible;
 
-pub(crate) const SSE_ENDPOINT: &str = "/event-stream";
+pub const SSE_ENDPOINT: &str = "/event-stream";
 
 /// Handles broadcasted messages from `mm2_event_stream` continuously.
-pub async fn handle_sse_events(request: Request<Body>, ctx_h: u32) -> Result<Response<Body>, Infallible> {
+pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<Body>, Infallible> {
     fn get_filtered_events(request: Request<Body>) -> Vec<String> {
         let query = request.uri().query().unwrap_or("");
         let events_param = query
@@ -16,7 +14,11 @@ pub async fn handle_sse_events(request: Request<Body>, ctx_h: u32) -> Result<Res
             .map(|param| param.trim_start_matches("filter="))
             .unwrap_or("");
 
-        events_param.split(',').map(|event| event.to_string()).collect()
+        if events_param.is_empty() {
+            Vec::new()
+        } else {
+            events_param.split(',').map(|event| event.to_string()).collect()
+        }
     }
 
     // This is only called once for per client on the initialization,
@@ -29,7 +31,7 @@ pub async fn handle_sse_events(request: Request<Body>, ctx_h: u32) -> Result<Res
     let filtered_events = get_filtered_events(request);
 
     let mut channel_controller = ctx.stream_channel_controller.clone();
-    let mut rx = channel_controller.create_channel(1); // TODO: read this from configuration
+    let mut rx = channel_controller.create_channel(4); // TODO: read this from configuration
     let body = Body::wrap_stream(async_stream::stream! {
         while let Some(msg) = rx.recv().await {
             // If there are no filtered events, that means we want to

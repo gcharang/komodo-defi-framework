@@ -13,7 +13,7 @@
       });
       source.onmessage = function (event) {
         var currentDatetime = new Date().toLocaleString();
-        var eventData = currentDatetime + ": " + event.data + "<br>";
+        var eventData = currentDatetime + ": " + event.data + "<hr/>";
         document.getElementById("result").insertAdjacentHTML("afterbegin", eventData);
       };
     } else {

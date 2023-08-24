@@ -24,7 +24,6 @@ default = []
 [dependencies]
 async-std = { version = "1.5", features = ["unstable"] }
 async-trait = "0.1"
-async-stream = "0.3"
 bitcrypto = { path = "../mm2_bitcoin/crypto" }
 blake2 = "0.10.6"
 bytes = "0.4"
@@ -58,7 +57,6 @@ lazy_static = "1.4"
 libc = "0.2"
 mm2_core = { path = "../mm2_core" }
 mm2_err_handle = { path = "../mm2_err_handle" }
-mm2_event_stream = { path = "../mm2_event_stream"}
 mm2_gui_storage = { path = "../mm2_gui_storage" }
 mm2_io = { path = "../mm2_io" }
 mm2-libp2p = { path = "../mm2_libp2p" }

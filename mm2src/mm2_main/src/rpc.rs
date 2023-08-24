@@ -21,7 +21,6 @@
 //
 
 use crate::mm2::rpc::rate_limiter::RateLimitError;
-use crate::mm2::rpc::sse::{handle_sse_events, SSE_ENDPOINT};
 use common::log::{error, info};
 use common::{err_to_rpc_json_string, err_tp_rpc_json, HttpStatusCode, APPLICATION_JSON};
 use derive_more::Display;
@@ -29,8 +28,6 @@ use futures::future::{join_all, FutureExt};
 use http::header::{HeaderValue, ACCESS_CONTROL_ALLOW_ORIGIN, CONTENT_TYPE};
 use http::request::Parts;
 use http::{Method, Request, Response, StatusCode};
-#[cfg(not(target_arch = "wasm32"))]
-use hyper::{self, Body, Server};
 use lazy_static::lazy_static;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
@@ -41,6 +38,11 @@ use serde_json::{self as json, Value as Json};
 use std::borrow::Cow;
 use std::net::SocketAddr;
 
+cfg_native! {
+    use hyper::{self, Body, Server};
+    use mm2_net::sse_handler::{handle_sse, SSE_ENDPOINT};
+}
+
 #[path = "rpc/dispatcher/dispatcher.rs"] mod dispatcher;
 #[path = "rpc/dispatcher/dispatcher_legacy.rs"]
 mod dispatcher_legacy;
@@ -48,7 +50,6 @@ mod dispatcher_legacy;
 #[path = "rpc/lp_commands/lp_commands_legacy.rs"]
 pub mod lp_commands_legacy;
 #[path = "rpc/rate_limiter.rs"] mod rate_limiter;
-mod sse;
 
 /// Lists the RPC method not requiring the "userpass" authentication.  
 /// None is also public to skip auth and display proper error in case of method is missing
@@ -358,7 +359,7 @@ pub extern "C" fn spawn_rpc(ctx_h: u32) {
     let make_svc_fut = move |remote_addr: SocketAddr| async move {
         Ok::<_, Infallible>(service_fn(move |req: Request<Body>| async move {
             if req.uri().path() == SSE_ENDPOINT {
-                let res = handle_sse_events(req, ctx_h).await?;
+                let res = handle_sse(req, ctx_h).await?;
                 return Ok::<_, Infallible>(res);
             }
 
