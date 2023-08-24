@@ -7,7 +7,7 @@ use mm2_err_handle::prelude::*;
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{IdbDatabase, IdbOpenDbRequest, IdbTransaction, IdbVersionChangeEvent};
+use web_sys::{IdbDatabase, IdbOpenDbRequest, IdbFactory, IdbTransaction, IdbVersionChangeEvent, Window, WorkerGlobalScope};
 
 pub type InitDbResult<T> = Result<T, MmError<InitDbError>>;
 
@@ -73,11 +73,60 @@ impl IdbDatabaseBuilder {
         let (table_names, on_upgrade_needed_handlers) = Self::tables_into_parts(self.tables)?;
         info!("Open '{}' database with tables: {:?}", self.db_name, table_names);
 
-        let window = web_sys::window().expect("!window");
-        let indexed_db = match window.indexed_db() {
-            Ok(Some(db)) => db,
-            Ok(None) => return MmError::err(InitDbError::NotSupported("Unknown error".to_owned())),
-            Err(e) => return MmError::err(InitDbError::NotSupported(stringify_js_error(&e))),
+        // get global context
+        let global = js_sys::global();
+        //
+        // // check if dyn casting to window type was successful 
+        // let indexed_db_factory: Option<IdbFactory> = if global.dyn_ref::<Window>().is_some() {
+        //     global.dyn_ref::<Window>().unwrap().indexed_db().unwrap_or(None)
+        // // check if worker context
+        // } else if global.dyn_ref::<WorkerGlobalScope>().is_some() {
+        //     global.dyn_ref::<WorkerGlobalScope>().unwrap().indexed_db().unwrap_or(None)
+        // } else {
+        //     None
+        // };
+        // // bind value based on pattern matching against idbfactory
+        // let indexed_db = match indexed_db_factory {
+        //     Ok(Some(db)) => db,
+        // // err handling
+        //     Ok(None) => {
+        //         if global.dyn_ref::<Window>().is_some() {
+        //             return MmError::err(InitDbError::NotSupported("IndexedDB not supported in window context".to_owned()));
+        //         } else if global.dyn_ref::<WorkerGlobalScope>().is_some() {
+        //             return MmError::err(InitDbError::NotSupported("IndexedDB not supported in worker context".to_owned()));
+        //         } else {
+        //             return MmError::err(InitDbError::UnexpectedState("rekt".to_owned()));
+        //         }
+        //     },
+        //     Err(e) => return MmError::err(InitDbError::NotSupported(stringify_js_error(&e)))
+        // };
+
+        // Using Result here (L111 - "cast check") for more precise error handling and messaging. 
+        // However, for performance and memory considerations, it might be worth evaluating the use of Option (as seen in commented-out code above). 
+        // Option<T> might have a slight edge in terms of memory consumption, especially if the error type E in Result<T, E> is large and/or complex.
+        // Moreover, in micro-benchmarks, Option<T> seems to demonstrate marginal performance advantages. 
+        // But these trade-offs were considered acceptable for the benefit of clearer error states in this context.
+        // Ref: https://users.rust-lang.org/t/performance-impact-of-result-vs-option/17783, etc.
+
+        let indexed_db_result: Result<IdbFactory, InitDbError> = if let Some(window) = global.dyn_ref::<Window>() {
+            match window.indexed_db() {
+                Ok(Some(db)) => Ok(db),
+                Ok(None) => Err(InitDbError::NotSupported("IndexedDB not supported in window context".to_owned())),
+                Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
+            }
+        } else if global.dyn_ref::<WorkerGlobalScope>().is_some() {
+            match global.dyn_ref::<WorkerGlobalScope>().unwrap().indexed_db() {
+                Ok(Some(db)) => Ok(db),
+                Ok(None) => Err(InitDbError::NotSupported("IndexedDB not supported in worker context".to_owned())),
+                Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
+            }
+        } else {
+            Err(InitDbError::UnexpectedState("Unknown context".to_owned()))
+        };
+        
+        let indexed_db = match indexed_db_result {
+            Ok(db) => db,
+            Err(e) => return MmError::err(e),
         };
 
         let db_request = match indexed_db.open_with_u32(&self.db_name, self.db_version) {

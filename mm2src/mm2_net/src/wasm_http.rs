@@ -145,17 +145,17 @@ impl FetchRequest {
     }
 
     async fn fetch(request: Self) -> FetchResult<JsResponse> {
-        let window = web_sys::window().expect("!window");
+        let global = js_sys::global();
         let uri = request.uri;
-
+    
         let mut req_init = RequestInit::new();
         req_init.method(request.method.as_str());
         req_init.body(request.body.map(RequestBody::into_js_value).as_ref());
-
+    
         if let Some(mode) = request.mode {
             req_init.mode(mode);
         }
-
+    
         let js_request = Request::new_with_str_and_init(&uri, &req_init)
             .map_to_mm(|e| SlurpError::Internal(stringify_js_error(&e)))?;
         for (hkey, hval) in request.headers {
@@ -164,14 +164,21 @@ impl FetchRequest {
                 .set(&hkey, &hval)
                 .map_to_mm(|e| SlurpError::Internal(stringify_js_error(&e)))?;
         }
-
-        let request_promise = window.fetch_with_request(&js_request);
+    
+        let request_promise = match global.dyn_into::<web_sys::Window>() {
+            Ok(window) => window.fetch_with_request(&js_request),
+            Err(global) => match global.dyn_into::<web_sys::WorkerGlobalScope>() {
+                Ok(worker) => worker.fetch_with_request(&js_request),
+                Err(_) => return Err(SlurpError::Internal("Unknown context: Neither window nor worker.".to_string()).into()),
+            },
+        };
 
         let future = JsFuture::from(request_promise);
         let resp_value = future.await.map_to_mm(|e| SlurpError::Transport {
             uri: uri.clone(),
             error: stringify_js_error(&e),
         })?;
+        
         let js_response: JsResponse = match resp_value.dyn_into() {
             Ok(res) => res,
             Err(origin_val) => {
@@ -179,7 +186,7 @@ impl FetchRequest {
                 return MmError::err(SlurpError::Internal(error));
             },
         };
-
+    
         let status_code = js_response.status();
         let status_code = match StatusCode::from_u16(status_code) {
             Ok(code) => code,
@@ -188,10 +195,10 @@ impl FetchRequest {
                 return MmError::err(SlurpError::ErrorDeserializing { uri, error });
             },
         };
-
+    
         Ok((status_code, js_response))
     }
-
+    
     /// The private non-Send method that is called in a spawned future.
     async fn fetch_str(request: Self) -> FetchResult<String> {
         let uri = request.uri.clone();
