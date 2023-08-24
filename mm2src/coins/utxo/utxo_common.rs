@@ -36,7 +36,7 @@ use chain::constants::SEQUENCE_FINAL;
 use chain::{OutPoint, TransactionInput, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
-use common::log::{error, warn};
+use common::log::{error, warn, debug};
 use crypto::{Bip32DerPathOps, Bip44Chain, RpcDerivationPath, StandardHDPath, StandardHDPathError};
 use futures::compat::Future01CompatExt;
 use futures::future::{FutureExt, TryFutureExt};
@@ -3029,12 +3029,12 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
             if prev_script.is_none() {
                 // get first previous utxo script assuming all are the same
                 let script_bytes = hex::decode(prev_utxo.clone().script_pub_key)
-                    .map_to_mm(|e| RawTransactionError::InvalidParam(e.to_string()))?;
+                    .map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
                 prev_script = Some(Script::from(script_bytes));
             }
 
             let prev_hash = hex::decode(prev_utxo.tx_hash.as_bytes())
-                .map_err(|e| RawTransactionError::InvalidParam(e.to_string()))?;
+                .map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
 
             unspents.push(UnspentInfo {
                 outpoint: OutPoint {
@@ -3070,6 +3070,7 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
         };
     }
 
+    // TODO: use zeroise for privkey
     let key_pair = coin.as_ref().priv_key_policy.key_pair_or_err().unwrap();
 
     let mut input_signer_incomplete = TransactionInputSigner::from(tx);
@@ -3082,7 +3083,7 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
         .build_unchecked()
         .await
         .map_err(|e| RawTransactionError::InvalidParam(e.to_string()))?;
-    log!("Unsigned tx = {:?} for signing", unsigned);
+    debug!("Unsigned tx = {:?} for signing", unsigned);
 
     let prev_script = prev_script
         .ok_or_else(|| RawTransactionError::NonExistentPrevOutputError(String::from("no previous script")))?;

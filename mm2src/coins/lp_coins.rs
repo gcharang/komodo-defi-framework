@@ -364,17 +364,16 @@ pub enum RawTransactionError {
 impl HttpStatusCode for RawTransactionError {
     fn status_code(&self) -> StatusCode {
         match self {
-            RawTransactionError::Transport(_) | RawTransactionError::InternalError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            },
+            RawTransactionError::Transport(_) 
+            | RawTransactionError::InternalError(_) 
+            | RawTransactionError::SigningError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             RawTransactionError::NoSuchCoin { .. }
             | RawTransactionError::InvalidHashError(_)
             | RawTransactionError::HashNotExist(_)
             | RawTransactionError::DecodeError(_)
             | RawTransactionError::InvalidParam(_)
-            | RawTransactionError::NonExistentPrevOutputError(_)
-            | RawTransactionError::SigningError(_)
-            | RawTransactionError::NotImplemented { .. } => StatusCode::BAD_REQUEST,
+            | RawTransactionError::NonExistentPrevOutputError(_) => StatusCode::BAD_REQUEST,
+            RawTransactionError::NotImplemented { .. } => StatusCode::NOT_IMPLEMENTED,
         }
     }
 }
@@ -431,27 +430,39 @@ pub struct RawTransactionRes {
     pub tx_hex: BytesJson,
 }
 
+/// Previous utxo transaction data for signing
 #[derive(Clone, Debug, Deserialize)]
 pub struct PrevTxns {
+    /// transaction hash
     pub tx_hash: String,
+    /// transaction output index
     pub index: u32,
+    /// transaction output script pub key
     pub script_pub_key: String,
+    /// redeem script for P2SH script pubkey
     pub redeem_script: Option<String>,
+    /// transaction output amount
     pub amount: BigDecimal,
 }
 
+/// RPC request with unsigned utxo transaction and params for signing 
 #[derive(Clone, Debug, Deserialize)]
 pub struct SignRawTransactionRequest {
+    /// coin ticker name
     pub coin: String,
+    /// unsigned utxo transaction in hex
     pub tx_hex: String,
+    /// optional data of previous transactions referred by unsigned transaction inputs 
     pub prev_txns: Option<Vec<PrevTxns>>,
-    pub sig_type: Option<String>,
-    pub branch_id: Option<u32>,
+    // TODO: add if needed:
+    // pub sighash_type: Option<String>, optional signature hash type, one of values: NONE, SINGLE, ALL, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY, ALL|ANYONECANPAY (if not set 'ALL' is used)
+    // pub branch_id: Option<u32>, zcash or komodo optional consensus branch id, used for signing transactions ahead of current height 
 }
 
+/// RPC response with signed utxo transaction 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SignRawTransactionResponse {
-    /// Raw bytes of signed transaction in hexadecimal string which is the response from the signrawtransaction request
+    /// Raw bytes of signed transaction in hexadecimal string which is the response from the sign_raw_transaction request
     pub tx_hex: BytesJson,
 }
 
@@ -1482,7 +1493,7 @@ pub trait MarketCoinOps {
     /// Receives raw transaction bytes as input and returns tx hash in hexadecimal format
     fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send>;
 
-    /// Signs raw transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
+    /// Signs raw utxo transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
     async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult;
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send>;
