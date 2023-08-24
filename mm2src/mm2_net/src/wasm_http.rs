@@ -87,10 +87,9 @@ impl FetchRequest {
 
     /// Set the mode to [`RequestMode::Cors`].
     /// The request is no-cors by default.
-    // TODO: set back to Cors - using no-cors mode for dev/debug
     // TODO: request change on server-side for debug via extension ID
     pub fn cors(mut self) -> FetchRequest {
-        self.mode = Some(RequestMode::NoCors);
+        self.mode = Some(RequestMode::Cors);
         self
     }
 
