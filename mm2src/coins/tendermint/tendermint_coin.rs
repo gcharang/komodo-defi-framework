@@ -2310,6 +2310,14 @@ impl MarketCoinOps for TendermintCoin {
             coin: self.ticker().to_string(),
         })
     }
+    
+    /// Stub for sign eth tx 
+    #[inline(always)]
+    async fn sign_eth_tx(&self, _args: &SignEthTransactionRequest) -> SignEthTransactionResult {
+        MmError::err(RawTransactionError::NotImplemented {
+            coin: self.ticker().to_string(),
+        })
+    }
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
         // Sanity check
