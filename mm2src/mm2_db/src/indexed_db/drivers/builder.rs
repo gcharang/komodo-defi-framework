@@ -7,7 +7,8 @@ use mm2_err_handle::prelude::*;
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{IdbDatabase, IdbOpenDbRequest, IdbFactory, IdbTransaction, IdbVersionChangeEvent, Window, WorkerGlobalScope};
+use web_sys::{IdbDatabase, IdbFactory, IdbOpenDbRequest, IdbTransaction, IdbVersionChangeEvent, Window,
+              WorkerGlobalScope};
 
 pub type InitDbResult<T> = Result<T, MmError<InitDbError>>;
 
@@ -76,7 +77,7 @@ impl IdbDatabaseBuilder {
         // get global context
         let global = js_sys::global();
         //
-        // // check if dyn casting to window type was successful 
+        // // check if dyn casting to window type was successful
         // let indexed_db_factory: Option<IdbFactory> = if global.dyn_ref::<Window>().is_some() {
         //     global.dyn_ref::<Window>().unwrap().indexed_db().unwrap_or(None)
         // // check if worker context
@@ -101,29 +102,57 @@ impl IdbDatabaseBuilder {
         //     Err(e) => return MmError::err(InitDbError::NotSupported(stringify_js_error(&e)))
         // };
 
-        // Using Result here (L111 - "cast check") for more precise error handling and messaging. 
-        // However, for performance and memory considerations, it might be worth evaluating the use of Option (as seen in commented-out code above). 
+        // Using Result here (L111 - "cast check") for more precise error handling and messaging.
+        // However, for performance and memory considerations, it might be worth evaluating the use of Option (as seen in commented-out code above).
         // Option<T> might have a slight edge in terms of memory consumption, especially if the error type E in Result<T, E> is large and/or complex.
-        // Moreover, in micro-benchmarks, Option<T> seems to demonstrate marginal performance advantages. 
+        // Moreover, in micro-benchmarks, Option<T> seems to demonstrate marginal performance advantages.
         // But these trade-offs were considered acceptable for the benefit of clearer error states in this context.
         // Ref: https://users.rust-lang.org/t/performance-impact-of-result-vs-option/17783, etc.
 
-        let indexed_db_result: Result<IdbFactory, InitDbError> = if let Some(window) = global.dyn_ref::<Window>() {
-            match window.indexed_db() {
+        let indexed_db_result: Result<IdbFactory, InitDbError> = match global.dyn_ref::<Window>() {
+            Some(window) => match window.indexed_db() {
                 Ok(Some(db)) => Ok(db),
-                Ok(None) => Err(InitDbError::NotSupported("IndexedDB not supported in window context".to_owned())),
+                Ok(None) => Err(InitDbError::NotSupported(
+                    "IndexedDB not supported in window context".to_owned(),
+                )),
                 Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
-            }
-        } else if global.dyn_ref::<WorkerGlobalScope>().is_some() {
-            match global.dyn_ref::<WorkerGlobalScope>().unwrap().indexed_db() {
-                Ok(Some(db)) => Ok(db),
-                Ok(None) => Err(InitDbError::NotSupported("IndexedDB not supported in worker context".to_owned())),
-                Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
-            }
-        } else {
-            Err(InitDbError::UnexpectedState("Unknown context".to_owned()))
+            },
+            None => match global.dyn_ref::<WorkerGlobalScope>() {
+                Some(worker) => match worker.indexed_db() {
+                    Ok(Some(db)) => Ok(db),
+                    Ok(None) => Err(InitDbError::NotSupported(
+                        "IndexedDB not supported in worker context".to_owned(),
+                    )),
+                    Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
+                },
+                None => Err(InitDbError::UnexpectedState("Unknown context".to_owned())),
+            },
         };
-        
+
+        // imo more clear / readable "if let" pattern version - as opposed to the "idiomatic" Rust version above
+        // (idiomatic Rust because favor extensive pattern matching () over if / else chains)
+        // following commented-out code serves educational purposes - ca333
+
+        // let indexed_db_result: Result<IdbFactory, InitDbError> = if let Some(window) = global.dyn_ref::<Window>() {
+        //     match window.indexed_db() {
+        //         Ok(Some(db)) => Ok(db),
+        //         Ok(None) => Err(InitDbError::NotSupported(
+        //             "IndexedDB not supported in window context".to_owned(),
+        //         )),
+        //         Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
+        //     }
+        // } else if let Some(worker) = global.dyn_ref::<WorkerGlobalScope>() {
+        //     match worker.indexed_db() {
+        //         Ok(Some(db)) => Ok(db),
+        //         Ok(None) => Err(InitDbError::NotSupported(
+        //             "IndexedDB not supported in worker context".to_owned(),
+        //         )),
+        //         Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
+        //     }
+        // } else {
+        //     Err(InitDbError::UnexpectedState("Unknown context".to_owned()))
+        // };
+
         let indexed_db = match indexed_db_result {
             Ok(db) => db,
             Err(e) => return MmError::err(e),
