@@ -1,4 +1,4 @@
-use crate::z_coin::storage::{BlockDbError, BlockDbImpl};
+use crate::z_coin::storage::{BlockDbError, BlockDbImpl, BlockSource};
 
 use async_trait::async_trait;
 use db_common::sqlite::rusqlite::{params, Connection};
@@ -10,8 +10,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
-use zcash_client_backend::with_async::data_api::BlockSource;
-use zcash_client_sqlite::error::{SqliteClientError as ZcashClientError, SqliteClientError};
+use zcash_client_sqlite::error::SqliteClientError as ZcashClientError;
 use zcash_client_sqlite::NoteId;
 use zcash_primitives::consensus::BlockHeight;
 
@@ -20,20 +19,20 @@ struct CompactBlockRow {
     data: Vec<u8>,
 }
 
-impl From<SqliteClientError> for BlockDbError {
-    fn from(value: SqliteClientError) -> Self { Self::SqliteError(value) }
+impl From<ZcashClientError> for BlockDbError {
+    fn from(value: ZcashClientError) -> Self { Self::SqliteError(value) }
 }
 
 impl From<ChainError<NoteId>> for BlockDbError {
-    fn from(value: ChainError<NoteId>) -> Self { Self::SqliteError(SqliteClientError::from(value)) }
+    fn from(value: ChainError<NoteId>) -> Self { Self::SqliteError(ZcashClientError::from(value)) }
 }
 
 impl BlockDbImpl {
     #[cfg(all(not(test)))]
     pub async fn new(_ctx: MmArc, ticker: String, path: Option<impl AsRef<Path>>) -> MmResult<Self, BlockDbError> {
         let conn =
-            Connection::open(path.unwrap()).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
-        run_optimization_pragmas(&conn).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
+            Connection::open(path.unwrap()).map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
+        run_optimization_pragmas(&conn).map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
@@ -41,7 +40,7 @@ impl BlockDbImpl {
         )",
             [],
         )
-        .map_to_mm(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
+        .map_to_mm(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
 
         Ok(Self {
             db: Arc::new(Mutex::new(conn)),
@@ -55,7 +54,7 @@ impl BlockDbImpl {
         let conn = ctx.sqlite_connection.clone_or(conn);
         let clone_db = conn.clone();
         let clone_db = clone_db.lock().unwrap();
-        run_optimization_pragmas(&clone_db).map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?;
+        run_optimization_pragmas(&clone_db).map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
         clone_db
             .execute(
                 "CREATE TABLE IF NOT EXISTS compactblocks (
@@ -64,7 +63,7 @@ impl BlockDbImpl {
         )",
                 [],
             )
-            .map_to_mm(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
+            .map_to_mm(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
             .unwrap();
 
         Ok(BlockDbImpl { db: conn, ticker })
@@ -85,9 +84,9 @@ impl BlockDbImpl {
             .lock()
             .unwrap()
             .prepare("INSERT INTO compactblocks (height, data) VALUES (?, ?)")
-            .map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))?
+            .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?
             .execute(params![height, cb_bytes])
-            .map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
+            .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
     }
 
     pub(crate) async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
@@ -95,7 +94,7 @@ impl BlockDbImpl {
             .lock()
             .unwrap()
             .execute("DELETE from compactblocks WHERE height > ?1", [height])
-            .map_err(|err| BlockDbError::SqliteError(SqliteClientError::from(err)))
+            .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
     }
 
     pub(crate) async fn with_blocks<F>(
@@ -103,9 +102,9 @@ impl BlockDbImpl {
         from_height: BlockHeight,
         limit: Option<u32>,
         mut with_row: F,
-    ) -> Result<(), SqliteClientError>
+    ) -> Result<(), ZcashClientError>
     where
-        F: FnMut(CompactBlock) -> Result<(), SqliteClientError>,
+        F: FnMut(CompactBlock) -> Result<(), ZcashClientError>,
     {
         // Fetch the CompactBlocks we need to scan
         let stmt_blocks = self.db.lock().unwrap();
@@ -129,7 +128,7 @@ impl BlockDbImpl {
             let block = CompactBlock::parse_from_bytes(&cbr.data).map_err(ChainError::from)?;
 
             if block.height() != cbr.height {
-                return Err(SqliteClientError::CorruptedData(format!(
+                return Err(ZcashClientError::CorruptedData(format!(
                     "Block height {} did not match row's height field value {}",
                     block.height(),
                     cbr.height
@@ -145,7 +144,7 @@ impl BlockDbImpl {
 
 #[async_trait(?Send)]
 impl BlockSource for BlockDbImpl {
-    type Error = SqliteClientError;
+    type Error = ZcashClientError;
 
     async fn with_blocks<F>(
         &self,

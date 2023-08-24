@@ -1,6 +1,6 @@
 use super::{z_coin_errors::*, ZcoinConsensusParams};
 use crate::utxo::rpc_clients::NativeClient;
-use crate::z_coin::storage::{BlockDbImpl, WalletDbShared};
+use crate::z_coin::storage::{scan_cached_blocks, validate_chain, BlockDbImpl, WalletDbShared};
 use async_trait::async_trait;
 use common::executor::{spawn_abortable, AbortOnDropHandle};
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender};
@@ -10,7 +10,6 @@ use futures::StreamExt;
 use mm2_err_handle::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use std::sync::Mutex as MutexStd;
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 
@@ -38,7 +37,6 @@ cfg_native!(
     use tokio::task::block_in_place;
     use tonic::transport::{Channel, ClientTlsConfig};
     use zcash_client_backend::data_api::{WalletRead, WalletWrite};
-    use zcash_client_backend::with_async::data_api::{scan_cached_blocks, validate_chain};
     use zcash_client_backend::data_api::error::Error as ChainError;
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::zip32::ExtendedFullViewingKey;
@@ -591,15 +589,13 @@ impl SaplingSyncLoopHandle {
         // required to avoid immutable borrow of self
         let wallet_db_arc = self.wallet_db.clone();
         let wallet_guard = wallet_db_arc.db.lock();
-        let wallet_ops = Arc::new(MutexStd::new(
-            wallet_guard.get_update_ops().expect("get_update_ops always returns Ok"),
-        ));
-        let mut wallet_ops_lock = wallet_ops.lock().unwrap();
+
+        let mut wallet_ops_guard = wallet_guard.get_update_ops().expect("get_update_ops always returns Ok");
 
         if let Err(e) = block_on(validate_chain(
             &self.consensus_params,
             &self.blocks_db,
-            wallet_ops_lock.get_max_height_hash()?,
+            wallet_ops_guard.get_max_height_hash()?,
         )) {
             match e {
                 ZcashClientError::BackendError(ChainError::InvalidChain(lower_bound, _)) => {
@@ -608,7 +604,7 @@ impl SaplingSyncLoopHandle {
                     } else {
                         BlockHeight::from_u32(0)
                     };
-                    wallet_ops_lock.rewind_to_height(rewind_height)?;
+                    wallet_ops_guard.rewind_to_height(rewind_height)?;
                     block_on(self.blocks_db.rewind_to_height(rewind_height.into()))?;
                 },
                 e => return MmError::err(BlockDbError::SqliteError(e)),
@@ -618,7 +614,7 @@ impl SaplingSyncLoopHandle {
         let latest_block_height = block_on(self.blocks_db.get_latest_block())?;
         let current_block = BlockHeight::from_u32(latest_block_height);
         loop {
-            match wallet_ops_lock.block_height_extrema()? {
+            match wallet_ops_guard.block_height_extrema()?.clone() {
                 Some((_, max_in_wallet)) => {
                     if max_in_wallet >= current_block {
                         break;
@@ -629,10 +625,12 @@ impl SaplingSyncLoopHandle {
                 None => self.notify_building_wallet_db(0, current_block.into()),
             }
 
+            let wallet_ops_guard = wallet_guard.get_update_ops().expect("get_update_ops always returns Ok");
+            let wallet_ops_guard = Arc::new(AsyncMutex::new(wallet_ops_guard));
             block_on(scan_cached_blocks(
                 &self.consensus_params.clone(),
                 &self.blocks_db,
-                wallet_ops.clone(),
+                wallet_ops_guard,
                 Some(self.scan_blocks_per_iteration),
             ))?;
             if self.scan_interval_ms > 0 {
