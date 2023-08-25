@@ -392,7 +392,7 @@ fn payment_instructions_row(
     let writer: &mut dyn Write = &mut buff;
     match payment_instrs {
         PaymentInstructions::Lightning(invoice) => {
-            writeln_field(writer, "Lightning: {:?}", invoice.to_string(), ZERO_INDENT)
+            writeln_field(writer, "Lightning: {}", invoice.to_string(), ZERO_INDENT)
         },
         PaymentInstructions::WatcherReward(reward) => writeln_field(
             writer,
