@@ -1,6 +1,6 @@
 use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
 use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
-use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumRpcRequest, EstimateFeeMethod,
+use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumConnSettings, EstimateFeeMethod, Priority,
                                UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
@@ -15,7 +15,7 @@ use chain::TxHashAlgo;
 use common::custom_futures::repeatable::{Ready, Retry};
 use common::executor::{abortable_queue::AbortableQueue, AbortSettings, AbortableSystem, AbortedError, SpawnAbortable,
                        Timer};
-use common::log::{error, info, LogOnError};
+use common::log::{debug, error, info, LogOnError};
 use common::small_rng;
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, Secp256k1Secret,
              StandardHDPathError, StandardHDPathToCoin};
@@ -63,7 +63,7 @@ pub enum UtxoCoinBuildError {
         seconds
     )]
     FailedToConnectToElectrums {
-        electrum_servers: Vec<ElectrumRpcRequest>,
+        electrum_servers: Vec<ElectrumConnSettings>,
         seconds: u64,
     },
     ElectrumProtocolVersionCheckError(String),
@@ -470,7 +470,7 @@ pub trait UtxoCoinBuilderCommonOps {
         &self,
         abortable_system: AbortableQueue,
         args: ElectrumBuilderArgs,
-        mut servers: Vec<ElectrumRpcRequest>,
+        mut servers: Vec<ElectrumConnSettings>,
     ) -> UtxoCoinBuildResult<ElectrumClient> {
         let (on_event_tx, on_event_rx) = unbounded();
         let ticker = self.ticker().to_owned();
@@ -493,9 +493,16 @@ pub trait UtxoCoinBuilderCommonOps {
             block_headers_storage.init().await?;
         }
 
+        // Sort them by priority
         let mut rng = small_rng();
         servers.as_mut_slice().shuffle(&mut rng);
 
+        let s = servers.clone();
+        let (primary, backup): (Vec<_>, Vec<_>) = s.iter().partition(|s| matches!(s.priority, Priority::Primary));
+        debug!("Primary electrum nodes to connect: {:?}", primary);
+        debug!("Backup electrum nodes to connect: {:?}", backup);
+
+        // Client can be created with servers
         let client = ElectrumClientImpl::new(
             ticker,
             event_handlers,
@@ -503,16 +510,33 @@ pub trait UtxoCoinBuilderCommonOps {
             abortable_system,
             args.negotiate_version,
         );
-        for server in servers.iter() {
-            match client.add_server(server).await {
-                Ok(_) => (),
-                Err(e) => error!("Error {:?} connecting to {:?}. Address won't be used", e, server),
+
+        let mut nodes_to_bring_back = 0_usize;
+        for node in primary {
+            debug!("Connecting to the primary node: {}", node.url);
+            if let Err(_) = client.connect(node).await {
+                nodes_to_bring_back += 1;
+            } else {
+                break;
             };
         }
 
+        //create connections for a address set
+        // for server in servers.iter() {
+        //     match client.add_server(server).await {
+        //         Ok(_) => (),
+        //         Err(e) => error!("Error {:?} connecting to {:?}. Address won't be used", e, server),
+        //     };
+        // }
+
+        // client should be started first, using timers is very bad I should get rid of timers, i think the condition should be used
+        // just connect and timer simultaneously
+        // connect with a timeout :D
+
+        // to be gotten rid of
         let mut attempts = 0i32;
         while !client.is_connected().await {
-            if attempts >= 10 {
+            if attempts >= 1000 {
                 return MmError::err(UtxoCoinBuildError::FailedToConnectToElectrums {
                     electrum_servers: servers.clone(),
                     seconds: 5,
@@ -522,7 +546,6 @@ pub trait UtxoCoinBuilderCommonOps {
             Timer::sleep(0.5).await;
             attempts += 1;
         }
-
         let client = Arc::new(client);
 
         let spawner = client.spawner();
@@ -720,7 +743,7 @@ fn read_native_mode_conf(
 fn spawn_electrum_ping_loop<Spawner: SpawnAbortable>(
     spawner: &Spawner,
     weak_client: Weak<ElectrumClientImpl>,
-    servers: Vec<ElectrumRpcRequest>,
+    servers: Vec<ElectrumConnSettings>,
 ) {
     let msg_on_stopped = format!("Electrum servers {servers:?} ping loop stopped");
     let fut = async move {
@@ -782,6 +805,7 @@ async fn check_electrum_server_version(
     if let Some(c) = weak_client.upgrade() {
         let client = ElectrumClient(c);
         let available_protocols = client.protocol_version();
+        debug!("Check version, supported protocols: {:?}", available_protocols);
         let version = match client
             .server_version(&electrum_addr, &client_name, available_protocols)
             .compat()
@@ -796,7 +820,7 @@ async fn check_electrum_server_version(
                 return;
             },
         };
-
+        debug!("Available protocols: {:?}", available_protocols);
         // check if the version is allowed
         let actual_version = match version.protocol_version.parse::<f32>() {
             Ok(v) => v,
@@ -829,7 +853,7 @@ async fn check_electrum_server_version(
 /// Wait until the protocol version of at least one client's Electrum is checked.
 async fn wait_for_protocol_version_checked(client: &ElectrumClientImpl) -> Result<(), String> {
     repeatable!(async {
-        if client.count_connections().await == 0 {
+        if !client.is_connected().await {
             // All of the connections were removed because of server.version checking
             return Ready(ERR!(
                 "There are no Electrums with the required protocol version {:?}",

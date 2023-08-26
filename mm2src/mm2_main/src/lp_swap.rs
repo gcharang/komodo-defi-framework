@@ -1419,7 +1419,7 @@ pub struct SwapPubkeys {
 mod lp_swap_tests {
     use super::*;
     use crate::mm2::lp_native_dex::{fix_directories, init_p2p};
-    use coins::utxo::rpc_clients::ElectrumRpcRequest;
+    use coins::utxo::rpc_clients::{ElectrumConnSettings, Priority};
     use coins::utxo::utxo_standard::utxo_standard_coin_with_priv_key;
     use coins::utxo::{UtxoActivationParams, UtxoRpcMode};
     use coins::MarketCoinOps;
@@ -1786,10 +1786,12 @@ mod lp_swap_tests {
             mode: UtxoRpcMode::Electrum {
                 servers: electrums
                     .iter()
-                    .map(|url| ElectrumRpcRequest {
+                    .map(|url| ElectrumConnSettings {
                         url: url.to_string(),
                         protocol: Default::default(),
                         disable_cert_verification: false,
+                        priority: Priority::default(),
+                        timeout_sec: None,
                     })
                     .collect(),
             },

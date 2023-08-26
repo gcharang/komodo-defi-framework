@@ -14,7 +14,7 @@ use common::jsonrpc_client::{JsonRpcBatchClient, JsonRpcBatchResponse, JsonRpcCl
                              JsonRpcId, JsonRpcMultiClient, JsonRpcRemoteAddr, JsonRpcRequest, JsonRpcRequestEnum,
                              JsonRpcResponse, JsonRpcResponseEnum, JsonRpcResponseFut, RpcRes};
 use common::log::LogOnError;
-use common::log::{error, info, warn};
+use common::log::{debug, error, info, warn};
 use common::{median, now_float, now_ms, now_sec, OrdRange};
 use derive_more::Display;
 use futures::channel::oneshot as async_oneshot;
@@ -40,6 +40,7 @@ use serialization::{deserialize, serialize, serialize_with_flags, CoinVariant, C
 use sha2::{Digest, Sha256};
 use spv_validation::helpers_validation::SPVError;
 use spv_validation::storage::BlockHeaderStorageOps;
+use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -51,6 +52,9 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Duration;
+
+use tokio::sync::Notify;
+use tokio::time::sleep;
 
 cfg_native! {
     use futures::future::Either;
@@ -73,6 +77,7 @@ cfg_native! {
 pub const NO_TX_ERROR_CODE: &str = "'code': -5";
 const RESPONSE_TOO_LARGE_CODE: i16 = -32600;
 const TX_NOT_FOUND_RETRIES: u8 = 10;
+const DEFAULT_CONN_TIMEOUT_SEC: u64 = 5;
 
 pub type AddressesByLabelResult = HashMap<String, AddressPurpose>;
 pub type JsonRpcPendingRequestsShared = Arc<AsyncMutex<JsonRpcPendingRequests>>;
@@ -1395,12 +1400,27 @@ pub struct ElectrumProtocolVersion {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 /// Electrum request RPC representation
-pub struct ElectrumRpcRequest {
+pub struct ElectrumConnSettings {
     pub url: String,
     #[serde(default)]
     pub protocol: ElectrumProtocol,
     #[serde(default)]
     pub disable_cert_verification: bool,
+    #[serde(default)]
+    pub priority: Priority,
+    pub timeout_sec: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Priority {
+    Primary,
+    Secondary,
+    Tertiary,
+}
+
+impl Default for Priority {
+    fn default() -> Self { Priority::Secondary }
 }
 
 /// Electrum client configuration
@@ -1435,11 +1455,11 @@ fn addr_to_socket_addr(input: &str) -> Result<SocketAddr, String> {
 /// Attempts to process the request (parse url, etc), build up the config and create new electrum connection
 /// The function takes `abortable_system` that will be used to spawn Electrum's related futures.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn spawn_electrum(
-    req: &ElectrumRpcRequest,
+fn spawn_electrum(
+    req: &ElectrumConnSettings,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
     abortable_system: AbortableQueue,
-) -> Result<ElectrumConnection, String> {
+) -> Result<(ElectrumConnection, Arc<Notify>), String> {
     let config = match req.protocol {
         ElectrumProtocol::TCP => ElectrumConfig::TCP,
         ElectrumProtocol::SSL => {
@@ -1447,8 +1467,6 @@ pub fn spawn_electrum(
             let host = uri
                 .host()
                 .ok_or(ERRL!("Couldn't retrieve host from addr {}", req.url))?;
-
-            // check the dns name
             try_s!(DnsNameRef::try_from_ascii_str(host));
 
             ElectrumConfig::SSL {
@@ -1472,8 +1490,8 @@ pub fn spawn_electrum(
 /// Attempts to process the request (parse url, etc), build up the config and create new electrum connection
 /// The function takes `abortable_system` that will be used to spawn Electrum's related futures.
 #[cfg(target_arch = "wasm32")]
-pub fn spawn_electrum(
-    req: &ElectrumRpcRequest,
+fn spawn_electrum(
+    req: &ElectrumConnSettings,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
     abortable_system: AbortableQueue,
 ) -> Result<ElectrumConnection, String> {
@@ -1507,6 +1525,7 @@ pub fn spawn_electrum(
 }
 
 /// Represents the active Electrum connection to selected address
+#[derive(Debug)]
 pub struct ElectrumConnection {
     /// The client connected to this SocketAddr
     addr: String,
@@ -1598,6 +1617,7 @@ impl<K: Clone + Eq + std::hash::Hash, V: Clone> ConcurrentRequestMap<K, V> {
 #[derive(Debug)]
 pub struct ElectrumClientImpl {
     coin_ticker: String,
+    connection: AsyncMutex<Option<ElectrumConnection>>,
     connections: AsyncMutex<Vec<ElectrumConnection>>,
     next_id: AtomicU64,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
@@ -1617,49 +1637,79 @@ async fn electrum_request_multi(
     client: ElectrumClient,
     request: JsonRpcRequestEnum,
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
+    // TODO: this method is getting redundant
     let mut futures = vec![];
-    let connections = client.connections.lock().await;
-    for (i, connection) in connections.iter().enumerate() {
-        if client.negotiate_version && connection.protocol_version.lock().await.is_none() {
-            continue;
-        }
 
-        let connection_addr = connection.addr.clone();
-        let json = json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string()))?;
-        if let Some(tx) = &*connection.tx.lock().await {
-            let fut = electrum_request(
-                json,
-                request.rpc_id(),
-                tx.clone(),
-                connection.responses.clone(),
-                ELECTRUM_TIMEOUT / (connections.len() - i) as u64,
-            )
-            .map(|response| (JsonRpcRemoteAddr(connection_addr), response));
-            futures.push(fut)
-        }
-    }
-    drop(connections);
-
-    if futures.is_empty() {
+    let bind = client.connection.lock().await;
+    let Some(connection) = bind.as_ref() else {
         return Err(JsonRpcErrorType::Transport(
             "All electrums are currently disconnected".to_string(),
         ));
+    };
+
+    if client.negotiate_version && connection.protocol_version.lock().await.is_none() {
+        return Err(JsonRpcErrorType::Transport(
+            "Protocol version is not negotiated".to_string(),
+        ));
     }
 
-    if let JsonRpcRequestEnum::Single(single) = &request {
-        if single.method == "server.ping" {
-            // server.ping must be sent to all servers to keep all connections alive
-            return select_ok(futures).map(|(result, _)| result).compat().await;
-        }
-    }
+    let connection_addr = connection.addr.clone();
+    let json = json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string()))?;
 
-    let (res, no_of_failed_requests) = select_ok_sequential(futures)
-        .compat()
-        .await
-        .map_err(|e| JsonRpcErrorType::Transport(format!("{:?}", e)))?;
-    client.rotate_servers(no_of_failed_requests).await;
+    let Some(tx) = &*connection.tx.lock().await else {
+         return Err(JsonRpcErrorType::Transport(
+            "Sender is not set".to_string()
+        ))
+    };
+
+    let fut = electrum_request(
+        json,
+        request.rpc_id(),
+        tx.clone(),
+        connection.responses.clone(),
+        ELECTRUM_TIMEOUT_SEC,
+    )
+    .map(|response| (JsonRpcRemoteAddr(connection_addr), response));
+
+    //
+    //
+    // if let JsonRpcRequestEnum::Single(single) = &request {
+    //     if single.method == "server.ping" {
+    //         // server.ping must be sent to all servers to keep all connections alive
+    //         return select_ok(futures).map(|(result, _)| result).compat().await;
+    //     }
+    // }
+    //
+    // let (res, no_of_failed_requests) = select_ok_sequential(futures)
+    //     .compat()
+    //     .await
+    //     .map_err(|e| JsonRpcErrorType::Transport(format!("{:?}", e)))?;
+    // //client.rotate_servers(no_of_failed_requests).await; TODO: @rozhkov
 
     Ok(res)
+
+    // let connections = client.connections.lock().await;
+    // for (i, connection) in connections.iter().enumerate() {
+    //     if client.negotiate_version && connection.protocol_version.lock().await.is_none() {
+    //         continue;
+    //     }
+    //
+    //     let connection_addr = connection.addr.clone();
+    //     let json = json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string()))?;
+    //     if let Some(tx) = &*connection.tx.lock().await {
+    //         let fut = electrum_request(
+    //             json,
+    //             request.rpc_id(),
+    //             tx.clone(),
+    //             connection.responses.clone(),
+    //             ELECTRUM_TIMEOUT_SEC / (connections.len() - i) as u64,
+    //         )
+    //         .map(|response| (JsonRpcRemoteAddr(connection_addr), response));
+    //         futures.push(fut)
+    //     }
+    // }
+    // drop(connections);
+    //
 }
 
 async fn electrum_request_to(
@@ -1668,10 +1718,14 @@ async fn electrum_request_to(
     to_addr: String,
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
     let (tx, responses) = {
-        let connections = client.connections.lock().await;
-        let connection = connections
-            .iter()
-            .find(|c| c.addr == to_addr)
+        // let connections = client.connections.lock().await;
+        // let connection = connections
+        //     .iter()
+        //     .find(|c| c.addr == to_addr)
+        //     .ok_or_else()?;
+        let conn_opt: futures::lock::MutexGuard<Option<ElectrumConnection>> = client.connection.lock().await;
+        let connection: &ElectrumConnection = conn_opt
+            .as_ref()
             .ok_or_else(|| JsonRpcErrorType::Internal(format!("Unknown destination address {}", to_addr)))?;
         let responses = connection.responses.clone();
         let tx = {
@@ -1688,7 +1742,7 @@ async fn electrum_request_to(
         (tx, responses)
     };
     let json = json::to_string(&request).map_err(|err| JsonRpcErrorType::InvalidRequest(err.to_string()))?;
-    let response = electrum_request(json, request.rpc_id(), tx, responses, ELECTRUM_TIMEOUT)
+    let response = electrum_request(json, request.rpc_id(), tx, responses, ELECTRUM_TIMEOUT_SEC)
         .compat()
         .await?;
     Ok((JsonRpcRemoteAddr(to_addr.to_owned()), response))
@@ -1697,11 +1751,27 @@ async fn electrum_request_to(
 impl ElectrumClientImpl {
     pub fn spawner(&self) -> abortable_queue::WeakSpawner { self.abortable_system.weak_spawner() }
 
-    /// Create an Electrum connection and spawn a green thread actor to handle it.
-    pub async fn add_server(&self, req: &ElectrumRpcRequest) -> Result<(), String> {
+    pub async fn add_servers(&self, _: Vec<ElectrumConnSettings>) {}
+
+    pub async fn connect(&self, conn_settings: &ElectrumConnSettings) -> Result<(), String> {
         let subsystem = try_s!(self.abortable_system.create_subsystem());
-        let connection = try_s!(spawn_electrum(req, self.event_handlers.clone(), subsystem));
-        self.connections.lock().await.push(connection);
+        let (conn, notify) = try_s!(spawn_electrum(conn_settings, self.event_handlers.clone(), subsystem));
+        let timeout = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
+        tokio::select! {
+            _ = sleep(Duration::from_secs(timeout)) => Err(format!("Failed to connect to: {}, timed out", conn.addr)),
+            _ = notify.notified() => {
+                debug!("Notified, connected to: {}", conn.addr);
+                self.connection.lock().await.replace(conn);
+                Ok(())
+            }
+        }
+    }
+
+    /// Create an Electrum connection and spawn a green thread actor to handle it.
+    pub async fn add_server(&self, _req: &ElectrumConnSettings) -> Result<(), String> {
+        // let subsystem = try_s!(self.abortable_system.create_subsystem());
+        // let connection = try_s!(spawn_electrum(req, self.event_handlers.clone(), subsystem));
+        // self.connections.lock().await.push(connection);
         Ok(())
     }
 
@@ -1726,10 +1796,8 @@ impl ElectrumClientImpl {
 
     /// Check if one of the spawned connections is connected.
     pub async fn is_connected(&self) -> bool {
-        for connection in self.connections.lock().await.iter() {
-            if connection.is_connected().await {
-                return true;
-            }
+        if let Some(conn) = self.connection.lock().await.as_ref() {
+            return conn.is_connected().await;
         }
         false
     }
@@ -1737,11 +1805,13 @@ impl ElectrumClientImpl {
     /// Check if all connections have been removed.
     pub async fn is_connections_pool_empty(&self) -> bool { self.connections.lock().await.is_empty() }
 
-    pub async fn count_connections(&self) -> usize { self.connections.lock().await.len() }
+    // pub async fn count_connections(&self) -> usize {
+    //     if self.connection.lock().as_ref().is_some() {1} e
+    // }
 
     /// Check if the protocol version was checked for one of the spawned connections.
     pub async fn is_protocol_version_checked(&self) -> bool {
-        for connection in self.connections.lock().await.iter() {
+        if let Some(connection) = self.connection.lock().await.as_ref() {
             if connection.protocol_version.lock().await.is_some() {
                 return true;
             }
@@ -1751,11 +1821,8 @@ impl ElectrumClientImpl {
 
     /// Set the protocol version for the specified server.
     pub async fn set_protocol_version(&self, server_addr: &str, version: f32) -> Result<(), String> {
-        let connections = self.connections.lock().await;
-        let con = connections
-            .iter()
-            .find(|con| con.addr == server_addr)
-            .ok_or(ERRL!("Unknown electrum address {}", server_addr))?;
+        let bind = self.connection.lock().await;
+        let con = bind.as_ref().ok_or(ERRL!("Unknown electrum address {}", server_addr))?;
         con.set_protocol_version(version).await;
         Ok(())
     }
@@ -2400,6 +2467,7 @@ impl ElectrumClientImpl {
         let protocol_version = OrdRange::new(1.2, 1.4).unwrap();
         ElectrumClientImpl {
             coin_ticker,
+            connection: AsyncMutex::default(),
             connections: AsyncMutex::new(vec![]),
             next_id: 0.into(),
             event_handlers,
@@ -2490,6 +2558,8 @@ async fn electrum_process_json(raw_json: Json, arc: &JsonRpcPendingRequestsShare
 async fn electrum_process_chunk(chunk: &[u8], arc: &JsonRpcPendingRequestsShared) {
     // we should split the received chunk because we can get several responses in 1 chunk.
     let split = chunk.split(|item| *item == b'\n');
+    // TODO: what if data is not completely received? In this case data could be lost - it presumably should be fixed
+
     for chunk in split {
         // split returns empty slice if it ends with separator which is our case
         if !chunk.is_empty() {
@@ -2576,16 +2646,16 @@ impl AsyncWrite for ElectrumStream {
     }
 }
 
-const ELECTRUM_TIMEOUT: u64 = 60;
+const ELECTRUM_TIMEOUT_SEC: u64 = 60;
 
 async fn electrum_last_chunk_loop(last_chunk: Arc<AtomicU64>) {
     loop {
-        Timer::sleep(ELECTRUM_TIMEOUT as f64).await;
-        let last = (last_chunk.load(AtomicOrdering::Relaxed) / 1000) as f64;
-        if now_float() - last > ELECTRUM_TIMEOUT as f64 {
+        Timer::sleep(ELECTRUM_TIMEOUT_SEC as f64).await;
+        let last_sec = (last_chunk.load(AtomicOrdering::Relaxed) / 1000) as f64;
+        if now_float() - last_sec > ELECTRUM_TIMEOUT_SEC as f64 {
             warn!(
                 "Didn't receive any data since {}. Shutting down the connection.",
-                last as i64
+                last_sec as i64
             );
             break;
         }
@@ -2630,6 +2700,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
     connection_tx: Arc<AsyncMutex<Option<mpsc::Sender<Vec<u8>>>>>,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
     _spawner: Spawner,
+    notifier: Arc<Notify>,
 ) -> Result<(), ()> {
     let delay = Arc::new(AtomicU64::new(0));
 
@@ -2666,11 +2737,14 @@ async fn connect_loop<Spawner: SpawnFuture>(
         let stream = try_loop!(connect_f.await, addr, delay);
         try_loop!(stream.as_ref().set_nodelay(true), addr, delay);
         info!("Electrum client connected to {}", addr);
+        // What? It should not be in charge of it's handler )
+        notifier.notify_one();
         try_loop!(event_handlers.on_connected(addr.clone()), addr, delay);
         let last_chunk = Arc::new(AtomicU64::new(now_ms()));
         let mut last_chunk_f = electrum_last_chunk_loop(last_chunk.clone()).boxed().fuse();
 
         let (tx, rx) = mpsc::channel(0);
+        // the place connection is getting connected
         *connection_tx.lock().await = Some(tx);
         let rx = rx_to_stream(rx).inspect(|data| {
             // measure the length of each sent packet
@@ -2856,11 +2930,12 @@ fn electrum_connect(
     config: ElectrumConfig,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
     abortable_system: AbortableQueue,
-) -> ElectrumConnection {
+) -> (ElectrumConnection, Arc<Notify>) {
     let responses = Arc::new(AsyncMutex::new(JsonRpcPendingRequests::default()));
     let tx = Arc::new(AsyncMutex::new(None));
 
     let spawner = abortable_system.weak_spawner();
+    let notifier = Arc::new(Notify::new());
     let fut = connect_loop(
         config.clone(),
         addr.clone(),
@@ -2868,18 +2943,22 @@ fn electrum_connect(
         tx.clone(),
         event_handlers,
         spawner.clone(),
+        notifier.clone(),
     )
     .then(|_| futures::future::ready(()));
 
     spawner.spawn(fut);
-    ElectrumConnection {
-        addr,
-        config,
-        tx,
-        responses,
-        protocol_version: AsyncMutex::new(None),
-        _abortable_system: abortable_system,
-    }
+    (
+        ElectrumConnection {
+            addr,
+            config,
+            tx,
+            responses,
+            protocol_version: AsyncMutex::new(None),
+            _abortable_system: abortable_system,
+        },
+        notifier,
+    )
 }
 
 /// # Important

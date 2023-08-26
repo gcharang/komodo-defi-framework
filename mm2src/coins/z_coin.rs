@@ -3,7 +3,7 @@ use crate::coin_errors::MyAddressError;
 use crate::my_tx_history_v2::{MyTxHistoryErrorV2, MyTxHistoryRequestV2, MyTxHistoryResponseV2};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::rpc_command::init_withdraw::{InitWithdrawCoin, WithdrawInProgressStatus, WithdrawTaskHandle};
-use crate::utxo::rpc_clients::{ElectrumRpcRequest, UnspentInfo, UtxoRpcClientEnum, UtxoRpcError, UtxoRpcFut,
+use crate::utxo::rpc_clients::{ElectrumConnSettings, UnspentInfo, UtxoRpcClientEnum, UtxoRpcError, UtxoRpcFut,
                                UtxoRpcResult};
 use crate::utxo::utxo_builder::UtxoCoinBuildError;
 use crate::utxo::utxo_builder::{UtxoCoinBuilder, UtxoCoinBuilderCommonOps, UtxoFieldsWithGlobalHDBuilder,
@@ -761,7 +761,7 @@ pub enum ZcoinRpcMode {
     #[cfg(not(target_arch = "wasm32"))]
     Native,
     Light {
-        electrum_servers: Vec<ElectrumRpcRequest>,
+        electrum_servers: Vec<ElectrumConnSettings>,
         light_wallet_d_servers: Vec<String>,
     },
 }

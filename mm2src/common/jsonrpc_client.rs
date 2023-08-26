@@ -5,6 +5,8 @@ use serde_json::{self as json, Value as Json};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 
+use super::log::debug;
+
 /// Macro generating functions for RPC requests.
 /// Args must implement/derive Serialize trait.
 /// Generates params vector from input args, builds the request and sends it.
@@ -352,6 +354,7 @@ pub trait JsonRpcMultiClient: JsonRpcClient {
     ) -> RpcRes<T> {
         let client_info = self.client_info();
         let request = JsonRpcRequestEnum::Single(request);
+        debug!("to_addr: {}", to_addr);
         Box::new(
             self.transport_exact(to_addr.to_owned(), request.clone())
                 .then(move |result| process_transport_single_result(result))

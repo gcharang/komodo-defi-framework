@@ -48,7 +48,7 @@ use common::executor::abortable_queue::AbortableQueue;
 #[cfg(not(target_arch = "wasm32"))]
 use common::first_char_to_upper;
 use common::jsonrpc_client::JsonRpcError;
-use common::log::LogOnError;
+use common::log::{debug, LogOnError};
 use common::{now_sec, now_sec_u32};
 use crypto::{Bip32DerPathOps, Bip32Error, Bip44Chain, ChildNumber, DerivationPath, Secp256k1ExtendedPublicKey,
              StandardHDPathError, StandardHDPathToAccount, StandardHDPathToCoin};
@@ -94,9 +94,9 @@ use utxo_common::{big_decimal_from_sat, UtxoTxBuilder};
 use utxo_signer::with_key_pair::sign_tx;
 use utxo_signer::{TxProvider, TxProviderError, UtxoSignTxError, UtxoSignTxResult};
 
-use self::rpc_clients::{electrum_script_hash, ElectrumClient, ElectrumRpcRequest, EstimateFeeMethod, EstimateFeeMode,
-                        NativeClient, UnspentInfo, UnspentMap, UtxoRpcClientEnum, UtxoRpcError, UtxoRpcFut,
-                        UtxoRpcResult};
+use self::rpc_clients::{electrum_script_hash, ElectrumClient, ElectrumConnSettings, EstimateFeeMethod,
+                        EstimateFeeMode, NativeClient, UnspentInfo, UnspentMap, UtxoRpcClientEnum, UtxoRpcError,
+                        UtxoRpcFut, UtxoRpcResult};
 use super::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BalanceResult, CoinBalance, CoinFutSpawner,
             CoinsContext, DerivationMethod, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, KmdRewardsDetails,
             MarketCoinOps, MmCoin, NumConversError, NumConversResult, PrivKeyActivationPolicy, PrivKeyPolicy,
@@ -1332,6 +1332,7 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
     fn on_incoming_response(&self, _data: &[u8]) {}
 
     fn on_connected(&self, address: String) -> Result<(), String> {
+        debug!("Connected to the electrum server: {}", address);
         try_s!(self
             .on_event_tx
             .unbounded_send(ElectrumProtoVerifierEvent::Connected(address)));
@@ -1339,6 +1340,7 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
     }
 
     fn on_disconnected(&self, address: String) -> Result<(), String> {
+        debug!("Disconnected from the electrum server: {}", address);
         try_s!(self
             .on_event_tx
             .unbounded_send(ElectrumProtoVerifierEvent::Disconnected(address)));
@@ -1437,7 +1439,7 @@ impl UtxoActivationParams {
 #[serde(tag = "rpc", content = "rpc_data")]
 pub enum UtxoRpcMode {
     Native,
-    Electrum { servers: Vec<ElectrumRpcRequest> },
+    Electrum { servers: Vec<ElectrumConnSettings> },
 }
 
 impl UtxoRpcMode {
