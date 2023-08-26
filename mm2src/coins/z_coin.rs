@@ -341,7 +341,9 @@ impl ZCoin {
     async fn my_balance_sat(&self) -> Result<u64, MmError<ZcashClientError>> {
         let wallet_db = self.z_fields.light_wallet_db.clone();
         async_blocking(move || {
-            let balance = get_balance(&wallet_db.db.lock(), AccountId::default())?.into();
+            let db_guard = wallet_db.db.inner();
+            let db_guard = db_guard.lock().unwrap();
+            let balance = get_balance(&db_guard, AccountId::default())?.into();
             Ok(balance)
         })
         .await
@@ -354,15 +356,16 @@ impl ZCoin {
     async fn get_spendable_notes(&self) -> Result<Vec<SpendableNote>, MmError<SpendableNotesError>> {
         let wallet_db = self.z_fields.light_wallet_db.clone();
         async_blocking(move || {
-            let guard = wallet_db.db.lock();
-            let latest_db_block = match guard
+            let db_guard = wallet_db.db.inner();
+            let db_guard = db_guard.lock().unwrap();
+            let latest_db_block = match db_guard
                 .block_height_extrema()
                 .map_err(|err| SpendableNotesError::DBClientError(err.to_string()))?
             {
                 Some((_, latest)) => latest,
                 None => return Ok(Vec::new()),
             };
-            get_spendable_notes(&guard, AccountId::default(), latest_db_block)
+            get_spendable_notes(&db_guard, AccountId::default(), latest_db_block)
                 .map_err(|err| MmError::new(SpendableNotesError::DBClientError(err.to_string())))
         })
         .await
@@ -529,7 +532,8 @@ impl ZCoin {
     ) -> Result<SqlTxHistoryRes, MmError<SqlTxHistoryError>> {
         let wallet_db = self.z_fields.light_wallet_db.clone();
         async_blocking(move || {
-            let db_guard = wallet_db.db.lock();
+            let db_guard = wallet_db.db.inner();
+            let db_guard = db_guard.lock().unwrap();
             let conn = db_guard.sql_conn();
 
             let total_sql = SqlBuilder::select_from(TRANSACTIONS_TABLE)

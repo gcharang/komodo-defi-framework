@@ -14,6 +14,7 @@ use blockdb_idb_storage::BlockDbInner;
 #[cfg(target_arch = "wasm32")] use mm2_db::indexed_db::SharedDb;
 
 /// A wrapper for the db connection to the block cache database in native and browser.
+#[derive(Clone)]
 pub struct BlockDbImpl {
     #[cfg(not(target_arch = "wasm32"))]
     pub db: Arc<Mutex<Connection>>,

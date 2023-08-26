@@ -5,9 +5,7 @@ cfg_native!(
     use crate::z_coin::{extended_spending_key_from_protocol_info_and_policy, ZcoinConsensusParams};
     use crate::z_coin::z_rpc::create_wallet_db;
 
-    use parking_lot::Mutex;
-    use std::sync::Arc;
-    use zcash_client_sqlite::WalletDb;
+    use zcash_client_sqlite::with_async::WalletDbAsync;
     use zcash_primitives::zip32::ExtendedFullViewingKey;
 );
 
@@ -26,7 +24,7 @@ pub enum WalletDbError {
 #[derive(Clone)]
 pub struct WalletDbShared {
     #[cfg(not(target_arch = "wasm32"))]
-    pub db: Arc<Mutex<WalletDb<ZcoinConsensusParams>>>,
+    pub db: WalletDbAsync<ZcoinConsensusParams>,
     #[cfg(target_arch = "wasm32")]
     pub db: SharedDb<WalletDbInner>,
     #[allow(unused)]
@@ -56,10 +54,12 @@ impl<'a> WalletDbShared {
         .map_err(|err| MmError::new(WalletDbError::ZcoinClientInitError(err.into_inner())))?;
 
         Ok(Self {
-            db: Arc::new(Mutex::new(wallet_db)),
+            db: wallet_db,
             ticker: zcoin_builder.ticker.to_string(),
         })
     }
+
+    //    pub async fn sql_conn(&self) -> Arc<&Connection> { Arc::new(self.db.inner().lock().unwrap().sql_conn().borrow()) }
 }
 
 cfg_wasm32!(

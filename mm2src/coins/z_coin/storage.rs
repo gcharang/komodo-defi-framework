@@ -8,12 +8,14 @@ pub mod walletdb;
 pub use walletdb::*;
 
 use async_trait::async_trait;
+use common::block_on;
 use futures::lock::Mutex;
 use zcash_client_backend::data_api::error::{ChainInvalid, Error as ChainError};
-use zcash_client_backend::data_api::{PrunedBlock, WalletWrite};
+use zcash_client_backend::data_api::PrunedBlock;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_client_backend::wallet::{AccountId, WalletTx};
 use zcash_client_backend::welding_rig::scan_block;
+use zcash_client_sqlite::with_async::WalletWrite;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus;
 use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade};
@@ -23,7 +25,7 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 /// This trait provides sequential access to raw blockchain data via a callback-oriented
 /// API.
-#[async_trait(?Send)]
+#[async_trait]
 pub trait BlockSource {
     type Error;
 
@@ -33,10 +35,10 @@ pub trait BlockSource {
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-        with_row: Box<F>,
+        with_row: F,
     ) -> Result<(), Self::Error>
     where
-        F: FnMut(CompactBlock) -> Result<(), Self::Error>;
+        F: FnMut(CompactBlock) -> Result<(), Self::Error> + Send;
 }
 
 pub async fn validate_chain<'a, N, E, P, C>(
@@ -65,30 +67,28 @@ where
     let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
 
     cache
-        .with_blocks(
-            from_height,
-            None,
-            Box::new(|block: CompactBlock| {
-                let current_height = block.height();
-                let result = if current_height != prev_height + 1 {
-                    Err(ChainInvalid::block_height_discontinuity(
-                        prev_height + 1,
-                        current_height,
-                    ))
-                } else {
-                    match prev_hash {
-                        None => Ok(()),
-                        Some(h) if h == block.prev_hash() => Ok(()),
-                        Some(_) => Err(ChainInvalid::prev_hash_mismatch(current_height)),
-                    }
-                };
+        .with_blocks(from_height, None, |block: CompactBlock| {
+            let current_height = block.height();
+            let result = if current_height != prev_height + 1 {
+                Err(ChainInvalid::block_height_discontinuity(
+                    prev_height + 1,
+                    current_height,
+                ))
+            } else {
+                match prev_hash {
+                    None => Ok(()),
+                    Some(h) if h == block.prev_hash() => Ok(()),
+                    Some(_) => Err(ChainInvalid::prev_hash_mismatch(current_height)),
+                }
+            };
 
-                prev_height = current_height;
-                prev_hash = Some(block.hash());
-                result.map_err(E::from)
-            }),
-        )
-        .await
+            prev_height = current_height;
+            prev_hash = Some(block.hash());
+            result.map_err(E::from)
+        })
+        .await?;
+
+    Ok(())
 }
 
 pub async fn scan_cached_blocks<'a, E, N, P, C, D>(
@@ -113,22 +113,24 @@ where
     // If we have never synced, use sapling activation height to select all cached CompactBlocks.
     let mut last_height = data_guard
         .block_height_extrema()
+        .await
         .map(|opt| opt.map(|(_, max)| max).unwrap_or(sapling_activation_height - 1))?;
 
     // Fetch the ExtendedFullViewingKeys we are tracking
-    let extfvks = data_guard.get_extended_full_viewing_keys()?;
+    let extfvks = data_guard.get_extended_full_viewing_keys().await?;
     let extfvks: Vec<(&AccountId, &ExtendedFullViewingKey)> = extfvks.iter().collect();
 
     // Get the most recent CommitmentTree
     let mut tree = data_guard
         .get_commitment_tree(last_height)
+        .await
         .map(|t| t.unwrap_or_else(CommitmentTree::empty))?;
 
     // Get most recent incremental witnesses for the notes we are tracking
-    let mut witnesses = data_guard.get_witnesses(last_height)?;
+    let mut witnesses = data_guard.get_witnesses(last_height).await?;
 
     // Get the nullifiers for the notes we are tracking
-    let mut nullifiers = data_guard.get_nullifiers()?;
+    let mut nullifiers = data_guard.get_nullifiers().await?;
 
     cache
         .with_blocks(
@@ -175,7 +177,7 @@ where
                     }
                 }
 
-                let new_witnesses = data_guard.advance_by_block(
+                let new_witnesses = block_on(data_guard.advance_by_block(
                     &(PrunedBlock {
                         block_height: current_height,
                         block_hash,
@@ -184,7 +186,7 @@ where
                         transactions: &txs,
                     }),
                     &witnesses,
-                )?;
+                ))?;
 
                 let spent_nf: Vec<Nullifier> = txs
                     .iter()

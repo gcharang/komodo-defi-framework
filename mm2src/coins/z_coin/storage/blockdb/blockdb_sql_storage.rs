@@ -1,6 +1,7 @@
 use crate::z_coin::storage::{BlockDbError, BlockDbImpl, BlockSource};
 
 use async_trait::async_trait;
+use common::async_blocking;
 use db_common::sqlite::rusqlite::{params, Connection};
 use db_common::sqlite::{query_single_row, run_optimization_pragmas};
 use mm2_core::mm_ctx::MmArc;
@@ -80,13 +81,18 @@ impl BlockDbImpl {
     }
 
     pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, BlockDbError> {
-        self.db
-            .lock()
-            .unwrap()
-            .prepare("INSERT INTO compactblocks (height, data) VALUES (?, ?)")
-            .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?
-            .execute(params![height, cb_bytes])
-            .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
+        let selfi = self.clone();
+        async_blocking(move || {
+            let db = selfi.db.lock().unwrap();
+            let insert = db
+                .prepare("INSERT INTO compactblocks (height, data) VALUES (?, ?)")
+                .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?
+                .execute(params![height, cb_bytes])
+                .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
+
+            Ok(insert)
+        })
+        .await
     }
 
     pub(crate) async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
@@ -104,7 +110,7 @@ impl BlockDbImpl {
         mut with_row: F,
     ) -> Result<(), ZcashClientError>
     where
-        F: FnMut(CompactBlock) -> Result<(), ZcashClientError>,
+        F: FnMut(CompactBlock) -> Result<(), ZcashClientError> + Send,
     {
         // Fetch the CompactBlocks we need to scan
         let stmt_blocks = self.db.lock().unwrap();
@@ -142,18 +148,13 @@ impl BlockDbImpl {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl BlockSource for BlockDbImpl {
     type Error = ZcashClientError;
 
-    async fn with_blocks<F>(
-        &self,
-        from_height: BlockHeight,
-        limit: Option<u32>,
-        with_row: Box<F>,
-    ) -> Result<(), Self::Error>
+    async fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
     where
-        F: FnMut(CompactBlock) -> Result<(), Self::Error>,
+        F: FnMut(CompactBlock) -> Result<(), Self::Error> + Send,
     {
         self.with_blocks(from_height, limit, with_row).await
     }
