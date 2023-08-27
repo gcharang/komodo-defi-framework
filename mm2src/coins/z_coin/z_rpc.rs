@@ -1,6 +1,7 @@
 use super::{z_coin_errors::*, ZcoinConsensusParams};
 use crate::utxo::rpc_clients::NativeClient;
-use crate::z_coin::storage::{scan_cached_blocks, validate_chain, BlockDbImpl, WalletDbShared};
+use crate::z_coin::storage::BlockProcessingMode;
+use crate::z_coin::storage::{BlockDbImpl, WalletDbShared};
 use async_trait::async_trait;
 use common::executor::{spawn_abortable, AbortOnDropHandle};
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender};
@@ -11,9 +12,6 @@ use futures::StreamExt;
 use mm2_err_handle::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use std::time::Duration;
-use zcash_client_backend::data_api::WalletRead;
-use zcash_client_sqlite::with_async::{WalletDbAsync, WalletRead as AsyncWalletRead, WalletWrite as AsyncWalletWrite};
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 
@@ -42,6 +40,8 @@ cfg_native!(
     use zcash_primitives::zip32::ExtendedFullViewingKey;
     use zcash_client_sqlite::error::SqliteClientError as ZcashClientError;
     use zcash_client_sqlite::wallet::init::{init_accounts_table, init_blocks_table, init_wallet_db};
+    use zcash_client_sqlite::with_async::WalletDbAsync;
+    use zcash_extras::{WalletRead, WalletWrite};
 
     mod z_coin_grpc {
         tonic::include_proto!("cash.z.wallet.sdk.rpc");
@@ -137,7 +137,7 @@ impl ZRpcOps for LightRpcClient {
         //         without Pin method get_mut is not found in current scope
         while let Some(block) = Pin::new(&mut response).get_mut().message().await? {
             debug!("Got block {:?}", block);
-            db.insert_block(u32::from(block.height as u32), block.encode_to_vec())
+            db.insert_block(block.height as u32, block.encode_to_vec())
                 .await
                 .map_err(|err| UpdateBlocksCacheErr::ZcashDBError(err.to_string()))?;
             handler.notify_blocks_cache_status(block.height, last_block);
@@ -253,10 +253,10 @@ impl ZRpcOps for NativeClient {
                 header: Vec::new(),
                 vtx: compact_txs,
             };
-            db.insert_block(u32::from(compact_block.height as u32), compact_block.encode_to_vec())
+            db.insert_block(compact_block.height as u32, compact_block.encode_to_vec())
                 .await
                 .map_err(|err| UpdateBlocksCacheErr::ZcashDBError(err.to_string()))?;
-            handler.notify_blocks_cache_status(compact_block.height as u64, last_block);
+            handler.notify_blocks_cache_status(compact_block.height, last_block);
         }
 
         Ok(())
@@ -290,16 +290,17 @@ pub async fn create_wallet_db(
     check_point_block: Option<CheckPointBlockInfo>,
     evk: ExtendedFullViewingKey,
 ) -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-    async_blocking({
+    let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
+        .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+    let get_extended_full_viewing_keys = db.get_extended_full_viewing_keys().await?;
+    async_blocking(
         move || -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-            let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
-                .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
             let conn = db.inner();
             let conn = conn.lock().unwrap();
             run_optimization_pragmas(conn.sql_conn())
                 .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
             init_wallet_db(&conn).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-            if conn.get_extended_full_viewing_keys()?.is_empty() {
+            if get_extended_full_viewing_keys.is_empty() {
                 init_accounts_table(&conn, &[evk])?;
                 if let Some(check_point) = check_point_block {
                     init_blocks_table(
@@ -313,8 +314,8 @@ pub async fn create_wallet_db(
             }
 
             Ok(db)
-        }
-    })
+        },
+    )
     .await
 }
 
@@ -573,7 +574,6 @@ impl SaplingSyncLoopHandle {
         if let Some((_, max_in_wallet)) = extrema {
             from_block = from_block.max(max_in_wallet.into());
         }
-        info!("before scan_blocks");
 
         if current_block >= from_block {
             let blocksdb = self.blocks_db.clone();
@@ -590,15 +590,18 @@ impl SaplingSyncLoopHandle {
     async fn scan_blocks(&mut self) -> Result<(), MmError<BlockDbError>> {
         // required to avoid immutable borrow of self
         let wallet_db = self.wallet_db.clone().db;
-        let mut wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
-        info!("HERE 1");
-        info!("HERE 2");
-        info!("HERE 4");
-        let max_height_hash = wallet_ops_guard.get_max_height_hash().await?;
-        info!("HERE 2");
-        let validate_chain = validate_chain(&self.consensus_params, &self.blocks_db, max_height_hash).await;
-        info!("validate_chain {:?}", validate_chain);
+        let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
+        let mut wallet_ops_guard_clone = wallet_ops_guard.clone();
 
+        let blocks_db = self.blocks_db.clone();
+        let validate_chain = blocks_db
+            .process_blocks_with_mode(
+                self.consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                wallet_ops_guard.get_max_height_hash().await?,
+                None,
+            )
+            .await;
         if let Err(e) = validate_chain {
             match e {
                 ZcashClientError::BackendError(ChainError::InvalidChain(lower_bound, _)) => {
@@ -607,18 +610,17 @@ impl SaplingSyncLoopHandle {
                     } else {
                         BlockHeight::from_u32(0)
                     };
-                    wallet_ops_guard.rewind_to_height(rewind_height).await?;
+                    wallet_ops_guard_clone.rewind_to_height(rewind_height).await?;
                     self.blocks_db.rewind_to_height(rewind_height.into()).await?;
                 },
                 e => return MmError::err(BlockDbError::SqliteError(e)),
             }
         }
 
-        info!("HERE 2");
         let latest_block_height = self.blocks_db.get_latest_block().await?;
         let current_block = BlockHeight::from_u32(latest_block_height);
         loop {
-            match wallet_ops_guard.block_height_extrema().await? {
+            match wallet_ops_guard_clone.block_height_extrema().await? {
                 Some((_, max_in_wallet)) => {
                     if max_in_wallet >= current_block {
                         break;
@@ -629,19 +631,18 @@ impl SaplingSyncLoopHandle {
                 None => self.notify_building_wallet_db(0, current_block.into()),
             }
 
-            info!("HERE 3");
-
             let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
-            let wallet_ops_guard = Arc::new(AsyncMutex::new(wallet_ops_guard));
-            scan_cached_blocks(
-                &self.consensus_params.clone(),
-                &self.blocks_db,
-                wallet_ops_guard,
-                Some(self.scan_blocks_per_iteration),
-            )
-            .await?;
+            blocks_db
+                .process_blocks_with_mode(
+                    self.consensus_params.clone(),
+                    BlockProcessingMode::Scan(wallet_ops_guard),
+                    None,
+                    Some(self.scan_blocks_per_iteration),
+                )
+                .await?;
+
             if self.scan_interval_ms > 0 {
-                std::thread::sleep(Duration::from_millis(self.scan_interval_ms));
+                Timer::sleep_ms(self.scan_interval_ms).await;
             }
         }
         Ok(())
@@ -710,7 +711,6 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
     );
     // this loop is spawned as standalone task so it's safe to use block_in_place here
     loop {
-        info!("HERE 02");
         if let Err(e) = sync_handle.update_blocks_cache(client.as_mut()).await {
             error!("Error {} on blocks cache update", e);
             sync_handle.notify_on_error(e.to_string());

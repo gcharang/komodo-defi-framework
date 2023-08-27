@@ -1,9 +1,10 @@
-use crate::z_coin::storage::{BlockDbError, BlockDbImpl, BlockSource};
+use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbError, BlockDbImpl, BlockProcessingMode};
 
-use async_trait::async_trait;
+use crate::z_coin::ZcoinConsensusParams;
 use common::async_blocking;
 use db_common::sqlite::rusqlite::{params, Connection};
-use db_common::sqlite::{query_single_row, run_optimization_pragmas};
+use db_common::sqlite::{query_single_row, run_optimization_pragmas, rusqlite};
+use itertools::Itertools;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use protobuf::Message;
@@ -11,11 +12,13 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
-use zcash_client_sqlite::error::SqliteClientError as ZcashClientError;
+use zcash_client_sqlite::error::{SqliteClientError as ZcashClientError, SqliteClientError};
 use zcash_client_sqlite::NoteId;
+use zcash_extras::WalletRead;
+use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
 
-struct CompactBlockRow {
+pub struct CompactBlockRow {
     height: BlockHeight,
     data: Vec<u8>,
 }
@@ -54,20 +57,25 @@ impl BlockDbImpl {
         let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let conn = ctx.sqlite_connection.clone_or(conn);
         let clone_db = conn.clone();
-        let clone_db = clone_db.lock().unwrap();
-        run_optimization_pragmas(&clone_db).map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
-        clone_db
-            .execute(
-                "CREATE TABLE IF NOT EXISTS compactblocks (
+
+        async_blocking(move || {
+            let clone_db = clone_db.lock().unwrap();
+            run_optimization_pragmas(&clone_db)
+                .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?;
+            clone_db
+                .execute(
+                    "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
             data BLOB NOT NULL
         )",
-                [],
-            )
-            .map_to_mm(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
-            .unwrap();
+                    [],
+                )
+                .map_to_mm(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
+                .unwrap();
 
-        Ok(BlockDbImpl { db: conn, ticker })
+            Ok(BlockDbImpl { db: conn, ticker })
+        })
+        .await
     }
 
     pub(crate) async fn get_latest_block(&self) -> Result<u32, ZcashClientError> {
@@ -81,9 +89,9 @@ impl BlockDbImpl {
     }
 
     pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, BlockDbError> {
-        let selfi = self.clone();
+        let db = self.db.clone();
         async_blocking(move || {
-            let db = selfi.db.lock().unwrap();
+            let db = db.lock().unwrap();
             let insert = db
                 .prepare("INSERT INTO compactblocks (height, data) VALUES (?, ?)")
                 .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))?
@@ -103,31 +111,56 @@ impl BlockDbImpl {
             .map_err(|err| BlockDbError::SqliteError(ZcashClientError::from(err)))
     }
 
-    pub(crate) async fn with_blocks<F>(
+    pub(crate) async fn query_blocks_by_limit(
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-        mut with_row: F,
-    ) -> Result<(), ZcashClientError>
-    where
-        F: FnMut(CompactBlock) -> Result<(), ZcashClientError> + Send,
-    {
-        // Fetch the CompactBlocks we need to scan
-        let stmt_blocks = self.db.lock().unwrap();
-        let mut stmt_blocks = stmt_blocks.prepare(
-            "SELECT height, data FROM compactblocks WHERE height > ? ORDER BY height ASC \
+    ) -> Result<Vec<rusqlite::Result<CompactBlockRow>>, SqliteClientError> {
+        let db = self.db.clone();
+        async_blocking(move || {
+            // Fetch the CompactBlocks we need to scan
+            let db = db.lock().unwrap();
+            let mut stmt_blocks = db.prepare(
+                "SELECT height, data FROM compactblocks WHERE height > ? ORDER BY height ASC \
         LIMIT ?",
-        )?;
+            )?;
 
-        let rows = stmt_blocks.query_map(
-            params![u32::from(from_height), limit.unwrap_or(u32::max_value()),],
-            |row| {
-                Ok(CompactBlockRow {
-                    height: BlockHeight::from_u32(row.get(0)?),
-                    data: row.get(1)?,
-                })
-            },
-        )?;
+            let rows = stmt_blocks.query_map(
+                params![u32::from(from_height), limit.unwrap_or(u32::max_value()),],
+                |row| {
+                    Ok(CompactBlockRow {
+                        height: BlockHeight::from_u32(row.get(0)?),
+                        data: row.get(1)?,
+                    })
+                },
+            )?;
+
+            Ok(rows.collect_vec())
+        })
+        .await
+    }
+
+    pub(crate) async fn process_blocks_with_mode(
+        &self,
+        params: ZcoinConsensusParams,
+        mode: BlockProcessingMode,
+        validate_from: Option<(BlockHeight, BlockHash)>,
+        limit: Option<u32>,
+    ) -> Result<(), ZcashClientError> {
+        let mut from_height = match &mode {
+            BlockProcessingMode::Validate => validate_from
+                .map(|(height, _)| height)
+                .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1),
+            BlockProcessingMode::Scan(data) => data.block_height_extrema().await.map(|opt| {
+                opt.map(|(_, max)| max)
+                    .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1)
+            })?,
+        };
+
+        let rows = self.query_blocks_by_limit(from_height, limit).await?;
+
+        let mut prev_height = from_height;
+        let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
 
         for row_result in rows {
             let cbr = row_result?;
@@ -141,21 +174,15 @@ impl BlockDbImpl {
                 )));
             }
 
-            with_row(block)?;
+            match &mode.clone() {
+                BlockProcessingMode::Validate => {
+                    validate_chain(block, &mut prev_height, &mut prev_hash).await?;
+                },
+                BlockProcessingMode::Scan(data) => {
+                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                },
+            }
         }
-
         Ok(())
-    }
-}
-
-#[async_trait]
-impl BlockSource for BlockDbImpl {
-    type Error = ZcashClientError;
-
-    async fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(CompactBlock) -> Result<(), Self::Error> + Send,
-    {
-        self.with_blocks(from_height, limit, with_row).await
     }
 }

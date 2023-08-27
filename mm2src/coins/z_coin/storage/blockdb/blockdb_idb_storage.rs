@@ -245,74 +245,63 @@ impl BlockDbImpl {
         Ok((height_to_remove_from + get_latest_block) as usize)
     }
 
-    pub async fn with_blocks<F>(
-        &self,
-        from_height: BlockHeight,
-        limit: Option<u32>,
-        mut with_row: F,
-    ) -> Result<(), BlockDbError>
-    where
-        F: FnMut(CompactBlock) -> Result<(), BlockDbError>,
-    {
-        let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
-        let block_db = db_transaction
-            .table::<BlockDbTable>()
-            .await
-            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
-
-        // Fetch CompactBlocks that are needed for scanning.
-        let blocks = block_db
-            .get_items("ticker", &ticker)
-            .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
-
-        // Perform scan
-        for (_, block) in blocks {
-            if let Some(limit) = limit {
-                if block.height > limit {
-                    break;
-                }
-            }
-
-            if block.height < u32::from(from_height) {
-                continue;
-            }
-
-            let cbr = block.clone();
-            let block_height = u32::from(block.height);
-            let block =
-                CompactBlock::parse_from_bytes(&block.data).map_err(|err| BlockDbError::ChainError(err.to_string()))?;
-
-            if block_height != cbr.height {
-                return Err(BlockDbError::CorruptedData(format!(
-                    "Block height {block_height} did not match row's height field value {}",
-                    cbr.height
-                )));
-            }
-
-            with_row(block)?;
-        }
-
-        Ok(())
-    }
-}
-
-#[async_trait(?Send)]
-impl BlockSource for BlockDbImpl {
-    type Error = BlockDbError;
-    async fn with_blocks<F>(&self, from_height: BlockHeight, limit: Option<u32>, with_row: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(CompactBlock) -> Result<(), Self::Error>,
-    {
-        self.with_blocks(from_height, limit, with_row).await
-    }
+    //    pub async fn with_blocks<F>(
+    //        &self,
+    //        from_height: BlockHeight,
+    //        limit: Option<u32>,
+    //        mut with_row: F,
+    //    ) -> Result<(), BlockDbError>
+    //    where
+    //        F: FnMut(CompactBlock) -> Result<(), BlockDbError>,
+    //    {
+    //        let ticker = self.ticker.clone();
+    //        let locked_db = self
+    //            .lock_db()
+    //            .await
+    //            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
+    //        let db_transaction = locked_db
+    //            .get_inner()
+    //            .transaction()
+    //            .await
+    //            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
+    //        let block_db = db_transaction
+    //            .table::<BlockDbTable>()
+    //            .await
+    //            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
+    //
+    //        // Fetch CompactBlocks that are needed for scanning.
+    //        let blocks = block_db
+    //            .get_items("ticker", &ticker)
+    //            .await
+    //            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+    //
+    //        // Perform scan
+    //        for (_, block) in blocks {
+    //            if let Some(limit) = limit {
+    //                if block.height > limit {
+    //                    break;
+    //                }
+    //            }
+    //
+    //            if block.height < u32::from(from_height) {
+    //                continue;
+    //            }
+    //
+    //            let cbr = block.clone();
+    //            let block_height = u32::from(block.height);
+    //            let block =
+    //                CompactBlock::parse_from_bytes(&block.data).map_err(|err| BlockDbError::ChainError(err.to_string()))?;
+    //
+    //            if block_height != cbr.height {
+    //                return Err(BlockDbError::CorruptedData(format!(
+    //                    "Block height {block_height} did not match row's height field value {}",
+    //                    cbr.height
+    //                )));
+    //            }
+    //
+    //            with_row(block)?;
+    //        }
+    //
+    //        Ok(())
+    //    }
 }
