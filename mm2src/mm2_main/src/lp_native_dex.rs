@@ -31,6 +31,7 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{spawn_gossipsub, AdexBehaviourError, NodeType, RelayAddress, RelayAddressError, SwarmRuntime,
                  WssCerts};
 use mm2_metrics::mm_gauge;
+use mm2_net::network_event::NETWORK_EVENT_TYPE;
 use mm2_net::p2p::P2PContext;
 use rpc_task::RpcTaskError;
 use serde_json::{self as json};
@@ -382,6 +383,21 @@ fn migrate_db(ctx: &MmArc) -> MmInitResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 fn migration_1(_ctx: &MmArc) {}
 
+#[cfg(not(target_arch = "wasm32"))]
+fn init_event_streaming(ctx: &MmArc) {
+    if let Some(config) = ctx.event_stream_configuration() {
+        if let Some(event) = config.get_event(NETWORK_EVENT_TYPE) {
+            info!(
+                "Event {NETWORK_EVENT_TYPE} is activated with {} seconds interval.",
+                event.stream_interval_seconds
+            );
+
+            ctx.spawner()
+                .spawn(start_network_event_stream(ctx.clone(), event.stream_interval_seconds));
+        }
+    }
+}
+
 pub async fn lp_init_continue(ctx: MmArc) -> MmInitResult<()> {
     init_ordermatch_context(&ctx)?;
     init_p2p(ctx.clone()).await?;
@@ -413,10 +429,7 @@ pub async fn lp_init_continue(ctx: MmArc) -> MmInitResult<()> {
     kick_start(ctx.clone()).await?;
 
     #[cfg(not(target_arch = "wasm32"))]
-    {
-        // TODO: this should be configurable from MM2 the config
-        ctx.spawner().spawn(start_network_event_stream(ctx.clone()));
-    }
+    init_event_streaming(&ctx);
 
     ctx.spawner().spawn(lp_ordermatch_loop(ctx.clone()));
 

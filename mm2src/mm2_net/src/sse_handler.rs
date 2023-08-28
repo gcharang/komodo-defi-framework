@@ -28,10 +28,20 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
         Err(err) => return handle_internal_error(err).await,
     };
 
+    let config = match ctx.event_stream_configuration() {
+        Some(config) => config,
+        None => {
+            return handle_internal_error(
+                "Event stream configuration couldn't be found. This should never happen.".to_string(),
+            )
+            .await
+        },
+    };
+
     let filtered_events = get_filtered_events(request);
 
     let mut channel_controller = ctx.stream_channel_controller.clone();
-    let mut rx = channel_controller.create_channel(4); // TODO: read this from configuration
+    let mut rx = channel_controller.create_channel(config.active_events.len());
     let body = Body::wrap_stream(async_stream::stream! {
         while let Some(msg) = rx.recv().await {
             // If there are no filtered events, that means we want to
@@ -47,7 +57,7 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
         .status(200)
         .header("Content-Type", "text/event-stream")
         .header("Cache-Control", "no-cache")
-        .header("Access-Control-Allow-Origin", "*") // TODO: read this from configuration
+        .header("Access-Control-Allow-Origin", config.access_control_allow_origin)
         .body(body);
 
     match response {

@@ -6,9 +6,11 @@ use serde_json::json;
 
 use crate::p2p::P2PContext;
 
-const NETWORK_EVENT_TYPE: &str = "NETWORK";
+// TODO: Create Event trait to enforce same design for all events.
 
-pub async fn start_network_event_stream(ctx: MmArc) {
+pub const NETWORK_EVENT_TYPE: &str = "NETWORK";
+
+pub async fn start_network_event_stream(ctx: MmArc, event_interval: f64) {
     let p2p_ctx = P2PContext::fetch_from_mm_arc(&ctx);
 
     loop {
@@ -32,6 +34,6 @@ pub async fn start_network_event_stream(ctx: MmArc) {
             .broadcast(Event::new(NETWORK_EVENT_TYPE.to_string(), event_data.to_string()))
             .await;
 
-        Timer::sleep(1.).await; // TODO: read this from configuration
+        Timer::sleep(event_interval).await;
     }
 }

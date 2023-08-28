@@ -356,9 +356,13 @@ pub extern "C" fn spawn_rpc(ctx_h: u32) {
     // then we might want to refactor into starting it ideomatically in order to benefit from a more graceful shutdown,
     // cf. https://github.com/hyperium/hyper/pull/1640.
 
+    let ctx = MmArc::from_ffi_handle(ctx_h).expect("No context");
+
+    let is_event_stream_enabled = ctx.event_stream_configuration().is_some();
+
     let make_svc_fut = move |remote_addr: SocketAddr| async move {
         Ok::<_, Infallible>(service_fn(move |req: Request<Body>| async move {
-            if req.uri().path() == SSE_ENDPOINT {
+            if is_event_stream_enabled && req.uri().path() == SSE_ENDPOINT {
                 let res = handle_sse(req, ctx_h).await?;
                 return Ok::<_, Infallible>(res);
             }
@@ -426,8 +430,6 @@ pub extern "C" fn spawn_rpc(ctx_h: u32) {
             }
         };
     }
-
-    let ctx = MmArc::from_ffi_handle(ctx_h).expect("No context");
 
     let rpc_ip_port = ctx
         .rpc_ip_port()

@@ -6,7 +6,7 @@ use common::log::{self, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
-use mm2_event_stream::{controller::Controller, Event};
+use mm2_event_stream::{controller::Controller, Event, EventStreamConfiguration};
 use mm2_metrics::{MetricsArc, MetricsOps};
 use primitives::hash::H160;
 use rand::Rng;
@@ -340,6 +340,20 @@ impl MmCtx {
             .or(&|| panic!("shared_sqlite_conn is not initialized"))
             .lock()
             .unwrap()
+    }
+
+    /// Reads 'event_stream_configuration' from the mm2 configuration. If the config wasn't given,
+    /// returns `None`.
+    pub fn event_stream_configuration(&self) -> Option<EventStreamConfiguration> {
+        let value = &self.conf["event_stream_configuration"];
+        if value.is_null() {
+            return None;
+        }
+
+        let config: EventStreamConfiguration =
+            json::from_value(value.clone()).expect("Invalid json value in 'event_stream_configuration'.");
+
+        Some(config)
     }
 }
 
@@ -681,6 +695,7 @@ impl MmCtxBuilder {
         let mut ctx = MmCtx::with_log_state(log);
         ctx.mm_version = self.version;
         ctx.datetime = self.datetime;
+
         if let Some(conf) = self.conf {
             ctx.conf = conf
         }
