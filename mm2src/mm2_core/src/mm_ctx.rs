@@ -344,6 +344,8 @@ impl MmCtx {
 
     /// Reads 'event_stream_configuration' from the mm2 configuration. If the config wasn't given,
     /// returns `None`.
+    ///
+    /// TODO: Move this value to `MmCtx`, so deserialization will be executed only once
     pub fn event_stream_configuration(&self) -> Option<EventStreamConfiguration> {
         let value = &self.conf["event_stream_configuration"];
         if value.is_null() {
