@@ -2,16 +2,25 @@ const NFT_LIST_URL_TEST: &str = "https://moralis-proxy.komodo.earth/api/v2/0x394
 const NFT_HISTORY_URL_TEST: &str = "https://moralis-proxy.komodo.earth/api/v2/0x394d86994f954ed931b86791b62fe64f4c5dac37/nft/transfers?chain=POLYGON&format=decimal";
 const NFT_METADATA_URL_TEST: &str = "https://moralis-proxy.komodo.earth/api/v2/nft/0xed55e4477b795eaa9bb4bca24df42214e1a05c18/1111777?chain=POLYGON&format=decimal";
 const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
+const BLOCKLIST_WALLET_ENDPOINT: &str =
+    "https://nft.antispam.dragonhound.info/api/blocklist/wallet/eth/0x3eb4b12127EdC81A4d2fD49658db07005bcAd065";
+const BLOCKLIST_CONTRACT_SCAN_ENDPOINT: &str = "https://nft.antispam.dragonhound.info/api/blocklist/contract/scan";
+const BLOCKLIST_DOMAIN_SCAN_ENDPOINT: &str = "https://nft.antispam.dragonhound.info/api/blocklist/domain/scan";
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod native_tests {
     use crate::eth::eth_addr_to_hex;
-    use crate::nft::nft_structs::{NftFromMoralis, NftTransferHistoryFromMoralis, UriMeta};
-    use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
+    use crate::nft::nft_structs::{Chain, MnemonicHQRes, NftFromMoralis, NftTransferHistoryFromMoralis,
+                                  PhishingDomainReq, PhishingDomainRes, SpamContractReq, SpamContractRes, UriMeta};
+    use crate::nft::nft_tests::{BLOCKLIST_CONTRACT_SCAN_ENDPOINT, BLOCKLIST_DOMAIN_SCAN_ENDPOINT,
+                                BLOCKLIST_WALLET_ENDPOINT, NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST,
+                                NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
     use crate::nft::{check_and_redact_if_spam, check_moralis_ipfs_bafy, check_nft_metadata_for_spam,
-                     send_request_to_uri};
+                     send_post_request_to_uri, send_request_to_uri};
     use common::block_on;
+    use ethereum_types::Address;
+    use std::str::FromStr;
 
     #[test]
     fn test_moralis_ipfs_bafy() {
@@ -90,10 +99,45 @@ mod native_tests {
     }
 
     #[test]
+    fn test_antispam_api_requests() {
+        let mnemonichq_value = block_on(send_request_to_uri(BLOCKLIST_WALLET_ENDPOINT)).unwrap();
+        let mnemonichq_res: MnemonicHQRes = serde_json::from_value(mnemonichq_value).unwrap();
+        assert!(mnemonichq_res
+            .spam_contracts
+            .contains(&Address::from_str("0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c").unwrap()));
+        assert_eq!(Chain::Eth, mnemonichq_res.network);
+
+        let req_spam = SpamContractReq {
+            network: Chain::Eth,
+            addresses: "0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c,0x8d1355b65da254f2cc4611453adfa8b7a13f60ee"
+                .to_string(),
+        };
+        let req_json = serde_json::to_string(&req_spam).unwrap();
+        let contract_scan_res = block_on(send_post_request_to_uri(BLOCKLIST_CONTRACT_SCAN_ENDPOINT, req_json)).unwrap();
+        let spam_res: SpamContractRes = serde_json::from_slice(&contract_scan_res).unwrap();
+        assert!(spam_res
+            .result
+            .get(&Address::from_str("0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c").unwrap())
+            .unwrap());
+        assert!(spam_res
+            .result
+            .get(&Address::from_str("0x8d1355b65da254f2cc4611453adfa8b7a13f60ee").unwrap())
+            .unwrap());
+
+        let req_phishing = PhishingDomainReq {
+            domains: "disposal-account-case-1f677.web.app,defi8090.vip".to_string(),
+        };
+        let req_json = serde_json::to_string(&req_phishing).unwrap();
+        let domain_scan_res = block_on(send_post_request_to_uri(BLOCKLIST_DOMAIN_SCAN_ENDPOINT, req_json)).unwrap();
+        let phishing_res: PhishingDomainRes = serde_json::from_slice(&domain_scan_res).unwrap();
+        assert!(phishing_res.result.get("disposal-account-case-1f677.web.app").unwrap());
+    }
+
+    #[test]
     fn test_add_get_nfts() { block_on(test_add_get_nfts_impl()) }
 
     #[test]
-    fn test_last_nft_blocks() { block_on(test_last_nft_blocks_impl()) }
+    fn test_last_nft_block() { block_on(test_last_nft_block_impl()) }
 
     #[test]
     fn test_nft_list() { block_on(test_nft_list_impl()) }
@@ -103,6 +147,9 @@ mod native_tests {
 
     #[test]
     fn test_refresh_metadata() { block_on(test_refresh_metadata_impl()) }
+
+    #[test]
+    fn test_nft_spam_by_token_address() { block_on(test_update_nft_spam_by_token_address_impl()) }
 
     #[test]
     fn test_nft_amount() { block_on(test_nft_amount_impl()) }
@@ -121,15 +168,23 @@ mod native_tests {
 
     #[test]
     fn test_get_update_transfer_meta() { block_on(test_get_update_transfer_meta_impl()) }
+
+    #[test]
+    fn test_update_transfer_spam_by_token_address() { block_on(test_update_transfer_spam_by_token_address_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_tests {
     use crate::eth::eth_addr_to_hex;
-    use crate::nft::nft_structs::{NftFromMoralis, NftTransferHistoryFromMoralis};
-    use crate::nft::nft_tests::{NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST, NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
-    use crate::nft::send_request_to_uri;
+    use crate::nft::nft_structs::{Chain, MnemonicHQRes, NftFromMoralis, NftTransferHistoryFromMoralis,
+                                  PhishingDomainReq, PhishingDomainRes, SpamContractReq, SpamContractRes};
+    use crate::nft::nft_tests::{BLOCKLIST_CONTRACT_SCAN_ENDPOINT, BLOCKLIST_DOMAIN_SCAN_ENDPOINT,
+                                BLOCKLIST_WALLET_ENDPOINT, NFT_HISTORY_URL_TEST, NFT_LIST_URL_TEST,
+                                NFT_METADATA_URL_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
+    use crate::nft::{send_post_request_to_uri, send_request_to_uri};
+    use ethereum_types::Address;
+    use std::str::FromStr;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -160,10 +215,49 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    async fn test_antispam_api_requests() {
+        let res_value = send_request_to_uri(BLOCKLIST_WALLET_ENDPOINT).await.unwrap();
+        let mnemonichq_res: MnemonicHQRes = serde_json::from_value(res_value).unwrap();
+        assert!(mnemonichq_res
+            .spam_contracts
+            .contains(&Address::from_str("0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c").unwrap()));
+        assert_eq!(Chain::Eth, mnemonichq_res.network);
+
+        let req_spam = SpamContractReq {
+            network: Chain::Eth,
+            addresses: "0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c,0x8d1355b65da254f2cc4611453adfa8b7a13f60ee"
+                .to_string(),
+        };
+        let req_json = serde_json::to_string(&req_spam).unwrap();
+        let contract_scan_res = send_post_request_to_uri(BLOCKLIST_CONTRACT_SCAN_ENDPOINT, req_json)
+            .await
+            .unwrap();
+        let spam_res: SpamContractRes = serde_json::from_slice(&contract_scan_res).unwrap();
+        assert!(spam_res
+            .result
+            .get(&Address::from_str("0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c").unwrap())
+            .unwrap());
+        assert!(spam_res
+            .result
+            .get(&Address::from_str("0x8d1355b65da254f2cc4611453adfa8b7a13f60ee").unwrap())
+            .unwrap());
+
+        let req_phishing = PhishingDomainReq {
+            domains: "disposal-account-case-1f677.web.app,defi8090.vip".to_string(),
+        };
+        let req_json = serde_json::to_string(&req_phishing).unwrap();
+        let domain_scan_res = send_post_request_to_uri(BLOCKLIST_DOMAIN_SCAN_ENDPOINT, req_json)
+            .await
+            .unwrap();
+        let phishing_res: PhishingDomainRes = serde_json::from_slice(&domain_scan_res).unwrap();
+        assert!(phishing_res.result.get("disposal-account-case-1f677.web.app").unwrap());
+    }
+
+    #[wasm_bindgen_test]
     async fn test_add_get_nfts() { test_add_get_nfts_impl().await }
 
     #[wasm_bindgen_test]
-    async fn test_last_nft_blocks() { test_last_nft_blocks_impl().await }
+    async fn test_last_nft_block() { test_last_nft_block_impl().await }
 
     #[wasm_bindgen_test]
     async fn test_nft_list() { test_nft_list_impl().await }

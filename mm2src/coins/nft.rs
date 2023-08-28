@@ -15,9 +15,9 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
-use crate::nft::nft_errors::ProtectFromSpamError;
-use crate::nft::nft_structs::{NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq, TransferMeta, TransferStatus,
-                              UriMeta};
+use crate::nft::nft_errors::{ProtectFromSpamError, UpdateSpamPhishingError};
+use crate::nft::nft_structs::{MnemonicHQRes, NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq, TransferMeta,
+                              TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use ethereum_types::Address;
@@ -29,12 +29,25 @@ use serde_json::Value as Json;
 use std::cmp::Ordering;
 use std::str::FromStr;
 
+#[cfg(not(target_arch = "wasm32"))]
+use mm2_net::native_http::slurp_post_json;
+
+#[cfg(target_arch = "wasm32")]
+use mm2_net::wasm_http::slurp_post_json;
+
 const MORALIS_API_ENDPOINT: &str = "api/v2";
 /// query parameters for moralis request: The format of the token ID
 const MORALIS_FORMAT_QUERY_NAME: &str = "format";
 const MORALIS_FORMAT_QUERY_VALUE: &str = "decimal";
 /// The minimum block number from which to get the transfers
 const MORALIS_FROM_BLOCK_QUERY_NAME: &str = "from_block";
+
+const BLOCKLIST_ENDPOINT: &str = "api/blocklist";
+const BLOCKLIST_CONTRACT: &str = "contract";
+#[allow(dead_code)]
+const BLOCKLIST_DOMAIN: &str = "domain";
+const BLOCKLIST_WALLET: &str = "wallet";
+const BLOCKLIST_SCAN: &str = "scan";
 
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
@@ -167,8 +180,75 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         }
         update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
         update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
+        update_spam_phishing(&ctx, &storage, *chain, &req.url_antispam).await?;
     }
     Ok(())
+}
+
+#[allow(dead_code)]
+/// `update_spam_phishing` function updates spam contracts and phishing domains info in NFT list and NFT transfers.
+async fn update_spam_phishing<T>(
+    ctx: &MmArc,
+    storage: &T,
+    chain: Chain,
+    url_antispam: &Url,
+) -> MmResult<(), UpdateSpamPhishingError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
+    if chain == Chain::Eth || chain == Chain::Polygon {
+        update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await?;
+    }
+    let _scan_contract_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_CONTRACT, BLOCKLIST_SCAN)?;
+    // todo get all unique contracts from transfer table (as it also covers NFT list table) and send post req with these addresses.
+    // todo most likely `update_spam_phishing` will be renamed to `update_spam` as there will be too many logic and code with phishing impl.
+    todo!()
+}
+/// Uses `/api/blocklist/wallet/{network}/{wallet_address}` endpoint to get **all spam contract addresses** of NFTs owned by the user.
+/// Currently, only the `Eth` and `Polygon` networks are supported.
+async fn update_spam_nft_with_mnemonichq<T>(
+    ctx: &MmArc,
+    storage: &T,
+    chain: &Chain,
+    url_antispam: &Url,
+) -> MmResult<(), UpdateSpamPhishingError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
+    let mut scan_wallet_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_WALLET, &chain.to_string())?;
+    let req = MyAddressReq {
+        coin: chain.to_ticker(),
+    };
+    let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
+    scan_wallet_uri
+        .path_segments_mut()
+        .map_to_mm(|_| UpdateSpamPhishingError::Internal("Invalid URI".to_string()))?
+        .push(&my_address);
+    let response = send_request_to_uri(scan_wallet_uri.as_str()).await?;
+    let mnemonichq_res: MnemonicHQRes = serde_json::from_value(response)?;
+    for contract in mnemonichq_res.spam_contracts.iter() {
+        storage
+            .update_nft_spam_by_token_address(chain, eth_addr_to_hex(contract), true)
+            .await?;
+        storage
+            .update_transfer_spam_by_token_address(chain, eth_addr_to_hex(contract), true)
+            .await?;
+    }
+    Ok(())
+}
+
+fn prepare_uri_for_blocklist_endpoint(
+    url_antispam: &Url,
+    blocklist_type: &str,
+    blocklist_action_or_network: &str,
+) -> MmResult<Url, UpdateSpamPhishingError> {
+    let mut uri = url_antispam.clone();
+    uri.set_path(BLOCKLIST_ENDPOINT);
+    uri.path_segments_mut()
+        .map_to_mm(|_| UpdateSpamPhishingError::Internal("Invalid URI".to_string()))?
+        .push(blocklist_type)
+        .push(blocklist_action_or_network);
+    Ok(uri)
 }
 
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
@@ -318,6 +398,7 @@ async fn get_moralis_nft_transfers(
                         verified: transfer_moralis.common.verified,
                         operator: transfer_moralis.common.operator,
                         possible_spam: transfer_moralis.common.possible_spam,
+                        possible_phishing: false,
                     },
                     chain: *chain,
                     block_number: *transfer_moralis.block_number,
@@ -403,6 +484,18 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
         return Err(MmError::new(GetInfoFromUriError::Transport(format!(
             "Response !200 from {}: {}, {}",
             uri, status, body
+        ))));
+    }
+    Ok(body)
+}
+
+#[allow(dead_code)]
+async fn send_post_request_to_uri(uri: &str, body: String) -> MmResult<Vec<u8>, GetInfoFromUriError> {
+    let (status, _header, body) = slurp_post_json(uri, body).await?;
+    if !status.is_success() {
+        return Err(MmError::new(GetInfoFromUriError::Transport(format!(
+            "Response !200 from {}: {}",
+            uri, status,
         ))));
     }
     Ok(body)
@@ -719,6 +812,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
                     last_metadata_sync: moralis_meta.common.last_metadata_sync,
                     minter_address: moralis_meta.common.minter_address,
                     possible_spam: moralis_meta.common.possible_spam,
+                    possible_phishing: false,
                 },
                 chain: *chain,
                 block_number_minted: moralis_meta.block_number_minted,
@@ -919,6 +1013,7 @@ async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, cont
             last_metadata_sync: nft_moralis.common.last_metadata_sync,
             minter_address: nft_moralis.common.minter_address,
             possible_spam: nft_moralis.common.possible_spam,
+            possible_phishing: false,
         },
         chain: *chain,
         block_number_minted: nft_moralis.block_number_minted.map(|v| v.0),

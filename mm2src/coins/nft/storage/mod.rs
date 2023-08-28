@@ -85,6 +85,17 @@ pub trait NftListStorageOps {
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error>;
 
     async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
+
+    /// `get_nfts_by_token_address` function returns list of NFTs which have specified token address.
+    async fn get_nfts_by_token_address(&self, chain: &Chain, token_address: String) -> MmResult<Vec<Nft>, Self::Error>;
+
+    /// `update_nft_spam_by_token_address` function updates `possible_spam` field in NFTs which have specified token address.
+    async fn update_nft_spam_by_token_address(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        possible_spam: bool,
+    ) -> MmResult<(), Self::Error>;
 }
 
 #[async_trait]
@@ -148,6 +159,21 @@ pub trait NftTransferHistoryStorageOps {
     ) -> MmResult<(), Self::Error>;
 
     async fn get_transfers_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error>;
+
+    /// `get_transfers_by_token_address` function returns list of NFT transfers which have specified token address.
+    async fn get_transfers_by_token_address(
+        &self,
+        chain: &Chain,
+        token_address: String,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
+
+    /// `update_transfer_spam_by_token_address` function updates `possible_spam` field in NFT transfers which have specified token address.
+    async fn update_transfer_spam_by_token_address(
+        &self,
+        chain: &Chain,
+        token_address: String,
+        possible_spam: bool,
+    ) -> MmResult<(), Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]

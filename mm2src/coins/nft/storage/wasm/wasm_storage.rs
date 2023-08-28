@@ -315,6 +315,23 @@ impl NftListStorageOps for IndexedDbNftStorage {
             .await?;
         Ok(())
     }
+
+    async fn get_nfts_by_token_address(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+    ) -> MmResult<Vec<Nft>, Self::Error> {
+        todo!()
+    }
+
+    async fn update_nft_spam_by_token_address(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _possible_spam: bool,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
 }
 
 #[async_trait]
@@ -520,6 +537,23 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
             }
         }
         Ok(res.into_iter().collect())
+    }
+
+    async fn get_transfers_by_token_address(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn update_transfer_spam_by_token_address(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _possible_spam: bool,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
     }
 }
 

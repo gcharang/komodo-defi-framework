@@ -6,8 +6,10 @@ use futures::lock::Mutex as AsyncMutex;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
+use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use serde_json::Value as Json;
+use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
@@ -20,6 +22,7 @@ use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
 #[cfg(target_arch = "wasm32")]
 use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
@@ -30,6 +33,16 @@ pub struct NftListReq {
     pub(crate) page_number: Option<NonZeroUsize>,
     #[serde(default)]
     pub(crate) protect_from_spam: bool,
+    pub(crate) filters: Option<NftListFilters>,
+}
+
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug, Deserialize)]
+pub struct NftListFilters {
+    #[serde(default)]
+    pub(crate) exclude_spam: bool,
+    #[serde(default)]
+    pub(crate) exclude_phishing: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,7 +67,7 @@ pub enum ParseChainTypeError {
     UnsupportedChainType,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Chain {
     Avalanche,
@@ -99,12 +112,28 @@ impl FromStr for Chain {
     fn from_str(s: &str) -> Result<Chain, ParseChainTypeError> {
         match s {
             "AVALANCHE" => Ok(Chain::Avalanche),
+            "avalanche" => Ok(Chain::Avalanche),
             "BSC" => Ok(Chain::Bsc),
+            "bsc" => Ok(Chain::Bsc),
             "ETH" => Ok(Chain::Eth),
+            "eth" => Ok(Chain::Eth),
             "FANTOM" => Ok(Chain::Fantom),
+            "fantom" => Ok(Chain::Fantom),
             "POLYGON" => Ok(Chain::Polygon),
+            "polygon" => Ok(Chain::Polygon),
             _ => Err(ParseChainTypeError::UnsupportedChainType),
         }
+    }
+}
+
+/// This implementation will use `FromStr` to deserialize `Chain`.
+impl<'de> Deserialize<'de> for Chain {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(de::Error::custom)
     }
 }
 
@@ -195,6 +224,7 @@ impl UriMeta {
     }
 }
 
+#[allow(dead_code)]
 /// [`NftCommon`] structure contains common fields from [`Nft`] and [`NftFromMoralis`]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftCommon {
@@ -213,6 +243,8 @@ pub struct NftCommon {
     pub(crate) minter_address: Option<String>,
     #[serde(default)]
     pub(crate) possible_spam: bool,
+    #[serde(default)]
+    pub(crate) possible_phishing: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -322,6 +354,7 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
@@ -340,7 +373,7 @@ pub(crate) enum ParseTransferStatusError {
     UnsupportedTransferStatus,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) enum TransferStatus {
     Receive,
     Send,
@@ -368,6 +401,7 @@ impl fmt::Display for TransferStatus {
     }
 }
 
+#[allow(dead_code)]
 /// [`NftTransferCommon`] structure contains common fields from [`NftTransferHistory`] and [`NftTransferHistoryFromMoralis`]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftTransferCommon {
@@ -387,6 +421,8 @@ pub struct NftTransferCommon {
     pub(crate) operator: Option<String>,
     #[serde(default)]
     pub(crate) possible_spam: bool,
+    #[serde(default)]
+    pub(crate) possible_phishing: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -421,20 +457,27 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub struct NftTransferHistoryFilters {
     #[serde(default)]
-    pub receive: bool,
+    pub(crate) receive: bool,
     #[serde(default)]
     pub(crate) send: bool,
     pub(crate) from_date: Option<u64>,
     pub(crate) to_date: Option<u64>,
+    #[serde(default)]
+    pub(crate) exclude_spam: bool,
+    #[serde(default)]
+    pub(crate) exclude_phishing: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateNftReq {
     pub(crate) chains: Vec<Chain>,
     pub(crate) url: Url,
+    pub(crate) url_antispam: Url,
 }
 
 #[derive(Debug, Deserialize, Eq, Hash, PartialEq)]
@@ -482,4 +525,36 @@ impl NftCtx {
             })
         })))
     }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct SpamContractReq {
+    pub(crate) network: Chain,
+    pub(crate) addresses: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct PhishingDomainReq {
+    pub(crate) domains: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub(crate) struct SpamContractRes {
+    pub(crate) result: HashMap<Address, bool>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub(crate) struct PhishingDomainRes {
+    pub(crate) result: HashMap<String, bool>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub(crate) struct MnemonicHQRes {
+    pub(crate) network: Chain,
+    pub(crate) address: Address,
+    pub(crate) result: String,
+    pub(crate) spam_contracts: Vec<Address>,
 }

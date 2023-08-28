@@ -168,6 +168,7 @@ pub enum UpdateNftError {
     },
     #[display(fmt = "Invalid hex string: {}", _0)]
     InvalidHexString(String),
+    UpdateSpamPhishingError(UpdateSpamPhishingError),
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -190,6 +191,10 @@ impl<T: NftStorageError> From<T> for UpdateNftError {
     fn from(err: T) -> Self { UpdateNftError::DbError(format!("{:?}", err)) }
 }
 
+impl From<UpdateSpamPhishingError> for UpdateNftError {
+    fn from(e: UpdateSpamPhishingError) -> Self { UpdateNftError::UpdateSpamPhishingError(e) }
+}
+
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -202,7 +207,8 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::InvalidBlockOrder { .. }
             | UpdateNftError::LastScannedBlockNotFound { .. }
             | UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 { .. }
-            | UpdateNftError::InvalidHexString(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::InvalidHexString(_)
+            | UpdateNftError::UpdateSpamPhishingError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -240,4 +246,39 @@ pub enum ProtectFromSpamError {
     RegexError(String),
     #[from_stringify("serde_json::Error")]
     SerdeError(String),
+}
+
+#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
+pub enum UpdateSpamPhishingError {
+    #[display(fmt = "Invalid request: {}", _0)]
+    InvalidRequest(String),
+    #[display(fmt = "Transport: {}", _0)]
+    Transport(String),
+    #[from_stringify("serde_json::Error")]
+    #[display(fmt = "Invalid response: {}", _0)]
+    InvalidResponse(String),
+    #[display(fmt = "Internal: {}", _0)]
+    Internal(String),
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
+    GetMyAddressError(GetMyAddressError),
+}
+
+impl From<GetMyAddressError> for UpdateSpamPhishingError {
+    fn from(e: GetMyAddressError) -> Self { UpdateSpamPhishingError::GetMyAddressError(e) }
+}
+
+impl From<GetInfoFromUriError> for UpdateSpamPhishingError {
+    fn from(e: GetInfoFromUriError) -> Self {
+        match e {
+            GetInfoFromUriError::InvalidRequest(e) => UpdateSpamPhishingError::InvalidRequest(e),
+            GetInfoFromUriError::Transport(e) => UpdateSpamPhishingError::Transport(e),
+            GetInfoFromUriError::InvalidResponse(e) => UpdateSpamPhishingError::InvalidResponse(e),
+            GetInfoFromUriError::Internal(e) => UpdateSpamPhishingError::Internal(e),
+        }
+    }
+}
+
+impl<T: NftStorageError> From<T> for UpdateSpamPhishingError {
+    fn from(err: T) -> Self { UpdateSpamPhishingError::DbError(format!("{:?}", err)) }
 }

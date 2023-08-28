@@ -38,6 +38,7 @@ pub(crate) fn nft() -> Nft {
             last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
             minter_address: Some("ERC1155 tokens don't have a single minter".to_string()),
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number_minted: Some(25465916),
@@ -74,6 +75,7 @@ fn transfer() -> NftTransferHistory {
             verified: Some(1),
             operator: None,
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056726,
@@ -103,6 +105,7 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
             minter_address: Some("ERC1155 tokens don't have a single minter".to_string()),
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number_minted: Some(25465916),
@@ -138,6 +141,7 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-16T16:36:04.283Z".to_string()),
             minter_address: Some("0xdbdeb0895f3681b87fb3654b5cf3e05546ba24a9".to_string()),
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
 
@@ -176,6 +180,7 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-16T16:36:04.283Z".to_string()),
             minter_address: Some("0xdbdeb0895f3681b87fb3654b5cf3e05546ba24a9".to_string()),
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
 
@@ -214,6 +219,7 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-19T19:12:18.080Z".to_string()),
             minter_address: Some("0xdbdeb0895f3681b87fb3654b5cf3e05546ba24a9".to_string()),
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
 
@@ -253,6 +259,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: Some("0x4ff0bbc9b64d635a4696d1a38554fb2529c103ff".to_string()),
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 25919780,
@@ -281,6 +288,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: None,
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056726,
@@ -312,6 +320,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: None,
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056726,
@@ -342,6 +351,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: None,
             possible_spam: false,
+            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056721,
@@ -394,19 +404,17 @@ pub(crate) async fn test_add_get_nfts_impl() {
     assert_eq!(nft.block_number, 28056721);
 }
 
-pub(crate) async fn test_last_nft_blocks_impl() {
+pub(crate) async fn test_last_nft_block_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
     storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
-    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
-    let nft = storage
-        .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
+    let last_block = NftListStorageOps::get_last_block_number(&storage, &chain)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(nft.block_number, 28056721);
+    assert_eq!(last_block, 28056726);
 }
 
 pub(crate) async fn test_nft_list_impl() {
@@ -507,6 +515,26 @@ pub(crate) async fn test_refresh_metadata_impl() {
     assert_eq!(new_symbol.to_string(), nft_upd.common.symbol.unwrap());
 }
 
+#[allow(dead_code)]
+pub(crate) async fn test_update_nft_spam_by_token_address_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+
+    storage
+        .update_nft_spam_by_token_address(&chain, TOKEN_ADD.to_string(), true)
+        .await
+        .unwrap();
+    let nfts = storage
+        .get_nfts_by_token_address(&chain, TOKEN_ADD.to_string())
+        .await
+        .unwrap();
+    for nft in nfts {
+        assert!(nft.common.possible_spam);
+    }
+}
+
 pub(crate) async fn test_add_get_transfers_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
@@ -573,6 +601,8 @@ pub(crate) async fn test_transfer_history_filters_impl() {
         send: false,
         from_date: None,
         to_date: None,
+        exclude_spam: false,
+        exclude_phishing: false,
     };
 
     let filters1 = NftTransferHistoryFilters {
@@ -580,6 +610,8 @@ pub(crate) async fn test_transfer_history_filters_impl() {
         send: false,
         from_date: None,
         to_date: Some(1677166110),
+        exclude_spam: false,
+        exclude_phishing: false,
     };
 
     let filters2 = NftTransferHistoryFilters {
@@ -587,6 +619,8 @@ pub(crate) async fn test_transfer_history_filters_impl() {
         send: false,
         from_date: Some(1677166110),
         to_date: Some(1683627417),
+        exclude_spam: false,
+        exclude_phishing: false,
     };
 
     let transfer_history = storage
@@ -656,4 +690,24 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
         .unwrap()
         .unwrap();
     assert_eq!(transfer_by_hash.token_name, Some("Nebula Nodes".to_string()))
+}
+
+#[allow(dead_code)]
+pub(crate) async fn test_update_transfer_spam_by_token_address_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let transfers = nft_transfer_history();
+    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+
+    storage
+        .update_transfer_spam_by_token_address(&chain, TOKEN_ADD.to_string(), true)
+        .await
+        .unwrap();
+    let transfers = storage
+        .get_transfers_by_token_address(&chain, TOKEN_ADD.to_string())
+        .await
+        .unwrap();
+    for transfers in transfers {
+        assert!(transfers.common.possible_spam);
+    }
 }
