@@ -1,31 +1,117 @@
-pub mod blockdb;
+use crate::z_coin::ZcoinConsensusParams;
 
+pub mod blockdb;
 pub use blockdb::*;
 
 pub mod walletdb;
 pub use walletdb::*;
 
-use crate::z_coin::ZcoinConsensusParams;
+#[cfg(target_arch = "wasm32")]
+use walletdb::wallet_idb_storage::DataConnStmtCacheWasm;
 use zcash_client_backend::data_api::error::ChainInvalid;
 #[cfg(debug_assertions)]
 use zcash_client_backend::data_api::error::Error;
-use zcash_client_backend::data_api::PrunedBlock;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
-use zcash_client_backend::wallet::{AccountId, WalletTx};
-use zcash_client_backend::welding_rig::scan_block;
+#[cfg(not(target_arch = "wasm32"))]
 use zcash_client_sqlite::error::SqliteClientError;
+#[cfg(not(target_arch = "wasm32"))]
 use zcash_client_sqlite::with_async::DataConnStmtCacheAsync;
-use zcash_extras::{WalletRead, WalletWrite};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
-use zcash_primitives::merkle_tree::CommitmentTree;
-use zcash_primitives::sapling::Nullifier;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+
+cfg_native!(
+    use zcash_client_backend::data_api::PrunedBlock;
+    use zcash_client_backend::wallet::{AccountId, WalletTx};
+    use zcash_client_backend::welding_rig::scan_block;
+    use zcash_extras::{WalletRead, WalletWrite};
+    use zcash_primitives::merkle_tree::CommitmentTree;
+    use zcash_primitives::sapling::Nullifier;
+    use zcash_primitives::zip32::ExtendedFullViewingKey;
+);
+
+#[derive(Clone)]
+pub struct DataConnStmtCacheWrapper {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub cache: DataConnStmtCacheAsync<ZcoinConsensusParams>,
+    #[cfg(target_arch = "wasm32")]
+    pub cache: DataConnStmtCacheWasm,
+}
+
+impl DataConnStmtCacheWrapper {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(cache: DataConnStmtCacheAsync<ZcoinConsensusParams>) -> Self { Self { cache } }
+    #[cfg(target_arch = "wasm32")]
+    pub fn new(cache: DataConnStmtCacheWasm) -> Self { Self { cache } }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn inner(&self) -> DataConnStmtCacheAsync<ZcoinConsensusParams> { self.clone().cache }
+    #[cfg(target_arch = "wasm32")]
+    pub fn inner(&self) -> DataConnStmtCacheWasm { self.clone().cache }
+}
+
+#[allow(unused)]
+pub struct CompactBlockRow {
+    pub(crate) height: BlockHeight,
+    pub(crate) data: Vec<u8>,
+}
 
 #[derive(Clone)]
 pub enum BlockProcessingMode {
     Validate,
-    Scan(DataConnStmtCacheAsync<ZcoinConsensusParams>),
+    Scan(DataConnStmtCacheWrapper),
+}
+
+#[derive(Debug, Display)]
+pub enum ValidateBlocksError {
+    #[display(fmt = "Chain Invalid occurred at height: {height:?} — with error {err:?}")]
+    ChainInvalid {
+        height: BlockHeight,
+        err: ChainInvalid,
+    },
+    GetFromStorageError(String),
+    IoError(String),
+    DbError(String),
+    DecodingError(String),
+    TableNotEmpty(String),
+    InvalidNote(String),
+    InvalidNoteId(String),
+    IncorrectHrpExtFvk(String),
+    CorruptedData(String),
+    InvalidMemo(String),
+    BackendError(String),
+}
+
+impl ValidateBlocksError {
+    pub fn prev_hash_mismatch(height: BlockHeight) -> ValidateBlocksError {
+        ValidateBlocksError::ChainInvalid {
+            height,
+            err: ChainInvalid::PrevHashMismatch,
+        }
+    }
+
+    pub fn block_height_discontinuity(height: BlockHeight, found: BlockHeight) -> ValidateBlocksError {
+        ValidateBlocksError::ChainInvalid {
+            height,
+            err: ChainInvalid::BlockHeightDiscontinuity(found),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<SqliteClientError> for ValidateBlocksError {
+    fn from(value: SqliteClientError) -> Self {
+        match value {
+            SqliteClientError::CorruptedData(err) => Self::CorruptedData(err),
+            SqliteClientError::IncorrectHrpExtFvk => Self::IncorrectHrpExtFvk(value.to_string()),
+            SqliteClientError::InvalidNote => Self::InvalidNote(value.to_string()),
+            SqliteClientError::InvalidNoteId => Self::InvalidNoteId(value.to_string()),
+            SqliteClientError::TableNotEmpty => Self::TableNotEmpty(value.to_string()),
+            SqliteClientError::Bech32(_) | SqliteClientError::Base58(_) => Self::DecodingError(value.to_string()),
+            SqliteClientError::DbError(err) => Self::DbError(err.to_string()),
+            SqliteClientError::Io(err) => Self::IoError(err.to_string()),
+            SqliteClientError::InvalidMemo(err) => Self::InvalidMemo(err.to_string()),
+            SqliteClientError::BackendError(err) => Self::BackendError(err.to_string()),
+        }
+    }
 }
 
 /// Checks that the scanned blocks in the data database, when combined with the recent
@@ -40,10 +126,10 @@ pub async fn validate_chain(
     block: CompactBlock,
     prev_height: &mut BlockHeight,
     prev_hash: &mut Option<BlockHash>,
-) -> Result<(), SqliteClientError> {
+) -> Result<(), ValidateBlocksError> {
     let current_height = block.height();
     if current_height != *prev_height + 1 {
-        Err(ChainInvalid::block_height_discontinuity(
+        Err(ValidateBlocksError::block_height_discontinuity(
             *prev_height + 1,
             current_height,
         ))
@@ -51,10 +137,9 @@ pub async fn validate_chain(
         match prev_hash {
             None => Ok(()),
             Some(ref h) if h == &block.prev_hash() => Ok(()),
-            Some(_) => Err(ChainInvalid::prev_hash_mismatch(current_height)),
+            Some(_) => Err(ValidateBlocksError::prev_hash_mismatch(current_height)),
         }
-    }
-    .map_err(SqliteClientError::from)?;
+    }?;
 
     *prev_height = current_height;
     *prev_hash = Some(block.hash());
@@ -83,13 +168,14 @@ pub async fn validate_chain(
 /// Scanned blocks are required to be height-sequential. If a block is missing from the
 /// cache, an error will be returned with kind [`ChainInvalid::BlockHeightDiscontinuity`].
 ///
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn scan_cached_block(
-    data: DataConnStmtCacheAsync<ZcoinConsensusParams>,
+    data: DataConnStmtCacheWrapper,
     params: &ZcoinConsensusParams,
     block: &CompactBlock,
     last_height: &mut BlockHeight,
-) -> Result<(), SqliteClientError> {
-    let mut data_guard = data;
+) -> Result<(), ValidateBlocksError> {
+    let mut data_guard = data.inner();
     // Fetch the ExtendedFullViewingKeys we are tracking
     let extfvks = data_guard.get_extended_full_viewing_keys().await?;
     let extfvks: Vec<(&AccountId, &ExtendedFullViewingKey)> = extfvks.iter().collect();
@@ -109,7 +195,10 @@ pub async fn scan_cached_block(
     let current_height = block.height();
     // Scanned blocks MUST be height-sequential.
     if current_height != (*last_height + 1) {
-        return Err(ChainInvalid::block_height_discontinuity(*last_height + 1, current_height).into());
+        return Err(ValidateBlocksError::block_height_discontinuity(
+            *last_height + 1,
+            current_height,
+        ));
     }
 
     let block_hash = BlockHash::from_slice(&block.hash);

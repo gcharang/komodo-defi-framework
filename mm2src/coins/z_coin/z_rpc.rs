@@ -1,12 +1,11 @@
 use super::{z_coin_errors::*, ZcoinConsensusParams};
 use crate::utxo::rpc_clients::NativeClient;
-use crate::z_coin::storage::BlockProcessingMode;
 use crate::z_coin::storage::{BlockDbImpl, WalletDbShared};
+
 use async_trait::async_trait;
 use common::executor::{spawn_abortable, AbortOnDropHandle};
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender};
 use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
-use futures::compat::Future01CompatExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use futures::StreamExt;
 use mm2_err_handle::prelude::*;
@@ -19,13 +18,14 @@ cfg_native!(
     use super::CheckPointBlockInfo;
     use crate::{RpcCommonOps, ZTransaction};
     use crate::utxo::rpc_clients::{UtxoRpcClientOps, NO_TX_ERROR_CODE};
-    use crate::z_coin::storage::BlockDbError;
+    use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper, BlockDbError, ValidateBlocksError};
 
     use db_common::sqlite::{query_single_row, run_optimization_pragmas};
     use common::{async_blocking};
     use common::executor::Timer;
     use common::log::{debug, error, info, LogOnError};
     use futures::channel::mpsc::channel;
+    use futures::compat::Future01CompatExt;
     use group::GroupEncoding;
     use http::Uri;
     use prost::Message;
@@ -35,10 +35,8 @@ cfg_native!(
     use std::str::FromStr;
     use tokio::task::block_in_place;
     use tonic::transport::{Channel, ClientTlsConfig};
-    use zcash_client_backend::data_api::error::Error as ChainError;
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::zip32::ExtendedFullViewingKey;
-    use zcash_client_sqlite::error::SqliteClientError as ZcashClientError;
     use zcash_client_sqlite::wallet::init::{init_accounts_table, init_blocks_table, init_wallet_db};
     use zcash_client_sqlite::with_async::WalletDbAsync;
     use zcash_extras::{WalletRead, WalletWrite};
@@ -587,7 +585,7 @@ impl SaplingSyncLoopHandle {
 
     /// Scans cached blocks, validates the chain and updates WalletDb.
     /// For more notes on the process, check https://github.com/zcash/librustzcash/blob/master/zcash_client_backend/src/data_api/chain.rs#L2
-    async fn scan_blocks(&mut self) -> Result<(), MmError<BlockDbError>> {
+    async fn scan_validate_and_update_blocks(&mut self) -> Result<(), MmError<BlockDbError>> {
         // required to avoid immutable borrow of self
         let wallet_db = self.wallet_db.clone().db;
         let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
@@ -604,7 +602,8 @@ impl SaplingSyncLoopHandle {
             .await;
         if let Err(e) = validate_chain {
             match e {
-                ZcashClientError::BackendError(ChainError::InvalidChain(lower_bound, _)) => {
+                BlockDbError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
+                    let lower_bound = height;
                     let rewind_height = if lower_bound > BlockHeight::from_u32(10) {
                         lower_bound - 10
                     } else {
@@ -613,7 +612,7 @@ impl SaplingSyncLoopHandle {
                     wallet_ops_guard_clone.rewind_to_height(rewind_height).await?;
                     self.blocks_db.rewind_to_height(rewind_height.into()).await?;
                 },
-                e => return MmError::err(BlockDbError::SqliteError(e)),
+                e => return MmError::err(e),
             }
         }
 
@@ -632,10 +631,11 @@ impl SaplingSyncLoopHandle {
             }
 
             let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
+            let scan = DataConnStmtCacheWrapper::new(wallet_ops_guard);
             blocks_db
                 .process_blocks_with_mode(
                     self.consensus_params.clone(),
-                    BlockProcessingMode::Scan(wallet_ops_guard),
+                    BlockProcessingMode::Scan(scan),
                     None,
                     Some(self.scan_blocks_per_iteration),
                 )
@@ -718,7 +718,7 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
             continue;
         }
 
-        if let Err(e) = sync_handle.scan_blocks().await {
+        if let Err(e) = sync_handle.scan_validate_and_update_blocks().await {
             error!("Error {} on scan_blocks", e);
             sync_handle.notify_on_error(e.to_string());
             Timer::sleep(10.).await;

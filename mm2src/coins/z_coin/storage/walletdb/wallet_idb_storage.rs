@@ -1,9 +1,140 @@
+use super::WalletDbShared;
+use crate::z_coin::storage::WalletDbError;
+use crate::z_coin::ZCoinBuilder;
+
 use async_trait::async_trait;
-use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, InitDbResult,
-                         OnUpgradeResult, TableSignature};
+use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb,
+                         IndexedDbBuilder, InitDbResult, OnUpgradeResult, SharedDb, TableSignature};
+use mm2_err_handle::prelude::*;
+use std::collections::HashMap;
+use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
+use zcash_client_backend::wallet::{AccountId, SpendableNote};
+use zcash_extras::{WalletRead, WalletWrite};
+use zcash_primitives::block::BlockHash;
+use zcash_primitives::consensus::BlockHeight;
+use zcash_primitives::memo::Memo;
+use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
+use zcash_primitives::sapling::{Node, Nullifier, PaymentAddress};
+use zcash_primitives::transaction::components::Amount;
+use zcash_primitives::transaction::TxId;
+use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 const DB_NAME: &str = "wallet_db_cache";
 const DB_VERSION: u32 = 1;
+
+pub type WalletDbRes<T> = MmResult<T, WalletDbError>;
+pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
+
+impl<'a> WalletDbShared {
+    pub async fn new(zcoin_builder: &ZCoinBuilder<'a>) -> MmResult<Self, WalletDbError> {
+        Ok(Self {
+            db: ConstructibleDb::new(zcoin_builder.ctx).into_shared(),
+            ticker: zcoin_builder.ticker.to_string(),
+        })
+    }
+
+    #[allow(unused)]
+    async fn lock_db(&self) -> WalletDbRes<WalletDbInnerLocked<'_>> {
+        self.db
+            .get_or_initialize()
+            .await
+            .mm_err(|err| WalletDbError::IndexedDBError(err.to_string()))
+    }
+}
+
+#[derive(Clone)]
+pub struct DataConnStmtCacheWasm {
+    pub inner: SharedDb<WalletDbInner>,
+}
+
+impl DataConnStmtCacheWasm {
+    pub fn transactionally<F, A>(&mut self, _f: F) -> Result<A, WalletDbError> { todo!() }
+}
+
+#[async_trait]
+impl WalletRead for DataConnStmtCacheWasm {
+    type Error = ();
+    type NoteRef = ();
+    type TxRef = ();
+
+    async fn block_height_extrema(&self) -> Result<Option<(BlockHeight, BlockHeight)>, Self::Error> { todo!() }
+
+    async fn get_block_hash(&self, _block_height: BlockHeight) -> Result<Option<BlockHash>, Self::Error> { todo!() }
+
+    async fn get_tx_height(&self, _txid: TxId) -> Result<Option<BlockHeight>, Self::Error> { todo!() }
+
+    async fn get_address(&self, _account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> { todo!() }
+
+    async fn get_extended_full_viewing_keys(&self) -> Result<HashMap<AccountId, ExtendedFullViewingKey>, Self::Error> {
+        todo!()
+    }
+
+    async fn is_valid_account_extfvk(
+        &self,
+        _account: AccountId,
+        _extfvk: &ExtendedFullViewingKey,
+    ) -> Result<bool, Self::Error> {
+        todo!()
+    }
+
+    async fn get_balance_at(&self, _account: AccountId, _anchor_height: BlockHeight) -> Result<Amount, Self::Error> {
+        todo!()
+    }
+
+    async fn get_memo(&self, _id_note: Self::NoteRef) -> Result<Memo, Self::Error> { todo!() }
+
+    async fn get_commitment_tree(
+        &self,
+        _block_height: BlockHeight,
+    ) -> Result<Option<CommitmentTree<Node>>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_witnesses(
+        &self,
+        _block_height: BlockHeight,
+    ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> { todo!() }
+
+    async fn get_spendable_notes(
+        &self,
+        _account: AccountId,
+        _anchor_height: BlockHeight,
+    ) -> Result<Vec<SpendableNote>, Self::Error> {
+        todo!()
+    }
+
+    async fn select_spendable_notes(
+        &self,
+        _account: AccountId,
+        _target_value: Amount,
+        _anchor_height: BlockHeight,
+    ) -> Result<Vec<SpendableNote>, Self::Error> {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl WalletWrite for DataConnStmtCacheWasm {
+    async fn advance_by_block(
+        &mut self,
+        _block: &PrunedBlock,
+        _updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
+    ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
+        todo!()
+    }
+
+    async fn store_received_tx(&mut self, _received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
+        todo!()
+    }
+
+    async fn store_sent_tx(&mut self, _sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> { todo!() }
+
+    async fn rewind_to_height(&mut self, _block_height: BlockHeight) -> Result<(), Self::Error> { todo!() }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbAccountsTable {
