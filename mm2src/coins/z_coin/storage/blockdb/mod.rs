@@ -4,14 +4,9 @@ pub(crate) mod blockdb_sql_storage;
 #[cfg(not(target_arch = "wasm32"))]
 use db_common::sqlite::rusqlite::Connection;
 #[cfg(not(target_arch = "wasm32"))] use std::sync::{Arc, Mutex};
-use zcash_client_backend::data_api::error::ChainInvalid;
-#[cfg(not(target_arch = "wasm32"))]
-use zcash_client_sqlite::error::SqliteClientError;
-use zcash_primitives::consensus::BlockHeight;
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod blockdb_idb_storage;
-use crate::z_coin::storage::ValidateBlocksError;
 #[cfg(target_arch = "wasm32")]
 use blockdb_idb_storage::BlockDbInner;
 #[cfg(target_arch = "wasm32")] use mm2_db::indexed_db::SharedDb;
@@ -25,63 +20,6 @@ pub struct BlockDbImpl {
     pub db: SharedDb<BlockDbInner>,
     #[allow(unused)]
     ticker: String,
-}
-
-#[allow(unused)]
-#[derive(Debug, Display)]
-pub enum BlockDbError {
-    #[cfg(not(target_arch = "wasm32"))]
-    SqliteError(SqliteClientError),
-    ValidateBlocksError(ValidateBlocksError),
-    #[display(fmt = "Chain Invalid occurred at height: {height:?} — with error {err:?}")]
-    ChainInvalid {
-        height: BlockHeight,
-        err: ChainInvalid,
-    },
-    IoError(String),
-    DbError(String),
-    DecodingError(String),
-    TableNotEmpty(String),
-    InvalidNote(String),
-    InvalidNoteId(String),
-    IncorrectHrpExtFvk(String),
-    CorruptedData(String),
-    InvalidMemo(String),
-    BackendError(String),
-    #[display(fmt = "Error inserting {ticker:?} block data to db: {err} - height {height}")]
-    AddToStorageErr {
-        ticker: String,
-        err: String,
-        height: u32,
-    },
-    #[display(fmt = "Error deleting {ticker:?} block data from db: {err} - height {height}")]
-    RemoveFromStorageErr {
-        ticker: String,
-        err: String,
-        height: u32,
-    },
-    #[display(fmt = "Error getting {ticker} block height from storage: {err}")]
-    BlockHeightNotFound {
-        ticker: String,
-        err: String,
-    },
-    #[display(fmt = "Error getting {ticker} block from storage: {err}")]
-    GetFromStorageError {
-        ticker: String,
-        err: String,
-    },
-    #[display(fmt = "Storage Initialization err: {err} - ticker: {ticker}")]
-    InitDbError {
-        ticker: String,
-        err: String,
-    },
-    #[cfg(target_arch = "wasm32")]
-    #[display(fmt = "IndexedDB table err: {err} - ticker: {ticker}")]
-    IdbTableError {
-        ticker: String,
-        err: String,
-    },
-    ChainError(String),
 }
 
 #[cfg(any(test, target_arch = "wasm32"))]

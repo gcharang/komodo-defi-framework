@@ -18,7 +18,7 @@ cfg_native!(
     use super::CheckPointBlockInfo;
     use crate::{RpcCommonOps, ZTransaction};
     use crate::utxo::rpc_clients::{UtxoRpcClientOps, NO_TX_ERROR_CODE};
-    use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper, BlockDbError, ValidateBlocksError};
+    use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper, ZcoinStorageError, ValidateBlocksError};
 
     use db_common::sqlite::{query_single_row, run_optimization_pragmas};
     use common::{async_blocking};
@@ -585,7 +585,7 @@ impl SaplingSyncLoopHandle {
 
     /// Scans cached blocks, validates the chain and updates WalletDb.
     /// For more notes on the process, check https://github.com/zcash/librustzcash/blob/master/zcash_client_backend/src/data_api/chain.rs#L2
-    async fn scan_validate_and_update_blocks(&mut self) -> Result<(), MmError<BlockDbError>> {
+    async fn scan_validate_and_update_blocks(&mut self) -> Result<(), MmError<ZcoinStorageError>> {
         // required to avoid immutable borrow of self
         let wallet_db = self.wallet_db.clone().db;
         let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
@@ -602,7 +602,7 @@ impl SaplingSyncLoopHandle {
             .await;
         if let Err(e) = validate_chain {
             match e {
-                BlockDbError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
+                ZcoinStorageError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
                     let lower_bound = height;
                     let rewind_height = if lower_bound > BlockHeight::from_u32(10) {
                         lower_bound - 10

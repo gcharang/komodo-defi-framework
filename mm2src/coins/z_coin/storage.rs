@@ -269,3 +269,58 @@ pub async fn scan_cached_block(
 
     Ok(())
 }
+
+#[allow(unused)]
+#[derive(Debug, Display)]
+pub enum ZcoinStorageError {
+    #[cfg(not(target_arch = "wasm32"))]
+    SqliteError(SqliteClientError),
+    ValidateBlocksError(ValidateBlocksError),
+    #[display(fmt = "Chain Invalid occurred at height: {height:?} — with error {err:?}")]
+    ChainInvalid {
+        height: BlockHeight,
+        err: ChainInvalid,
+    },
+    IoError(String),
+    DbError(String),
+    DecodingError(String),
+    TableNotEmpty(String),
+    InvalidNote(String),
+    InvalidNoteId(String),
+    IncorrectHrpExtFvk(String),
+    CorruptedData(String),
+    InvalidMemo(String),
+    BackendError(String),
+    #[display(fmt = "Error inserting {ticker:?} block data to db: {err} ")]
+    AddToStorageErr {
+        ticker: String,
+        err: String,
+    },
+    #[display(fmt = "Error deleting {ticker:?} block data from db: {err} ")]
+    RemoveFromStorageErr {
+        ticker: String,
+        err: String,
+    },
+    #[display(fmt = "Error getting {ticker} block height from storage: {err}")]
+    BlockHeightNotFound {
+        ticker: String,
+        err: String,
+    },
+    #[display(fmt = "Error getting {ticker} block from storage: {err}")]
+    GetFromStorageError {
+        ticker: String,
+        err: String,
+    },
+    #[display(fmt = "Storage Initialization err: {err} - ticker: {ticker}")]
+    InitDbError {
+        ticker: String,
+        err: String,
+    },
+    #[cfg(target_arch = "wasm32")]
+    #[display(fmt = "IndexedDB table err: {err} - ticker: {ticker}")]
+    IdbTableError {
+        ticker: String,
+        err: String,
+    },
+    ChainError(String),
+}

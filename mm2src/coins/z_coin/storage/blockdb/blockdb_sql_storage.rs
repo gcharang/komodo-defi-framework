@@ -1,5 +1,5 @@
-use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbError, BlockDbImpl, BlockProcessingMode,
-                             CompactBlockRow, ValidateBlocksError};
+use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow,
+                             ValidateBlocksError, ZcoinStorageError};
 use crate::z_coin::ZcoinConsensusParams;
 
 use common::async_blocking;
@@ -19,7 +19,7 @@ use zcash_extras::WalletRead;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
 
-impl From<ZcashClientError> for BlockDbError {
+impl From<ZcashClientError> for ZcoinStorageError {
     fn from(value: ZcashClientError) -> Self {
         match value {
             SqliteClientError::CorruptedData(err) => Self::CorruptedData(err),
@@ -37,19 +37,19 @@ impl From<ZcashClientError> for BlockDbError {
     }
 }
 
-impl From<ValidateBlocksError> for BlockDbError {
+impl From<ValidateBlocksError> for ZcoinStorageError {
     fn from(value: ValidateBlocksError) -> Self { Self::ValidateBlocksError(value) }
 }
 
-impl From<ChainError<NoteId>> for BlockDbError {
+impl From<ChainError<NoteId>> for ZcoinStorageError {
     fn from(value: ChainError<NoteId>) -> Self { Self::SqliteError(ZcashClientError::from(value)) }
 }
 
 impl BlockDbImpl {
     #[cfg(all(not(test)))]
-    pub async fn new(_ctx: MmArc, ticker: String, path: Option<impl AsRef<Path>>) -> MmResult<Self, BlockDbError> {
-        let conn = Connection::open(path.unwrap()).map_to_mm(|err| BlockDbError::DbError(err.to_string()))?;
-        run_optimization_pragmas(&conn).map_to_mm(|err| BlockDbError::DbError(err.to_string()))?;
+    pub async fn new(_ctx: MmArc, ticker: String, path: Option<impl AsRef<Path>>) -> MmResult<Self, ZcoinStorageError> {
+        let conn = Connection::open(path.unwrap()).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+        run_optimization_pragmas(&conn).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
@@ -57,7 +57,7 @@ impl BlockDbImpl {
         )",
             [],
         )
-        .map_to_mm(|err| BlockDbError::DbError(err.to_string()))?;
+        .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
 
         Ok(Self {
             db: Arc::new(Mutex::new(conn)),
@@ -70,14 +70,14 @@ impl BlockDbImpl {
         ctx: MmArc,
         ticker: String,
         _path: Option<impl AsRef<Path>>,
-    ) -> MmResult<Self, BlockDbError> {
+    ) -> MmResult<Self, ZcoinStorageError> {
         let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let conn = ctx.sqlite_connection.clone_or(conn);
         let clone_db = conn.clone();
 
         async_blocking(move || {
             let clone_db = clone_db.lock().unwrap();
-            run_optimization_pragmas(&clone_db).map_err(|err| BlockDbError::DbError(err.to_string()))?;
+            run_optimization_pragmas(&clone_db).map_err(|err| ZcoinStorageError::DbError(err.to_string()))?;
             clone_db
                 .execute(
                     "CREATE TABLE IF NOT EXISTS compactblocks (
@@ -86,7 +86,7 @@ impl BlockDbImpl {
         )",
                     [],
                 )
-                .map_to_mm(|err| BlockDbError::DbError(err.to_string()))?;
+                .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
 
             Ok(BlockDbImpl { db: conn, ticker })
         })
@@ -103,23 +103,21 @@ impl BlockDbImpl {
         .unwrap_or(0))
     }
 
-    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, BlockDbError> {
+    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, ZcoinStorageError> {
         let db = self.db.clone();
         let ticker = self.ticker.clone();
         async_blocking(move || {
             let db = db.lock().unwrap();
             let insert = db
                 .prepare("INSERT INTO compactblocks (height, data) VALUES (?, ?)")
-                .map_err(|err| BlockDbError::AddToStorageErr {
+                .map_err(|err| ZcoinStorageError::AddToStorageErr {
                     ticker: ticker.clone(),
                     err: err.to_string(),
-                    height,
                 })?
                 .execute(params![height, cb_bytes])
-                .map_err(|err| BlockDbError::AddToStorageErr {
+                .map_err(|err| ZcoinStorageError::AddToStorageErr {
                     ticker,
                     err: err.to_string(),
-                    height,
                 })?;
 
             Ok(insert)
@@ -127,16 +125,15 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
+    pub(crate) async fn rewind_to_height(&self, height: u32) -> Result<usize, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         self.db
             .lock()
             .unwrap()
             .execute("DELETE from compactblocks WHERE height > ?1", [height])
-            .map_err(|err| BlockDbError::RemoveFromStorageErr {
+            .map_err(|err| ZcoinStorageError::RemoveFromStorageErr {
                 ticker,
                 err: err.to_string(),
-                height,
             })
     }
 
@@ -144,7 +141,7 @@ impl BlockDbImpl {
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-    ) -> Result<Vec<rusqlite::Result<CompactBlockRow>>, BlockDbError> {
+    ) -> Result<Vec<rusqlite::Result<CompactBlockRow>>, ZcoinStorageError> {
         let db = self.db.clone();
         let ticker = self.ticker.clone();
         async_blocking(move || {
@@ -155,10 +152,9 @@ impl BlockDbImpl {
                     "SELECT height, data FROM compactblocks WHERE height > ? ORDER BY height ASC \
         LIMIT ?",
                 )
-                .map_err(|err| BlockDbError::AddToStorageErr {
+                .map_err(|err| ZcoinStorageError::AddToStorageErr {
                     ticker: ticker.clone(),
                     err: err.to_string(),
-                    height: u32::from(from_height),
                 })?;
 
             let rows = stmt_blocks
@@ -171,10 +167,9 @@ impl BlockDbImpl {
                         })
                     },
                 )
-                .map_err(|err| BlockDbError::AddToStorageErr {
+                .map_err(|err| ZcoinStorageError::AddToStorageErr {
                     ticker: ticker.clone(),
                     err: err.to_string(),
-                    height: u32::from(from_height),
                 })?;
 
             Ok(rows.collect_vec())
@@ -188,7 +183,7 @@ impl BlockDbImpl {
         mode: BlockProcessingMode,
         validate_from: Option<(BlockHeight, BlockHash)>,
         limit: Option<u32>,
-    ) -> Result<(), BlockDbError> {
+    ) -> Result<(), ZcoinStorageError> {
         let ticker = self.ticker.to_owned();
         let mut from_height = match &mode {
             BlockProcessingMode::Validate => validate_from
@@ -209,16 +204,15 @@ impl BlockDbImpl {
         let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
 
         for row_result in rows {
-            let cbr = row_result.map_err(|err| BlockDbError::AddToStorageErr {
+            let cbr = row_result.map_err(|err| ZcoinStorageError::AddToStorageErr {
                 ticker: ticker.clone(),
                 err: err.to_string(),
-                height: u32::from(from_height),
             })?;
-            let block =
-                CompactBlock::parse_from_bytes(&cbr.data).map_err(|err| BlockDbError::ChainError(err.to_string()))?;
+            let block = CompactBlock::parse_from_bytes(&cbr.data)
+                .map_err(|err| ZcoinStorageError::ChainError(err.to_string()))?;
 
             if block.height() != cbr.height {
-                return Err(BlockDbError::CorruptedData(format!(
+                return Err(ZcoinStorageError::CorruptedData(format!(
                     "{ticker}, Block height {} did not match row's height field value {}",
                     block.height(),
                     cbr.height

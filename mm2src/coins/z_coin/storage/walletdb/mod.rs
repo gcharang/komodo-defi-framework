@@ -9,9 +9,7 @@ cfg_native!(
 
 cfg_wasm32!(
     pub mod wallet_idb_storage;
-
-    use mm2_db::indexed_db::SharedDb;
-    use wallet_idb_storage::WalletDbInner;
+    use wallet_idb_storage::WalletIndexedDb;
 );
 
 #[derive(Debug, Display)]
@@ -26,7 +24,7 @@ pub struct WalletDbShared {
     #[cfg(not(target_arch = "wasm32"))]
     pub db: WalletDbAsync<ZcoinConsensusParams>,
     #[cfg(target_arch = "wasm32")]
-    pub db: SharedDb<WalletDbInner>,
+    pub db: WalletIndexedDb,
     #[allow(unused)]
     ticker: String,
 }

@@ -1,5 +1,5 @@
-use crate::z_coin::storage::CompactBlockRow;
-use crate::z_coin::storage::{BlockDbError, BlockDbImpl, BlockProcessingMode, ZcoinConsensusParams};
+use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode, CompactBlockRow, ZcoinConsensusParams,
+                             ZcoinStorageError};
 
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
@@ -15,16 +15,15 @@ use zcash_primitives::consensus::BlockHeight;
 const DB_NAME: &str = "z_compactblocks_cache";
 const DB_VERSION: u32 = 1;
 
-pub type BlockDbRes<T> = MmResult<T, BlockDbError>;
+pub type BlockDbRes<T> = MmResult<T, ZcoinStorageError>;
 pub type BlockDbInnerLocked<'a> = DbLocked<'a, BlockDbInner>;
 
 #[cfg(target_arch = "wasm32")]
-impl BlockDbError {
-    pub(crate) fn add_err(ticker: &str, err: String, height: u32) -> Self {
+impl ZcoinStorageError {
+    pub(crate) fn add_err(ticker: &str, err: String) -> Self {
         Self::AddToStorageErr {
             ticker: ticker.to_string(),
             err,
-            height,
         }
     }
 
@@ -35,11 +34,10 @@ impl BlockDbError {
         }
     }
 
-    pub(crate) fn remove_err(ticker: &str, err: String, height: u32) -> Self {
+    pub(crate) fn remove_err(ticker: &str, err: String) -> Self {
         Self::RemoveFromStorageErr {
             ticker: ticker.to_string(),
             err,
-            height,
         }
     }
 
@@ -114,7 +112,7 @@ impl BlockDbInner {
 }
 
 impl BlockDbImpl {
-    pub async fn new(ctx: MmArc, ticker: String, _path: Option<impl AsRef<Path>>) -> Result<Self, BlockDbError> {
+    pub async fn new(ctx: MmArc, ticker: String, _path: Option<impl AsRef<Path>>) -> Result<Self, ZcoinStorageError> {
         Ok(Self {
             db: ConstructibleDb::new(&ctx).into_shared(),
             ticker,
@@ -125,75 +123,75 @@ impl BlockDbImpl {
         self.db
             .get_or_initialize()
             .await
-            .mm_err(|err| BlockDbError::init_err(&self.ticker, err.to_string()))
+            .mm_err(|err| ZcoinStorageError::init_err(&self.ticker, err.to_string()))
     }
 
-    pub async fn get_latest_block(&self) -> Result<u32, BlockDbError> {
+    pub async fn get_latest_block(&self) -> Result<u32, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self
             .lock_db()
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
         let db_transaction = locked_db
             .get_inner()
             .transaction()
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
         let block_db = db_transaction
             .table::<BlockDbTable>()
             .await
-            .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
         let maybe_height = block_db
             .cursor_builder()
             .only("ticker", ticker.clone())
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
             .bound("height", 0u32, u32::MAX)
             .reverse()
             .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
             .next()
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
 
         let maybe_height = maybe_height
             .map(|(_, item)| {
                 item.height
                     .to_u32()
-                    .ok_or_else(|| BlockDbError::get_err(&ticker, "height is too large".to_string()))
+                    .ok_or_else(|| ZcoinStorageError::get_err(&ticker, "height is too large".to_string()))
             })
             .transpose()?;
 
         let Some(height) = maybe_height else {
-            return Err(BlockDbError::not_found(&ticker, format!("block height not found")));
+            return Err(ZcoinStorageError::not_found(&ticker, format!("block height not found")));
         };
 
         Ok(height)
     }
 
-    pub async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, BlockDbError> {
+    pub async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self
             .lock_db()
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
         let db_transaction = locked_db
             .get_inner()
             .transaction()
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
         let block_db = db_transaction
             .table::<BlockDbTable>()
             .await
-            .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
 
         Ok(block_db
             .add_item_or_ignore_by_unique_multi_index(
                 MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
                     .with_value(&ticker)
-                    .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?
+                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
                     .with_value(BeBigUint::from(height))
-                    .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?,
+                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?,
                 &BlockDbTable {
                     height,
                     data: cb_bytes,
@@ -201,65 +199,65 @@ impl BlockDbImpl {
                 },
             )
             .await
-            .map_err(|err| BlockDbError::add_err(&ticker, err.to_string(), height))?
+            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?
             .item_id() as usize)
     }
 
-    pub async fn rewind_to_height(&self, height: u32) -> Result<usize, BlockDbError> {
+    pub async fn rewind_to_height(&self, height: u32) -> Result<usize, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self
             .lock_db()
             .await
-            .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), height))?;
+            .map_err(|err| ZcoinStorageError::remove_err(&ticker, err.to_string()))?;
         let db_transaction = locked_db
             .get_inner()
             .transaction()
             .await
-            .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), height))?;
+            .map_err(|err| ZcoinStorageError::remove_err(&ticker, err.to_string()))?;
         let block_db = db_transaction
             .table::<BlockDbTable>()
             .await
-            .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), height))?;
+            .map_err(|err| ZcoinStorageError::remove_err(&ticker, err.to_string()))?;
 
         let get_latest_block = self.get_latest_block().await?;
         let height_to_remove_from = height + 1;
         for i in height_to_remove_from..=get_latest_block {
             let index_keys = MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
                 .with_value(&ticker)
-                .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?
-                .with_value(BeBigUint::from(height))
-                .map_err(|err| BlockDbError::table_err(&ticker, err.to_string()))?;
+                .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
+                .with_value(BeBigUint::from(i))
+                .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
 
             block_db
                 .delete_item_by_unique_multi_index(index_keys)
                 .await
-                .map_err(|err| BlockDbError::remove_err(&ticker, err.to_string(), i))?;
+                .map_err(|err| ZcoinStorageError::remove_err(&ticker, err.to_string()))?;
         }
 
         Ok((height_to_remove_from + get_latest_block) as usize)
     }
 
-    pub async fn query_blocks_by_limit(&self, limit: Option<u32>) -> Result<Vec<CompactBlockRow>, BlockDbError> {
+    pub async fn query_blocks_by_limit(&self, limit: Option<u32>) -> Result<Vec<CompactBlockRow>, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self
             .lock_db()
             .await
-            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::init_err(&ticker, err.to_string()))?;
         let db_transaction = locked_db
             .get_inner()
             .transaction()
             .await
-            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::init_err(&ticker, err.to_string()))?;
         let block_db = db_transaction
             .table::<BlockDbTable>()
             .await
-            .map_err(|err| BlockDbError::init_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::init_err(&ticker, err.to_string()))?;
 
         // Fetch CompactBlocks that are needed for scanning.
         let blocks = block_db
             .get_items("ticker", &ticker)
             .await
-            .map_err(|err| BlockDbError::get_err(&ticker, err.to_string()))?;
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
 
         let mut blocks_to_scan = vec![];
         for (_, block) in blocks {
@@ -278,13 +276,13 @@ impl BlockDbImpl {
         Ok(blocks_to_scan)
     }
 
-    pub(crate) async fn process_blocks_with_mode(
+    pub(crate) async fn _process_blocks_with_mode(
         &self,
         _params: ZcoinConsensusParams,
         _mode: BlockProcessingMode,
         _validate_from: Option<(BlockHeight, BlockHash)>,
         _limit: Option<u32>,
-    ) -> Result<(), BlockDbError> {
+    ) -> Result<(), ZcoinStorageError> {
         //        let mut from_height = match &mode {
         //            BlockProcessingMode::Validate => validate_from
         //                .map(|(height, _)| height)
@@ -315,7 +313,7 @@ impl BlockDbImpl {
         //            let block = CompactBlock::parse_from_bytes(&cbr.data).map_err(ChainError::from)?;
         //
         //            if block.height() != cbr.height {
-        //                return Err(BlockDbError::CorruptedData(format!(
+        //                return Err(ZcoinStorageError::CorruptedData(format!(
         //                    "Block height {} did not match row's height field value {}",
         //                    block.height(),
         //                    cbr.height
