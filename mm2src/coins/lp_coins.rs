@@ -444,8 +444,9 @@ pub struct PrevTxns {
     pub index: u32,
     /// transaction output script pub key
     pub script_pub_key: String,
-    /// redeem script for P2SH script pubkey
-    pub redeem_script: Option<String>,
+    // TODO: implement if needed:
+    // redeem script for P2SH script pubkey
+    // pub redeem_script: Option<String>,
     /// transaction output amount
     pub amount: BigDecimal,
 }

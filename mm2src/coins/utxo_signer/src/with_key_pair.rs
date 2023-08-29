@@ -176,12 +176,12 @@ pub fn p2wpkh_spend(
 ) -> UtxoSignWithKeyPairResult<TransactionInput> {
     let unsigned_input = get_input(signer, input_index)?;
 
-    let script_code = Builder::build_p2pkh(&key_pair.public().address_hash().into()); // this is script code by BIP-0141
-    let witness_program = Builder::build_p2witness(&key_pair.public().address_hash().into());
-    if witness_program != prev_script {
+    let script_code = Builder::build_p2pkh(&key_pair.public().address_hash().into()); // this is the scriptCode by BIP-0143: for P2WPKH scriptCode is P2PKH
+    let script_pub_key = Builder::build_p2witness(&key_pair.public().address_hash().into());
+    if script_pub_key != prev_script {
         return MmError::err(UtxoSignWithKeyPairError::MismatchScript {
             script_type: "P2WPKH".to_owned(),
-            script: witness_program,
+            script: script_pub_key,
             prev_script,
         });
     }
