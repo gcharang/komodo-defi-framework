@@ -1,7 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 /// multi-purpose/generic event type that can easily be used over the event streaming
-#[derive(Debug, Deserialize, Serialize)]
 pub struct Event {
     _type: String,
     message: String,

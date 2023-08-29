@@ -43,12 +43,11 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
     let mut channel_controller = ctx.stream_channel_controller.clone();
     let mut rx = channel_controller.create_channel(config.active_events.len());
     let body = Body::wrap_stream(async_stream::stream! {
-        while let Some(msg) = rx.recv().await {
+        while let Some(event) = rx.recv().await {
             // If there are no filtered events, that means we want to
             // stream out all the events.
-            if filtered_events.is_empty() || filtered_events.contains(&msg.event_type().to_owned()) {
-                let Ok(json) = serde_json::to_string(&msg) else { continue }; // TODO: This is not a good idea. Refactor the event type.
-                yield Ok::<_, hyper::Error>(Bytes::from(format!("data: {json} \n\n")));
+            if filtered_events.is_empty() || filtered_events.contains(&event.event_type().to_owned()) {
+                yield Ok::<_, hyper::Error>(Bytes::from(format!("data: {} \n\n", event.message())));
             }
         }
     });
