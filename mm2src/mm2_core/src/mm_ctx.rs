@@ -73,7 +73,7 @@ pub struct MmCtx {
     pub initialized: Constructible<bool>,
     /// True if the RPC HTTP server was started.
     pub rpc_started: Constructible<bool>,
-    /// Channels for continuously streaming data to clients via SSE.
+    /// Controller for continuously streaming data using streaming channels of `mm2_event_stream`.
     pub stream_channel_controller: Controller<Event>,
     /// Configuration of event streaming used for SSE.
     pub event_stream_configuration: Option<EventStreamConfiguration>,
