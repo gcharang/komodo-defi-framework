@@ -13,6 +13,7 @@ use common::log::{error, info};
 use common::state_machine::prelude::*;
 use common::state_machine::StateMachineTrait;
 use derive_more::Display;
+use futures::future::try_join_all;
 use keys::Address;
 use mm2_err_handle::prelude::*;
 use mm2_metrics::MetricsArc;
@@ -108,7 +109,7 @@ pub trait UtxoTxHistoryOps: CoinWithTxHistoryV2 + MarketCoinOps + Send + Sync + 
     /// Returns Transaction details by hash using the coin RPC if required.
     async fn tx_details_by_hash<T>(
         &self,
-        params: UtxoTxDetailsParams<'_, T>,
+        params: &'_ UtxoTxDetailsParams<'_, T>,
     ) -> MmResult<Vec<TransactionDetails>, UtxoTxDetailsError>
     where
         T: TxHistoryStorage;
@@ -572,49 +573,76 @@ where
         self: Box<Self>,
         ctx: &mut UtxoTxHistoryStateMachine<Coin, Storage>,
     ) -> StateResult<UtxoTxHistoryStateMachine<Coin, Storage>> {
+        let chunk_size: usize = 100;
+
         let ticker = ctx.coin.ticker();
         let wallet_id = ctx.coin.history_wallet_id();
 
         let my_addresses = try_or_stop_unknown!(ctx.coin.my_addresses().await, "Error on getting my addresses");
-
+        let mut new_tx_ids_with_height = Vec::new();
         for (tx_hash, height) in self.all_tx_ids_with_height {
             let tx_hash_string = format!("{:02x}", tx_hash);
             match ctx.storage.history_has_tx_hash(&wallet_id, &tx_hash_string).await {
                 Ok(true) => continue,
-                Ok(false) => (),
+                Ok(false) => new_tx_ids_with_height.push((tx_hash, height)),
                 Err(e) => return Self::change_state(Stopped::storage_error(e)),
             }
+        }
 
-            let block_height_and_time = if height > 0 {
-                let timestamp = match ctx.coin.get_block_timestamp(height).await {
-                    Ok(time) => time,
+        for (i, chunk) in new_tx_ids_with_height.chunks(chunk_size).enumerate() {
+            let txes_left = new_tx_ids_with_height.len() - (i * chunk_size);
+            let new_state_json = json!({ "transactions_left": txes_left });
+            ctx.coin
+                .set_history_sync_state(HistorySyncState::InProgress(new_state_json));
+
+            let unique_heights_set: HashSet<u64> = chunk
+                .iter()
+                .filter_map(|(_, height)| if *height > 0 { Some(*height) } else { None })
+                .collect();
+
+            let heights: Vec<u64> = unique_heights_set.into_iter().collect();
+
+            let heights_time_map: HashMap<u64, u64> =
+                match try_join_all(heights.iter().map(|&height| ctx.coin.get_block_timestamp(height))).await {
+                    Ok(times) => heights
+                        .iter()
+                        .zip(times)
+                        .map(|(&height, time)| (height, time))
+                        .collect(),
                     Err(_) => return Self::change_state(OnIoErrorCooldown::new(self.requested_for_addresses)),
                 };
-                Some(BlockHeightAndTime { height, timestamp })
-            } else {
-                None
-            };
-            let params = UtxoTxDetailsParams {
-                hash: &tx_hash,
-                block_height_and_time,
-                storage: &ctx.storage,
-                my_addresses: &my_addresses,
-            };
-            let tx_details = match ctx.coin.tx_details_by_hash(params).await {
-                Ok(tx) => tx,
+
+            let mut params = Vec::with_capacity(chunk_size);
+            for (tx_hash, height) in chunk {
+                let block_height_and_time = heights_time_map.get(height).map(|time| BlockHeightAndTime {
+                    height: *height,
+                    timestamp: *time,
+                });
+                let param = UtxoTxDetailsParams {
+                    hash: tx_hash,
+                    block_height_and_time,
+                    storage: &ctx.storage,
+                    my_addresses: &my_addresses,
+                };
+                params.push(param);
+            }
+            let tx_details_futs = params.iter().map(|param| ctx.coin.tx_details_by_hash(param));
+
+            match try_join_all(tx_details_futs).await {
+                Ok(tx_details) => {
+                    for tx_detail in tx_details {
+                        if let Err(e) = ctx.storage.add_transactions_to_history(&wallet_id, tx_detail).await {
+                            return Self::change_state(Stopped::storage_error(e));
+                        }
+                    }
+                },
                 Err(e) => {
-                    error!("Error on getting {ticker} tx details for hash {tx_hash:02x}: {e}");
+                    error!("Error on getting {ticker} tx details for {chunk_size} hashes: {e}");
                     return Self::change_state(OnIoErrorCooldown::new(self.requested_for_addresses));
                 },
-            };
-
-            if let Err(e) = ctx.storage.add_transactions_to_history(&wallet_id, tx_details).await {
-                return Self::change_state(Stopped::storage_error(e));
             }
-
-            // wait for for one second to reduce the number of requests to electrum servers
-            Timer::sleep(1.).await;
         }
+
         info!("Tx history fetching finished for {ticker}");
         ctx.coin.set_history_sync_state(HistorySyncState::Finished);
         Self::change_state(WaitForHistoryUpdateTrigger::new())

@@ -1242,7 +1242,7 @@ impl UtxoTxHistoryOps for QtumCoin {
 
     async fn tx_details_by_hash<Storage>(
         &self,
-        params: UtxoTxDetailsParams<'_, Storage>,
+        params: &'_ UtxoTxDetailsParams<'_, Storage>,
     ) -> MmResult<Vec<TransactionDetails>, UtxoTxDetailsError>
     where
         Storage: TxHistoryStorage,

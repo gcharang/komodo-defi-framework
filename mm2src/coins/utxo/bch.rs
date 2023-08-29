@@ -358,7 +358,7 @@ impl BchCoin {
     /// Returns multiple details by tx hash if token transfers also occurred in the transaction
     pub async fn transaction_details_with_token_transfers<T: TxHistoryStorage>(
         &self,
-        params: UtxoTxDetailsParams<'_, T>,
+        params: &'_ UtxoTxDetailsParams<'_, T>,
     ) -> MmResult<Vec<TransactionDetails>, UtxoTxDetailsError> {
         let tx = self.tx_from_storage_or_rpc(params.hash, params.storage).await?;
 
@@ -1350,7 +1350,7 @@ impl UtxoTxHistoryOps for BchCoin {
 
     async fn tx_details_by_hash<Storage>(
         &self,
-        params: UtxoTxDetailsParams<'_, Storage>,
+        params: &'_ UtxoTxDetailsParams<'_, Storage>,
     ) -> MmResult<Vec<TransactionDetails>, UtxoTxDetailsError>
     where
         Storage: TxHistoryStorage,

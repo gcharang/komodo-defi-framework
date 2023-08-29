@@ -125,7 +125,7 @@ where
         my_addresses: &my_addresses,
     };
 
-    block_on(UtxoTxHistoryOps::tx_details_by_hash(coin, params)).unwrap()
+    block_on(UtxoTxHistoryOps::tx_details_by_hash(coin, &params)).unwrap()
 }
 
 /// Returns `TransactionDetails` of the given `tx_hash` and checks that

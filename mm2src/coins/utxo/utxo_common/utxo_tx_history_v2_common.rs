@@ -154,7 +154,7 @@ where
 /// [`UtxoTxHistoryOps::tx_details_by_hash`] implementation.
 pub async fn tx_details_by_hash<Coin, Storage>(
     coin: &Coin,
-    params: UtxoTxDetailsParams<'_, Storage>,
+    params: &'_ UtxoTxDetailsParams<'_, Storage>,
 ) -> MmResult<Vec<TransactionDetails>, UtxoTxDetailsError>
 where
     Coin: UtxoTxHistoryOps + UtxoCommonOps + MarketCoinOps,
