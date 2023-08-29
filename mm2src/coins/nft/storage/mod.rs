@@ -3,6 +3,7 @@ use crate::nft::nft_structs::{Chain, Nft, NftList, NftTokenAddrId, NftTransferHi
 use crate::WithdrawError;
 use async_trait::async_trait;
 use derive_more::Display;
+use ethereum_types::Address;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::mm_error::MmResult;
 use mm2_err_handle::mm_error::{NotEqual, NotMmError};
@@ -174,6 +175,9 @@ pub trait NftTransferHistoryStorageOps {
         token_address: String,
         possible_spam: bool,
     ) -> MmResult<(), Self::Error>;
+
+    /// `get_token_addresses` return all unique token addresses.
+    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<Vec<Address>, Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]

@@ -10,6 +10,7 @@ use db_common::sqlite::rusqlite::types::{FromSqlError, Type};
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Row, Statement};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use db_common::sqlite::{query_single_row, string_from_row, validate_table_name, CHECK_TABLE_EXISTS_SQL};
+use ethereum_types::Address;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::mm_error::{MmError, MmResult};
@@ -212,6 +213,13 @@ fn transfer_history_from_row(row: &Row<'_>) -> Result<NftTransferHistory, SqlErr
     json::from_str(&json_string).map_err(|e| SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(e)))
 }
 
+fn address_from_row(row: &Row<'_>) -> Result<Address, SqlError> {
+    let address: String = row.get(0)?;
+    address
+        .parse()
+        .map_err(|e| SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(e)))
+}
+
 fn token_address_id_from_row(row: &Row<'_>) -> Result<NftTokenAddrId, SqlError> {
     let token_address: String = row.get("token_address")?;
     let token_id_str: String = row.get("token_id")?;
@@ -386,6 +394,21 @@ where
     let table_name = table_name_creator(chain);
     validate_table_name(table_name.as_str())?;
     let sql_query = format!("SELECT details_json FROM {} WHERE token_address = ?", table_name);
+    let stmt = conn.prepare(&sql_query)?;
+    Ok(stmt)
+}
+
+fn get_token_addresses_statement<'a, F>(
+    conn: &'a Connection,
+    chain: &'a Chain,
+    table_name_creator: F,
+) -> MmResult<Statement<'a>, SqlError>
+where
+    F: FnOnce(&Chain) -> String,
+{
+    let table_name = table_name_creator(chain);
+    validate_table_name(table_name.as_str())?;
+    let sql_query = format!("SELECT DISTINCT token_address FROM {}", table_name);
     let stmt = conn.prepare(&sql_query)?;
     Ok(stmt)
 }
@@ -1045,6 +1068,18 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
             }
             sql_transaction.commit()?;
             Ok(())
+        })
+        .await
+    }
+
+    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<Vec<Address>, Self::Error> {
+        let selfi = self.clone();
+        let chain = *chain;
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            let mut stmt = get_token_addresses_statement(&conn, &chain, nft_transfer_history_table_name)?;
+            let addresses = stmt.query_map([], address_from_row)?.collect::<Result<Vec<_>, _>>()?;
+            Ok(addresses)
         })
         .await
     }

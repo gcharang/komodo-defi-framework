@@ -149,10 +149,10 @@ mod native_tests {
     fn test_refresh_metadata() { block_on(test_refresh_metadata_impl()) }
 
     #[test]
-    fn test_nft_spam_by_token_address() { block_on(test_update_nft_spam_by_token_address_impl()) }
+    fn test_nft_amount() { block_on(test_nft_amount_impl()) }
 
     #[test]
-    fn test_nft_amount() { block_on(test_nft_amount_impl()) }
+    fn test_nft_spam_by_token_address() { block_on(test_update_nft_spam_by_token_address_impl()) }
 
     #[test]
     fn test_add_get_transfers() { block_on(test_add_get_transfers_impl()) }
@@ -171,6 +171,9 @@ mod native_tests {
 
     #[test]
     fn test_update_transfer_spam_by_token_address() { block_on(test_update_transfer_spam_by_token_address_impl()) }
+
+    #[test]
+    fn test_get_token_addresses() { block_on(test_get_token_addresses_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -272,6 +275,9 @@ mod wasm_tests {
     async fn test_refresh_metadata() { test_refresh_metadata_impl().await }
 
     #[wasm_bindgen_test]
+    async fn test_nft_spam_by_token_address() { test_update_nft_spam_by_token_address_impl().await }
+
+    #[wasm_bindgen_test]
     async fn test_add_get_transfers() { test_add_get_transfers_impl().await }
 
     #[wasm_bindgen_test]
@@ -285,4 +291,10 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_get_update_transfer_meta() { test_get_update_transfer_meta_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_update_transfer_spam_by_token_address() { test_update_transfer_spam_by_token_address_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_get_token_addresses() { test_get_token_addresses_impl().await }
 }

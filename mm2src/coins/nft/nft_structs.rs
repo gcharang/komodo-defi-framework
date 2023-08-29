@@ -538,7 +538,6 @@ pub(crate) struct PhishingDomainReq {
     pub(crate) domains: String,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub(crate) struct SpamContractRes {
     pub(crate) result: HashMap<Address, bool>,

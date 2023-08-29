@@ -515,7 +515,6 @@ pub(crate) async fn test_refresh_metadata_impl() {
     assert_eq!(new_symbol.to_string(), nft_upd.common.symbol.unwrap());
 }
 
-#[allow(dead_code)]
 pub(crate) async fn test_update_nft_spam_by_token_address_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
@@ -692,7 +691,6 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
     assert_eq!(transfer_by_hash.token_name, Some("Nebula Nodes".to_string()))
 }
 
-#[allow(dead_code)]
 pub(crate) async fn test_update_transfer_spam_by_token_address_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
@@ -710,4 +708,14 @@ pub(crate) async fn test_update_transfer_spam_by_token_address_impl() {
     for transfers in transfers {
         assert!(transfers.common.possible_spam);
     }
+}
+
+pub(crate) async fn test_get_token_addresses_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let transfers = nft_transfer_history();
+    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+
+    let token_addresses = storage.get_token_addresses(&chain).await.unwrap();
+    assert_eq!(token_addresses.len(), 2);
 }
