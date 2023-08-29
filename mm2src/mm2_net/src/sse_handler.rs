@@ -29,7 +29,7 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
         Err(err) => return handle_internal_error(err).await,
     };
 
-    let config = match ctx.event_stream_configuration() {
+    let config = match &ctx.event_stream_configuration {
         Some(config) => config,
         None => {
             return handle_internal_error(
@@ -62,7 +62,7 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
         .status(200)
         .header("Content-Type", "text/event-stream")
         .header("Cache-Control", "no-cache")
-        .header("Access-Control-Allow-Origin", config.access_control_allow_origin)
+        .header("Access-Control-Allow-Origin", &config.access_control_allow_origin)
         .body(body);
 
     match response {

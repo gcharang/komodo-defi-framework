@@ -386,9 +386,9 @@ fn migration_1(_ctx: &MmArc) {}
 #[cfg(not(target_arch = "wasm32"))]
 fn init_event_streaming(ctx: &MmArc) {
     // This condition only executed if events were enabled in mm2 configuration.
-    if let Some(config) = ctx.event_stream_configuration() {
+    if let Some(config) = &ctx.event_stream_configuration {
         // Network event handling
-        NetworkEvent::new(ctx.clone()).spawn_if_active(&config);
+        NetworkEvent::new(ctx.clone()).spawn_if_active(config);
     }
 }
 

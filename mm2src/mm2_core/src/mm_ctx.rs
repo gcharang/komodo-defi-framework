@@ -75,6 +75,8 @@ pub struct MmCtx {
     pub rpc_started: Constructible<bool>,
     /// Channels for continuously streaming data to clients via SSE.
     pub stream_channel_controller: Controller<Event>,
+    /// Configuration of event streaming used for SSE.
+    pub event_stream_configuration: Option<EventStreamConfiguration>,
     /// True if the MarketMaker instance needs to stop.
     pub stop: Constructible<bool>,
     /// Unique context identifier, allowing us to more easily pass the context through the FFI boundaries.  
@@ -137,6 +139,7 @@ impl MmCtx {
             initialized: Constructible::default(),
             rpc_started: Constructible::default(),
             stream_channel_controller: Controller::new(),
+            event_stream_configuration: None,
             stop: Constructible::default(),
             ffi_handle: Constructible::default(),
             ordermatch_ctx: Mutex::new(None),
@@ -340,22 +343,6 @@ impl MmCtx {
             .or(&|| panic!("shared_sqlite_conn is not initialized"))
             .lock()
             .unwrap()
-    }
-
-    /// Reads 'event_stream_configuration' from the mm2 configuration. If the config wasn't given,
-    /// returns `None`.
-    ///
-    /// TODO: Move this value to `MmCtx`, so deserialization will be executed only once
-    pub fn event_stream_configuration(&self) -> Option<EventStreamConfiguration> {
-        let value = &self.conf["event_stream_configuration"];
-        if value.is_null() {
-            return None;
-        }
-
-        let config: EventStreamConfiguration =
-            json::from_value(value.clone()).expect("Invalid json value in 'event_stream_configuration'.");
-
-        Some(config)
     }
 }
 
@@ -699,7 +686,15 @@ impl MmCtxBuilder {
         ctx.datetime = self.datetime;
 
         if let Some(conf) = self.conf {
-            ctx.conf = conf
+            ctx.conf = conf;
+
+            let event_stream_configuration = &ctx.conf["event_stream_configuration"];
+            if !event_stream_configuration.is_null() {
+                let event_stream_configuration: EventStreamConfiguration =
+                    json::from_value(event_stream_configuration.clone())
+                        .expect("Invalid json value in 'event_stream_configuration'.");
+                ctx.event_stream_configuration = Some(event_stream_configuration);
+            }
         }
 
         #[cfg(target_arch = "wasm32")]

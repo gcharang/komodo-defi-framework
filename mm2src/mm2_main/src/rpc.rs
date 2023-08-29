@@ -358,7 +358,7 @@ pub extern "C" fn spawn_rpc(ctx_h: u32) {
 
     let ctx = MmArc::from_ffi_handle(ctx_h).expect("No context");
 
-    let is_event_stream_enabled = ctx.event_stream_configuration().is_some();
+    let is_event_stream_enabled = ctx.event_stream_configuration.is_some();
 
     let make_svc_fut = move |remote_addr: SocketAddr| async move {
         Ok::<_, Infallible>(service_fn(move |req: Request<Body>| async move {
