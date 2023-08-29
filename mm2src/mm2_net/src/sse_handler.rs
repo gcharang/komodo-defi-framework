@@ -1,5 +1,6 @@
 use hyper::{body::Bytes, Body, Request, Response};
 use mm2_core::mm_ctx::MmArc;
+use serde_json::json;
 use std::convert::Infallible;
 
 pub const SSE_ENDPOINT: &str = "/event-stream";
@@ -47,7 +48,12 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
             // If there are no filtered events, that means we want to
             // stream out all the events.
             if filtered_events.is_empty() || filtered_events.contains(&event.event_type().to_owned()) {
-                yield Ok::<_, hyper::Error>(Bytes::from(format!("data: {} \n\n", event.message())));
+                let data = json!({
+                    "_type": event.event_type(),
+                    "message": event.message(),
+                });
+
+                yield Ok::<_, hyper::Error>(Bytes::from(format!("data: {data} \n\n")));
             }
         }
     });
