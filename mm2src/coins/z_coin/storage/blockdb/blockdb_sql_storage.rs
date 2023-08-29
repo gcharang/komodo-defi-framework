@@ -23,7 +23,7 @@ impl From<ZcashClientError> for ZcoinStorageError {
     fn from(value: ZcashClientError) -> Self {
         match value {
             SqliteClientError::CorruptedData(err) => Self::CorruptedData(err),
-            SqliteClientError::IncorrectHrpExtFvk => Self::IncorrectHrpExtFvk(value.to_string()),
+            SqliteClientError::IncorrectHrpExtFvk => Self::IncorrectHrpExtFvk,
             SqliteClientError::InvalidNote => Self::InvalidNote(value.to_string()),
             SqliteClientError::InvalidNoteId => Self::InvalidNoteId(value.to_string()),
             SqliteClientError::TableNotEmpty => Self::TableNotEmpty(value.to_string()),

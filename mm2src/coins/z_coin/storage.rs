@@ -287,7 +287,8 @@ pub enum ZcoinStorageError {
     TableNotEmpty(String),
     InvalidNote(String),
     InvalidNoteId(String),
-    IncorrectHrpExtFvk(String),
+    #[display(fmt = "Incorrect Hrp extended full viewing key")]
+    IncorrectHrpExtFvk,
     CorruptedData(String),
     InvalidMemo(String),
     BackendError(String),
