@@ -2843,7 +2843,6 @@ pub enum CoinProtocol {
 
 pub type RpcTransportEventHandlerShared = Arc<dyn RpcTransportEventHandler + Send + Sync + 'static>;
 
-/// Common methods to measure the outgoing requests and incoming responses statistics.
 pub trait RpcTransportEventHandler {
     fn debug_info(&self) -> String;
 
@@ -2860,6 +2859,7 @@ impl fmt::Debug for dyn RpcTransportEventHandler + Send + Sync {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.debug_info()) }
 }
 
+#[async_trait]
 impl RpcTransportEventHandler for RpcTransportEventHandlerShared {
     fn debug_info(&self) -> String { self.deref().debug_info() }
 
@@ -2872,6 +2872,7 @@ impl RpcTransportEventHandler for RpcTransportEventHandlerShared {
     fn on_disconnected(&self, address: String) -> Result<(), String> { self.as_ref().on_disconnected(address) }
 }
 
+#[async_trait]
 impl<T: RpcTransportEventHandler> RpcTransportEventHandler for Vec<T> {
     fn debug_info(&self) -> String {
         let selfi: Vec<String> = self.iter().map(|x| x.debug_info()).collect();
@@ -2943,6 +2944,7 @@ impl CoinTransportMetrics {
     fn into_shared(self) -> RpcTransportEventHandlerShared { Arc::new(self) }
 }
 
+#[async_trait]
 impl RpcTransportEventHandler for CoinTransportMetrics {
     fn debug_info(&self) -> String { "CoinTransportMetrics".into() }
 

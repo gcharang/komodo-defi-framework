@@ -38,6 +38,7 @@ where
     })
 }
 
+// tobe removed
 /// The analogue of select_ok combinator running futures `sequentially`.
 /// The use case of such combinator is Electrum (and maybe not only Electrum) multiple servers support.
 /// Electrum client uses shared HashMap to store responses and we can treat the first received response as

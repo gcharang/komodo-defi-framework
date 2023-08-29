@@ -1,6 +1,6 @@
 use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
 use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
-use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumConnSettings, EstimateFeeMethod, Priority,
+use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumConnSettings, EstimateFeeMethod,
                                UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
@@ -497,13 +497,9 @@ pub trait UtxoCoinBuilderCommonOps {
         let mut rng = small_rng();
         servers.as_mut_slice().shuffle(&mut rng);
 
-        let s = servers.clone();
-        let (primary, backup): (Vec<_>, Vec<_>) = s.iter().partition(|s| matches!(s.priority, Priority::Primary));
-        debug!("Primary electrum nodes to connect: {:?}", primary);
-        debug!("Backup electrum nodes to connect: {:?}", backup);
-
         // Client can be created with servers
-        let client = ElectrumClientImpl::new(
+        let mut client = ElectrumClientImpl::new(
+            servers.clone(),
             ticker,
             event_handlers,
             block_headers_storage,
@@ -511,15 +507,19 @@ pub trait UtxoCoinBuilderCommonOps {
             args.negotiate_version,
         );
 
-        let mut nodes_to_bring_back = 0_usize;
-        for node in primary {
-            debug!("Connecting to the primary node: {}", node.url);
-            if let Err(_) = client.connect(node).await {
-                nodes_to_bring_back += 1;
-            } else {
-                break;
-            };
-        }
+        if let Err(err) = client.connect().await {
+            error!("Error connecting to the electrum server address: {}", err);
+        };
+
+        // let mut nodes_to_bring_back = 0_usize;
+        // for node in primary {
+        //     debug!("Connecting to the primary node: {}", node.url);
+        //     if let Err(_) = client.connect(node).await {
+        //         nodes_to_bring_back += 1;
+        //     } else {
+        //         break;
+        //     };
+        // }
 
         //create connections for a address set
         // for server in servers.iter() {

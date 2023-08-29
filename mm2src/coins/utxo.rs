@@ -1324,6 +1324,7 @@ impl ElectrumProtoVerifier {
     fn into_shared(self) -> RpcTransportEventHandlerShared { Arc::new(self) }
 }
 
+#[async_trait]
 impl RpcTransportEventHandler for ElectrumProtoVerifier {
     fn debug_info(&self) -> String { "ElectrumProtoVerifier".into() }
 
