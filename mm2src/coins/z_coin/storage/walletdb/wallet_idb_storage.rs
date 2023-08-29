@@ -459,16 +459,89 @@ impl WalletRead for WalletIndexedDb {
 
     async fn get_commitment_tree(
         &self,
-        _block_height: BlockHeight,
+        block_height: BlockHeight,
     ) -> Result<Option<CommitmentTree<Node>>, Self::Error> {
-        todo!()
+        let ticker = self.ticker.clone();
+        let locked_db = self
+            .lock_db()
+            .await
+            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
+        let db_transaction = locked_db
+            .get_inner()
+            .transaction()
+            .await
+            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
+        let blocks_table = db_transaction
+            .table::<WalletDbBlocksTable>()
+            .await
+            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+            .with_value(&ticker)
+            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
+            .with_value(u32::from(block_height))
+            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+
+        let block = blocks_table
+            .get_item_by_unique_multi_index(index_keys)
+            .await
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .map(|(_, account)| account);
+
+        if let Some(block) = block {
+            let sapling_tree = block.sapling_tree.as_bytes();
+            return Ok(Some(
+                CommitmentTree::read(&sapling_tree[..]).map_err(|e| ZcoinStorageError::DecodingError(e.to_string()))?,
+            ));
+        }
+
+        Ok(None)
     }
 
     async fn get_witnesses(
         &self,
-        _block_height: BlockHeight,
+        block_height: BlockHeight,
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
-        todo!()
+        let ticker = self.ticker.clone();
+        let locked_db = self
+            .lock_db()
+            .await
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+        let db_transaction = locked_db
+            .get_inner()
+            .transaction()
+            .await
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+
+        let sapling_witness_table = db_transaction
+            .table::<WalletDbSaplingWitnessesTable>()
+            .await
+            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let mut maybe_blocks = sapling_witness_table
+            .cursor_builder()
+            .only("ticker", ticker.clone())
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .only("block", u32::from(block_height))
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .open_cursor("ticker")
+            .await
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+
+        // Retrieves a list of transaction IDs (id_tx) from the transactions table
+        // that match the provided account ID and have not been spent (spent IS NULL).
+        let mut witnesses = vec![];
+        while let Some((_, block)) = maybe_blocks
+            .next()
+            .await
+            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+        {
+            let id_note = NoteId::ReceivedNoteId(block.note);
+            let witness = IncrementalWitness::read(&block.witness.as_bytes()[..])
+                .map(|witness| (id_note, witness))
+                .map_err(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
+            witnesses.push(witness)
+        }
+
+        Ok(witnesses)
     }
 
     async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> { todo!() }
@@ -738,8 +811,8 @@ impl TableSignature for WalletDbReceivedNotesTable {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSaplingWitnessesTable {
     id_witness: BeBigUint,
-    note: BeBigUint,
-    block: BeBigUint,
+    note: i64,
+    block: u32,
     witness: String,
     ticker: String,
 }
