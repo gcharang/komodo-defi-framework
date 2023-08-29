@@ -2,6 +2,7 @@ use super::*;
 use crate::lightning::ln_db::{DBChannelDetails, HTLCStatus, LightningDB, PaymentType};
 use crate::lightning::ln_errors::{SaveChannelClosingError, SaveChannelClosingResult};
 use crate::lightning::ln_sql::SqliteLightningDB;
+use crate::utxo::UtxoCommonOps;
 use bitcoin::blockdata::script::Script;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::consensus::encode::serialize_hex;
@@ -219,7 +220,7 @@ fn sign_funding_transaction(
         .activated_key_or_err()
         .map_err(|e| SignFundingTransactionError::Internal(e.to_string()))?;
 
-    let prev_script = Builder::build_p2pkh(&my_address.hash);
+    let prev_script = coin.script_for_address(my_address);
     let signed = sign_tx(
         unsigned,
         key_pair,

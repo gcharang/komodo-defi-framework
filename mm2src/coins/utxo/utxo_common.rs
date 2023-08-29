@@ -755,6 +755,31 @@ pub fn tx_size_in_v_bytes(from_addr_format: &UtxoAddressFormat, tx: &UtxoTx) -> 
     }
 }
 
+/// Implements building utxo script pubkey for an address by the address format
+pub fn get_script_for_address(coin: &UtxoCoinFields, addr: &Address) -> Script {
+
+    match addr.addr_format {
+        UtxoAddressFormat::Standard => {
+            if addr.prefix == coin.conf.pub_addr_prefix && addr.t_addr_prefix == coin.conf.pub_t_addr_prefix {
+                return Builder::build_p2pkh(&addr.hash);
+            } else if addr.prefix == coin.conf.p2sh_addr_prefix && addr.t_addr_prefix == coin.conf.p2sh_t_addr_prefix {
+                return Builder::build_p2sh(&addr.hash);
+            }
+        },
+        UtxoAddressFormat::Segwit => {
+            return Builder::build_p2witness(&addr.hash);
+        },
+        UtxoAddressFormat::CashAddress { network: _, pub_addr_prefix, p2sh_addr_prefix } => {
+            if pub_addr_prefix == coin.conf.pub_addr_prefix {
+                return Builder::build_p2pkh(&addr.hash);
+            } else if p2sh_addr_prefix == coin.conf.p2sh_addr_prefix {
+                return Builder::build_p2sh(&addr.hash);
+            }        
+        }
+    }
+    Builder::default().into_script()
+}
+
 pub struct UtxoTxBuilder<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> {
     coin: &'a T,
     from: Option<Address>,

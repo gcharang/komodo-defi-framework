@@ -759,6 +759,10 @@ impl UtxoCommonOps for BchCoin {
         utxo_common::checked_address_from_str(self, address)
     }
 
+    fn script_for_address(&self, address: &Address) -> Script {
+        utxo_common::get_script_for_address(self.as_ref(), address)
+    }
+
     async fn get_current_mtp(&self) -> UtxoRpcResult<u32> {
         utxo_common::get_current_mtp(&self.utxo_arc, CoinVariant::Standard).await
     }

@@ -962,6 +962,9 @@ pub trait UtxoCommonOps:
     /// and if it failed inform user that he used a wrong format.
     fn address_from_str(&self, address: &str) -> MmResult<Address, AddrFromStrError>;
 
+    /// For an address create corresponding utxo output script
+    fn script_for_address(&self, address: &Address) -> Script;
+
     async fn get_current_mtp(&self) -> UtxoRpcResult<u32>;
 
     /// Check if the output is spendable (is not coinbase or it has enough confirmations).
@@ -1868,7 +1871,7 @@ where
         _ => coin.as_ref().conf.signature_version,
     };
 
-    let prev_script = Builder::build_p2pkh(&my_address.hash);
+    let prev_script = utxo_common::get_script_for_address(coin.as_ref(), my_address);
     let signed = try_tx_s!(sign_tx(
         unsigned,
         key_pair,

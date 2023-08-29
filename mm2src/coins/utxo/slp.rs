@@ -1683,7 +1683,7 @@ impl MmCoin for SlpToken {
                 WithdrawError::from_generate_tx_error(gen_tx_error, coin.platform_ticker().into(), platform_decimals)
             })?;
 
-            let prev_script = ScriptBuilder::build_p2pkh(&my_address.hash);
+            let prev_script = coin.platform_coin.script_for_address(my_address);
             let signed = sign_tx(
                 unsigned,
                 key_pair,

@@ -538,7 +538,7 @@ impl Qrc20Coin {
         let my_address = self.utxo.derivation_method.single_addr_or_err()?;
         let key_pair = self.utxo.priv_key_policy.activated_key_or_err()?;
 
-        let prev_script = ScriptBuilder::build_p2pkh(&my_address.hash);
+        let prev_script = self.script_for_address(my_address);
         let signed = sign_tx(
             unsigned,
             key_pair,
@@ -668,6 +668,10 @@ impl UtxoCommonOps for Qrc20Coin {
 
     fn address_from_str(&self, address: &str) -> MmResult<UtxoAddress, AddrFromStrError> {
         utxo_common::checked_address_from_str(self, address)
+    }
+
+    fn script_for_address(&self, address: &Address) -> Script {
+        utxo_common::get_script_for_address(self.as_ref(), address)
     }
 
     async fn get_current_mtp(&self) -> UtxoRpcResult<u32> {
