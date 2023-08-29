@@ -51,10 +51,11 @@ use crate::mm2::lp_swap::{running_swaps_num, swap_kick_starts};
 use crate::mm2::rpc::spawn_rpc;
 
 cfg_native! {
+    use db_common::sqlite::rusqlite::Error as SqlError;
+    use mm2_event_stream::behaviour::EventBehaviour;
     use mm2_io::fs::{ensure_dir_is_writable, ensure_file_is_writable};
     use mm2_net::ip_addr::myipaddr;
-    use mm2_net::network_event::start_network_event_stream;
-    use db_common::sqlite::rusqlite::Error as SqlError;
+    use mm2_net::network_event::NetworkEvent;
 }
 
 #[path = "lp_init/init_context.rs"] mod init_context;
@@ -384,18 +385,10 @@ fn migration_1(_ctx: &MmArc) {}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn init_event_streaming(ctx: &MmArc) {
-    use mm2_net::network_event::NETWORK_EVENT_TYPE;
-
+    // This condition only executed if events were enabled in mm2 configuration.
     if let Some(config) = ctx.event_stream_configuration() {
-        if let Some(event) = config.get_event(NETWORK_EVENT_TYPE) {
-            info!(
-                "Event {NETWORK_EVENT_TYPE} is activated with {} seconds interval.",
-                event.stream_interval_seconds
-            );
-
-            ctx.spawner()
-                .spawn(start_network_event_stream(ctx.clone(), event.stream_interval_seconds));
-        }
+        // Network event handling
+        NetworkEvent::new(ctx.clone()).spawn_if_active(&config);
     }
 }
 

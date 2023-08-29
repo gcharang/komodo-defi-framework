@@ -52,4 +52,5 @@ impl EventStreamConfiguration {
     }
 }
 
+pub mod behaviour;
 pub mod controller;
