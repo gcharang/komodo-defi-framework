@@ -31,7 +31,6 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{spawn_gossipsub, AdexBehaviourError, NodeType, RelayAddress, RelayAddressError, SwarmRuntime,
                  WssCerts};
 use mm2_metrics::mm_gauge;
-use mm2_net::network_event::NETWORK_EVENT_TYPE;
 use mm2_net::p2p::P2PContext;
 use rpc_task::RpcTaskError;
 use serde_json::{self as json};
@@ -385,6 +384,8 @@ fn migration_1(_ctx: &MmArc) {}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn init_event_streaming(ctx: &MmArc) {
+    use mm2_net::network_event::NETWORK_EVENT_TYPE;
+
     if let Some(config) = ctx.event_stream_configuration() {
         if let Some(event) = config.get_event(NETWORK_EVENT_TYPE) {
             info!(
