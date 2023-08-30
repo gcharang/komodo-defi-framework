@@ -1,5 +1,4 @@
 use crate::transport::{SlurpError, SlurpResult};
-use common::compatible_fetch_with_request;
 use common::executor::spawn_local;
 use common::{stringify_js_error, APPLICATION_JSON};
 use futures::channel::oneshot;
@@ -11,7 +10,7 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response as JsResponse};
+use web_sys::{Request, RequestInit, RequestMode, Response as JsResponse, Window, WorkerGlobalScope};
 
 /// The result containing either a pair of (HTTP status code, body) or a stringified error.
 pub type FetchResult<T> = Result<(StatusCode, T), MmError<SlurpError>>;
@@ -45,6 +44,22 @@ pub async fn slurp_post_json(url: &str, body: String) -> SlurpResult {
         .request_str()
         .await
         .map(|(status_code, response)| (status_code, HeaderMap::new(), response.into_bytes()))
+}
+
+/// This function is a wrapper around the `fetch_with_request`, providing compatibility across
+/// different execution environments, such as window and worker.
+pub fn compatible_fetch_with_request(js_request: &web_sys::Request) -> Result<js_sys::Promise, String> {
+    let global = js_sys::global();
+
+    if let Some(scope) = global.dyn_ref::<Window>() {
+        return Ok(scope.fetch_with_request(js_request));
+    }
+
+    if let Some(scope) = global.dyn_ref::<WorkerGlobalScope>() {
+        return Ok(scope.fetch_with_request(js_request));
+    }
+
+    Err(String::from("Unknown WASM environment."))
 }
 
 pub struct FetchRequest {

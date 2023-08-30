@@ -1,5 +1,5 @@
 use super::{construct_event_closure, DbUpgrader, IdbDatabaseImpl, OnUpgradeError, OnUpgradeNeededCb, OPEN_DATABASES};
-use common::get_idb_factory;
+use crate::indexed_db::get_idb_factory;
 use common::{log::info, stringify_js_error};
 use derive_more::Display;
 use futures::channel::mpsc;
