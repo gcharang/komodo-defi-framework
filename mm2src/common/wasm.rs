@@ -146,10 +146,12 @@ pub fn deserialize_from_js<T: DeserializeOwned>(value: JsValue) -> Result<T, ser
 pub fn get_idb_factory() -> Result<web_sys::IdbFactory, String> {
     let global = js_sys::global();
 
-    let idb_factory = match (global.dyn_ref::<Window>(), global.dyn_ref::<WorkerGlobalScope>()) {
-        (Some(window), None) => window.indexed_db(),
-        (None, Some(worker)) => worker.indexed_db(),
-        _ => return Err(String::from("Unknown WASM environment.")),
+    let idb_factory = if let Some(window) = global.dyn_ref::<Window>() {
+        window.indexed_db()
+    } else if let Some(worker) = global.dyn_ref::<WorkerGlobalScope>() {
+        worker.indexed_db()
+    } else {
+        return Err(String::from("Unknown WASM environment."));
     };
 
     match idb_factory {
