@@ -292,23 +292,14 @@ pub enum ZcoinStorageError {
     CorruptedData(String),
     InvalidMemo(String),
     BackendError(String),
-    #[display(fmt = "Error inserting {ticker:?} block data to db: {err} ")]
-    AddToStorageErr {
-        ticker: String,
-        err: String,
-    },
-    #[display(fmt = "Error deleting {ticker:?} block data from db: {err} ")]
-    RemoveFromStorageErr {
-        ticker: String,
-        err: String,
-    },
+    #[display(fmt = "Add to storage err: {}", _0)]
+    AddToStorageErr(String),
+    #[display(fmt = "Remove from storage err: {}", _0)]
+    RemoveFromStorageErr(String),
+    #[display(fmt = "Get from storage err: {}", _0)]
+    GetFromStorageError(String),
     #[display(fmt = "Error getting {ticker} block height from storage: {err}")]
     BlockHeightNotFound {
-        ticker: String,
-        err: String,
-    },
-    #[display(fmt = "Error getting {ticker} block from storage: {err}")]
-    GetFromStorageError {
         ticker: String,
         err: String,
     },
@@ -324,4 +315,68 @@ pub enum ZcoinStorageError {
         err: String,
     },
     ChainError(String),
+    InternalError(String),
+    NotSupported(String),
+}
+
+#[cfg(target_arch = "wasm32")]
+use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
+
+#[cfg(target_arch = "wasm32")]
+impl From<InitDbError> for ZcoinStorageError {
+    fn from(e: InitDbError) -> Self {
+        match &e {
+            InitDbError::NotSupported(_) => ZcoinStorageError::NotSupported(e.to_string()),
+            InitDbError::EmptyTableList
+            | InitDbError::DbIsOpenAlready { .. }
+            | InitDbError::InvalidVersion(_)
+            | InitDbError::OpeningError(_)
+            | InitDbError::TypeMismatch { .. }
+            | InitDbError::UnexpectedState(_)
+            | InitDbError::UpgradingError { .. } => ZcoinStorageError::InternalError(e.to_string()),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<DbTransactionError> for ZcoinStorageError {
+    fn from(e: DbTransactionError) -> Self {
+        match e {
+            DbTransactionError::ErrorSerializingItem(_) | DbTransactionError::ErrorDeserializingItem(_) => {
+                ZcoinStorageError::DecodingError(e.to_string())
+            },
+            DbTransactionError::ErrorUploadingItem(_) => ZcoinStorageError::AddToStorageErr(e.to_string()),
+            DbTransactionError::ErrorGettingItems(_) | DbTransactionError::ErrorCountingItems(_) => {
+                ZcoinStorageError::GetFromStorageError(e.to_string())
+            },
+            DbTransactionError::ErrorDeletingItems(_) => ZcoinStorageError::RemoveFromStorageErr(e.to_string()),
+            DbTransactionError::NoSuchTable { .. }
+            | DbTransactionError::ErrorCreatingTransaction(_)
+            | DbTransactionError::ErrorOpeningTable { .. }
+            | DbTransactionError::ErrorSerializingIndex { .. }
+            | DbTransactionError::UnexpectedState(_)
+            | DbTransactionError::TransactionAborted
+            | DbTransactionError::MultipleItemsByUniqueIndex { .. }
+            | DbTransactionError::NoSuchIndex { .. }
+            | DbTransactionError::InvalidIndex { .. } => ZcoinStorageError::InternalError(e.to_string()),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<CursorError> for ZcoinStorageError {
+    fn from(value: CursorError) -> Self {
+        match value {
+            CursorError::ErrorSerializingIndexFieldValue { .. }
+            | CursorError::ErrorDeserializingIndexValue { .. }
+            | CursorError::ErrorDeserializingItem(_) => Self::DecodingError(value.to_string()),
+            CursorError::ErrorOpeningCursor { .. }
+            | CursorError::AdvanceError { .. }
+            | CursorError::InvalidKeyRange { .. }
+            | CursorError::IncorrectNumberOfKeysPerIndex { .. }
+            | CursorError::UnexpectedState(_)
+            | CursorError::IncorrectUsage { .. }
+            | CursorError::TypeMismatch { .. } => Self::DbError(value.to_string()),
+        }
+    }
 }

@@ -601,7 +601,7 @@ impl SaplingSyncLoopHandle {
             )
             .await;
         if let Err(e) = validate_chain {
-            match e {
+            match e.into_inner() {
                 ZcoinStorageError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
                     let lower_bound = height;
                     let rewind_height = if lower_bound > BlockHeight::from_u32(10) {

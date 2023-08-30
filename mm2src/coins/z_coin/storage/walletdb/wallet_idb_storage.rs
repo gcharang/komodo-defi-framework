@@ -99,29 +99,18 @@ pub enum NoteId {
 
 #[async_trait]
 impl WalletRead for WalletIndexedDb {
-    type Error = ZcoinStorageError;
+    type Error = MmError<ZcoinStorageError>;
     type NoteRef = NoteId;
     type TxRef = i64;
 
     async fn block_height_extrema(&self) -> Result<Option<(BlockHeight, BlockHeight)>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let block_headers_db = db_transaction
-            .table::<WalletDbBlocksTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let block_headers_db = db_transaction.table::<WalletDbBlocksTable>().await?;
         let maybe_max_item = block_headers_db
             .cursor_builder()
-            .only("ticker", ticker.clone())
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .only("ticker", ticker.clone())?
             // We need to provide any constraint on the `height` property
             // since `ticker_height` consists of both `ticker` and `height` properties.
             .bound("height", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
@@ -129,26 +118,21 @@ impl WalletRead for WalletIndexedDb {
             // But we need to get the most highest height, so reverse the cursor direction.
             .reverse()
             .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .await?
             .next()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+            .await?;
         let max = maybe_max_item.map(|(_, item)| item.height);
 
         let maybe_min_item = block_headers_db
             .cursor_builder()
-            .only("ticker", ticker.clone())
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .only("ticker", ticker.clone())?
             // We need to provide any constraint on the `height` property
             // since `ticker_height` consists of both `ticker` and `height` properties.
             .bound("height", 0u32, u32::MAX)
             .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .await?
             .next()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+            .await?;
 
         let min = maybe_min_item.map(|(_, item)| item.height);
 
@@ -161,89 +145,50 @@ impl WalletRead for WalletIndexedDb {
 
     async fn get_block_hash(&self, block_height: BlockHeight) -> Result<Option<BlockHash>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let block_headers_db = db_transaction
-            .table::<WalletDbBlocksTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let block_headers_db = db_transaction.table::<WalletDbBlocksTable>().await?;
         let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
-            .with_value(&ticker)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-            .with_value(u32::from(block_height))
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+            .with_value(&ticker)?
+            .with_value(u32::from(block_height))?;
 
         Ok(block_headers_db
             .get_item_by_unique_multi_index(index_keys)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .await?
             .map(|(_, block)| BlockHash::from_slice(&block.hash.as_bytes())))
     }
 
     async fn get_tx_height(&self, txid: TxId) -> Result<Option<BlockHeight>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let block_headers_db = db_transaction
-            .table::<WalletDbTransactionsTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let block_headers_db = db_transaction.table::<WalletDbTransactionsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
-            .with_value(&ticker)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-            .with_value(txid.to_string())
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+            .with_value(&ticker)?
+            .with_value(txid.to_string())?;
 
         Ok(block_headers_db
             .get_item_by_unique_multi_index(index_keys)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .await?
             .map(|(_, block)| BlockHeight::from(block.block)))
     }
 
     async fn get_address(&self, account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let block_headers_db = db_transaction
-            .table::<WalletDbAccountsTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let block_headers_db = db_transaction.table::<WalletDbAccountsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
-            .with_value(&ticker)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-            .with_value(account.0)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+            .with_value(&ticker)?
+            .with_value(account.0)?;
 
         let address = block_headers_db
             .get_item_by_unique_multi_index(index_keys)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .await?
             .map(|(_, account)| account.address);
 
         if let Some(addr) = address {
-            return decode_payment_address(self.params.hrp_sapling_payment_address(), &addr).map_err(|err| {
+            return decode_payment_address(self.params.hrp_sapling_payment_address(), &addr).map_to_mm(|err| {
                 ZcoinStorageError::DecodingError(format!(
                     "Error occurred while decoding account address: {err:?} - ticker: {ticker}"
                 ))
@@ -255,30 +200,17 @@ impl WalletRead for WalletIndexedDb {
 
     async fn get_extended_full_viewing_keys(&self) -> Result<HashMap<AccountId, ExtendedFullViewingKey>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let accounts_table = db_transaction
-            .table::<WalletDbAccountsTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
-        let accounts = accounts_table
-            .get_all_items()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let accounts_table = db_transaction.table::<WalletDbAccountsTable>().await?;
+        let accounts = accounts_table.get_all_items().await?;
 
         let mut res_accounts: HashMap<AccountId, ExtendedFullViewingKey> = HashMap::new();
         for (_, account) in accounts {
             let extfvk =
                 decode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), &account.extfvk)
-                    .map_err(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
-                    .and_then(|k| k.ok_or(ZcoinStorageError::IncorrectHrpExtFvk));
+                    .map_to_mm(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
+                    .and_then(|k| k.ok_or(MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)));
             res_accounts.insert(AccountId(account.account), extfvk?);
         }
 
@@ -291,35 +223,20 @@ impl WalletRead for WalletIndexedDb {
         extfvk: &ExtendedFullViewingKey,
     ) -> Result<bool, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let accounts_table = db_transaction
-            .table::<WalletDbAccountsTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let accounts_table = db_transaction.table::<WalletDbAccountsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
-            .with_value(&ticker)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-            .with_value(account.0)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+            .with_value(&ticker)?
+            .with_value(account.0)?;
 
-        let account = accounts_table
-            .get_item_by_unique_multi_index(index_keys)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+        let account = accounts_table.get_item_by_unique_multi_index(index_keys).await?;
 
         if let Some((_, account)) = account {
             let expected =
                 decode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), &account.extfvk)
-                    .map_err(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
-                    .and_then(|k| k.ok_or(ZcoinStorageError::IncorrectHrpExtFvk))?;
+                    .map_to_mm(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
+                    .and_then(|k| k.ok_or(MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)))?;
 
             return Ok(&expected == extfvk);
         }
@@ -329,71 +246,44 @@ impl WalletRead for WalletIndexedDb {
 
     async fn get_balance_at(&self, account: AccountId, anchor_height: BlockHeight) -> Result<Amount, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
 
-        let tx_table = db_transaction
-            .table::<WalletDbTransactionsTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
         let mut maybe_txs = tx_table
             .cursor_builder()
-            .only("ticker", ticker.clone())
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .only("ticker", ticker.clone())?
             .bound("block", 0u32, anchor_height.into())
             .open_cursor("ticker")
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+            .await?;
 
         // Retrieves a list of transaction IDs (id_tx) from the transactions table
         // that match the provided account ID and have not been spent (spent IS NULL).
         let mut id_tx = vec![];
-        while let Some((_, account)) = maybe_txs
-            .next()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
-        {
+        while let Some((_, account)) = maybe_txs.next().await? {
             id_tx.push(account.id_tx)
         }
 
-        let received_notes_table = db_transaction
-            .table::<WalletDbReceivedNotesTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
         let mut maybe_notes = received_notes_table
             .cursor_builder()
-            .only("ticker", ticker.clone())
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
-            .only("account", account.0)
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .only("ticker", ticker.clone())?
+            .only("account", account.0)?
             .open_cursor(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+            .await?;
 
         let mut value: i64 = 0;
-        while let Some((_, note)) = maybe_notes
-            .next()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
-        {
+        while let Some((_, note)) = maybe_notes.next().await? {
             if id_tx.contains(&note.tx) && !note.spent.is_some() {
-                value += note
-                    .value
-                    .to_i64()
-                    .ok_or_else(|| ZcoinStorageError::get_err(&ticker, "price is too large".to_string()))?
+                value += note.value.to_i64().ok_or_else(|| {
+                    MmError::new(ZcoinStorageError::GetFromStorageError("price is too large".to_string()))
+                })?
             }
         }
 
         match Amount::from_i64(value) {
             Ok(amount) if !amount.is_negative() => Ok(amount),
-            _ => Err(ZcoinStorageError::CorruptedData(
+            _ => MmError::err(ZcoinStorageError::CorruptedData(
                 "Sum of values in received_notes is out of range".to_string(),
             )),
         }
@@ -401,49 +291,26 @@ impl WalletRead for WalletIndexedDb {
 
     async fn get_memo(&self, id_note: Self::NoteRef) -> Result<Memo, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
 
         let memo = match id_note {
             NoteId::SentNoteId(id_note) => {
-                let sent_notes_table = db_transaction
-                    .table::<WalletDbSentNotesTable>()
-                    .await
-                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+                let sent_notes_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
                 let index_keys = MultiIndex::new(WalletDbSentNotesTable::TICKER_ID_NOTE_INDEX)
-                    .with_value(&ticker)
-                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-                    .with_value(id_note)
-                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+                    .with_value(&ticker)?
+                    .with_value(id_note)?;
 
-                let note = sent_notes_table
-                    .get_item_by_unique_multi_index(index_keys)
-                    .await
-                    .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+                let note = sent_notes_table.get_item_by_unique_multi_index(index_keys).await?;
                 note.map(|(_, n)| n.memo)
             },
             NoteId::ReceivedNoteId(id_note) => {
-                let received_notes_table = db_transaction
-                    .table::<WalletDbSentNotesTable>()
-                    .await
-                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+                let received_notes_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
                 let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ID_NOTE_INDEX)
-                    .with_value(&ticker)
-                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-                    .with_value(id_note)
-                    .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+                    .with_value(&ticker)?
+                    .with_value(id_note)?;
 
-                let note = received_notes_table
-                    .get_item_by_unique_multi_index(index_keys)
-                    .await
-                    .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+                let note = received_notes_table.get_item_by_unique_multi_index(index_keys).await?;
                 note.map(|(_, n)| n.memo)
             },
         };
@@ -451,10 +318,10 @@ impl WalletRead for WalletIndexedDb {
         if let Some(memo) = memo {
             return Ok(MemoBytes::from_bytes(&memo.as_bytes())
                 .and_then(Memo::try_from)
-                .map_err(|err| ZcoinStorageError::InvalidMemo(err.to_string()))?);
+                .map_to_mm(|err| ZcoinStorageError::InvalidMemo(err.to_string()))?);
         };
 
-        Err(ZcoinStorageError::get_err(&ticker, "Memo not found".to_string()))
+        MmError::err(ZcoinStorageError::GetFromStorageError(format!("Memo not found")))
     }
 
     async fn get_commitment_tree(
@@ -462,35 +329,23 @@ impl WalletRead for WalletIndexedDb {
         block_height: BlockHeight,
     ) -> Result<Option<CommitmentTree<Node>>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::add_err(&ticker, err.to_string()))?;
-        let blocks_table = db_transaction
-            .table::<WalletDbBlocksTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let blocks_table = db_transaction.table::<WalletDbBlocksTable>().await?;
         let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
-            .with_value(&ticker)
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?
-            .with_value(u32::from(block_height))
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+            .with_value(&ticker)?
+            .with_value(u32::from(block_height))?;
 
         let block = blocks_table
             .get_item_by_unique_multi_index(index_keys)
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .await?
             .map(|(_, account)| account);
 
         if let Some(block) = block {
             let sapling_tree = block.sapling_tree.as_bytes();
             return Ok(Some(
-                CommitmentTree::read(&sapling_tree[..]).map_err(|e| ZcoinStorageError::DecodingError(e.to_string()))?,
+                CommitmentTree::read(&sapling_tree[..])
+                    .map_to_mm(|e| ZcoinStorageError::DecodingError(e.to_string()))?,
             ));
         }
 
@@ -502,42 +357,25 @@ impl WalletRead for WalletIndexedDb {
         block_height: BlockHeight,
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
         let ticker = self.ticker.clone();
-        let locked_db = self
-            .lock_db()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
-        let db_transaction = locked_db
-            .get_inner()
-            .transaction()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
 
-        let sapling_witness_table = db_transaction
-            .table::<WalletDbSaplingWitnessesTable>()
-            .await
-            .map_err(|err| ZcoinStorageError::table_err(&ticker, err.to_string()))?;
+        let sapling_witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
         let mut maybe_blocks = sapling_witness_table
             .cursor_builder()
-            .only("ticker", ticker.clone())
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
-            .only("block", u32::from(block_height))
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
+            .only("ticker", ticker.clone())?
+            .only("block", u32::from(block_height))?
             .open_cursor("ticker")
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?;
+            .await?;
 
         // Retrieves a list of transaction IDs (id_tx) from the transactions table
         // that match the provided account ID and have not been spent (spent IS NULL).
         let mut witnesses = vec![];
-        while let Some((_, block)) = maybe_blocks
-            .next()
-            .await
-            .map_err(|err| ZcoinStorageError::get_err(&ticker, err.to_string()))?
-        {
+        while let Some((_, block)) = maybe_blocks.next().await? {
             let id_note = NoteId::ReceivedNoteId(block.note);
             let witness = IncrementalWitness::read(&block.witness.as_bytes()[..])
                 .map(|witness| (id_note, witness))
-                .map_err(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
+                .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
             witnesses.push(witness)
         }
 

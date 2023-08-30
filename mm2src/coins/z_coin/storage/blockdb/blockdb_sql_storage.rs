@@ -93,7 +93,7 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn get_latest_block(&self) -> Result<u32, ZcashClientError> {
+    pub(crate) async fn get_latest_block(&self) -> MmResult<u32, ZcashClientError> {
         Ok(query_single_row(
             &self.db.lock().unwrap(),
             "SELECT height FROM compactblocks ORDER BY height DESC LIMIT 1",
@@ -103,47 +103,35 @@ impl BlockDbImpl {
         .unwrap_or(0))
     }
 
-    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> Result<usize, ZcoinStorageError> {
+    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> MmResult<usize, ZcoinStorageError> {
         let db = self.db.clone();
-        let ticker = self.ticker.clone();
         async_blocking(move || {
             let db = db.lock().unwrap();
             let insert = db
                 .prepare("INSERT INTO compactblocks (height, data) VALUES (?, ?)")
-                .map_err(|err| ZcoinStorageError::AddToStorageErr {
-                    ticker: ticker.clone(),
-                    err: err.to_string(),
-                })?
+                .map_to_mm(|err| ZcoinStorageError::AddToStorageErr(err.to_string()))?
                 .execute(params![height, cb_bytes])
-                .map_err(|err| ZcoinStorageError::AddToStorageErr {
-                    ticker,
-                    err: err.to_string(),
-                })?;
+                .map_to_mm(|err| ZcoinStorageError::AddToStorageErr(err.to_string()))?;
 
             Ok(insert)
         })
         .await
     }
 
-    pub(crate) async fn rewind_to_height(&self, height: u32) -> Result<usize, ZcoinStorageError> {
-        let ticker = self.ticker.clone();
+    pub(crate) async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
         self.db
             .lock()
             .unwrap()
             .execute("DELETE from compactblocks WHERE height > ?1", [height])
-            .map_err(|err| ZcoinStorageError::RemoveFromStorageErr {
-                ticker,
-                err: err.to_string(),
-            })
+            .map_to_mm(|err| ZcoinStorageError::RemoveFromStorageErr(err.to_string()))
     }
 
     pub(crate) async fn query_blocks_by_limit(
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-    ) -> Result<Vec<rusqlite::Result<CompactBlockRow>>, ZcoinStorageError> {
+    ) -> MmResult<Vec<rusqlite::Result<CompactBlockRow>>, ZcoinStorageError> {
         let db = self.db.clone();
-        let ticker = self.ticker.clone();
         async_blocking(move || {
             // Fetch the CompactBlocks we need to scan
             let db = db.lock().unwrap();
@@ -152,10 +140,7 @@ impl BlockDbImpl {
                     "SELECT height, data FROM compactblocks WHERE height > ? ORDER BY height ASC \
         LIMIT ?",
                 )
-                .map_err(|err| ZcoinStorageError::AddToStorageErr {
-                    ticker: ticker.clone(),
-                    err: err.to_string(),
-                })?;
+                .map_to_mm(|err| ZcoinStorageError::AddToStorageErr(err.to_string()))?;
 
             let rows = stmt_blocks
                 .query_map(
@@ -167,10 +152,7 @@ impl BlockDbImpl {
                         })
                     },
                 )
-                .map_err(|err| ZcoinStorageError::AddToStorageErr {
-                    ticker: ticker.clone(),
-                    err: err.to_string(),
-                })?;
+                .map_to_mm(|err| ZcoinStorageError::AddToStorageErr(err.to_string()))?;
 
             Ok(rows.collect_vec())
         })
@@ -183,7 +165,7 @@ impl BlockDbImpl {
         mode: BlockProcessingMode,
         validate_from: Option<(BlockHeight, BlockHash)>,
         limit: Option<u32>,
-    ) -> Result<(), ZcoinStorageError> {
+    ) -> MmResult<(), ZcoinStorageError> {
         let ticker = self.ticker.to_owned();
         let mut from_height = match &mode {
             BlockProcessingMode::Validate => validate_from
@@ -204,15 +186,12 @@ impl BlockDbImpl {
         let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
 
         for row_result in rows {
-            let cbr = row_result.map_err(|err| ZcoinStorageError::AddToStorageErr {
-                ticker: ticker.clone(),
-                err: err.to_string(),
-            })?;
+            let cbr = row_result.map_err(|err| ZcoinStorageError::AddToStorageErr(err.to_string()))?;
             let block = CompactBlock::parse_from_bytes(&cbr.data)
                 .map_err(|err| ZcoinStorageError::ChainError(err.to_string()))?;
 
             if block.height() != cbr.height {
-                return Err(ZcoinStorageError::CorruptedData(format!(
+                return MmError::err(ZcoinStorageError::CorruptedData(format!(
                     "{ticker}, Block height {} did not match row's height field value {}",
                     block.height(),
                     cbr.height
