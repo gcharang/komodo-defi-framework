@@ -74,7 +74,7 @@ impl IdbDatabaseBuilder {
         let (table_names, on_upgrade_needed_handlers) = Self::tables_into_parts(self.tables)?;
         info!("Open '{}' database with tables: {:?}", self.db_name, table_names);
 
-        let indexed_db = get_idb_factory().map_err(InitDbError::NotSupported)?;
+        let indexed_db = get_idb_factory()?;
 
         let db_request = match indexed_db.open_with_u32(&self.db_name, self.db_version) {
             Ok(r) => r,

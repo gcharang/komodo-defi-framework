@@ -48,7 +48,7 @@ pub async fn slurp_post_json(url: &str, body: String) -> SlurpResult {
 
 /// This function is a wrapper around the `fetch_with_request`, providing compatibility across
 /// different execution environments, such as window and worker.
-pub fn compatible_fetch_with_request(js_request: &web_sys::Request) -> Result<js_sys::Promise, String> {
+fn compatible_fetch_with_request(js_request: &web_sys::Request) -> MmResult<js_sys::Promise, SlurpError> {
     let global = js_sys::global();
 
     if let Some(scope) = global.dyn_ref::<Window>() {
@@ -59,7 +59,7 @@ pub fn compatible_fetch_with_request(js_request: &web_sys::Request) -> Result<js
         return Ok(scope.fetch_with_request(js_request));
     }
 
-    Err(String::from("Unknown WASM environment."))
+    MmError::err(SlurpError::Internal("Unknown WASM environment.".to_string()))
 }
 
 pub struct FetchRequest {
@@ -180,7 +180,7 @@ impl FetchRequest {
                 .map_to_mm(|e| SlurpError::Internal(stringify_js_error(&e)))?;
         }
 
-        let request_promise = compatible_fetch_with_request(&js_request).map_to_mm(SlurpError::Internal)?;
+        let request_promise = compatible_fetch_with_request(&js_request)?;
 
         let future = JsFuture::from(request_promise);
         let resp_value = future.await.map_to_mm(|e| SlurpError::Transport {

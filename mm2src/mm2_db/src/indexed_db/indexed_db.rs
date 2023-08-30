@@ -805,7 +805,7 @@ fn open_cursor(
 
 /// Detects the current execution environment (window or worker) and follows the appropriate way
 /// of getting `web_sys::IdbFactory` instance.
-pub fn get_idb_factory() -> Result<web_sys::IdbFactory, String> {
+pub(crate) fn get_idb_factory() -> Result<web_sys::IdbFactory, InitDbError> {
     let global = js_sys::global();
 
     let idb_factory = if let Some(window) = global.dyn_ref::<Window>() {
@@ -813,18 +813,20 @@ pub fn get_idb_factory() -> Result<web_sys::IdbFactory, String> {
     } else if let Some(worker) = global.dyn_ref::<WorkerGlobalScope>() {
         worker.indexed_db()
     } else {
-        return Err(String::from("Unknown WASM environment."));
+        return Err(InitDbError::NotSupported("Unknown WASM environment.".to_string()));
     };
 
     match idb_factory {
         Ok(Some(db)) => Ok(db),
-        Ok(None) => Err(if global.dyn_ref::<Window>().is_some() {
-            "IndexedDB not supported in window context"
-        } else {
-            "IndexedDB not supported in worker context"
-        }
-        .to_string()),
-        Err(e) => Err(stringify_js_error(&e)),
+        Ok(None) => Err(InitDbError::NotSupported(
+            if global.dyn_ref::<Window>().is_some() {
+                "IndexedDB not supported in window context"
+            } else {
+                "IndexedDB not supported in worker context"
+            }
+            .to_string(),
+        )),
+        Err(e) => Err(InitDbError::NotSupported(stringify_js_error(&e))),
     }
 }
 
