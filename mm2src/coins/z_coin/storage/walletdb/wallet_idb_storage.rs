@@ -170,7 +170,8 @@ impl WalletRead for WalletIndexedDb {
         Ok(block_headers_db
             .get_item_by_unique_multi_index(index_keys)
             .await?
-            .map(|(_, block)| BlockHeight::from(block.block)))
+            .map(|(_, tx)| tx.block.map(|block| BlockHeight::from(block)))
+            .flatten())
     }
 
     async fn get_address(&self, account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> {
@@ -315,7 +316,7 @@ impl WalletRead for WalletIndexedDb {
             },
         };
 
-        if let Some(memo) = memo {
+        if let Some(Some(memo)) = memo {
             return Ok(MemoBytes::from_bytes(&memo.as_bytes())
                 .and_then(Memo::try_from)
                 .map_to_mm(|err| ZcoinStorageError::InvalidMemo(err.to_string()))?);
@@ -382,7 +383,38 @@ impl WalletRead for WalletIndexedDb {
         Ok(witnesses)
     }
 
-    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> { todo!() }
+    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        // Received notes
+        let receive_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
+        let notes = receive_notes_table.get_all_items().await?;
+
+        // Transactions
+        let txs_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
+        let txs = txs_table.get_all_items().await?;
+
+        let mut nullifiers = vec![];
+        for (_, note) in notes {
+            let mut spent_found = false;
+            for (_, tx) in &txs {
+                if let Some(spent) = note.spent {
+                    if tx.id_tx == spent.into() && tx.block.is_none() {
+                        spent_found = true;
+                        break;
+                    }
+                }
+            }
+            if !spent_found {
+                nullifiers.push((
+                    AccountId(note.account),
+                    Nullifier::from_slice(note.nf.clone().as_bytes()).unwrap(),
+                ));
+            }
+        }
+
+        Ok(nullifiers)
+    }
 
     async fn get_spendable_notes(
         &self,
@@ -565,10 +597,10 @@ pub struct WalletDbTransactionsTable {
     id_tx: BeBigUint,
     txid: String, // unique
     created: String,
-    block: u32,
-    tx_index: BeBigUint,
-    expiry_height: BeBigUint,
-    raw: String,
+    block: Option<u32>,
+    tx_index: Option<u32>,
+    expiry_height: Option<u32>,
+    raw: Option<String>,
     ticker: String,
 }
 
@@ -598,8 +630,10 @@ impl TableSignature for WalletDbTransactionsTable {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbReceivedNotesTable {
     id_note: BeBigUint,
+    // references transactions(id_tx)
     tx: BeBigUint,
     output_index: BeBigUint,
+    // references accounts(account)
     account: u32,
     diversifier: String,
     value: BeBigUint,
@@ -607,7 +641,8 @@ pub struct WalletDbReceivedNotesTable {
     nf: String, // unique
     is_change: BeBigUint,
     memo: String,
-    spent: Option<BeBigUint>,
+    // references transactions(id_tx)
+    spent: Option<u32>,
     ticker: String,
 }
 
@@ -649,7 +684,9 @@ impl TableSignature for WalletDbReceivedNotesTable {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSaplingWitnessesTable {
     id_witness: BeBigUint,
+    // REFERENCES received_notes(id_note)
     note: i64,
+    // REFERENCES blocks(height)
     block: u32,
     witness: String,
     ticker: String,
@@ -684,12 +721,14 @@ impl TableSignature for WalletDbSaplingWitnessesTable {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSentNotesTable {
     id_note: i64,
+    // REFERENCES transactions(id_tx)
     tx: BeBigUint,
     output_index: BeBigUint,
+    // REFERENCES accounts(account)
     from_account: BeBigUint,
     address: String,
     value: BeBigUint,
-    memo: String,
+    memo: Option<String>,
     ticker: String,
 }
 
