@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use std::fmt;
 use wasm_bindgen::prelude::*;
+use web_sys::{Window, WorkerGlobalScope};
 
 /// Get only the first line of the error.
 /// Generally, the `JsValue` error contains the stack trace of an error.
@@ -138,4 +139,43 @@ pub fn serialize_to_js<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bi
 #[inline]
 pub fn deserialize_from_js<T: DeserializeOwned>(value: JsValue) -> Result<T, serde_wasm_bindgen::Error> {
     serde_wasm_bindgen::from_value(value)
+}
+
+/// Detects the current execution environment (window or worker) and follows the appropriate way
+/// of getting `web_sys::IdbFactory` instance.
+pub fn get_idb_factory() -> Result<web_sys::IdbFactory, String> {
+    let global = js_sys::global();
+
+    let idb_factory = match (global.dyn_ref::<Window>(), global.dyn_ref::<WorkerGlobalScope>()) {
+        (Some(window), None) => window.indexed_db(),
+        (None, Some(worker)) => worker.indexed_db(),
+        _ => return Err(String::from("Unknown WASM environment.")),
+    };
+
+    match idb_factory {
+        Ok(Some(db)) => Ok(db),
+        Ok(None) => Err(if global.dyn_ref::<Window>().is_some() {
+            "IndexedDB not supported in window context"
+        } else {
+            "IndexedDB not supported in worker context"
+        }
+        .to_string()),
+        Err(e) => Err(stringify_js_error(&e)),
+    }
+}
+
+/// This function is a wrapper around the `fetch_with_request`, providing compatibility across
+/// different execution environments, such as window and worker.
+pub fn compatible_fetch_with_request(js_request: &web_sys::Request) -> Result<js_sys::Promise, String> {
+    let global = js_sys::global();
+
+    if let Some(scope) = global.dyn_ref::<Window>() {
+        return Ok(scope.fetch_with_request(js_request));
+    }
+
+    if let Some(scope) = global.dyn_ref::<WorkerGlobalScope>() {
+        return Ok(scope.fetch_with_request(js_request));
+    }
+
+    Err(String::from("Unknown WASM environment."))
 }

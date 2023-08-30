@@ -1,4 +1,5 @@
 use crate::transport::{SlurpError, SlurpResult};
+use common::compatible_fetch_with_request;
 use common::executor::spawn_local;
 use common::{stringify_js_error, APPLICATION_JSON};
 use futures::channel::oneshot;
@@ -145,7 +146,6 @@ impl FetchRequest {
     }
 
     async fn fetch(request: Self) -> FetchResult<JsResponse> {
-        let window = web_sys::window().expect("!window");
         let uri = request.uri;
 
         let mut req_init = RequestInit::new();
@@ -165,7 +165,7 @@ impl FetchRequest {
                 .map_to_mm(|e| SlurpError::Internal(stringify_js_error(&e)))?;
         }
 
-        let request_promise = window.fetch_with_request(&js_request);
+        let request_promise = compatible_fetch_with_request(&js_request).map_to_mm(SlurpError::Internal)?;
 
         let future = JsFuture::from(request_promise);
         let resp_value = future.await.map_to_mm(|e| SlurpError::Transport {
