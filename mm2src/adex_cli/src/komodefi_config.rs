@@ -5,10 +5,10 @@ use inquire::Password;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::fs;
+#[cfg(unix)] use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use crate::helpers::rewrite_json_file;
-#[cfg(unix)] use crate::helpers::set_file_permissions;
 use crate::komodefi_proc::SmartFractPrecision;
 use crate::logging::{error_anyhow, warn_bail};
 
@@ -163,8 +163,21 @@ impl KomodefiConfigImpl {
         rewrite_json_file(self, komodefi_path_str)?;
         #[cfg(unix)]
         {
-            set_file_permissions(komodefi_path_str, CFG_FILE_PERM_MODE)?;
+            Self::warn_on_insecure_mode(komodefi_path_str)?;
         }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn warn_on_insecure_mode(file_path: &str) -> Result<()> {
+        let perms = fs::metadata(file_path)?.permissions();
+        let mode = perms.mode() & 0o777;
+        if mode != CFG_FILE_PERM_MODE {
+            warn!(
+                "Configuration file: '{}' - does not comply to the expected mode: {:o}, the actual one is: {:o}",
+                file_path, CFG_FILE_PERM_MODE, mode
+            );
+        };
         Ok(())
     }
 
