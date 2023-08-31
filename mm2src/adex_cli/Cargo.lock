@@ -1261,7 +1261,7 @@ dependencies = [
  "http 0.2.9",
  "hyper",
  "log",
- "rustls 0.20.8",
+ "rustls 0.20.4",
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
@@ -1490,7 +1490,7 @@ dependencies = [
  "mm2_rpc",
  "passwords",
  "rpc",
- "rustls 0.20.8",
+ "rustls 0.20.4",
  "serde",
  "serde_json",
  "skip_serializing_none",
@@ -1777,7 +1777,7 @@ dependencies = [
  "mm2_err_handle",
  "prost",
  "rand 0.7.3",
- "rustls 0.20.8",
+ "rustls 0.20.4",
  "serde",
  "serde_json",
  "tokio",
@@ -2602,9 +2602,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.8"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fff78fc74d175294f4e83b28343315ffcfb114b156f0185e9741cb5570f50e2f"
+checksum = "4fbfeb8d0ddb84706bc597a5574ab8912817c52a397f819e5b614e2265206921"
 dependencies = [
  "log",
  "ring",
@@ -3243,7 +3243,7 @@ version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
- "rustls 0.20.8",
+ "rustls 0.20.4",
  "tokio",
  "webpki 0.22.0",
 ]
