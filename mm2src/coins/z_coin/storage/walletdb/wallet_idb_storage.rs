@@ -1,5 +1,5 @@
 use super::WalletDbShared;
-use crate::z_coin::storage::{WalletDbError, ZcoinStorageError};
+use crate::z_coin::storage::ZcoinStorageError;
 use crate::z_coin::{ZCoinBuilder, ZcoinConsensusParams};
 
 use async_trait::async_trait;
@@ -7,6 +7,8 @@ use ff::PrimeField;
 use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb,
                          IndexedDbBuilder, InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::prelude::*;
+//use mm2_number::num_bigint::ToBigInt;
+use mm2_number::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -39,6 +41,7 @@ impl<'a> WalletDbShared {
         })
     }
 }
+
 pub struct WalletDbInner {
     pub inner: IndexedDb,
 }
@@ -100,7 +103,7 @@ pub enum NoteId {
 
 struct SpendableNoteConstructor {
     diversifier: String,
-    value: i64,
+    value: BigInt,
     rcm: String,
     witness: String,
 }
@@ -118,7 +121,7 @@ fn to_spendable_note(note: SpendableNoteConstructor) -> MmResult<SpendableNote, 
         Diversifier(tmp)
     };
 
-    let note_value = Amount::from_i64(note.value).unwrap();
+    let note_value = Amount::from_i64(note.value.to_i64().expect("BigInt is too large to fit in an i64")).unwrap();
 
     let rseed = {
         let rcm_bytes = note.rcm.as_bytes();
@@ -162,11 +165,7 @@ impl WalletRead for WalletIndexedDb {
         let maybe_max_item = block_headers_db
             .cursor_builder()
             .only("ticker", ticker.clone())?
-            // We need to provide any constraint on the `height` property
-            // since `ticker_height` consists of both `ticker` and `height` properties.
             .bound("height", 0u32, u32::MAX)
-            // Cursor returns values from the lowest to highest key indexes.
-            // But we need to get the most highest height, so reverse the cursor direction.
             .reverse()
             .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
             .await?
@@ -177,8 +176,6 @@ impl WalletRead for WalletIndexedDb {
         let maybe_min_item = block_headers_db
             .cursor_builder()
             .only("ticker", ticker.clone())?
-            // We need to provide any constraint on the `height` property
-            // since `ticker_height` consists of both `ticker` and `height` properties.
             .bound("height", 0u32, u32::MAX)
             .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
             .await?
@@ -187,8 +184,8 @@ impl WalletRead for WalletIndexedDb {
 
         let min = maybe_min_item.map(|(_, item)| item.height);
 
-        if let (Some(max), Some(min)) = (max, min) {
-            Ok(Some((BlockHeight::from(max), BlockHeight::from(min))))
+        if let (Some(min), Some(max)) = (min, max) {
+            Ok(Some((BlockHeight::from(min), BlockHeight::from(max))))
         } else {
             Ok(None)
         }
@@ -317,15 +314,13 @@ impl WalletRead for WalletIndexedDb {
         }
 
         let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
-        let mut maybe_notes = received_notes_table
-            .cursor_builder()
-            .only("ticker", ticker.clone())?
-            .only("account", account.0)?
-            .open_cursor(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
-            .await?;
+        let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
+            .with_value(&ticker)?
+            .with_value(account.0)?;
+        let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
 
         let mut value: i64 = 0;
-        while let Some((_, note)) = maybe_notes.next().await? {
+        for (_, note) in maybe_notes {
             if id_tx.contains(&note.tx) && note.spent.is_none() {
                 value += note.value.to_i64().ok_or_else(|| {
                     MmError::new(ZcoinStorageError::GetFromStorageError("price is too large".to_string()))
@@ -424,7 +419,7 @@ impl WalletRead for WalletIndexedDb {
         // that match the provided account ID and have not been spent (spent IS NULL).
         let mut witnesses = vec![];
         while let Some((_, block)) = maybe_sapling_witnesses.next().await? {
-            let id_note = NoteId::ReceivedNoteId(block.note);
+            let id_note = NoteId::ReceivedNoteId(block.note.to_i64().expect("BigInt is too large to fit in an i64"));
             let witness = IncrementalWitness::read(&block.witness.as_bytes()[..])
                 .map(|witness| (id_note, witness))
                 .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
@@ -440,37 +435,24 @@ impl WalletRead for WalletIndexedDb {
         let db_transaction = locked_db.get_inner().transaction().await?;
 
         // Received notes
-        let receive_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
-        let maybe_notes = receive_notes_table.get_items("ticker", ticker.clone()).await?;
+        let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
+        let maybe_notes = received_notes_table.get_items("ticker", ticker.clone()).await?;
 
         // Transactions
         let txs_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
-        let mut maybe_txs = txs_table
-            .cursor_builder()
-            .only("ticker", ticker.clone())?
-            .open_cursor("ticker")
-            .await?;
-        let mut txs = vec![];
-        while let Some((_, ts)) = maybe_txs.next().await? {
-            txs.push(ts)
-        }
+        let maybe_txs = txs_table.get_items("ticker", &ticker).await?;
 
         let mut nullifiers = vec![];
         for (_, note) in maybe_notes {
-            let mut spent_found = false;
-            for tx in &txs {
+            for (_, tx) in &maybe_txs {
                 if let Some(spent) = note.spent {
                     if tx.id_tx == spent && tx.block.is_none() {
-                        spent_found = true;
-                        break;
+                        nullifiers.push((
+                            AccountId(note.account),
+                            Nullifier::from_slice(note.nf.clone().as_bytes()).unwrap(),
+                        ));
                     }
                 }
-            }
-            if !spent_found {
-                nullifiers.push((
-                    AccountId(note.account),
-                    Nullifier::from_slice(note.nf.clone().as_bytes()).unwrap(),
-                ));
             }
         }
 
@@ -487,16 +469,12 @@ impl WalletRead for WalletIndexedDb {
         let db_transaction = locked_db.get_inner().transaction().await?;
 
         // Received notes
-        let receive_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
-        let mut maybe_notes = receive_notes_table
-            .cursor_builder()
-            .only("ticker", ticker.clone())?
-            .open_cursor("ticker")
-            .await?;
-        let mut notes = vec![];
-        while let Some((_, note)) = maybe_notes.next().await? {
-            notes.push(note)
-        }
+        let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
+        let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
+            .with_value(&ticker)?
+            .with_value(account.0)?;
+        let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
+        let maybe_notes = maybe_notes.iter().filter(|(_, note)| note.spent.is_none());
 
         // Transactions
         let txs_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
@@ -525,37 +503,16 @@ impl WalletRead for WalletIndexedDb {
         }
 
         let mut spendable_notes = vec![];
+        for (_, note) in maybe_notes {
+            let witness = witnesses.iter().find(|wit| wit.note == note.id_note.into());
+            let tx = txs.iter().find(|tx| tx.id_tx == note.tx);
 
-        for note in notes {
-            let mut spent_found = false;
-            let mut witness_found = (false, "");
-
-            for tx in &txs {
-                if let Some(spent) = note.spent {
-                    if tx.id_tx == spent {
-                        spent_found = true;
-                        break;
-                    }
-                }
-            }
-
-            if spent_found {
-                continue;
-            }
-
-            for witness in &witnesses {
-                if witness.note == note.id_note as i64 && witness.block == u32::from(anchor_height) {
-                    witness_found = (true, &witness.witness);
-                    break;
-                }
-            }
-
-            if !spent_found && witness_found.0 && witness_found.1.len() > 1 {
+            if let (Some(witness), Some(_)) = (witness, tx) {
                 let spend = SpendableNoteConstructor {
-                    diversifier: note.diversifier,
-                    value: note.value,
-                    rcm: note.rcm,
-                    witness: witness_found.1.to_string(),
+                    diversifier: note.diversifier.to_owned(),
+                    value: note.value.clone(),
+                    rcm: note.rcm.to_owned(),
+                    witness: witness.witness.to_string(),
                 };
                 spendable_notes.push(to_spendable_note(spend)?);
             }
@@ -576,76 +533,84 @@ impl WalletRead for WalletIndexedDb {
 
 #[derive(Clone)]
 pub struct DataConnStmtCacheWasm {
-    pub inner: SharedDb<WalletDbInner>,
-}
-
-impl DataConnStmtCacheWasm {
-    pub fn transactionally<F, A>(&mut self, _f: F) -> Result<A, WalletDbError> { todo!() }
+    pub inner: WalletIndexedDb,
 }
 
 #[async_trait]
 impl WalletRead for DataConnStmtCacheWasm {
-    type Error = ();
-    type NoteRef = ();
-    type TxRef = ();
+    type Error = MmError<ZcoinStorageError>;
+    type NoteRef = NoteId;
+    type TxRef = i64;
 
-    async fn block_height_extrema(&self) -> Result<Option<(BlockHeight, BlockHeight)>, Self::Error> { todo!() }
+    async fn block_height_extrema(&self) -> Result<Option<(BlockHeight, BlockHeight)>, Self::Error> {
+        self.inner.block_height_extrema().await
+    }
 
-    async fn get_block_hash(&self, _block_height: BlockHeight) -> Result<Option<BlockHash>, Self::Error> { todo!() }
+    async fn get_block_hash(&self, block_height: BlockHeight) -> Result<Option<BlockHash>, Self::Error> {
+        self.inner.get_block_hash(block_height).await
+    }
 
-    async fn get_tx_height(&self, _txid: TxId) -> Result<Option<BlockHeight>, Self::Error> { todo!() }
+    async fn get_tx_height(&self, txid: TxId) -> Result<Option<BlockHeight>, Self::Error> {
+        self.inner.get_tx_height(txid).await
+    }
 
-    async fn get_address(&self, _account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> { todo!() }
+    async fn get_address(&self, account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> {
+        self.inner.get_address(account).await
+    }
 
     async fn get_extended_full_viewing_keys(&self) -> Result<HashMap<AccountId, ExtendedFullViewingKey>, Self::Error> {
-        todo!()
+        self.inner.get_extended_full_viewing_keys().await
     }
 
     async fn is_valid_account_extfvk(
         &self,
-        _account: AccountId,
-        _extfvk: &ExtendedFullViewingKey,
+        account: AccountId,
+        extfvk: &ExtendedFullViewingKey,
     ) -> Result<bool, Self::Error> {
-        todo!()
+        self.inner.is_valid_account_extfvk(account, extfvk).await
     }
 
-    async fn get_balance_at(&self, _account: AccountId, _anchor_height: BlockHeight) -> Result<Amount, Self::Error> {
-        todo!()
+    async fn get_balance_at(&self, account: AccountId, anchor_height: BlockHeight) -> Result<Amount, Self::Error> {
+        self.inner.get_balance_at(account, anchor_height).await
     }
 
-    async fn get_memo(&self, _id_note: Self::NoteRef) -> Result<Memo, Self::Error> { todo!() }
+    async fn get_memo(&self, id_note: Self::NoteRef) -> Result<Memo, Self::Error> { self.inner.get_memo(id_note).await }
 
     async fn get_commitment_tree(
         &self,
-        _block_height: BlockHeight,
+        block_height: BlockHeight,
     ) -> Result<Option<CommitmentTree<Node>>, Self::Error> {
-        todo!()
+        self.inner.get_commitment_tree(block_height).await
     }
 
     async fn get_witnesses(
         &self,
-        _block_height: BlockHeight,
+        block_height: BlockHeight,
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
-        todo!()
+        self.inner.get_witnesses(block_height).await
     }
 
-    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> { todo!() }
+    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> {
+        self.inner.get_nullifiers().await
+    }
 
     async fn get_spendable_notes(
         &self,
-        _account: AccountId,
-        _anchor_height: BlockHeight,
+        account: AccountId,
+        anchor_height: BlockHeight,
     ) -> Result<Vec<SpendableNote>, Self::Error> {
-        todo!()
+        self.inner.get_spendable_notes(account, anchor_height).await
     }
 
     async fn select_spendable_notes(
         &self,
-        _account: AccountId,
-        _target_value: Amount,
-        _anchor_height: BlockHeight,
+        account: AccountId,
+        target_value: Amount,
+        anchor_height: BlockHeight,
     ) -> Result<Vec<SpendableNote>, Self::Error> {
-        todo!()
+        self.inner
+            .select_spendable_notes(account, target_value, anchor_height)
+            .await
     }
 }
 
@@ -778,10 +743,10 @@ pub struct WalletDbReceivedNotesTable {
     // references accounts(account)
     account: u32,
     diversifier: String,
-    value: i64,
+    value: BigInt,
     rcm: String,
     nf: String, // unique
-    is_change: i64,
+    is_change: BigInt,
     memo: String,
     // references transactions(id_tx)
     spent: Option<u32>,
@@ -827,7 +792,7 @@ impl TableSignature for WalletDbReceivedNotesTable {
 pub struct WalletDbSaplingWitnessesTable {
     id_witness: u32,
     // REFERENCES received_notes(id_note)
-    note: i64,
+    note: BigInt,
     // REFERENCES blocks(height)
     block: u32,
     witness: String,
@@ -864,14 +829,14 @@ impl TableSignature for WalletDbSaplingWitnessesTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSentNotesTable {
-    id_note: i64,
+    id_note: BigInt,
     // REFERENCES transactions(id_tx)
     tx: BeBigUint,
     output_index: BeBigUint,
     // REFERENCES accounts(account)
-    from_account: BeBigUint,
+    from_account: BigInt,
     address: String,
-    value: BeBigUint,
+    value: BigInt,
     memo: Option<String>,
     ticker: String,
 }
