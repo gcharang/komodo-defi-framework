@@ -7,7 +7,6 @@ use ff::PrimeField;
 use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb,
                          IndexedDbBuilder, InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::prelude::*;
-//use mm2_number::num_bigint::ToBigInt;
 use mm2_number::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
@@ -523,12 +522,125 @@ impl WalletRead for WalletIndexedDb {
 
     async fn select_spendable_notes(
         &self,
-        _account: AccountId,
-        _target_value: Amount,
-        _anchor_height: BlockHeight,
+        account: AccountId,
+        target_value: Amount,
+        anchor_height: BlockHeight,
     ) -> Result<Vec<SpendableNote>, Self::Error> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+
+        // Received notes
+        let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
+        let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
+            .with_value(&ticker)?
+            .with_value(account.0)?;
+        let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
+        let maybe_notes = maybe_notes
+            .clone()
+            .into_iter()
+            .filter(|(_, note)| note.spent.is_none())
+            .collect::<Vec<(u32, WalletDbReceivedNotesTable)>>();
+
+        // Transactions
+        let txs_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
+        let mut maybe_txs = txs_table
+            .cursor_builder()
+            .only("ticker", ticker.clone())?
+            .bound("block", 0u32, u32::from(anchor_height))
+            .open_cursor(WalletDbTransactionsTable::TICKER_BLOCK_INDEX)
+            .await?;
+        let mut txs = vec![];
+        while let Some((_, ts)) = maybe_txs.next().await? {
+            txs.push(ts)
+        }
+
+        // Sapling Witness
+        let witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
+        let mut maybe_witness = witness_table
+            .cursor_builder()
+            .only("ticker", ticker.clone())?
+            .bound("block", 0u32, u32::from(anchor_height))
+            .open_cursor(WalletDbTransactionsTable::TICKER_BLOCK_INDEX)
+            .await?;
+        let mut witnesses = vec![];
+        while let Some((_, witness)) = maybe_witness.next().await? {
+            witnesses.push(witness)
+        }
+
+        // Step 1: Calculate the running sum for each note
+        let mut running_sum = 0;
+        let mut note_running_sums = HashMap::new();
+
+        for (_, note) in maybe_notes.iter() {
+            if note.account == account.0 {
+                let value = note.value.clone().to_i64().expect("price is too large");
+                running_sum += value;
+            }
+
+            note_running_sums.insert(note.id_note, running_sum);
+        }
+
+        // Step 2: Select eligible notes
+        let mut selected_notes = Vec::new();
+        for (_, note) in maybe_notes {
+            if note.account == account.0 && note.spent.is_none() {
+                let note_running_sum = note_running_sums.get(&note.id_note).unwrap_or(&0);
+                if Amount::from_i64(*note_running_sums.get(&note.id_note).unwrap_or(&0))
+                    .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
+                    < target_value
+                {
+                    selected_notes.push((note, *note_running_sum));
+                }
+            }
+        }
+
+        // Step 2: Select all unspent notes in the desired account, along with their running sum.
+        let mut final_notes = Vec::new();
+        for (note, sum) in &selected_notes {
+            if note.spent.is_none()
+                && Amount::from_i64(*sum)
+                    .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
+                    < target_value
+            {
+                final_notes.push(note);
+            }
+        }
+
+        // Step 4: Get witnesses for selected notes
+        let mut spendable_notes = Vec::new();
+        for note in final_notes.iter() {
+            if let Some(witness) = witnesses.iter().find(|&w| w.note == note.id_note.into()) {
+                spendable_notes.push(to_spendable_note(SpendableNoteConstructor {
+                    diversifier: note.diversifier.clone(),
+                    value: note.value.clone(),
+                    rcm: note.rcm.clone(),
+                    witness: witness.witness.clone(),
+                })?);
+            }
+        }
+
+        Ok(spendable_notes)
+    }
+}
+
+#[async_trait]
+impl WalletWrite for WalletIndexedDb {
+    async fn advance_by_block(
+        &mut self,
+        _block: &PrunedBlock,
+        _updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
+    ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
         todo!()
     }
+
+    async fn store_received_tx(&mut self, _received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
+        todo!()
+    }
+
+    async fn store_sent_tx(&mut self, _sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> { todo!() }
+
+    async fn rewind_to_height(&mut self, _block_height: BlockHeight) -> Result<(), Self::Error> { todo!() }
 }
 
 #[derive(Clone)]
