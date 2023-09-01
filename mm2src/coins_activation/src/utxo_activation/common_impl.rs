@@ -44,6 +44,7 @@ where
     // Construct an Xpub extractor without checking if the MarketMaker supports HD wallet ops.
     // [`EnableCoinBalanceOps::enable_coin_balance`] won't just use `xpub_extractor`
     // if the coin has been initialized with an Iguana priv key.
+    // Todo: fix this too, we need to create xpub_extractor for HD wallet or similar method
     let xpub_extractor = RpcTaskXPubExtractor::new_unchecked(ctx, task_handle, xpub_extractor_rpc_statuses());
     task_handle.update_in_progress_status(UtxoStandardInProgressStatus::RequestingWalletBalance)?;
     let wallet_balance = coin

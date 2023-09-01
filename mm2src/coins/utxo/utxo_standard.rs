@@ -861,7 +861,7 @@ impl ExtractExtendedPubkey for UtxoStandardCoin {
     where
         XPubExtractor: HDXPubExtractor,
     {
-        utxo_common::extract_extended_pubkey(&self.utxo_arc.conf, xpub_extractor, derivation_path).await
+        utxo_common::extract_extended_pubkey(&self.utxo_arc, xpub_extractor, derivation_path).await
     }
 }
 

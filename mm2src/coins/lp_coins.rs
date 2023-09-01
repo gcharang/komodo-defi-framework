@@ -49,8 +49,9 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        AbortSettings, AbortedError, SpawnAbortable, SpawnFuture};
 use common::log::{warn, LogOnError};
 use common::{calc_total_pages, now_sec, ten, HttpStatusCode};
-use crypto::{derive_secp256k1_secret, Bip32Error, CryptoCtx, CryptoCtxError, DerivationPath, GlobalHDAccountArc,
-             HwRpcError, KeyPairPolicy, Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin, WithHwRpcError};
+use crypto::{derive_secp256k1_secret, derive_secp256k1_secret_from_full_path, Bip32Error, CryptoCtx, CryptoCtxError,
+             DerivationPath, GlobalHDAccountArc, HwRpcError, KeyPairPolicy, Secp256k1ExtendedPublicKey,
+             Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin, WithHwRpcError};
 use derive_more::Display;
 use enum_from::{EnumFromStringify, EnumFromTrait};
 use ethereum_types::H256;
@@ -2969,6 +2970,31 @@ impl<T> PrivKeyPolicy<T> {
         let derivation_path = self.derivation_path_or_err()?;
         derive_secp256k1_secret(bip39_secp_priv_key.clone(), derivation_path, path_to_address)
             .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
+    }
+
+    // Todo: this will be removed when all coins are migrated to using `DerivationPath` and hd_wallet_derived_priv_key_or_err will be used instead by using DerivationPath
+    fn hd_wallet_derived_priv_key_from_full_path_or_err(
+        &self,
+        derivation_path: DerivationPath,
+    ) -> Result<Secp256k1Secret, MmError<PrivKeyPolicyNotAllowed>> {
+        let bip39_secp_priv_key = self.bip39_secp_priv_key_or_err()?;
+        derive_secp256k1_secret_from_full_path(bip39_secp_priv_key.clone(), derivation_path)
+            .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
+    }
+
+    // Todo: move Secp256k1ExtendedPublicKey to a common place and make it generic
+    // Todo: so the private key policy is seperated from the UTXOHDWallet struct to make it similar to Trezor/HW
+    fn hd_wallet_derived_pubkey(
+        &self,
+        derivation_path: DerivationPath,
+    ) -> Result<Secp256k1ExtendedPublicKey, MmError<PrivKeyPolicyNotAllowed>> {
+        let mut priv_key = self.bip39_secp_priv_key_or_err()?.clone();
+        for child in derivation_path {
+            priv_key = priv_key
+                .derive_child(child)
+                .map_to_mm(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))?;
+        }
+        Ok(Secp256k1ExtendedPublicKey::from(&priv_key))
     }
 }
 

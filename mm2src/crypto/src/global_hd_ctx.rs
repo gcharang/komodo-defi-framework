@@ -2,7 +2,7 @@ use crate::privkey::{bip39_seed_from_passphrase, key_pair_from_secret, PrivKeyEr
 use crate::standard_hd_path::StandardHDCoinAddress;
 use crate::{mm2_internal_der_path, Bip32DerPathOps, Bip32Error, CryptoInitError, CryptoInitResult,
             StandardHDPathToCoin};
-use bip32::{ChildNumber, ExtendedPrivateKey};
+use bip32::{ChildNumber, DerivationPath, ExtendedPrivateKey};
 use common::drop_mutability;
 use keys::{KeyPair, Secret as Secp256k1Secret};
 use mm2_err_handle::prelude::*;
@@ -94,6 +94,21 @@ pub fn derive_secp256k1_secret(
 
     let mut priv_key = bip39_secp_priv_key;
     for child in account_der_path {
+        priv_key = priv_key.derive_child(child)?;
+    }
+    drop_mutability!(priv_key);
+
+    let secret = *priv_key.private_key().as_ref();
+    Ok(Secp256k1Secret::from(secret))
+}
+
+// Todo: this will be removed after all coins are migrated to use `DerivationPath` and derive_secp256k1_secret will be using `DerivationPath` instead of `StandardHDPathToCoin`
+pub fn derive_secp256k1_secret_from_full_path(
+    bip39_secp_priv_key: ExtendedPrivateKey<secp256k1::SecretKey>,
+    derivation_path: DerivationPath,
+) -> MmResult<Secp256k1Secret, Bip32Error> {
+    let mut priv_key = bip39_secp_priv_key;
+    for child in derivation_path {
         priv_key = priv_key.derive_child(child)?;
     }
     drop_mutability!(priv_key);

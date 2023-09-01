@@ -182,6 +182,7 @@ pub trait HDWalletCoinWithStorageOps: HDWalletCoinOps {
 /// It's associated with a specific mm2 user, HD wallet and coin.
 pub struct HDWalletCoinStorage {
     coin: String,
+    // Todo: edit this comment
     /// RIPEMD160(SHA256(x)) where x is a pubkey extracted from a Hardware Wallet device or passphrase.
     /// This property allows us to store DB items that are unique to each Hardware Wallet device.
     hd_wallet_rmd160: H160,
@@ -222,7 +223,6 @@ impl HDWalletCoinStorage {
         })
     }
 
-    #[cfg(any(test, target_arch = "wasm32"))]
     pub async fn init_with_rmd160(
         ctx: &MmArc,
         coin: String,

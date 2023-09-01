@@ -31,6 +31,7 @@ pub struct HDAccountBalanceResponse {
     pub account_index: u32,
     pub derivation_path: RpcDerivationPath,
     pub addresses: Vec<HDAddressBalance>,
+    // Todo: get all balance also?? I don't know yet
     pub page_balance: CoinBalance,
     pub limit: usize,
     pub skipped: u32,

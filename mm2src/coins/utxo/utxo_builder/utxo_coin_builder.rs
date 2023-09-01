@@ -152,8 +152,19 @@ pub trait UtxoFieldsWithIguanaSecretBuilder: UtxoCoinBuilderCommonOps {
             checksum_type: conf.checksum_type,
         };
         let key_pair = KeyPair::from_private(private).map_to_mm(|e| UtxoCoinBuildError::Internal(e.to_string()))?;
+        // Todo: is this needed?
         let priv_key_policy = PrivKeyPolicy::Iguana(key_pair);
-        build_utxo_coin_fields_with_conf_and_policy(self, conf, priv_key_policy).await
+        let addr_format = self.address_format()?;
+        let my_address = Address {
+            prefix: conf.pub_addr_prefix,
+            t_addr_prefix: conf.pub_t_addr_prefix,
+            hash: AddressHashEnum::AddressHash(key_pair.public().address_hash()),
+            checksum_type: conf.checksum_type,
+            hrp: conf.bech32_hrp.clone(),
+            addr_format,
+        };
+        let derivation_method = DerivationMethod::SingleAddress(my_address);
+        build_utxo_coin_fields_with_conf_and_policy(self, conf, priv_key_policy, derivation_method).await
     }
 }
 
@@ -185,14 +196,46 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
             activated_key: activated_key_pair,
             bip39_secp_priv_key: global_hd_ctx.root_priv_key().clone(),
         };
-        build_utxo_coin_fields_with_conf_and_policy(self, conf, priv_key_policy).await
+
+        let address_format = self.address_format()?;
+        let hd_wallet_rmd160 = *self.ctx().rmd160();
+        let hd_wallet_storage =
+            HDWalletCoinStorage::init_with_rmd160(self.ctx(), self.ticker().to_owned(), hd_wallet_rmd160).await?;
+        let accounts = self
+            .load_hd_wallet_accounts(&hd_wallet_storage, derivation_path)
+            .await?;
+        // Todo: should I combine fn gap_limit with ones from trezor???
+        let gap_limit = self.gap_limit();
+        let hd_wallet = UtxoHDWallet {
+            hd_wallet_rmd160,
+            hd_wallet_storage,
+            address_format,
+            derivation_path: derivation_path.clone(),
+            accounts: HDAccountsMutex::new(accounts),
+            gap_limit,
+        };
+        let derivation_method = DerivationMethod::HDWallet(hd_wallet);
+        build_utxo_coin_fields_with_conf_and_policy(self, conf, priv_key_policy, derivation_method).await
     }
+
+    async fn load_hd_wallet_accounts(
+        &self,
+        hd_wallet_storage: &HDWalletCoinStorage,
+        derivation_path: &StandardHDPathToCoin,
+    ) -> UtxoCoinBuildResult<HDAccountsMap<UtxoHDAccount>> {
+        utxo_common::load_hd_accounts_from_storage(hd_wallet_storage, derivation_path)
+            .await
+            .mm_err(UtxoCoinBuildError::from)
+    }
+
+    fn gap_limit(&self) -> u32 { self.activation_params().gap_limit.unwrap_or(DEFAULT_GAP_LIMIT) }
 }
 
 async fn build_utxo_coin_fields_with_conf_and_policy<Builder>(
     builder: &Builder,
     conf: UtxoCoinConf,
     priv_key_policy: PrivKeyPolicy<KeyPair>,
+    derivation_method: DerivationMethod<Address, UtxoHDWallet>,
 ) -> UtxoCoinBuildResult<UtxoCoinFields>
 where
     Builder: UtxoCoinBuilderCommonOps + Sync + ?Sized,
@@ -209,7 +252,6 @@ where
     };
 
     let my_script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
-    let derivation_method = DerivationMethod::SingleAddress(my_address);
 
     // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,
     // all spawned futures related to this `UTXO` coin will be aborted as well.

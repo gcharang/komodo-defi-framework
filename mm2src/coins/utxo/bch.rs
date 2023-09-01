@@ -1,5 +1,10 @@
 use super::*;
 use crate::coin_errors::MyAddressError;
+use crate::hd_confirm_address::HDConfirmAddress;
+use crate::hd_pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor};
+use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, HDAccountMut, NewAccountCreatingError,
+                       NewAddressDeriveConfirmError};
+use crate::hd_wallet_storage::HDWalletCoinWithStorageOps;
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxDetailsBuilder,
                               TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
@@ -10,16 +15,17 @@ use crate::utxo::utxo_common::big_decimal_from_sat_unsigned;
 use crate::utxo::utxo_tx_history_v2::{UtxoMyAddressesHistoryError, UtxoTxDetailsError, UtxoTxDetailsParams,
                                       UtxoTxHistoryOps};
 use crate::{BlockHeightAndTime, CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, CoinProtocol,
-            CoinWithDerivationMethod, ConfirmPaymentInput, IguanaPrivKey, MakerSwapTakerCoin, MmCoinEnum,
-            NegotiateSwapContractAddrErr, PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr,
-            PrivKeyBuildPolicy, RawTransactionFut, RawTransactionRequest, RefundError, RefundPaymentArgs,
-            RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs,
-            SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradePreimageValue, TransactionFut,
-            TransactionResult, TransactionType, TxFeeDetails, TxMarshalingErr, UnexpectedDerivationMethod,
-            ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr,
-            ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, VerificationResult,
-            WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut};
+            CoinWithDerivationMethod, ConfirmPaymentInput, GetWithdrawSenderAddress, IguanaPrivKey,
+            MakerSwapTakerCoin, MmCoinEnum, NegotiateSwapContractAddrErr, PaymentInstructionArgs, PaymentInstructions,
+            PaymentInstructionsErr, PrivKeyBuildPolicy, RawTransactionFut, RawTransactionRequest, RefundError,
+            RefundPaymentArgs, RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
+            SendPaymentArgs, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradePreimageValue,
+            TransactionFut, TransactionResult, TransactionType, TxFeeDetails, TxMarshalingErr,
+            UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
+            ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput,
+            VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
+            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut,
+            WithdrawSenderAddress};
 use common::executor::{AbortableSystem, AbortedError};
 use common::log::warn;
 use derive_more::Display;
@@ -1310,12 +1316,100 @@ impl MmCoin for BchCoin {
     }
 }
 
+#[async_trait]
+impl GetWithdrawSenderAddress for BchCoin {
+    type Address = Address;
+    type Pubkey = Public;
+
+    async fn get_withdraw_sender_address(
+        &self,
+        req: &WithdrawRequest,
+    ) -> MmResult<WithdrawSenderAddress<Self::Address, Self::Pubkey>, WithdrawError> {
+        utxo_common::get_withdraw_from_address(self, req).await
+    }
+}
+
 impl CoinWithDerivationMethod for BchCoin {
     type Address = Address;
     type HDWallet = UtxoHDWallet;
 
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet> {
         utxo_common::derivation_method(self.as_ref())
+    }
+}
+
+#[async_trait]
+impl ExtractExtendedPubkey for BchCoin {
+    type ExtendedPublicKey = Secp256k1ExtendedPublicKey;
+
+    async fn extract_extended_pubkey<XPubExtractor>(
+        &self,
+        xpub_extractor: &XPubExtractor,
+        derivation_path: DerivationPath,
+    ) -> MmResult<Self::ExtendedPublicKey, HDExtractPubkeyError>
+    where
+        XPubExtractor: HDXPubExtractor,
+    {
+        utxo_common::extract_extended_pubkey(&self.utxo_arc, xpub_extractor, derivation_path).await
+    }
+}
+
+#[async_trait]
+impl HDWalletCoinOps for BchCoin {
+    type Address = Address;
+    type Pubkey = Public;
+    type HDWallet = UtxoHDWallet;
+    type HDAccount = UtxoHDAccount;
+
+    async fn derive_addresses<Ids>(
+        &self,
+        hd_account: &Self::HDAccount,
+        address_ids: Ids,
+    ) -> AddressDerivingResult<Vec<HDAddress<Self::Address, Self::Pubkey>>>
+    where
+        Ids: Iterator<Item = HDAddressId> + Send,
+    {
+        utxo_common::derive_addresses(self, hd_account, address_ids).await
+    }
+
+    async fn generate_and_confirm_new_address<ConfirmAddress>(
+        &self,
+        hd_wallet: &Self::HDWallet,
+        hd_account: &mut Self::HDAccount,
+        chain: Bip44Chain,
+        confirm_address: &ConfirmAddress,
+    ) -> MmResult<HDAddress<Self::Address, Self::Pubkey>, NewAddressDeriveConfirmError>
+    where
+        ConfirmAddress: HDConfirmAddress,
+    {
+        utxo_common::generate_and_confirm_new_address(self, hd_wallet, hd_account, chain, confirm_address).await
+    }
+
+    async fn create_new_account<'a, XPubExtractor>(
+        &self,
+        hd_wallet: &'a Self::HDWallet,
+        xpub_extractor: &XPubExtractor,
+    ) -> MmResult<HDAccountMut<'a, Self::HDAccount>, NewAccountCreatingError>
+    where
+        XPubExtractor: HDXPubExtractor,
+    {
+        utxo_common::create_new_account(self, hd_wallet, xpub_extractor).await
+    }
+
+    async fn set_known_addresses_number(
+        &self,
+        hd_wallet: &Self::HDWallet,
+        hd_account: &mut Self::HDAccount,
+        chain: Bip44Chain,
+        new_known_addresses_number: u32,
+    ) -> MmResult<(), AccountUpdatingError> {
+        utxo_common::set_known_addresses_number(self, hd_wallet, hd_account, chain, new_known_addresses_number).await
+    }
+}
+
+impl HDWalletCoinWithStorageOps for BchCoin {
+    fn hd_wallet_storage<'a>(&self, hd_wallet: &'a Self::HDWallet) -> &'a HDWalletCoinStorage {
+        &hd_wallet.hd_wallet_storage
     }
 }
 

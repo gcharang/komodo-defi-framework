@@ -567,20 +567,30 @@ where
 
 pub fn derivation_method(coin: &UtxoCoinFields) -> &DerivationMethod<Address, UtxoHDWallet> { &coin.derivation_method }
 
+// Todo: maybe rename this function
 pub async fn extract_extended_pubkey<XPubExtractor>(
-    conf: &UtxoCoinConf,
+    coin: &UtxoCoinFields,
     xpub_extractor: &XPubExtractor,
     derivation_path: DerivationPath,
 ) -> MmResult<Secp256k1ExtendedPublicKey, HDExtractPubkeyError>
 where
     XPubExtractor: HDXPubExtractor,
 {
-    let trezor_coin = conf
-        .trezor_coin
-        .clone()
-        .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
-    let xpub = xpub_extractor.extract_utxo_xpub(trezor_coin, derivation_path).await?;
-    Secp256k1ExtendedPublicKey::from_str(&xpub).map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
+    // Todo: refactor this whole function
+    if let PrivKeyPolicy::Trezor = coin.priv_key_policy {
+        let trezor_coin = coin
+            .conf
+            .trezor_coin
+            .clone()
+            .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
+        let xpub = xpub_extractor.extract_utxo_xpub(trezor_coin, derivation_path).await?;
+        return Secp256k1ExtendedPublicKey::from_str(&xpub)
+            .map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()));
+    }
+
+    coin.priv_key_policy
+        .hd_wallet_derived_pubkey(derivation_path)
+        .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))
 }
 
 /// returns the fee required to be paid for HTLC spend transaction
@@ -2745,9 +2755,13 @@ pub async fn get_tx_hex_by_hash(coin: &UtxoCoinFields, tx_hash: Vec<u8>) -> RawT
 
 pub async fn withdraw<T>(coin: T, req: WithdrawRequest) -> WithdrawResult
 where
-    T: UtxoCommonOps + GetUtxoListOps + MarketCoinOps,
+    T: UtxoCommonOps
+        + GetUtxoListOps
+        + MarketCoinOps
+        + CoinWithDerivationMethod
+        + GetWithdrawSenderAddress<Address = Address, Pubkey = Public>,
 {
-    StandardUtxoWithdraw::new(coin, req)?.build().await
+    StandardUtxoWithdraw::new(coin, req).await?.build().await
 }
 
 pub async fn init_withdraw<T>(
