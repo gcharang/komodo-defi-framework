@@ -1,8 +1,9 @@
 use crate::nft::eth_addr_to_hex;
-use crate::nft::nft_structs::{Chain, ConvertChain, Nft, NftList, NftTokenAddrId, NftTransferHistory,
-                              NftTransferHistoryFilters, NftsTransferHistoryList, TransferMeta};
-use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftStorageError,
-                          NftTransferHistoryStorageOps, RemoveNftResult};
+use crate::nft::nft_structs::{Chain, ContractType, ConvertChain, Nft, NftCommon, NftList, NftTokenAddrId,
+                              NftTransferCommon, NftTransferHistory, NftTransferHistoryFilters,
+                              NftsTransferHistoryList, TransferMeta, UriMeta};
+use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftDetailsJson, NftListStorageOps, NftStorageError,
+                          NftTransferHistoryStorageOps, RemoveNftResult, TransferDetailsJson};
 use async_trait::async_trait;
 use common::async_blocking;
 use db_common::sql_build::{SqlCondition, SqlQuery};
@@ -15,6 +16,7 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::mm_error::{MmError, MmResult};
 use mm2_number::BigDecimal;
+use serde_json::Value as Json;
 use serde_json::{self as json};
 use std::convert::TryInto;
 use std::num::NonZeroUsize;
@@ -40,6 +42,24 @@ fn create_nft_list_table_sql(chain: &Chain) -> MmResult<String, SqlError> {
     contract_type TEXT NOT NULL,
     possible_spam INTEGER DEFAULT 0 NOT NULL,
     possible_phishing INTEGER DEFAULT 0 NOT NULL,
+    collection_name TEXT,
+    symbol TEXT,
+    token_uri TEXT,
+    token_domain TEXT,
+    metadata TEXT,
+    last_token_uri_sync TEXT,
+    last_metadata_sync TEXT,
+    raw_image_url TEXT,
+    image_url TEXT,
+    image_domain TEXT,
+    token_name TEXT,
+    description TEXT,
+    attributes TEXT,
+    animation_url TEXT,
+    animation_domain TEXT,
+    external_url TEXT,
+    external_domain TEXT,
+    image_details TEXT,
     details_json TEXT,
     PRIMARY KEY (token_address, token_id)
         );",
@@ -63,12 +83,14 @@ fn create_transfer_history_table_sql(chain: &Chain) -> MmResult<String, SqlError
     token_id VARCHAR(256) NOT NULL,
     status TEXT NOT NULL,
     amount VARCHAR(256) NOT NULL,
-    token_uri TEXT,
-    collection_name TEXT,
-    image_url TEXT,
-    token_name TEXT,
     possible_spam INTEGER DEFAULT 0 NOT NULL,
     possible_phishing INTEGER DEFAULT 0 NOT NULL,
+    token_uri TEXT,
+    token_domain TEXT,
+    collection_name TEXT,
+    image_url TEXT,
+    image_domain TEXT,
+    token_name TEXT,
     details_json TEXT,
     PRIMARY KEY (transaction_hash, log_index)
         );",
@@ -175,13 +197,9 @@ fn nft_history_table_builder_preimage(
     Ok(sql_builder)
 }
 
-fn finalize_nft_list_sql_builder(
-    mut sql_builder: SqlBuilder,
-    offset: usize,
-    limit: usize,
-) -> MmResult<String, SqlError> {
+fn finalize_sql_builder(mut sql_builder: SqlBuilder, offset: usize, limit: usize) -> MmResult<String, SqlError> {
     let sql = sql_builder
-        .field("nft_list.details_json")
+        .field("*")
         .offset(offset)
         .limit(limit)
         .sql()
@@ -189,28 +207,151 @@ fn finalize_nft_list_sql_builder(
     Ok(sql)
 }
 
-fn finalize_nft_history_sql_builder(
-    mut sql_builder: SqlBuilder,
-    offset: usize,
-    limit: usize,
-) -> MmResult<String, SqlError> {
-    let sql = sql_builder
-        .field("nft_history.details_json")
-        .offset(offset)
-        .limit(limit)
-        .sql()
-        .map_err(|e| SqlError::ToSqlConversionFailure(e.into()))?;
-    Ok(sql)
+fn get_and_parse<T: FromStr>(row: &Row<'_>, column: &str) -> Result<T, SqlError> {
+    let value_str: String = row.get(column)?;
+    value_str.parse().map_err(|_| SqlError::from(FromSqlError::InvalidType))
 }
 
 fn nft_from_row(row: &Row<'_>) -> Result<Nft, SqlError> {
-    let json_string: String = row.get(0)?;
-    json::from_str(&json_string).map_err(|e| SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(e)))
+    let token_address = get_and_parse(row, "token_address")?;
+    let token_id = get_and_parse(row, "token_id")?;
+    let chain = get_and_parse(row, "chain")?;
+    let amount = get_and_parse(row, "amount")?;
+    let block_number: u64 = row.get("block_number")?;
+    let contract_type = get_and_parse(row, "contract_type")?;
+    let possible_spam: i32 = row.get("possible_spam")?;
+    let possible_phishing: i32 = row.get("possible_phishing")?;
+    let collection_name: Option<String> = row.get("collection_name")?;
+    let symbol: Option<String> = row.get("symbol")?;
+    let token_uri: Option<String> = row.get("token_uri")?;
+    let token_domain: Option<String> = row.get("token_domain")?;
+    let metadata: Option<String> = row.get("metadata")?;
+    let last_token_uri_sync: Option<String> = row.get("last_token_uri_sync")?;
+    let last_metadata_sync: Option<String> = row.get("last_metadata_sync")?;
+    let raw_image_url: Option<String> = row.get("raw_image_url")?;
+    let image_url: Option<String> = row.get("image_url")?;
+    let image_domain: Option<String> = row.get("image_domain")?;
+    let token_name: Option<String> = row.get("token_name")?;
+    let description: Option<String> = row.get("description")?;
+    let attributes_str: Option<String> = row.get("attributes")?;
+    let attributes: Option<Json> = attributes_str
+        .as_deref()
+        .map(json::from_str)
+        .transpose()
+        .map_err(|e| SqlError::FromSqlConversionFailure(21, Type::Text, Box::new(e)))?;
+    let animation_url: Option<String> = row.get("animation_url")?;
+    let animation_domain: Option<String> = row.get("animation_domain")?;
+    let external_url: Option<String> = row.get("external_url")?;
+    let external_domain: Option<String> = row.get("external_domain")?;
+    let image_details_str: Option<String> = row.get("image_details")?;
+    let image_details: Option<Json> = image_details_str
+        .as_deref()
+        .map(json::from_str)
+        .transpose()
+        .map_err(|e| SqlError::FromSqlConversionFailure(26, Type::Text, Box::new(e)))?;
+    let details_json: String = row.get("details_json")?;
+    let nft_details: NftDetailsJson =
+        json::from_str(&details_json).map_err(|e| SqlError::FromSqlConversionFailure(27, Type::Text, Box::new(e)))?;
+
+    let uri_meta = UriMeta {
+        raw_image_url,
+        image_url,
+        image_domain,
+        token_name,
+        description,
+        attributes,
+        animation_url,
+        animation_domain,
+        external_url,
+        external_domain,
+        image_details,
+    };
+
+    let common = NftCommon {
+        token_address,
+        token_id,
+        amount,
+        owner_of: nft_details.owner_of,
+        token_hash: nft_details.token_hash,
+        collection_name,
+        symbol,
+        token_uri,
+        token_domain,
+        metadata,
+        last_token_uri_sync,
+        last_metadata_sync,
+        minter_address: nft_details.minter_address,
+        possible_spam: possible_spam != 0,
+        possible_phishing: possible_phishing != 0,
+    };
+    let nft = Nft {
+        common,
+        chain,
+        block_number_minted: nft_details.block_number_minted,
+        block_number,
+        contract_type,
+        uri_meta,
+    };
+    Ok(nft)
 }
 
 fn transfer_history_from_row(row: &Row<'_>) -> Result<NftTransferHistory, SqlError> {
-    let json_string: String = row.get(0)?;
-    json::from_str(&json_string).map_err(|e| SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(e)))
+    let transaction_hash: String = row.get("transaction_hash")?;
+    let log_index: u32 = row.get("log_index")?;
+    let chain: Chain = get_and_parse(row, "chain")?;
+    let block_number: u64 = row.get("block_number")?;
+    let block_timestamp: u64 = row.get("block_timestamp")?;
+    let contract_type: ContractType = get_and_parse(row, "contract_type")?;
+    let token_address: Address = get_and_parse(row, "token_address")?;
+    let token_id: BigDecimal = get_and_parse(row, "token_id")?;
+    let status = get_and_parse(row, "status")?;
+    let amount: BigDecimal = get_and_parse(row, "amount")?;
+    let token_uri: Option<String> = row.get("token_uri")?;
+    let token_domain: Option<String> = row.get("token_domain")?;
+    let collection_name: Option<String> = row.get("collection_name")?;
+    let image_url: Option<String> = row.get("image_url")?;
+    let image_domain: Option<String> = row.get("image_domain")?;
+    let token_name: Option<String> = row.get("token_name")?;
+    let possible_spam: i32 = row.get("possible_spam")?;
+    let possible_phishing: i32 = row.get("possible_phishing")?;
+    let details_json: String = row.get("details_json")?;
+    let details: TransferDetailsJson =
+        json::from_str(&details_json).map_err(|e| SqlError::FromSqlConversionFailure(19, Type::Text, Box::new(e)))?;
+
+    let common = NftTransferCommon {
+        block_hash: details.block_hash,
+        transaction_hash,
+        transaction_index: details.transaction_index,
+        log_index,
+        value: details.value,
+        transaction_type: details.transaction_type,
+        token_address,
+        token_id,
+        from_address: details.from_address,
+        to_address: details.to_address,
+        amount,
+        verified: details.verified,
+        operator: details.operator,
+        possible_spam: possible_spam != 0,
+        possible_phishing: possible_phishing != 0,
+    };
+
+    let transfer_history = NftTransferHistory {
+        common,
+        chain,
+        block_number,
+        block_timestamp,
+        contract_type,
+        token_uri,
+        token_domain,
+        collection_name,
+        image_url,
+        image_domain,
+        token_name,
+        status,
+    };
+
+    Ok(transfer_history)
 }
 
 fn address_from_row(row: &Row<'_>) -> Result<Address, SqlError> {
@@ -237,9 +378,13 @@ fn insert_nft_in_list_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let sql = format!(
         "INSERT INTO {} (
             token_address, token_id, chain, amount, block_number, contract_type, possible_spam,
-             possible_phishing, details_json
+            possible_phishing, collection_name, symbol, token_uri, token_domain, metadata,
+            last_token_uri_sync, last_metadata_sync, raw_image_url, image_url, image_domain,
+            token_name, description, attributes, animation_url, animation_domain, external_url,
+            external_domain, image_details, details_json
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+            ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
         );",
         table_name
     );
@@ -253,10 +398,10 @@ fn insert_transfer_in_history_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let sql = format!(
         "INSERT INTO {} (
             transaction_hash, log_index, chain, block_number, block_timestamp, contract_type,
-            token_address, token_id, status, amount, token_uri, collection_name, image_url, token_name,
-            possible_spam, possible_phishing, details_json
+            token_address, token_id, status, amount, token_uri, token_domain, collection_name, image_url, image_domain,
+            token_name, possible_spam, possible_phishing, details_json
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
         );",
         table_name
     );
@@ -273,26 +418,26 @@ fn upsert_last_scanned_block_sql() -> MmResult<String, SqlError> {
     Ok(sql)
 }
 
-fn update_details_json_by_token_add_id_sql<F>(chain: &Chain, table_name_creator: F) -> MmResult<String, SqlError>
-where
-    F: FnOnce(&Chain) -> String,
-{
-    let table_name = table_name_creator(chain);
+fn refresh_nft_metadata_sql(chain: &Chain) -> MmResult<String, SqlError> {
+    let table_name = nft_list_table_name(chain);
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET details_json = ?1 WHERE token_address = ?2 AND token_id = ?3;",
+        "UPDATE {} SET possible_spam = ?1, possible_phishing = ?2, collection_name = ?3, symbol = ?4, token_uri = ?5, token_domain = ?6, metadata = ?7, \
+        last_token_uri_sync = ?8, last_metadata_sync = ?9, raw_image_url = ?10, image_url = ?11, image_domain = ?12, token_name = ?13, description = ?14, \
+        attributes = ?15, animation_url = ?16, animation_domain = ?17, external_url = ?18, external_domain = ?19, image_details = ?20 WHERE token_address = ?21 AND token_id = ?22;",
         table_name
     );
     Ok(sql)
 }
 
-fn update_meta_by_tx_hash_and_log_index_sql(chain: &Chain) -> MmResult<String, SqlError> {
+fn update_transfers_meta_by_token_addr_id_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_transfer_history_table_name(chain);
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET token_uri = ?1, collection_name = ?2, image_url = ?3, token_name = ?4, details_json = ?5 WHERE transaction_hash = ?6 AND log_index = ?7;",
+        "UPDATE {} SET token_uri = ?1, token_domain = ?2, collection_name = ?3, image_url = ?4, image_domain = ?5, \
+        token_name = ?6 WHERE token_address = ?7 AND token_id = ?8;",
         table_name
     );
     Ok(sql)
@@ -306,7 +451,7 @@ where
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET amount = ?1, details_json = ?2 WHERE token_address = ?3 AND token_id = ?4;",
+        "UPDATE {} SET amount = ?1 WHERE token_address = ?2 AND token_id = ?3;",
         table_name
     );
     Ok(sql)
@@ -320,7 +465,7 @@ where
 
     validate_table_name(&table_name)?;
     let sql = format!(
-        "UPDATE {} SET amount = ?1, block_number = ?2, details_json = ?3 WHERE token_address = ?4 AND token_id = ?5;",
+        "UPDATE {} SET amount = ?1, block_number = ?2 WHERE token_address = ?3 AND token_id = ?4;",
         table_name
     );
     Ok(sql)
@@ -329,10 +474,7 @@ where
 fn get_nft_metadata_sql(chain: &Chain) -> MmResult<String, SqlError> {
     let table_name = nft_list_table_name(chain);
     validate_table_name(&table_name)?;
-    let sql = format!(
-        "SELECT details_json FROM {} WHERE token_address=?1 AND token_id=?2",
-        table_name
-    );
+    let sql = format!("SELECT * FROM {} WHERE token_address=?1 AND token_id=?2", table_name);
     Ok(sql)
 }
 
@@ -393,7 +535,7 @@ where
 {
     let table_name = table_name_creator(chain);
     validate_table_name(table_name.as_str())?;
-    let sql_query = format!("SELECT details_json FROM {} WHERE token_address = ?", table_name);
+    let sql_query = format!("SELECT * FROM {} WHERE token_address = ?", table_name);
     let stmt = conn.prepare(&sql_query)?;
     Ok(stmt)
 }
@@ -413,21 +555,32 @@ where
     Ok(stmt)
 }
 
-fn get_transfers_from_block_builder<'a>(
-    conn: &'a Connection,
-    chain: &'a Chain,
-    from_block: u64,
-) -> MmResult<SqlQuery<'a>, SqlError> {
+// fn get_transfers_from_block_builder<'a>(
+//     conn: &'a Connection,
+//     chain: &'a Chain,
+//     from_block: u64,
+// ) -> MmResult<SqlQuery<'a>, SqlError> {
+//     let table_name = nft_transfer_history_table_name(chain);
+//     validate_table_name(table_name.as_str())?;
+//     let mut sql_builder = SqlQuery::select_from(conn, table_name.as_str())?;
+//     sql_builder
+//         .sql_builder()
+//         .and_where(format!("block_number >= '{}'", from_block))
+//         .order_asc("block_number")
+//         .field("*");
+//     drop_mutability!(sql_builder);
+//     Ok(sql_builder)
+// }
+
+fn get_transfers_from_block_statement<'a>(conn: &'a Connection, chain: &'a Chain) -> MmResult<Statement<'a>, SqlError> {
     let table_name = nft_transfer_history_table_name(chain);
     validate_table_name(table_name.as_str())?;
-    let mut sql_builder = SqlQuery::select_from(conn, table_name.as_str())?;
-    sql_builder
-        .sql_builder()
-        .and_where(format!("block_number >= '{}'", from_block))
-        .order_asc("block_number")
-        .field("details_json");
-    drop_mutability!(sql_builder);
-    Ok(sql_builder)
+    let sql_query = format!(
+        "SELECT * FROM {} WHERE block_number >= ? ORDER BY block_number ASC",
+        table_name
+    );
+    let stmt = conn.prepare(&sql_query)?;
+    Ok(stmt)
 }
 
 fn get_transfers_by_token_addr_id_statement<'a>(
@@ -436,10 +589,7 @@ fn get_transfers_by_token_addr_id_statement<'a>(
 ) -> MmResult<Statement<'a>, SqlError> {
     let table_name = nft_transfer_history_table_name(chain);
     validate_table_name(table_name.as_str())?;
-    let sql_query = format!(
-        "SELECT details_json FROM {} WHERE token_address = ? AND token_id = ?",
-        table_name
-    );
+    let sql_query = format!("SELECT * FROM {} WHERE token_address = ? AND token_id = ?", table_name);
     let stmt = conn.prepare(&sql_query)?;
     Ok(stmt)
 }
@@ -468,7 +618,7 @@ fn get_transfer_by_tx_hash_and_log_index_sql(chain: &Chain) -> MmResult<String, 
     let table_name = nft_transfer_history_table_name(chain);
     validate_table_name(&table_name)?;
     let sql = format!(
-        "SELECT details_json FROM {} WHERE transaction_hash=?1 AND log_index = ?2",
+        "SELECT * FROM {} WHERE transaction_hash=?1 AND log_index = ?2",
         table_name
     );
     Ok(sql)
@@ -530,7 +680,7 @@ impl NftListStorageOps for SqliteNftStorage {
             let count_total = total.try_into().expect("count should not be failed");
 
             let (offset, limit) = get_offset_limit(max, limit, page_number, count_total);
-            let sql = finalize_nft_list_sql_builder(sql_builder, offset, limit)?;
+            let sql = finalize_sql_builder(sql_builder, offset, limit)?;
             let nfts = conn
                 .prepare(&sql)?
                 .query_map([], nft_from_row)?
@@ -557,7 +707,13 @@ impl NftListStorageOps for SqliteNftStorage {
             let sql_transaction = conn.transaction()?;
 
             for nft in nfts {
-                let nft_json = json::to_string(&nft).expect("serialization should not fail");
+                let details_json = NftDetailsJson {
+                    owner_of: nft.common.owner_of,
+                    token_hash: nft.common.token_hash,
+                    minter_address: nft.common.minter_address,
+                    block_number_minted: nft.block_number_minted,
+                };
+                let details_json = json::to_string(&details_json).expect("serialization should not fail");
                 let params = [
                     Some(eth_addr_to_hex(&nft.common.token_address)),
                     Some(nft.common.token_id.to_string()),
@@ -567,7 +723,25 @@ impl NftListStorageOps for SqliteNftStorage {
                     Some(nft.contract_type.to_string()),
                     Some(i32::from(nft.common.possible_spam).to_string()),
                     Some(i32::from(nft.common.possible_phishing).to_string()),
-                    Some(nft_json),
+                    nft.common.collection_name,
+                    nft.common.symbol,
+                    nft.common.token_uri,
+                    nft.common.token_domain,
+                    nft.common.metadata,
+                    nft.common.last_token_uri_sync,
+                    nft.common.last_metadata_sync,
+                    nft.uri_meta.raw_image_url,
+                    nft.uri_meta.image_url,
+                    nft.uri_meta.image_domain,
+                    nft.uri_meta.token_name,
+                    nft.uri_meta.description,
+                    nft.uri_meta.attributes.map(|v| v.to_string()),
+                    nft.uri_meta.animation_url,
+                    nft.uri_meta.animation_domain,
+                    nft.uri_meta.external_url,
+                    nft.uri_meta.external_domain,
+                    nft.uri_meta.image_details.map(|v| v.to_string()),
+                    Some(details_json),
                 ];
                 sql_transaction.execute(&insert_nft_in_list_sql(&chain)?, params)?;
             }
@@ -640,16 +814,34 @@ impl NftListStorageOps for SqliteNftStorage {
     }
 
     async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
-        let sql = update_details_json_by_token_add_id_sql(chain, nft_list_table_name)?;
-        let nft_json = json::to_string(&nft).expect("serialization should not fail");
+        let sql = refresh_nft_metadata_sql(chain)?;
         let selfi = self.clone();
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
             let params = [
-                nft_json,
-                eth_addr_to_hex(&nft.common.token_address),
-                nft.common.token_id.to_string(),
+                Some(i32::from(nft.common.possible_spam).to_string()),
+                Some(i32::from(nft.common.possible_phishing).to_string()),
+                nft.common.collection_name,
+                nft.common.symbol,
+                nft.common.token_uri,
+                nft.common.token_domain,
+                nft.common.metadata,
+                nft.common.last_token_uri_sync,
+                nft.common.last_metadata_sync,
+                nft.uri_meta.raw_image_url,
+                nft.uri_meta.image_url,
+                nft.uri_meta.image_domain,
+                nft.uri_meta.token_name,
+                nft.uri_meta.description,
+                nft.uri_meta.attributes.map(|v| v.to_string()),
+                nft.uri_meta.animation_url,
+                nft.uri_meta.animation_domain,
+                nft.uri_meta.external_url,
+                nft.uri_meta.external_domain,
+                nft.uri_meta.image_details.map(|v| v.to_string()),
+                Some(eth_addr_to_hex(&nft.common.token_address)),
+                Some(nft.common.token_id.to_string()),
             ];
             sql_transaction.execute(&sql, params)?;
             sql_transaction.commit()?;
@@ -687,7 +879,6 @@ impl NftListStorageOps for SqliteNftStorage {
 
     async fn update_nft_amount(&self, chain: &Chain, nft: Nft, scanned_block: u64) -> MmResult<(), Self::Error> {
         let sql = update_nft_amount_sql(chain, nft_list_table_name)?;
-        let nft_json = json::to_string(&nft).expect("serialization should not fail");
         let scanned_block_params = [chain.to_ticker(), scanned_block.to_string()];
         let selfi = self.clone();
         async_blocking(move || {
@@ -695,7 +886,6 @@ impl NftListStorageOps for SqliteNftStorage {
             let sql_transaction = conn.transaction()?;
             let params = [
                 Some(nft.common.amount.to_string()),
-                Some(nft_json),
                 Some(eth_addr_to_hex(&nft.common.token_address)),
                 Some(nft.common.token_id.to_string()),
             ];
@@ -709,7 +899,6 @@ impl NftListStorageOps for SqliteNftStorage {
 
     async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error> {
         let sql = update_nft_amount_and_block_number_sql(chain, nft_list_table_name)?;
-        let nft_json = json::to_string(&nft).expect("serialization should not fail");
         let scanned_block_params = [chain.to_ticker(), nft.block_number.to_string()];
         let selfi = self.clone();
         async_blocking(move || {
@@ -718,7 +907,6 @@ impl NftListStorageOps for SqliteNftStorage {
             let params = [
                 Some(nft.common.amount.to_string()),
                 Some(nft.block_number.to_string()),
-                Some(nft_json),
                 Some(eth_addr_to_hex(&nft.common.token_address)),
                 Some(nft.common.token_id.to_string()),
             ];
@@ -751,30 +939,16 @@ impl NftListStorageOps for SqliteNftStorage {
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
-        let nfts = selfi.get_nfts_by_token_address(chain, token_address.clone()).await?;
 
         let table_name = nft_list_table_name(chain);
         validate_table_name(&table_name)?;
-        let sql = format!(
-            "UPDATE {} SET possible_spam = ?1, details_json = ?2 WHERE token_address = ?3 AND token_id = ?4;",
-            table_name
-        );
+        let sql = format!("UPDATE {} SET possible_spam = ?1 WHERE token_address = ?2;", table_name);
 
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
-
-            for mut nft in nfts.into_iter() {
-                nft.common.possible_spam = possible_spam;
-                let nft_json = json::to_string(&nft).expect("serialization should not fail");
-                let params = [
-                    Some(i32::from(possible_spam).to_string()),
-                    Some(nft_json),
-                    Some(token_address.to_string()),
-                    Some(nft.common.token_id.to_string()),
-                ];
-                sql_transaction.execute(&sql, params)?;
-            }
+            let params = [Some(i32::from(possible_spam).to_string()), Some(token_address.clone())];
+            sql_transaction.execute(&sql, params)?;
             sql_transaction.commit()?;
             Ok(())
         })
@@ -832,7 +1006,7 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
             let count_total = total.try_into().expect("count should not be failed");
 
             let (offset, limit) = get_offset_limit(max, limit, page_number, count_total);
-            let sql = finalize_nft_history_sql_builder(sql_builder, offset, limit)?;
+            let sql = finalize_sql_builder(sql_builder, offset, limit)?;
             let transfers = conn
                 .prepare(&sql)?
                 .query_map([], transfer_history_from_row)?
@@ -859,7 +1033,17 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
             let sql_transaction = conn.transaction()?;
 
             for transfer in transfers {
-                let transfer_json = json::to_string(&transfer).expect("serialization should not fail");
+                let details_json = TransferDetailsJson {
+                    block_hash: transfer.common.block_hash,
+                    transaction_index: transfer.common.transaction_index,
+                    value: transfer.common.value,
+                    transaction_type: transfer.common.transaction_type,
+                    verified: transfer.common.verified,
+                    operator: transfer.common.operator,
+                    from_address: transfer.common.from_address,
+                    to_address: transfer.common.from_address,
+                };
+                let transfer_json = json::to_string(&details_json).expect("serialization should not fail");
                 let params = [
                     Some(transfer.common.transaction_hash),
                     Some(transfer.common.log_index.to_string()),
@@ -872,8 +1056,10 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
                     Some(transfer.status.to_string()),
                     Some(transfer.common.amount.to_string()),
                     transfer.token_uri,
+                    transfer.token_domain,
                     transfer.collection_name,
                     transfer.image_url,
+                    transfer.image_domain,
                     transfer.token_name,
                     Some(i32::from(transfer.common.possible_spam).to_string()),
                     Some(i32::from(transfer.common.possible_phishing).to_string()),
@@ -909,8 +1095,10 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
         let chain = *chain;
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            let sql_builder = get_transfers_from_block_builder(&conn, &chain, from_block)?;
-            let transfers = sql_builder.query(transfer_history_from_row)?;
+            let mut stmt = get_transfers_from_block_statement(&conn, &chain)?;
+            let transfers = stmt
+                .query_map([from_block], transfer_history_from_row)?
+                .collect::<Result<Vec<_>, _>>()?;
             Ok(transfers)
         })
         .await
@@ -956,21 +1144,21 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
         .await
     }
 
-    async fn update_transfer_meta_by_hash_and_log_index(
+    async fn update_transfers_meta_by_token_addr_id(
         &self,
         chain: &Chain,
-        transfer: NftTransferHistory,
+        transfer_meta: TransferMeta,
     ) -> MmResult<(), Self::Error> {
-        let sql = update_meta_by_tx_hash_and_log_index_sql(chain)?;
-        let transfer_json = json::to_string(&transfer).expect("serialization should not fail");
+        let sql = update_transfers_meta_by_token_addr_id_sql(chain)?;
         let params = [
-            transfer.token_uri,
-            transfer.collection_name,
-            transfer.image_url,
-            transfer.token_name,
-            Some(transfer_json),
-            Some(transfer.common.transaction_hash),
-            Some(transfer.common.log_index.to_string()),
+            transfer_meta.token_uri,
+            transfer_meta.token_domain,
+            transfer_meta.collection_name,
+            transfer_meta.image_url,
+            transfer_meta.image_domain,
+            transfer_meta.token_name,
+            Some(transfer_meta.token_address),
+            Some(transfer_meta.token_id.to_string()),
         ];
         let selfi = self.clone();
         async_blocking(move || {
@@ -981,28 +1169,6 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
             Ok(())
         })
         .await
-    }
-
-    async fn update_transfers_meta_by_token_addr_id(
-        &self,
-        chain: &Chain,
-        transfer_meta: TransferMeta,
-    ) -> MmResult<(), Self::Error> {
-        let selfi = self.clone();
-        let transfers = selfi
-            .get_transfers_by_token_addr_id(chain, transfer_meta.token_address, transfer_meta.token_id)
-            .await?;
-        for mut transfer in transfers.into_iter() {
-            transfer.token_uri = transfer_meta.token_uri.clone();
-            transfer.collection_name = transfer_meta.collection_name.clone();
-            transfer.image_url = transfer_meta.image_url.clone();
-            transfer.token_name = transfer_meta.token_name.clone();
-            drop_mutability!(transfer);
-            selfi
-                .update_transfer_meta_by_hash_and_log_index(chain, transfer)
-                .await?;
-        }
-        Ok(())
     }
 
     async fn get_transfers_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> {
@@ -1042,30 +1208,16 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
         let selfi = self.clone();
-        let transfers = selfi.get_transfers_by_token_address(chain, token_address).await?;
 
         let table_name = nft_transfer_history_table_name(chain);
         validate_table_name(&table_name)?;
-        let sql = format!(
-            "UPDATE {} SET possible_spam = ?1, details_json = ?2 WHERE transaction_hash = ?3 AND log_index = ?4;",
-            table_name
-        );
+        let sql = format!("UPDATE {} SET possible_spam = ?1 WHERE token_address = ?2;", table_name);
 
         async_blocking(move || {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
-
-            for mut transfer in transfers.into_iter() {
-                transfer.common.possible_spam = possible_spam;
-                let transfer_json = json::to_string(&transfer).expect("serialization should not fail");
-                let params = [
-                    Some(i32::from(possible_spam).to_string()),
-                    Some(transfer_json),
-                    Some(transfer.common.transaction_hash.to_string()),
-                    Some(transfer.common.log_index.to_string()),
-                ];
-                sql_transaction.execute(&sql, params)?;
-            }
+            let params = [Some(i32::from(possible_spam).to_string()), Some(token_address.clone())];
+            sql_transaction.execute(&sql, params)?;
             sql_transaction.commit()?;
             Ok(())
         })

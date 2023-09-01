@@ -181,6 +181,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
         update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
         update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+        // todo update phishing domains
     }
     Ok(())
 }
@@ -273,6 +274,7 @@ fn prepare_uri_for_blocklist_endpoint(
     Ok(uri)
 }
 
+/// `refresh_nft_metadata` function refreshes metadata related to NFT with specified token address and token id.
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -293,14 +295,17 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     };
     let mut nft_db = get_nft_metadata(ctx.clone(), req).await?;
     let token_uri = check_moralis_ipfs_bafy(moralis_meta.common.token_uri.as_deref());
+    let token_domain = get_domain_from_url(token_uri.as_deref());
     let uri_meta = get_uri_meta(token_uri.as_deref(), moralis_meta.common.metadata.as_deref()).await;
     nft_db.common.collection_name = moralis_meta.common.collection_name;
     nft_db.common.symbol = moralis_meta.common.symbol;
     nft_db.common.token_uri = token_uri;
+    nft_db.common.token_domain = token_domain;
     nft_db.common.metadata = moralis_meta.common.metadata;
     nft_db.common.last_token_uri_sync = moralis_meta.common.last_token_uri_sync;
     nft_db.common.last_metadata_sync = moralis_meta.common.last_metadata_sync;
     nft_db.common.possible_spam = moralis_meta.common.possible_spam;
+    // todo also update possible_phishing and check spam with antispam proxy additionally
     nft_db.uri_meta = uri_meta;
     drop_mutability!(nft_db);
     storage
@@ -427,8 +432,10 @@ async fn get_moralis_nft_transfers(
                     block_timestamp,
                     contract_type,
                     token_uri: None,
+                    token_domain: None,
                     collection_name: None,
                     image_url: None,
+                    image_domain: None,
                     token_name: None,
                     status,
                 };
@@ -590,7 +597,11 @@ async fn get_uri_meta(token_uri: Option<&str>, metadata: Option<&str>) -> UriMet
         }
     }
     uri_meta.image_url = check_moralis_ipfs_bafy(uri_meta.image_url.as_deref());
+    uri_meta.image_domain = get_domain_from_url(uri_meta.image_url.as_deref());
     uri_meta.animation_url = check_moralis_ipfs_bafy(uri_meta.animation_url.as_deref());
+    uri_meta.animation_domain = get_domain_from_url(uri_meta.animation_url.as_deref());
+    uri_meta.external_url = check_moralis_ipfs_bafy(uri_meta.external_url.as_deref());
+    uri_meta.external_domain = get_domain_from_url(uri_meta.external_url.as_deref());
     drop_mutability!(uri_meta);
     uri_meta
 }
@@ -817,6 +828,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
             )
             .await?;
             let token_uri = check_moralis_ipfs_bafy(moralis_meta.common.token_uri.as_deref());
+            let token_domain = get_domain_from_url(token_uri.as_deref());
             let uri_meta = get_uri_meta(token_uri.as_deref(), moralis_meta.common.metadata.as_deref()).await;
             let nft = Nft {
                 common: NftCommon {
@@ -829,6 +841,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
                     collection_name: moralis_meta.common.collection_name,
                     symbol: moralis_meta.common.symbol,
                     token_uri,
+                    token_domain,
                     metadata: moralis_meta.common.metadata,
                     last_token_uri_sync: moralis_meta.common.last_token_uri_sync,
                     last_metadata_sync: moralis_meta.common.last_metadata_sync,
@@ -1020,6 +1033,7 @@ fn check_spam_and_redact_metadata_field(
 async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, contract_type: ContractType) -> Nft {
     let token_uri = check_moralis_ipfs_bafy(nft_moralis.common.token_uri.as_deref());
     let uri_meta = get_uri_meta(token_uri.as_deref(), nft_moralis.common.metadata.as_deref()).await;
+    let token_domain = get_domain_from_url(token_uri.as_deref());
     Nft {
         common: NftCommon {
             token_address: nft_moralis.common.token_address,
@@ -1030,6 +1044,7 @@ async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, cont
             collection_name: nft_moralis.common.collection_name,
             symbol: nft_moralis.common.symbol,
             token_uri,
+            token_domain,
             metadata: nft_moralis.common.metadata,
             last_token_uri_sync: nft_moralis.common.last_token_uri_sync,
             last_metadata_sync: nft_moralis.common.last_metadata_sync,
@@ -1043,4 +1058,11 @@ async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, cont
         contract_type,
         uri_meta,
     }
+}
+
+#[inline(always)]
+fn get_domain_from_url(url: Option<&str>) -> Option<String> {
+    url.as_ref()
+        .and_then(|uri| Url::parse(uri).ok())
+        .and_then(|url| url.domain().map(String::from))
 }

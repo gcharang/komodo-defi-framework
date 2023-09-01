@@ -487,25 +487,6 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         }
     }
 
-    async fn update_transfer_meta_by_hash_and_log_index(
-        &self,
-        chain: &Chain,
-        transfer: NftTransferHistory,
-    ) -> MmResult<(), Self::Error> {
-        let locked_db = self.lock_db().await?;
-        let db_transaction = locked_db.get_inner().transaction().await?;
-        let table = db_transaction.table::<NftTransferHistoryTable>().await?;
-
-        let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
-            .with_value(chain.to_string())?
-            .with_value(&transfer.common.transaction_hash)?
-            .with_value(transfer.common.log_index)?;
-
-        let item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
-        table.replace_item_by_unique_multi_index(index_keys, &item).await?;
-        Ok(())
-    }
-
     async fn update_transfers_meta_by_token_addr_id(
         &self,
         chain: &Chain,
@@ -519,8 +500,10 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
         for mut transfer in transfers {
             transfer.token_uri = transfer_meta.token_uri.clone();
+            transfer.token_domain = transfer_meta.token_domain.clone();
             transfer.collection_name = transfer_meta.collection_name.clone();
             transfer.image_url = transfer_meta.image_url.clone();
+            transfer.image_domain = transfer_meta.image_domain.clone();
             transfer.token_name = transfer_meta.token_name.clone();
             drop_mutability!(transfer);
 

@@ -147,12 +147,6 @@ pub trait NftTransferHistoryStorageOps {
         log_index: u32,
     ) -> MmResult<Option<NftTransferHistory>, Self::Error>;
 
-    async fn update_transfer_meta_by_hash_and_log_index(
-        &self,
-        chain: &Chain,
-        transfer: NftTransferHistory,
-    ) -> MmResult<(), Self::Error>;
-
     async fn update_transfers_meta_by_token_addr_id(
         &self,
         chain: &Chain,
@@ -222,4 +216,29 @@ fn get_offset_limit(max: bool, limit: usize, page_number: Option<NonZeroUsize>, 
         Some(page) => ((page.get() - 1) * limit, limit),
         None => (0, limit),
     }
+}
+
+/// `NftDetailsJson` structure contains immutable parameters that are not needed for queries.
+/// This is what `details_json` string contains in db table.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub(crate) struct NftDetailsJson {
+    pub(crate) owner_of: Address,
+    pub(crate) token_hash: Option<String>,
+    pub(crate) minter_address: Option<String>,
+    pub(crate) block_number_minted: Option<u64>,
+}
+
+#[allow(dead_code)]
+/// `TransferDetailsJson` structure contains immutable parameters that are not needed for queries.
+/// /// This is what `details_json` string contains in db table.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub(crate) struct TransferDetailsJson {
+    pub(crate) block_hash: Option<String>,
+    pub(crate) transaction_index: Option<u32>,
+    pub(crate) value: Option<BigDecimal>,
+    pub(crate) transaction_type: Option<String>,
+    pub(crate) verified: Option<u32>,
+    pub(crate) operator: Option<String>,
+    pub(crate) from_address: Address,
+    pub(crate) to_address: Address,
 }

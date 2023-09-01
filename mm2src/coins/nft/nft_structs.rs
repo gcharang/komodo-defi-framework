@@ -185,12 +185,15 @@ pub(crate) struct UriMeta {
     #[serde(rename = "image")]
     pub(crate) raw_image_url: Option<String>,
     pub(crate) image_url: Option<String>,
+    pub(crate) image_domain: Option<String>,
     #[serde(rename = "name")]
     pub(crate) token_name: Option<String>,
     pub(crate) description: Option<String>,
     pub(crate) attributes: Option<Json>,
     pub(crate) animation_url: Option<String>,
+    pub(crate) animation_domain: Option<String>,
     pub(crate) external_url: Option<String>,
+    pub(crate) external_domain: Option<String>,
     pub(crate) image_details: Option<Json>,
 }
 
@@ -224,7 +227,6 @@ impl UriMeta {
     }
 }
 
-#[allow(dead_code)]
 /// [`NftCommon`] structure contains common fields from [`Nft`] and [`NftFromMoralis`]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftCommon {
@@ -237,6 +239,7 @@ pub struct NftCommon {
     pub(crate) collection_name: Option<String>,
     pub(crate) symbol: Option<String>,
     pub(crate) token_uri: Option<String>,
+    pub(crate) token_domain: Option<String>,
     pub(crate) metadata: Option<String>,
     pub(crate) last_token_uri_sync: Option<String>,
     pub(crate) last_metadata_sync: Option<String>,
@@ -401,14 +404,13 @@ impl fmt::Display for TransferStatus {
     }
 }
 
-#[allow(dead_code)]
 /// [`NftTransferCommon`] structure contains common fields from [`NftTransferHistory`] and [`NftTransferHistoryFromMoralis`]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftTransferCommon {
     pub(crate) block_hash: Option<String>,
     /// Transaction hash in hexadecimal format
     pub(crate) transaction_hash: String,
-    pub(crate) transaction_index: Option<u64>,
+    pub(crate) transaction_index: Option<u32>,
     pub(crate) log_index: u32,
     pub(crate) value: Option<BigDecimal>,
     pub(crate) transaction_type: Option<String>,
@@ -417,7 +419,7 @@ pub struct NftTransferCommon {
     pub(crate) from_address: Address,
     pub(crate) to_address: Address,
     pub(crate) amount: BigDecimal,
-    pub(crate) verified: Option<u64>,
+    pub(crate) verified: Option<u32>,
     pub(crate) operator: Option<String>,
     #[serde(default)]
     pub(crate) possible_spam: bool,
@@ -434,8 +436,10 @@ pub struct NftTransferHistory {
     pub(crate) block_timestamp: u64,
     pub(crate) contract_type: ContractType,
     pub(crate) token_uri: Option<String>,
+    pub(crate) token_domain: Option<String>,
     pub(crate) collection_name: Option<String>,
     pub(crate) image_url: Option<String>,
+    pub(crate) image_domain: Option<String>,
     pub(crate) token_name: Option<String>,
     pub(crate) status: TransferStatus,
 }
@@ -472,7 +476,6 @@ pub struct NftTransferHistoryFilters {
     pub(crate) exclude_phishing: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateNftReq {
     pub(crate) chains: Vec<Chain>,
@@ -491,8 +494,10 @@ pub struct TransferMeta {
     pub(crate) token_address: String,
     pub(crate) token_id: BigDecimal,
     pub(crate) token_uri: Option<String>,
+    pub(crate) token_domain: Option<String>,
     pub(crate) collection_name: Option<String>,
     pub(crate) image_url: Option<String>,
+    pub(crate) image_domain: Option<String>,
     pub(crate) token_name: Option<String>,
 }
 
@@ -502,8 +507,10 @@ impl From<Nft> for TransferMeta {
             token_address: eth_addr_to_hex(&nft_db.common.token_address),
             token_id: nft_db.common.token_id,
             token_uri: nft_db.common.token_uri,
+            token_domain: nft_db.common.token_domain,
             collection_name: nft_db.common.collection_name,
             image_url: nft_db.uri_meta.image_url,
+            image_domain: nft_db.uri_meta.image_domain,
             token_name: nft_db.uri_meta.token_name,
         }
     }

@@ -30,6 +30,7 @@ pub(crate) fn nft() -> Nft {
             collection_name: None,
             symbol: None,
             token_uri: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.json".to_string()),
+            token_domain: None,
             metadata: Some(
                 "{\"name\":\"https://arweave.net\",\"image\":\"https://tikimetadata.s3.amazonaws.com/tiki_box.png\"}"
                     .to_string(),
@@ -52,40 +53,12 @@ pub(crate) fn nft() -> Nft {
             description: Some("Born to usher in Bull markets.".to_string()),
             attributes: None,
             animation_url: None,
+            animation_domain: None,
             external_url: None,
+            external_domain: None,
             image_details: None,
+            image_domain: None,
         },
-    }
-}
-
-fn transfer() -> NftTransferHistory {
-    NftTransferHistory {
-        common: NftTransferCommon {
-            block_hash: Some("0x3d68b78391fb3cf8570df27036214f7e9a5a6a45d309197936f51d826041bfe7".to_string()),
-            transaction_hash: "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe".to_string(),
-            transaction_index: Some(198),
-            log_index: 495,
-            value: Default::default(),
-            transaction_type: Some("Single".to_string()),
-            token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300047252").unwrap(),
-            from_address: Address::from_str("0x6fad0ec6bb76914b2a2a800686acc22970645820").unwrap(),
-            to_address: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
-            amount: BigDecimal::from_str("1").unwrap(),
-            verified: Some(1),
-            operator: None,
-            possible_spam: false,
-            possible_phishing: false,
-        },
-        chain: Chain::Bsc,
-        block_number: 28056726,
-        block_timestamp: 1683627432,
-        contract_type: ContractType::Erc721,
-        token_uri: None,
-        collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
-        image_url: Some("https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string()),
-        token_name: Some("Nebula Nodes".to_string()),
-        status: TransferStatus::Receive,
     }
 }
 
@@ -100,6 +73,7 @@ fn nft_list() -> Vec<Nft> {
             collection_name: None,
             symbol: None,
             token_uri: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.json".to_string()),
+            token_domain: None,
             metadata: Some("{\"name\":\"Tiki box\"}".to_string()),
             last_token_uri_sync: Some("2023-02-07T17:10:08.402Z".to_string()),
             last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
@@ -118,8 +92,11 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Born to usher in Bull markets.".to_string()),
             attributes: None,
             animation_url: None,
+            animation_domain: None,
             external_url: None,
+            external_domain: None,
             image_details: None,
+            image_domain: None,
         },
     };
 
@@ -133,6 +110,7 @@ fn nft_list() -> Vec<Nft> {
             collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
             symbol: Some("BMBBBF".to_string()),
             token_uri: Some("https://public.nftstatic.com/static/nft/BSC/BMBBBF/214300047252".to_string()),
+            token_domain: None,
             metadata: Some(
                 "{\"image\":\"https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png\"}"
                     .to_string(),
@@ -157,8 +135,11 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Interchain nodes".to_string()),
             attributes: None,
             animation_url: None,
+            animation_domain: None,
             external_url: None,
+            external_domain: None,
             image_details: None,
+            image_domain: None,
         },
     };
 
@@ -172,6 +153,7 @@ fn nft_list() -> Vec<Nft> {
             collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
             symbol: Some("BMBBBF".to_string()),
             token_uri: Some("https://public.nftstatic.com/static/nft/BSC/BMBBBF/214300047252".to_string()),
+            token_domain: None,
             metadata: Some(
                 "{\"image\":\"https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png\"}"
                     .to_string(),
@@ -196,8 +178,11 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Interchain nodes".to_string()),
             attributes: None,
             animation_url: None,
+            animation_domain: None,
             external_url: None,
+            external_domain: None,
             image_details: None,
+            image_domain: None,
         },
     };
 
@@ -211,6 +196,7 @@ fn nft_list() -> Vec<Nft> {
             collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
             symbol: Some("BMBBBF".to_string()),
             token_uri: Some("https://public.nftstatic.com/static/nft/BSC/BMBBBF/214300044414".to_string()),
+            token_domain: None,
             metadata: Some(
                 "{\"image\":\"https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png\"}"
                     .to_string(),
@@ -235,8 +221,11 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Interchain nodes".to_string()),
             attributes: None,
             animation_url: None,
+            animation_domain: None,
             external_url: None,
+            external_domain: None,
             image_details: None,
+            image_domain: None,
         },
     };
     vec![nft, nft1, nft2, nft3]
@@ -266,8 +255,10 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         block_timestamp: 1677166110,
         contract_type: ContractType::Erc1155,
         token_uri: None,
+        token_domain: None,
         collection_name: None,
         image_url: None,
+        image_domain: None,
         token_name: None,
         status: TransferStatus::Receive,
     };
@@ -296,8 +287,10 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         contract_type: ContractType::Erc721,
 
         token_uri: None,
+        token_domain: None,
         collection_name: None,
         image_url: None,
+        image_domain: None,
         token_name: None,
 
         status: TransferStatus::Receive,
@@ -328,8 +321,10 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         contract_type: ContractType::Erc721,
 
         token_uri: None,
+        token_domain: None,
         collection_name: None,
         image_url: None,
+        image_domain: None,
         token_name: None,
 
         status: TransferStatus::Receive,
@@ -360,8 +355,10 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         contract_type: ContractType::Erc721,
 
         token_uri: None,
+        token_domain: None,
         collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
         image_url: Some("https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string()),
+        image_domain: None,
         token_name: Some("Nebula Nodes".to_string()),
 
         status: TransferStatus::Receive,
@@ -663,8 +660,10 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
         token_address: token_add.clone(),
         token_id: Default::default(),
         token_uri: None,
+        token_domain: None,
         collection_name: None,
         image_url: None,
+        image_domain: None,
         token_name: Some("Tiki box".to_string()),
     };
     storage
@@ -677,18 +676,6 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
         .unwrap();
     let transfer_upd = transfer_upd.get(0).unwrap();
     assert_eq!(transfer_upd.token_name, Some("Tiki box".to_string()));
-
-    let transfer_meta = transfer();
-    storage
-        .update_transfer_meta_by_hash_and_log_index(&chain, transfer_meta)
-        .await
-        .unwrap();
-    let transfer_by_hash = storage
-        .get_transfer_by_tx_hash_and_log_index(&chain, TX_HASH.to_string(), LOG_INDEX)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(transfer_by_hash.token_name, Some("Nebula Nodes".to_string()))
 }
 
 pub(crate) async fn test_update_transfer_spam_by_token_address_impl() {
