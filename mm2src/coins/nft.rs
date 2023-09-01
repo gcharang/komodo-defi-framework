@@ -242,6 +242,7 @@ where
     let mut scan_wallet_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_WALLET, &chain.to_string())?;
     let req = MyAddressReq {
         coin: chain.to_ticker(),
+        path_to_address: Default::default(),
     };
     let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
     scan_wallet_uri
