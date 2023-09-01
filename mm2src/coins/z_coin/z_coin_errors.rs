@@ -1,7 +1,6 @@
 use crate::my_tx_history_v2::MyTxHistoryErrorV2;
 use crate::utxo::rpc_clients::UtxoRpcError;
 use crate::utxo::utxo_builder::UtxoCoinBuildError;
-use crate::z_coin::storage::WalletDbError;
 use crate::NumConversError;
 use crate::PrivKeyPolicyNotAllowed;
 use crate::WithdrawError;

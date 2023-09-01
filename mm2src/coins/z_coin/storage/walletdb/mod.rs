@@ -1,5 +1,3 @@
-use crate::z_coin::ZcoinClientInitError;
-
 cfg_native!(
     use crate::z_coin::ZcoinConsensusParams;
 
@@ -11,13 +9,6 @@ cfg_wasm32!(
     pub mod wallet_idb_storage;
     use wallet_idb_storage::WalletIndexedDb;
 );
-
-#[derive(Debug, Display)]
-pub enum WalletDbError {
-    ZcoinClientInitError(ZcoinClientInitError),
-    ZCoinBuildError(String),
-    IndexedDBError(String),
-}
 
 #[derive(Clone)]
 pub struct WalletDbShared {

@@ -15,14 +15,11 @@ use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 
 cfg_native!(
-    use super::CheckPointBlockInfo;
     use crate::{RpcCommonOps, ZTransaction};
     use crate::utxo::rpc_clients::{UtxoRpcClientOps, NO_TX_ERROR_CODE};
     use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper};
     use crate::z_coin::z_coin_errors::{ZcoinStorageError, ValidateBlocksError};
 
-    use db_common::sqlite::{query_single_row, run_optimization_pragmas};
-    use common::{async_blocking};
     use common::executor::Timer;
     use common::log::{debug, error, info, LogOnError};
     use futures::channel::mpsc::channel;
@@ -31,14 +28,9 @@ cfg_native!(
     use http::Uri;
     use prost::Message;
     use rpc::v1::types::H256 as H256Json;
-    use std::path::PathBuf;
     use std::pin::Pin;
     use std::str::FromStr;
     use tonic::transport::{Channel, ClientTlsConfig};
-    use zcash_primitives::block::BlockHash;
-    use zcash_primitives::zip32::ExtendedFullViewingKey;
-    use zcash_client_sqlite::wallet::init::{init_accounts_table, init_blocks_table, init_wallet_db};
-    use zcash_client_sqlite::with_async::WalletDbAsync;
     use zcash_extras::{WalletRead, WalletWrite};
 
     mod z_coin_grpc {
@@ -282,42 +274,6 @@ impl ZRpcOps for NativeClient {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn create_wallet_db(
-    wallet_db_path: PathBuf,
-    consensus_params: ZcoinConsensusParams,
-    check_point_block: Option<CheckPointBlockInfo>,
-    evk: ExtendedFullViewingKey,
-) -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-    let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
-        .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-    let get_extended_full_viewing_keys = db.get_extended_full_viewing_keys().await?;
-    async_blocking(
-        move || -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-            let conn = db.inner();
-            let conn = conn.lock().unwrap();
-            run_optimization_pragmas(conn.sql_conn())
-                .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-            init_wallet_db(&conn).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-            if get_extended_full_viewing_keys.is_empty() {
-                init_accounts_table(&conn, &[evk])?;
-                if let Some(check_point) = check_point_block {
-                    init_blocks_table(
-                        &conn,
-                        BlockHeight::from_u32(check_point.height),
-                        BlockHash(check_point.hash.0),
-                        check_point.time,
-                        &check_point.sapling_tree.0,
-                    )?;
-                }
-            }
-
-            Ok(db)
-        },
-    )
-    .await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn init_light_client(
     coin: String,
     lightwalletd_urls: Vec<String>,
@@ -447,24 +403,6 @@ pub(super) async fn _init_native_client(
 ) -> Result<(AsyncMutex<SaplingSyncConnector>, String), MmError<ZcoinClientInitError>> {
     todo!()
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn is_tx_imported(conn: &WalletDbShared, tx_id: TxId) -> bool {
-    let conn = conn.db.inner();
-    async_blocking(move || {
-        let conn = conn.lock().unwrap();
-        const QUERY: &str = "SELECT id_tx FROM transactions WHERE txid = ?1;";
-        match query_single_row(conn.sql_conn(), QUERY, [tx_id.0.to_vec()], |row| row.get::<_, i64>(0)) {
-            Ok(Some(_)) => true,
-            Ok(None) | Err(_) => false,
-        }
-    })
-    .await
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(unused)]
-fn is_tx_imported(_conn: String, _tx_id: TxId) -> bool { todo!() }
 
 pub struct SaplingSyncRespawnGuard {
     pub(super) sync_handle: Option<(SaplingSyncLoopHandle, Box<dyn ZRpcOps + Send>)>,
@@ -733,7 +671,9 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
         sync_handle.check_watch_for_tx_existence(client.as_mut()).await;
 
         if let Some(tx_id) = sync_handle.watch_for_tx {
-            if !is_tx_imported(&sync_handle.wallet_db, tx_id).await {
+            let walletdb = &sync_handle.wallet_db;
+            let is_tx_imported = walletdb.is_tx_imported(tx_id).await;
+            if !is_tx_imported {
                 info!("Tx {} is not imported yet", tx_id);
                 Timer::sleep(10.).await;
                 continue;

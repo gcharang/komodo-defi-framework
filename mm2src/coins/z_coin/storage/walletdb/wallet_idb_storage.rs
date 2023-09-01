@@ -23,7 +23,7 @@ use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::{Diversifier, Node, Nullifier, PaymentAddress, Rseed};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::transaction::TxId;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
 const DB_NAME: &str = "wallet_db_cache";
 const DB_VERSION: u32 = 1;
@@ -32,14 +32,19 @@ pub type WalletDbRes<T> = MmResult<T, ZcoinStorageError>;
 pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
 
 impl<'a> WalletDbShared {
-    pub async fn new(zcoin_builder: &ZCoinBuilder<'a>) -> MmResult<Self, ZcoinStorageError> {
+    pub async fn new(
+        zcoin_builder: &ZCoinBuilder<'a>,
+        z_spending_key: &ExtendedSpendingKey,
+    ) -> MmResult<Self, ZcoinStorageError> {
         let ticker = zcoin_builder.ticker.clone();
-        let db = WalletIndexedDb::new(zcoin_builder).await?;
+        let db = WalletIndexedDb::new(zcoin_builder, z_spending_key).await?;
         Ok(Self {
             db,
             ticker: ticker.to_string(),
         })
     }
+
+    pub async fn is_tx_imported(&self, _tx_id: TxId) -> bool { todo!() }
 }
 
 pub struct WalletDbInner {
@@ -78,7 +83,10 @@ pub struct WalletIndexedDb {
 }
 
 impl<'a> WalletIndexedDb {
-    pub async fn new(zcoin_builder: &ZCoinBuilder<'a>) -> MmResult<Self, ZcoinStorageError> {
+    pub async fn new(
+        zcoin_builder: &ZCoinBuilder<'a>,
+        _z_spending_key: &ExtendedSpendingKey,
+    ) -> MmResult<Self, ZcoinStorageError> {
         Ok(Self {
             db: ConstructibleDb::new(zcoin_builder.ctx).into_shared(),
             ticker: zcoin_builder.ticker.to_string(),
