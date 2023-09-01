@@ -214,6 +214,7 @@ where
     let req_spam_json = serde_json::to_string(&req_spam)?;
     let scan_contract_res = send_post_request_to_uri(scan_contract_uri.as_str(), req_spam_json).await?;
     let spam_res: SpamContractRes = serde_json::from_slice(&scan_contract_res)?;
+    println!("spam_res {:?}", spam_res);
     for (address, is_spam) in spam_res.result.into_iter() {
         if is_spam {
             let address_hex = eth_addr_to_hex(&address);
@@ -251,6 +252,7 @@ where
         .push(&my_address);
     let response = send_request_to_uri(scan_wallet_uri.as_str()).await?;
     let mnemonichq_res: MnemonicHQRes = serde_json::from_value(response)?;
+    println!("mnemonichq_res {:?}", mnemonichq_res);
     for contract in mnemonichq_res.spam_contracts.iter() {
         storage
             .update_nft_spam_by_token_address(chain, eth_addr_to_hex(contract), true)

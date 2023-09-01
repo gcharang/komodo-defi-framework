@@ -218,14 +218,17 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn test_antispam_api_requests() {
+    async fn test_antispam_wallet_endpoint() {
         let res_value = send_request_to_uri(BLOCKLIST_WALLET_ENDPOINT).await.unwrap();
         let mnemonichq_res: MnemonicHQRes = serde_json::from_value(res_value).unwrap();
         assert!(mnemonichq_res
             .spam_contracts
             .contains(&Address::from_str("0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c").unwrap()));
         assert_eq!(Chain::Eth, mnemonichq_res.network);
+    }
 
+    #[wasm_bindgen_test]
+    async fn test_antispam_scan_endpoints() {
         let req_spam = SpamContractReq {
             network: Chain::Eth,
             addresses: "0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c,0x8d1355b65da254f2cc4611453adfa8b7a13f60ee"
