@@ -1,3 +1,4 @@
+use crate::z_coin::ValidateBlocksError;
 use crate::z_coin::ZcoinConsensusParams;
 
 pub mod blockdb;
@@ -8,12 +9,9 @@ pub use walletdb::*;
 
 #[cfg(target_arch = "wasm32")]
 use walletdb::wallet_idb_storage::DataConnStmtCacheWasm;
-use zcash_client_backend::data_api::error::ChainInvalid;
 #[cfg(debug_assertions)]
 use zcash_client_backend::data_api::error::Error;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
-#[cfg(not(target_arch = "wasm32"))]
-use zcash_client_sqlite::error::SqliteClientError;
 #[cfg(not(target_arch = "wasm32"))]
 use zcash_client_sqlite::with_async::DataConnStmtCacheAsync;
 use zcash_primitives::block::BlockHash;
@@ -58,60 +56,6 @@ pub struct CompactBlockRow {
 pub enum BlockProcessingMode {
     Validate,
     Scan(DataConnStmtCacheWrapper),
-}
-
-#[derive(Debug, Display)]
-pub enum ValidateBlocksError {
-    #[display(fmt = "Chain Invalid occurred at height: {height:?} — with error {err:?}")]
-    ChainInvalid {
-        height: BlockHeight,
-        err: ChainInvalid,
-    },
-    GetFromStorageError(String),
-    IoError(String),
-    DbError(String),
-    DecodingError(String),
-    TableNotEmpty(String),
-    InvalidNote(String),
-    InvalidNoteId(String),
-    IncorrectHrpExtFvk(String),
-    CorruptedData(String),
-    InvalidMemo(String),
-    BackendError(String),
-}
-
-impl ValidateBlocksError {
-    pub fn prev_hash_mismatch(height: BlockHeight) -> ValidateBlocksError {
-        ValidateBlocksError::ChainInvalid {
-            height,
-            err: ChainInvalid::PrevHashMismatch,
-        }
-    }
-
-    pub fn block_height_discontinuity(height: BlockHeight, found: BlockHeight) -> ValidateBlocksError {
-        ValidateBlocksError::ChainInvalid {
-            height,
-            err: ChainInvalid::BlockHeightDiscontinuity(found),
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl From<SqliteClientError> for ValidateBlocksError {
-    fn from(value: SqliteClientError) -> Self {
-        match value {
-            SqliteClientError::CorruptedData(err) => Self::CorruptedData(err),
-            SqliteClientError::IncorrectHrpExtFvk => Self::IncorrectHrpExtFvk(value.to_string()),
-            SqliteClientError::InvalidNote => Self::InvalidNote(value.to_string()),
-            SqliteClientError::InvalidNoteId => Self::InvalidNoteId(value.to_string()),
-            SqliteClientError::TableNotEmpty => Self::TableNotEmpty(value.to_string()),
-            SqliteClientError::Bech32(_) | SqliteClientError::Base58(_) => Self::DecodingError(value.to_string()),
-            SqliteClientError::DbError(err) => Self::DbError(err.to_string()),
-            SqliteClientError::Io(err) => Self::IoError(err.to_string()),
-            SqliteClientError::InvalidMemo(err) => Self::InvalidMemo(err.to_string()),
-            SqliteClientError::BackendError(err) => Self::BackendError(err.to_string()),
-        }
-    }
 }
 
 /// Checks that the scanned blocks in the data database, when combined with the recent
@@ -268,115 +212,4 @@ pub async fn scan_cached_block(
     *last_height = current_height;
 
     Ok(())
-}
-
-#[allow(unused)]
-#[derive(Debug, Display)]
-pub enum ZcoinStorageError {
-    #[cfg(not(target_arch = "wasm32"))]
-    SqliteError(SqliteClientError),
-    ValidateBlocksError(ValidateBlocksError),
-    #[display(fmt = "Chain Invalid occurred at height: {height:?} — with error {err:?}")]
-    ChainInvalid {
-        height: BlockHeight,
-        err: ChainInvalid,
-    },
-    IoError(String),
-    DbError(String),
-    DecodingError(String),
-    TableNotEmpty(String),
-    InvalidNote(String),
-    InvalidNoteId(String),
-    #[display(fmt = "Incorrect Hrp extended full viewing key")]
-    IncorrectHrpExtFvk,
-    CorruptedData(String),
-    InvalidMemo(String),
-    BackendError(String),
-    #[display(fmt = "Add to storage err: {}", _0)]
-    AddToStorageErr(String),
-    #[display(fmt = "Remove from storage err: {}", _0)]
-    RemoveFromStorageErr(String),
-    #[display(fmt = "Get from storage err: {}", _0)]
-    GetFromStorageError(String),
-    #[display(fmt = "Error getting {ticker} block height from storage: {err}")]
-    BlockHeightNotFound {
-        ticker: String,
-        err: String,
-    },
-    #[display(fmt = "Storage Initialization err: {err} - ticker: {ticker}")]
-    InitDbError {
-        ticker: String,
-        err: String,
-    },
-    #[cfg(target_arch = "wasm32")]
-    #[display(fmt = "IndexedDB table err: {err} - ticker: {ticker}")]
-    IdbTableError {
-        ticker: String,
-        err: String,
-    },
-    ChainError(String),
-    InternalError(String),
-    NotSupported(String),
-}
-
-#[cfg(target_arch = "wasm32")]
-use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
-
-#[cfg(target_arch = "wasm32")]
-impl From<InitDbError> for ZcoinStorageError {
-    fn from(e: InitDbError) -> Self {
-        match &e {
-            InitDbError::NotSupported(_) => ZcoinStorageError::NotSupported(e.to_string()),
-            InitDbError::EmptyTableList
-            | InitDbError::DbIsOpenAlready { .. }
-            | InitDbError::InvalidVersion(_)
-            | InitDbError::OpeningError(_)
-            | InitDbError::TypeMismatch { .. }
-            | InitDbError::UnexpectedState(_)
-            | InitDbError::UpgradingError { .. } => ZcoinStorageError::InternalError(e.to_string()),
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-impl From<DbTransactionError> for ZcoinStorageError {
-    fn from(e: DbTransactionError) -> Self {
-        match e {
-            DbTransactionError::ErrorSerializingItem(_) | DbTransactionError::ErrorDeserializingItem(_) => {
-                ZcoinStorageError::DecodingError(e.to_string())
-            },
-            DbTransactionError::ErrorUploadingItem(_) => ZcoinStorageError::AddToStorageErr(e.to_string()),
-            DbTransactionError::ErrorGettingItems(_) | DbTransactionError::ErrorCountingItems(_) => {
-                ZcoinStorageError::GetFromStorageError(e.to_string())
-            },
-            DbTransactionError::ErrorDeletingItems(_) => ZcoinStorageError::RemoveFromStorageErr(e.to_string()),
-            DbTransactionError::NoSuchTable { .. }
-            | DbTransactionError::ErrorCreatingTransaction(_)
-            | DbTransactionError::ErrorOpeningTable { .. }
-            | DbTransactionError::ErrorSerializingIndex { .. }
-            | DbTransactionError::UnexpectedState(_)
-            | DbTransactionError::TransactionAborted
-            | DbTransactionError::MultipleItemsByUniqueIndex { .. }
-            | DbTransactionError::NoSuchIndex { .. }
-            | DbTransactionError::InvalidIndex { .. } => ZcoinStorageError::InternalError(e.to_string()),
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-impl From<CursorError> for ZcoinStorageError {
-    fn from(value: CursorError) -> Self {
-        match value {
-            CursorError::ErrorSerializingIndexFieldValue { .. }
-            | CursorError::ErrorDeserializingIndexValue { .. }
-            | CursorError::ErrorDeserializingItem(_) => Self::DecodingError(value.to_string()),
-            CursorError::ErrorOpeningCursor { .. }
-            | CursorError::AdvanceError { .. }
-            | CursorError::InvalidKeyRange { .. }
-            | CursorError::IncorrectNumberOfKeysPerIndex { .. }
-            | CursorError::UnexpectedState(_)
-            | CursorError::IncorrectUsage { .. }
-            | CursorError::TypeMismatch { .. } => Self::DbError(value.to_string()),
-        }
-    }
 }

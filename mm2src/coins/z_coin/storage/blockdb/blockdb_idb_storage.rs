@@ -1,5 +1,6 @@
-use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode, CompactBlockRow, ZcoinConsensusParams,
-                             ZcoinStorageError};
+use crate::z_coin::storage::validate_chain;
+use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode, CompactBlockRow, ZcoinConsensusParams};
+use crate::z_coin::z_coin_errors::ZcoinStorageError;
 
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
@@ -8,7 +9,10 @@ use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, Indexe
 use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
 use mm2_err_handle::prelude::*;
 use num_traits::ToPrimitive;
+use protobuf::Message;
 use std::path::Path;
+use zcash_client_backend::proto::compact_formats::CompactBlock;
+use zcash_extras::WalletRead;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
 
@@ -151,17 +155,26 @@ impl BlockDbImpl {
         Ok((height_to_remove_from + get_latest_block) as usize)
     }
 
-    pub async fn query_blocks_by_limit(&self, limit: Option<u32>) -> MmResult<Vec<CompactBlockRow>, ZcoinStorageError> {
+    pub async fn query_blocks_by_limit(
+        &self,
+        from_height: BlockHeight,
+        limit: Option<u32>,
+    ) -> MmResult<Vec<CompactBlockRow>, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
 
-        // Fetch CompactBlocks that are needed for scanning.
-        let blocks = block_db.get_items("ticker", &ticker).await?;
+        // Fetch CompactBlocks block_db are needed for scanning.
+        let mut maybe_blocks = block_db
+            .cursor_builder()
+            .only("ticker", ticker.clone())?
+            .bound("block", u32::from(from_height), limit.unwrap_or(u32::MAX))
+            .open_cursor("ticker")
+            .await?;
 
         let mut blocks_to_scan = vec![];
-        for (_, block) in blocks {
+        while let Some((_, block)) = maybe_blocks.next().await? {
             if let Some(limit) = limit {
                 if block.height > limit {
                     break;
@@ -177,59 +190,63 @@ impl BlockDbImpl {
         Ok(blocks_to_scan)
     }
 
-    pub(crate) async fn _process_blocks_with_mode(
+    #[allow(unused)]
+    pub(crate) async fn process_blocks_with_mode(
         &self,
-        _params: ZcoinConsensusParams,
-        _mode: BlockProcessingMode,
-        _validate_from: Option<(BlockHeight, BlockHash)>,
-        _limit: Option<u32>,
+        params: ZcoinConsensusParams,
+        mode: BlockProcessingMode,
+        validate_from: Option<(BlockHeight, BlockHash)>,
+        limit: Option<u32>,
     ) -> MmResult<(), ZcoinStorageError> {
-        //        let mut from_height = match &mode {
-        //            BlockProcessingMode::Validate => validate_from
-        //                .map(|(height, _)| height)
-        //                .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1),
-        //            BlockProcessingMode::Scan(data) => data.block_height_extrema().await.map(|opt| {
-        //                opt.map(|(_, max)| max)
-        //                    .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1)
-        //            })?,
-        //        };
-        //
-        //        let blocks = self.query_blocks_by_limit(from_height, limit).await?;
-        //
-        //        let mut prev_height = from_height;
-        //        let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
-        //
-        //        for block in blocks {
-        //            if let Some(limit) = limit {
-        //                if block.height > limit {
-        //                    break;
-        //                }
-        //            }
-        //
-        //            if block.height < u32::from(from_height) {
-        //                continue;
-        //            }
-        //
-        //            let cbr = block.clone();
-        //            let block = CompactBlock::parse_from_bytes(&cbr.data).map_err(ChainError::from)?;
-        //
-        //            if block.height() != cbr.height {
-        //                return Err(ZcoinStorageError::CorruptedData(format!(
-        //                    "Block height {} did not match row's height field value {}",
-        //                    block.height(),
-        //                    cbr.height
-        //                )));
-        //            }
-        //
-        //            match &mode.clone() {
-        //                BlockProcessingMode::Validate => {
-        //                    validate_chain(block, &mut prev_height, &mut prev_hash).await?;
-        //                },
-        //                BlockProcessingMode::Scan(data) => {
-        //                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
-        //                },
-        //            }
-        //        }
+        // TODO: make from_height var mut after impl walletdb for wasm.
+        let from_height = match &mode {
+            BlockProcessingMode::Validate => validate_from
+                .map(|(height, _)| height)
+                .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1),
+            BlockProcessingMode::Scan(data) => data.inner().block_height_extrema().await.map(|opt| {
+                opt.map(|(_, max)| max)
+                    .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1)
+            })?,
+        };
+
+        let blocks = self.query_blocks_by_limit(from_height, limit).await?;
+
+        let mut prev_height = from_height;
+        let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
+
+        for block in blocks {
+            if let Some(limit) = limit {
+                if u32::from(block.height) > limit {
+                    break;
+                }
+            }
+
+            if block.height < from_height {
+                continue;
+            }
+
+            let cbr = block;
+            let block = CompactBlock::parse_from_bytes(&cbr.data)
+                .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
+
+            if block.height() != cbr.height {
+                return MmError::err(ZcoinStorageError::CorruptedData(format!(
+                    "Block height {} did not match row's height field value {}",
+                    block.height(),
+                    cbr.height
+                )));
+            }
+
+            match &mode.clone() {
+                BlockProcessingMode::Validate => {
+                    validate_chain(block, &mut prev_height, &mut prev_hash).await?;
+                },
+                BlockProcessingMode::Scan(_data) => {
+                    // TODO: uncomment after implementing walletdb for wasm.
+                    // scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                },
+            }
+        }
         Ok(())
     }
 }

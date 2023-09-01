@@ -18,7 +18,8 @@ cfg_native!(
     use super::CheckPointBlockInfo;
     use crate::{RpcCommonOps, ZTransaction};
     use crate::utxo::rpc_clients::{UtxoRpcClientOps, NO_TX_ERROR_CODE};
-    use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper, ZcoinStorageError, ValidateBlocksError};
+    use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper};
+    use crate::z_coin::z_coin_errors::{ZcoinStorageError, ValidateBlocksError};
 
     use db_common::sqlite::{query_single_row, run_optimization_pragmas};
     use common::{async_blocking};
@@ -33,7 +34,6 @@ cfg_native!(
     use std::path::PathBuf;
     use std::pin::Pin;
     use std::str::FromStr;
-    use tokio::task::block_in_place;
     use tonic::transport::{Channel, ClientTlsConfig};
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::zip32::ExtendedFullViewingKey;
@@ -449,14 +449,17 @@ pub(super) async fn _init_native_client(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn is_tx_imported(conn: &WalletDbShared, tx_id: TxId) -> bool {
+async fn is_tx_imported(conn: &WalletDbShared, tx_id: TxId) -> bool {
     let conn = conn.db.inner();
-    let conn = conn.lock().unwrap();
-    const QUERY: &str = "SELECT id_tx FROM transactions WHERE txid = ?1;";
-    match query_single_row(conn.sql_conn(), QUERY, [tx_id.0.to_vec()], |row| row.get::<_, i64>(0)) {
-        Ok(Some(_)) => true,
-        Ok(None) | Err(_) => false,
-    }
+    async_blocking(move || {
+        let conn = conn.lock().unwrap();
+        const QUERY: &str = "SELECT id_tx FROM transactions WHERE txid = ?1;";
+        match query_single_row(conn.sql_conn(), QUERY, [tx_id.0.to_vec()], |row| row.get::<_, i64>(0)) {
+            Ok(Some(_)) => true,
+            Ok(None) | Err(_) => false,
+        }
+    })
+    .await
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -730,7 +733,7 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
         sync_handle.check_watch_for_tx_existence(client.as_mut()).await;
 
         if let Some(tx_id) = sync_handle.watch_for_tx {
-            if !block_in_place(|| is_tx_imported(&sync_handle.wallet_db, tx_id)) {
+            if !is_tx_imported(&sync_handle.wallet_db, tx_id).await {
                 info!("Tx {} is not imported yet", tx_id);
                 Timer::sleep(10.).await;
                 continue;

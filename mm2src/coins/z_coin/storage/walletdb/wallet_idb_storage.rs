@@ -1,5 +1,5 @@
 use super::WalletDbShared;
-use crate::z_coin::storage::ZcoinStorageError;
+use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::{ZCoinBuilder, ZcoinConsensusParams};
 
 use async_trait::async_trait;
@@ -15,7 +15,7 @@ use uuid::Uuid;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address};
 use zcash_client_backend::wallet::{AccountId, SpendableNote, WalletTx};
-use zcash_extras::{WalletRead, WalletWrite};
+use zcash_extras::{ShieldedOutput, WalletRead, WalletWrite};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::memo::{Memo, MemoBytes};
@@ -192,14 +192,13 @@ impl WalletIndexedDb {
 
         if let Some((_, note)) = maybe_note {
             let new_received_note = WalletDbReceivedNotesTable {
-                id_note: note.id_note,
                 tx: note.tx,
                 output_index: note.output_index,
                 account: note.account,
                 diversifier: note.diversifier,
                 value: note.value,
                 rcm: note.rcm,
-                nf: nf.0.to_vec(),
+                nf: Some(nf.0.to_vec()),
                 is_change: note.is_change,
                 memo: note.memo,
                 spent: Some(tx_ref),
@@ -219,9 +218,36 @@ impl WalletIndexedDb {
 
     pub async fn put_received_note<T: ShieldedOutput>(
         &self,
-        _output: &T,
-        _tx_ref: i64,
-    ) -> Result<NoteId, SqliteClientError> {
+        output: &T,
+        tx_ref: String,
+    ) -> Result<NoteId, ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let rcm = output.note().rcm().to_repr();
+        let account = BigInt::from(output.account().0);
+        let diversifier = output.to().diversifier().0.to_vec();
+        let value = output.note().value.into();
+        let rcm = rcm.to_vec();
+        let memo = output.memo().map(|m| m.as_slice().to_vec());
+        let is_change = output.is_change();
+        let tx = tx_ref;
+        let output_index = output.index() as i64;
+        let nf_bytes = output.nullifier().map(|nf| nf.0.to_vec());
+
+        let _note = WalletDbReceivedNotesTable {
+            tx,
+            output_index: output_index.into(),
+            account,
+            diversifier,
+            value,
+            rcm,
+            nf: nf_bytes,
+            is_change,
+            memo,
+            spent: None,
+            ticker: ticker.to_string(),
+        };
+
+        todo!()
     }
 
     pub async fn insert_witness(
@@ -229,12 +255,13 @@ impl WalletIndexedDb {
         _note_id: i64,
         _witness: &IncrementalWitness<Node>,
         _height: BlockHeight,
-    ) -> Result<NoteId, SqliteClientError> {
+    ) -> Result<NoteId, ZcoinStorageError> {
+        todo!()
     }
 
-    pub async fn prune_witnesses(&self, _below_height: BlockHeight) -> Result<NoteId, SqliteClientError> {}
+    pub async fn prune_witnesses(&self, _below_height: BlockHeight) -> Result<NoteId, ZcoinStorageError> { todo!() }
 
-    pub async fn update_expired_notes(&self, _height: BlockHeight) -> Result<NoteId, SqliteClientError> {}
+    pub async fn update_expired_notes(&self, _height: BlockHeight) -> Result<NoteId, ZcoinStorageError> { todo!() }
 
     pub async fn get_single_tx(
         &self,
@@ -254,20 +281,20 @@ impl WalletIndexedDb {
 
 #[derive(Debug, Clone)]
 pub enum NoteId {
-    SentNoteId(String),
-    ReceivedNoteId(String),
+    SentNoteId(i64),
+    ReceivedNoteId(i64),
 }
 
 struct SpendableNoteConstructor {
-    diversifier: String,
+    diversifier: Vec<u8>,
     value: BigInt,
-    rcm: String,
+    rcm: Vec<u8>,
     witness: String,
 }
 
 fn to_spendable_note(note: SpendableNoteConstructor) -> MmResult<SpendableNote, ZcoinStorageError> {
     let diversifier = {
-        let d = note.diversifier.as_bytes();
+        let d = note.diversifier;
         if d.len() != 11 {
             return MmError::err(ZcoinStorageError::CorruptedData(
                 "Invalid diversifier length".to_string(),
@@ -281,7 +308,7 @@ fn to_spendable_note(note: SpendableNoteConstructor) -> MmResult<SpendableNote, 
     let note_value = Amount::from_i64(note.value.to_i64().expect("BigInt is too large to fit in an i64")).unwrap();
 
     let rseed = {
-        let rcm_bytes = note.rcm.as_bytes();
+        let rcm_bytes = &note.rcm;
 
         // We store rcm directly in the data DB, regardless of whether the note
         // used a v1 or v2 note plaintext, so for the purposes of spending let's
@@ -575,7 +602,7 @@ impl WalletRead for WalletIndexedDb {
         // that match the provided account ID and have not been spent (spent IS NULL).
         let mut witnesses = vec![];
         while let Some((_, block)) = maybe_sapling_witnesses.next().await? {
-            let id_note = NoteId::ReceivedNoteId(block.note);
+            let id_note = NoteId::ReceivedNoteId(block.note as i64);
             let witness = IncrementalWitness::read(&block.witness.as_bytes()[..])
                 .map(|witness| (id_note, witness))
                 .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
@@ -603,7 +630,17 @@ impl WalletRead for WalletIndexedDb {
             for (_, tx) in &maybe_txs {
                 if let Some(spent) = note.spent.clone() {
                     if tx.id_tx == spent && tx.block.is_none() {
-                        nullifiers.push((AccountId(note.account), Nullifier::from_slice(&note.nf).unwrap()));
+                        nullifiers.push((
+                            AccountId(
+                                note.account
+                                    .to_u32()
+                                    .ok_or(ZcoinStorageError::GetFromStorageError("Invalid amount".to_string()))?,
+                            ),
+                            Nullifier::from_slice(&note.nf.clone().ok_or(ZcoinStorageError::GetFromStorageError(
+                                "Error while putting tx_meta".to_string(),
+                            ))?)
+                            .unwrap(),
+                        ));
                     }
                 }
             }
@@ -656,13 +693,13 @@ impl WalletRead for WalletIndexedDb {
         }
 
         let mut spendable_notes = vec![];
-        for (_, note) in maybe_notes {
-            let witness = witnesses.iter().find(|wit| wit.note == note.id_note);
+        for (id_note, note) in maybe_notes {
+            let witness = witnesses.iter().find(|wit| &wit.note == id_note);
             let tx = txs.iter().find(|tx| tx.id_tx == note.tx);
 
             if let (Some(witness), Some(_)) = (witness, tx) {
                 let spend = SpendableNoteConstructor {
-                    diversifier: note.diversifier.to_owned(),
+                    diversifier: note.diversifier.clone(),
                     value: note.value.clone(),
                     rcm: note.rcm.to_owned(),
                     witness: witness.witness.to_string(),
@@ -726,45 +763,45 @@ impl WalletRead for WalletIndexedDb {
         let mut running_sum = 0;
         let mut note_running_sums = HashMap::new();
 
-        for (_, note) in maybe_notes.iter() {
-            if note.account == account.0 {
+        for (id_note, note) in maybe_notes.iter() {
+            if note.account == account.0.into() {
                 let value = note.value.clone().to_i64().expect("price is too large");
                 running_sum += value;
             }
 
-            note_running_sums.insert(note.id_note.clone(), running_sum);
+            note_running_sums.insert(id_note.clone(), running_sum);
         }
 
         // Step 2: Select eligible notes
         let mut selected_notes = Vec::new();
-        for (_, note) in maybe_notes {
-            if note.account == account.0 && note.spent.is_none() {
-                let note_running_sum = note_running_sums.get(&note.id_note).unwrap_or(&0);
-                if Amount::from_i64(*note_running_sums.get(&note.id_note).unwrap_or(&0))
+        for (id_note, note) in maybe_notes {
+            if note.account == account.0.into() && note.spent.is_none() {
+                let note_running_sum = note_running_sums.get(&id_note).unwrap_or(&0);
+                if Amount::from_i64(*note_running_sums.get(&id_note).unwrap_or(&0))
                     .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
                     < target_value
                 {
-                    selected_notes.push((note, *note_running_sum));
+                    selected_notes.push((id_note, note, *note_running_sum));
                 }
             }
         }
 
         // Step 2: Select all unspent notes in the desired account, along with their running sum.
         let mut final_notes = Vec::new();
-        for (note, sum) in &selected_notes {
+        for (id_note, note, sum) in &selected_notes {
             if note.spent.is_none()
                 && Amount::from_i64(*sum)
                     .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
                     < target_value
             {
-                final_notes.push(note);
+                final_notes.push((id_note, note));
             }
         }
 
         // Step 4: Get witnesses for selected notes
         let mut spendable_notes = Vec::new();
-        for note in final_notes.iter() {
-            if let Some(witness) = witnesses.iter().find(|&w| w.note == note.id_note) {
+        for (id_note, note) in final_notes.iter() {
+            if let Some(witness) = witnesses.iter().find(|&w| &w.note == *id_note) {
                 spendable_notes.push(to_spendable_note(SpendableNoteConstructor {
                     diversifier: note.diversifier.clone(),
                     value: note.value.clone(),
@@ -1002,18 +1039,17 @@ impl TableSignature for WalletDbTransactionsTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbReceivedNotesTable {
-    id_note: String,
     // references transactions(id_tx)
     tx: String,
-    output_index: u32,
+    output_index: BigInt,
     // references accounts(account)
-    account: u32,
-    diversifier: String,
+    account: BigInt,
+    diversifier: Vec<u8>,
     value: BigInt,
-    rcm: String,
-    nf: Vec<u8>, // unique
-    is_change: BigInt,
-    memo: String,
+    rcm: Vec<u8>,
+    nf: Option<Vec<u8>>, // unique
+    is_change: Option<bool>,
+    memo: Option<Vec<u8>>,
     // references transactions(id_tx)
     spent: Option<String>,
     ticker: String,
@@ -1059,7 +1095,7 @@ impl TableSignature for WalletDbReceivedNotesTable {
 pub struct WalletDbSaplingWitnessesTable {
     id_witness: u32,
     // REFERENCES received_notes(id_note)
-    note: String,
+    note: u32,
     // REFERENCES blocks(height)
     block: u32,
     witness: String,

@@ -1,5 +1,5 @@
-use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow,
-                             ValidateBlocksError, ZcoinStorageError};
+use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow};
+use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::ZcoinConsensusParams;
 
 use common::async_blocking;
@@ -35,10 +35,6 @@ impl From<ZcashClientError> for ZcoinStorageError {
             SqliteClientError::BackendError(err) => Self::BackendError(err.to_string()),
         }
     }
-}
-
-impl From<ValidateBlocksError> for ZcoinStorageError {
-    fn from(value: ValidateBlocksError) -> Self { Self::ValidateBlocksError(value) }
 }
 
 impl From<ChainError<NoteId>> for ZcoinStorageError {
