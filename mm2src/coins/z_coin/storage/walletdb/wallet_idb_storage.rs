@@ -36,7 +36,7 @@ impl<'a> WalletDbShared {
         zcoin_builder: &ZCoinBuilder<'a>,
         z_spending_key: &ExtendedSpendingKey,
     ) -> MmResult<Self, ZcoinStorageError> {
-        let ticker = zcoin_builder.ticker.clone();
+        let ticker = zcoin_builder.ticker;
         let db = WalletIndexedDb::new(zcoin_builder, z_spending_key).await?;
         Ok(Self {
             db,
@@ -182,7 +182,7 @@ impl WalletIndexedDb {
             .with_value(u32::from(height))?;
         tx_table.replace_item_by_unique_multi_index(index_keys, &new_tx).await?;
 
-        Ok(self.get_single_tx(txid.clone()).await?.map(|(_, tx)| tx.id_tx).ok_or(
+        Ok(self.get_single_tx(txid.clone()).await?.map(|(_, tx)| tx.id_tx).ok_or_else( ||
             ZcoinStorageError::GetFromStorageError("Error while putting tx_meta".to_string()),
         )?)
     }
@@ -252,7 +252,7 @@ impl WalletIndexedDb {
             is_change,
             memo,
             spent: None,
-            ticker: ticker.to_string(),
+            ticker,
         };
 
         todo!()
@@ -326,13 +326,13 @@ fn to_spendable_note(note: SpendableNoteConstructor) -> MmResult<SpendableNote, 
                 .try_into()
                 .map_to_mm(|_| ZcoinStorageError::InvalidNote("Invalid note".to_string()))?,
         )
-        .ok_or(MmError::new(ZcoinStorageError::InvalidNote("Invalid note".to_string())))?;
+        .ok_or_else(|| MmError::new(ZcoinStorageError::InvalidNote("Invalid note".to_string())))?;
         Rseed::BeforeZip212(rcm)
     };
 
     let witness = {
-        let d = note.witness.as_bytes();
-        IncrementalWitness::read(&d[..]).map_to_mm(|err| ZcoinStorageError::IoError(err.to_string()))?
+        let mut d = note.witness.as_bytes();
+        IncrementalWitness::read(&mut d).map_to_mm(|err| ZcoinStorageError::IoError(err.to_string()))?
     };
 
     Ok(SpendableNote {
@@ -410,8 +410,7 @@ impl WalletRead for WalletIndexedDb {
         Ok(block_headers_db
             .get_item_by_unique_multi_index(index_keys)
             .await?
-            .map(|(_, tx)| tx.block.map(|block| BlockHeight::from(block)))
-            .flatten())
+            .and_then(|(_, tx)| tx.block.map(BlockHeight::from)))
     }
 
     async fn get_address(&self, account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> {
@@ -451,7 +450,7 @@ impl WalletRead for WalletIndexedDb {
             let extfvk =
                 decode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), &account.extfvk)
                     .map_to_mm(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
-                    .and_then(|k| k.ok_or(MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)));
+                    .and_then(|k| k.ok_or_else(|| MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)));
             res_accounts.insert(AccountId(account.account), extfvk?);
         }
 
@@ -477,7 +476,7 @@ impl WalletRead for WalletIndexedDb {
             let expected =
                 decode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), &account.extfvk)
                     .map_to_mm(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
-                    .and_then(|k| k.ok_or(MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)))?;
+                    .and_then(|k| k.ok_or_else(|| MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)))?;
 
             return Ok(&expected == extfvk);
         }
@@ -555,12 +554,12 @@ impl WalletRead for WalletIndexedDb {
         };
 
         if let Some(Some(memo)) = memo {
-            return Ok(MemoBytes::from_bytes(&memo.as_bytes())
+            return MemoBytes::from_bytes(memo.as_bytes())
                 .and_then(Memo::try_from)
-                .map_to_mm(|err| ZcoinStorageError::InvalidMemo(err.to_string()))?);
+                .map_to_mm(|err| ZcoinStorageError::InvalidMemo(err.to_string()));
         };
 
-        MmError::err(ZcoinStorageError::GetFromStorageError(format!("Memo not found")))
+        MmError::err(ZcoinStorageError::GetFromStorageError("Memo not found".to_string()))
     }
 
     async fn get_commitment_tree(
@@ -611,7 +610,7 @@ impl WalletRead for WalletIndexedDb {
         let mut witnesses = vec![];
         while let Some((_, block)) = maybe_sapling_witnesses.next().await? {
             let id_note = NoteId::ReceivedNoteId(block.note as i64);
-            let witness = IncrementalWitness::read(&block.witness.as_bytes()[..])
+            let witness = IncrementalWitness::read(block.witness.as_bytes())
                 .map(|witness| (id_note, witness))
                 .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
             witnesses.push(witness)
@@ -642,9 +641,9 @@ impl WalletRead for WalletIndexedDb {
                             AccountId(
                                 note.account
                                     .to_u32()
-                                    .ok_or(ZcoinStorageError::GetFromStorageError("Invalid amount".to_string()))?,
+                                    .ok_or_else(||ZcoinStorageError::GetFromStorageError("Invalid amount".to_string()))?,
                             ),
-                            Nullifier::from_slice(&note.nf.clone().ok_or(ZcoinStorageError::GetFromStorageError(
+                            Nullifier::from_slice(&note.nf.clone().ok_or_else(||ZcoinStorageError::GetFromStorageError(
                                 "Error while putting tx_meta".to_string(),
                             ))?)
                             .unwrap(),
@@ -777,15 +776,15 @@ impl WalletRead for WalletIndexedDb {
                 running_sum += value;
             }
 
-            note_running_sums.insert(id_note.clone(), running_sum);
+            note_running_sums.insert(id_note, running_sum);
         }
 
         // Step 2: Select eligible notes
         let mut selected_notes = Vec::new();
-        for (id_note, note) in maybe_notes {
+        for (id_note, note) in maybe_notes.iter() {
             if note.account == account.0.into() && note.spent.is_none() {
                 let note_running_sum = note_running_sums.get(&id_note).unwrap_or(&0);
-                if Amount::from_i64(*note_running_sums.get(&id_note).unwrap_or(&0))
+                if Amount::from_i64(*note_running_sum)
                     .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
                     < target_value
                 {
@@ -809,7 +808,7 @@ impl WalletRead for WalletIndexedDb {
         // Step 4: Get witnesses for selected notes
         let mut spendable_notes = Vec::new();
         for (id_note, note) in final_notes.iter() {
-            if let Some(witness) = witnesses.iter().find(|&w| &w.note == *id_note) {
+            if let Some(witness) = witnesses.iter().find(|&w| &w.note == **id_note) {
                 spendable_notes.push(to_spendable_note(SpendableNoteConstructor {
                     diversifier: note.diversifier.clone(),
                     value: note.value.clone(),
