@@ -19,7 +19,6 @@ use crate::nft::nft_errors::{ProtectFromSpamError, UpdateSpamPhishingError};
 use crate::nft::nft_structs::{MnemonicHQRes, NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq,
                               SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
-use common::log::debug;
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use crypto::StandardHDCoinAddress;
 use ethereum_types::Address;
@@ -148,6 +147,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
                 update_meta_in_transfers(&storage, chain, nfts).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
+                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
                 continue;
             },
             Err(_) => {
@@ -162,6 +162,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                     .await?;
                 update_meta_in_transfers(&storage, chain, nft_list).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
+                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
                 continue;
             },
         };
@@ -198,9 +199,7 @@ async fn update_spam<T>(
 where
     T: NftListStorageOps + NftTransferHistoryStorageOps,
 {
-    log!("WE ARE IN update_spam \n Chain = {}", chain);
     if chain == Chain::Eth || chain == Chain::Polygon {
-        log!("WE ARE IN if chain == Chain::Eth || chain == Chain::Polygon");
         return update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await;
     }
     let token_addresses = storage.get_token_addresses(&chain).await?;
@@ -210,7 +209,6 @@ where
         .collect::<Vec<_>>()
         .join(",");
     let spam_res = send_spam_request(&chain, url_antispam, addresses).await?;
-    debug!("\n spam_res {:?} \n", spam_res);
     for (address, is_spam) in spam_res.result.into_iter() {
         if is_spam {
             let address_hex = eth_addr_to_hex(&address);
@@ -248,7 +246,6 @@ where
         .push(&my_address);
     let response = send_request_to_uri(scan_wallet_uri.as_str()).await?;
     let mnemonichq_res: MnemonicHQRes = serde_json::from_value(response)?;
-    debug!("\n mnemonichq_res {:?} \n", mnemonichq_res);
     for contract in mnemonichq_res.spam_contracts.iter() {
         storage
             .update_nft_spam_by_token_address(chain, eth_addr_to_hex(contract), true)
@@ -260,6 +257,7 @@ where
     Ok(())
 }
 
+/// `send_spam_request` function sends request to antispam api to scan contract addresses for spam.
 async fn send_spam_request(
     chain: &Chain,
     url_antispam: &Url,
@@ -276,6 +274,8 @@ async fn send_spam_request(
     Ok(spam_res)
 }
 
+/// `prepare_uri_for_blocklist_endpoint` function constructs the URI required for the antispam API request.
+/// It appends the required path segments to the given base URL and returns the completed URI.
 fn prepare_uri_for_blocklist_endpoint(
     url_antispam: &Url,
     blocklist_type: &str,
