@@ -8,7 +8,7 @@ use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, D
                          IndexedDbBuilder, InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::prelude::*;
 use mm2_number::BigInt;
-cuse num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use uuid::Uuid;
@@ -332,7 +332,26 @@ impl WalletIndexedDb {
         Ok(())
     }
 
-    pub async fn prune_witnesses(&self, _below_height: BlockHeight) -> Result<NoteId, ZcoinStorageError> { todo!() }
+    pub async fn prune_witnesses(&self, below_height: BlockHeight) -> MmResult<(), ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
+
+        let mut maybe_max_item = witness_table
+            .cursor_builder()
+            .only("ticker", ticker.clone())?
+            .bound("height", 0u32, (below_height - 1).into())
+            .reverse()
+            .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+            .await?;
+
+        while let Some((id, _)) = maybe_max_item.next().await? {
+            witness_table.delete_item(id).await?;
+        }
+
+        Ok(())
+    }
 
     pub async fn update_expired_notes(&self, _height: BlockHeight) -> Result<NoteId, ZcoinStorageError> { todo!() }
 
