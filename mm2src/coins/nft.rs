@@ -198,7 +198,9 @@ async fn update_spam<T>(
 where
     T: NftListStorageOps + NftTransferHistoryStorageOps,
 {
+    log!("WE ARE IN update_spam \n Chain = {}", chain);
     if chain == Chain::Eth || chain == Chain::Polygon {
+        log!("WE ARE IN if chain == Chain::Eth || chain == Chain::Polygon");
         return update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await;
     }
     let token_addresses = storage.get_token_addresses(&chain).await?;
