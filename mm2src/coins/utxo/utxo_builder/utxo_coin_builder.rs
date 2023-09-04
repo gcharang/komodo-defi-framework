@@ -9,7 +9,10 @@ use crate::utxo::{output_script, utxo_common, ElectrumBuilderArgs, ElectrumProto
                   RecentlySpentOutPoints, TxFee, UtxoCoinConf, UtxoCoinFields, UtxoHDAccount, UtxoHDWallet,
                   UtxoRpcMode, UtxoSyncStatus, UtxoSyncStatusLoopHandle, DEFAULT_GAP_LIMIT, UTXO_DUST_AMOUNT};
 use crate::{BlockchainNetwork, CoinTransportMetrics, DerivationMethod, HistorySyncState, IguanaPrivKey,
-            PrivKeyBuildPolicy, PrivKeyPolicy, PrivKeyPolicyNotAllowed, RpcClientType, UtxoActivationParams};
+            PrivKeyBuildPolicy, PrivKeyPolicy, PrivKeyPolicyNotAllowed, RpcClientType, RpcTransportEventHandlerShared,
+            UtxoActivationParams};
+use std::ops::Deref;
+
 use async_trait::async_trait;
 use chain::TxHashAlgo;
 use common::custom_futures::repeatable::{Ready, Retry};
@@ -498,36 +501,20 @@ pub trait UtxoCoinBuilderCommonOps {
         servers.as_mut_slice().shuffle(&mut rng);
 
         // Client can be created with servers
-        let mut client = ElectrumClientImpl::new(
+        let client = Arc::new(ElectrumClientImpl::new(
             servers.clone(),
             ticker,
             event_handlers,
             block_headers_storage,
             abortable_system,
             args.negotiate_version,
-        );
+        ));
+        let handler: RpcTransportEventHandlerShared = client.clone();
+        client.register(handler).await;
 
         if let Err(err) = client.connect().await {
             error!("Error connecting to the electrum server address: {}", err);
         };
-
-        // let mut nodes_to_bring_back = 0_usize;
-        // for node in primary {
-        //     debug!("Connecting to the primary node: {}", node.url);
-        //     if let Err(_) = client.connect(node).await {
-        //         nodes_to_bring_back += 1;
-        //     } else {
-        //         break;
-        //     };
-        // }
-
-        //create connections for a address set
-        // for server in servers.iter() {
-        //     match client.add_server(server).await {
-        //         Ok(_) => (),
-        //         Err(e) => error!("Error {:?} connecting to {:?}. Address won't be used", e, server),
-        //     };
-        // }
 
         // client should be started first, using timers is very bad I should get rid of timers, i think the condition should be used
         // just connect and timer simultaneously
@@ -546,23 +533,37 @@ pub trait UtxoCoinBuilderCommonOps {
             Timer::sleep(0.5).await;
             attempts += 1;
         }
-        let client = Arc::new(client);
 
-        let spawner = client.spawner();
-        if args.negotiate_version {
-            let weak_client = Arc::downgrade(&client);
-            let client_name = format!("{} GUI/MM2 {}", ctx.gui().unwrap_or("UNKNOWN"), ctx.mm_version());
-            spawn_electrum_version_loop(&spawner, weak_client, on_event_rx, client_name);
+        let client_copy = client.clone();
+        let gui = ctx.gui().unwrap_or("UNKNOWN").to_string();
+        let mm_version = ctx.mm_version().to_string();
+        let negotiate_version = args.negotiate_version;
+        let negotiate_version_fut = async move {
+            let weak_client = Arc::downgrade(&client_copy);
+            if negotiate_version {
+                let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
+                let Some(spawner) = client_copy.spawner() else {
+                    error!("Failed to spawn negotiate version, no spawner available");
+                    return;
+                };
+                spawn_electrum_version_loop(&spawner, weak_client, on_event_rx, client_name);
 
-            wait_for_protocol_version_checked(&client)
-                .await
-                .map_to_mm(UtxoCoinBuildError::ElectrumProtocolVersionCheckError)?;
-        }
-
-        if args.spawn_ping {
-            let weak_client = Arc::downgrade(&client);
-            spawn_electrum_ping_loop(&spawner, weak_client, servers);
-        }
+                let _ = wait_for_protocol_version_checked(client_copy.deref()).await;
+                //.map_to_mm(UtxoCoinBuildError::ElectrumProtocolVersionCheckError)?;
+            }
+        };
+        let client_copy = client.clone();
+        let ping_fut = async move {
+            if args.spawn_ping {
+                let weak_client = Arc::downgrade(&client_copy);
+                let Some(spawner) = client_copy.spawner() else {
+                    error!("Failed to spawn ping, no spawner available");
+                    return;
+                };
+                spawn_electrum_ping_loop(&spawner, weak_client, servers);
+            }
+        };
+        use crate::common::executor::SpawnFuture;
 
         Ok(ElectrumClient(client))
     }
