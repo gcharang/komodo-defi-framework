@@ -1,5 +1,5 @@
-use crate::nft::nft_structs::{Chain, Nft, NftList, NftTokenAddrId, NftTransferHistory, NftTransferHistoryFilters,
-                              NftsTransferHistoryList, TransferMeta};
+use crate::nft::nft_structs::{Chain, Nft, NftList, NftListFilters, NftTokenAddrId, NftTransferHistory,
+                              NftTransferHistoryFilters, NftsTransferHistoryList, TransferMeta};
 use crate::WithdrawError;
 use async_trait::async_trait;
 use derive_more::Display;
@@ -44,6 +44,7 @@ pub trait NftListStorageOps {
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
+        filters: Option<NftListFilters>,
     ) -> MmResult<NftList, Self::Error>;
 
     async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>

@@ -169,6 +169,9 @@ pub enum UpdateNftError {
     #[display(fmt = "Invalid hex string: {}", _0)]
     InvalidHexString(String),
     UpdateSpamPhishingError(UpdateSpamPhishingError),
+    GetInfoFromUriError(GetInfoFromUriError),
+    #[from_stringify("serde_json::Error")]
+    SerdeError(String),
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -195,6 +198,10 @@ impl From<UpdateSpamPhishingError> for UpdateNftError {
     fn from(e: UpdateSpamPhishingError) -> Self { UpdateNftError::UpdateSpamPhishingError(e) }
 }
 
+impl From<GetInfoFromUriError> for UpdateNftError {
+    fn from(e: GetInfoFromUriError) -> Self { UpdateNftError::GetInfoFromUriError(e) }
+}
+
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -208,13 +215,15 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::LastScannedBlockNotFound { .. }
             | UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 { .. }
             | UpdateNftError::InvalidHexString(_)
-            | UpdateNftError::UpdateSpamPhishingError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::UpdateSpamPhishingError(_)
+            | UpdateNftError::GetInfoFromUriError(_)
+            | UpdateNftError::SerdeError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
-pub(crate) enum GetInfoFromUriError {
+pub enum GetInfoFromUriError {
     /// `http::Error` can appear on an HTTP request [`http::Builder::build`] building.
     #[from_stringify("http::Error")]
     #[display(fmt = "Invalid request: {}", _0)]

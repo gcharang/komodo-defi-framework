@@ -22,7 +22,6 @@ use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
 #[cfg(target_arch = "wasm32")]
 use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
     pub(crate) chains: Vec<Chain>,
@@ -36,7 +35,6 @@ pub struct NftListReq {
     pub(crate) filters: Option<NftListFilters>,
 }
 
-#[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub struct NftListFilters {
     #[serde(default)]
@@ -60,6 +58,7 @@ pub struct RefreshMetadataReq {
     pub(crate) token_id: BigDecimal,
     pub(crate) chain: Chain,
     pub(crate) url: Url,
+    pub(crate) url_antispam: Url,
 }
 
 #[derive(Debug, Display)]
@@ -246,8 +245,6 @@ pub struct NftCommon {
     pub(crate) minter_address: Option<String>,
     #[serde(default)]
     pub(crate) possible_spam: bool,
-    #[serde(default)]
-    pub(crate) possible_phishing: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -258,6 +255,8 @@ pub struct Nft {
     pub(crate) block_number_minted: Option<u64>,
     pub(crate) block_number: u64,
     pub(crate) contract_type: ContractType,
+    #[serde(default)]
+    pub(crate) possible_phishing: bool,
     pub(crate) uri_meta: UriMeta,
 }
 
@@ -357,7 +356,6 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
     pub(crate) chains: Vec<Chain>,
@@ -423,8 +421,6 @@ pub struct NftTransferCommon {
     pub(crate) operator: Option<String>,
     #[serde(default)]
     pub(crate) possible_spam: bool,
-    #[serde(default)]
-    pub(crate) possible_phishing: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -442,6 +438,8 @@ pub struct NftTransferHistory {
     pub(crate) image_domain: Option<String>,
     pub(crate) token_name: Option<String>,
     pub(crate) status: TransferStatus,
+    #[serde(default)]
+    pub(crate) possible_phishing: bool,
 }
 
 /// This structure is for deserializing moralis NFT transfer json to struct.
@@ -461,7 +459,6 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
-#[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub struct NftTransferHistoryFilters {
     #[serde(default)]

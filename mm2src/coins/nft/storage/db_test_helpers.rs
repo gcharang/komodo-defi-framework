@@ -1,6 +1,6 @@
 use crate::eth::eth_addr_to_hex;
-use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftTransferCommon, NftTransferHistory,
-                              NftTransferHistoryFilters, TransferMeta, TransferStatus, UriMeta};
+use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftListFilters, NftTransferCommon,
+                              NftTransferHistory, NftTransferHistoryFilters, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps, RemoveNftResult};
 use ethereum_types::Address;
 use mm2_number::BigDecimal;
@@ -38,14 +38,13 @@ pub(crate) fn nft() -> Nft {
             last_token_uri_sync: Some("2023-02-07T17:10:08.402Z".to_string()),
             last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
             minter_address: Some("ERC1155 tokens don't have a single minter".to_string()),
-            possible_spam: false,
-            possible_phishing: false,
+            possible_spam: true,
         },
         chain: Chain::Bsc,
         block_number_minted: Some(25465916),
         block_number: 25919780,
         contract_type: ContractType::Erc1155,
-
+        possible_phishing: false,
         uri_meta: UriMeta {
             image_url: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.png".to_string()),
             raw_image_url: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.png".to_string()),
@@ -78,13 +77,13 @@ fn nft_list() -> Vec<Nft> {
             last_token_uri_sync: Some("2023-02-07T17:10:08.402Z".to_string()),
             last_metadata_sync: Some("2023-02-07T17:10:16.858Z".to_string()),
             minter_address: Some("ERC1155 tokens don't have a single minter".to_string()),
-            possible_spam: false,
-            possible_phishing: false,
+            possible_spam: true,
         },
         chain: Chain::Bsc,
         block_number_minted: Some(25465916),
         block_number: 25919780,
         contract_type: ContractType::Erc1155,
+        possible_phishing: false,
         uri_meta: UriMeta {
             image_url: Some("https://tikimetadata.s3.amazonaws.com/tiki_box.png".to_string()),
             raw_image_url: None,
@@ -119,13 +118,12 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-16T16:36:04.283Z".to_string()),
             minter_address: Some("0xdbdeb0895f3681b87fb3654b5cf3e05546ba24a9".to_string()),
             possible_spam: false,
-            possible_phishing: false,
         },
         chain: Chain::Bsc,
-
         block_number_minted: Some(25721963),
         block_number: 28056726,
         contract_type: ContractType::Erc721,
+        possible_phishing: false,
         uri_meta: UriMeta {
             image_url: Some(
                 "https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string(),
@@ -162,13 +160,12 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-16T16:36:04.283Z".to_string()),
             minter_address: Some("0xdbdeb0895f3681b87fb3654b5cf3e05546ba24a9".to_string()),
             possible_spam: false,
-            possible_phishing: false,
         },
         chain: Chain::Bsc,
-
         block_number_minted: Some(25721963),
         block_number: 28056726,
         contract_type: ContractType::Erc721,
+        possible_phishing: false,
         uri_meta: UriMeta {
             image_url: Some(
                 "https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string(),
@@ -205,13 +202,12 @@ fn nft_list() -> Vec<Nft> {
             last_metadata_sync: Some("2023-02-19T19:12:18.080Z".to_string()),
             minter_address: Some("0xdbdeb0895f3681b87fb3654b5cf3e05546ba24a9".to_string()),
             possible_spam: false,
-            possible_phishing: false,
         },
         chain: Chain::Bsc,
-
         block_number_minted: Some(25810308),
         block_number: 28056721,
         contract_type: ContractType::Erc721,
+        possible_phishing: false,
         uri_meta: UriMeta {
             image_url: Some(
                 "https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string(),
@@ -247,8 +243,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             amount: BigDecimal::from_str("1").unwrap(),
             verified: Some(1),
             operator: Some("0x4ff0bbc9b64d635a4696d1a38554fb2529c103ff".to_string()),
-            possible_spam: false,
-            possible_phishing: false,
+            possible_spam: true,
         },
         chain: Chain::Bsc,
         block_number: 25919780,
@@ -261,6 +256,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         image_domain: None,
         token_name: None,
         status: TransferStatus::Receive,
+        possible_phishing: false,
     };
 
     let transfer1 = NftTransferHistory {
@@ -279,21 +275,19 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: None,
             possible_spam: false,
-            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056726,
         block_timestamp: 1683627432,
         contract_type: ContractType::Erc721,
-
         token_uri: None,
         token_domain: None,
         collection_name: None,
         image_url: None,
         image_domain: None,
         token_name: None,
-
         status: TransferStatus::Receive,
+        possible_phishing: false,
     };
 
     // Same as transfer1 but with different log_index, meaning that transfer1 and transfer2 are part of one batch/multi token transaction
@@ -313,21 +307,19 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: None,
             possible_spam: false,
-            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056726,
         block_timestamp: 1683627432,
         contract_type: ContractType::Erc721,
-
         token_uri: None,
         token_domain: None,
         collection_name: None,
         image_url: None,
         image_domain: None,
         token_name: None,
-
         status: TransferStatus::Receive,
+        possible_phishing: false,
     };
 
     let transfer3 = NftTransferHistory {
@@ -346,22 +338,19 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             verified: Some(1),
             operator: None,
             possible_spam: false,
-            possible_phishing: false,
         },
         chain: Chain::Bsc,
         block_number: 28056721,
         block_timestamp: 1683627417,
-
         contract_type: ContractType::Erc721,
-
         token_uri: None,
         token_domain: None,
         collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
         image_url: Some("https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string()),
         image_domain: None,
         token_name: Some("Nebula Nodes".to_string()),
-
         status: TransferStatus::Receive,
+        possible_phishing: false,
     };
     vec![transfer, transfer1, transfer2, transfer3]
 }
@@ -421,7 +410,7 @@ pub(crate) async fn test_nft_list_impl() {
     storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
 
     let nft_list = storage
-        .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(3).unwrap()))
+        .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(3).unwrap()), None)
         .await
         .unwrap();
     assert_eq!(nft_list.nfts.len(), 1);
@@ -444,7 +433,7 @@ pub(crate) async fn test_remove_nft_impl() {
         .unwrap();
     assert_eq!(remove_rslt, RemoveNftResult::NftRemoved);
     let list_len = storage
-        .get_nft_list(vec![chain], true, 1, None)
+        .get_nft_list(vec![chain], true, 1, None, None)
         .await
         .unwrap()
         .nfts
@@ -529,6 +518,23 @@ pub(crate) async fn test_update_nft_spam_by_token_address_impl() {
     for nft in nfts {
         assert!(nft.common.possible_spam);
     }
+}
+
+pub(crate) async fn test_exclude_nft_spam_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+
+    let filters = NftListFilters {
+        exclude_spam: true,
+        exclude_phishing: false,
+    };
+    let nft_list = storage
+        .get_nft_list(vec![chain], true, 1, None, Some(filters))
+        .await
+        .unwrap();
+    assert_eq!(nft_list.nfts.len(), 3);
 }
 
 pub(crate) async fn test_add_get_transfers_impl() {
@@ -705,4 +711,25 @@ pub(crate) async fn test_get_token_addresses_impl() {
 
     let token_addresses = storage.get_token_addresses(&chain).await.unwrap();
     assert_eq!(token_addresses.len(), 2);
+}
+
+pub(crate) async fn test_exclude_transfer_spam_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let transfers = nft_transfer_history();
+    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+
+    let filters = NftTransferHistoryFilters {
+        receive: true,
+        send: true,
+        from_date: None,
+        to_date: None,
+        exclude_spam: true,
+        exclude_phishing: false,
+    };
+    let transfer_history = storage
+        .get_transfer_history(vec![chain], true, 1, None, Some(filters))
+        .await
+        .unwrap();
+    assert_eq!(transfer_history.transfer_history.len(), 3);
 }

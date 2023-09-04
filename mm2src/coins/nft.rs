@@ -19,6 +19,7 @@ use crate::nft::nft_errors::{ProtectFromSpamError, UpdateSpamPhishingError};
 use crate::nft::nft_structs::{MnemonicHQRes, NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq,
                               SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
+use common::log::debug;
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
 use crypto::StandardHDCoinAddress;
 use ethereum_types::Address;
@@ -64,7 +65,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         }
     }
     let mut nft_list = storage
-        .get_nft_list(req.chains, req.max, req.limit, req.page_number)
+        .get_nft_list(req.chains, req.max, req.limit, req.page_number, req.filters)
         .await?;
     if req.protect_from_spam {
         for nft in &mut nft_list.nfts {
@@ -187,7 +188,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     Ok(())
 }
 
-/// `update_spam_phishing` function updates spam contracts info in NFT list and NFT transfers.
+/// `update_spam` function updates spam contracts info in NFT list and NFT transfers.
 async fn update_spam<T>(
     ctx: &MmArc,
     storage: &T,
@@ -198,23 +199,16 @@ where
     T: NftListStorageOps + NftTransferHistoryStorageOps,
 {
     if chain == Chain::Eth || chain == Chain::Polygon {
-        update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await?;
+        return update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await;
     }
-    let scan_contract_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_CONTRACT, BLOCKLIST_SCAN)?;
     let token_addresses = storage.get_token_addresses(&chain).await?;
     let addresses = token_addresses
         .iter()
         .map(eth_addr_to_hex)
         .collect::<Vec<_>>()
         .join(",");
-    let req_spam = SpamContractReq {
-        network: chain,
-        addresses,
-    };
-    let req_spam_json = serde_json::to_string(&req_spam)?;
-    let scan_contract_res = send_post_request_to_uri(scan_contract_uri.as_str(), req_spam_json).await?;
-    let spam_res: SpamContractRes = serde_json::from_slice(&scan_contract_res)?;
-    println!("spam_res {:?}", spam_res);
+    let spam_res = send_spam_request(&chain, url_antispam, addresses).await?;
+    debug!("\n spam_res {:?} \n", spam_res);
     for (address, is_spam) in spam_res.result.into_iter() {
         if is_spam {
             let address_hex = eth_addr_to_hex(&address);
@@ -252,7 +246,7 @@ where
         .push(&my_address);
     let response = send_request_to_uri(scan_wallet_uri.as_str()).await?;
     let mnemonichq_res: MnemonicHQRes = serde_json::from_value(response)?;
-    println!("mnemonichq_res {:?}", mnemonichq_res);
+    debug!("\n mnemonichq_res {:?} \n", mnemonichq_res);
     for contract in mnemonichq_res.spam_contracts.iter() {
         storage
             .update_nft_spam_by_token_address(chain, eth_addr_to_hex(contract), true)
@@ -262,6 +256,22 @@ where
             .await?;
     }
     Ok(())
+}
+
+async fn send_spam_request(
+    chain: &Chain,
+    url_antispam: &Url,
+    addresses: String,
+) -> MmResult<SpamContractRes, UpdateSpamPhishingError> {
+    let scan_contract_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_CONTRACT, BLOCKLIST_SCAN)?;
+    let req_spam = SpamContractReq {
+        network: *chain,
+        addresses,
+    };
+    let req_spam_json = serde_json::to_string(&req_spam)?;
+    let scan_contract_res = send_post_request_to_uri(scan_contract_uri.as_str(), req_spam_json).await?;
+    let spam_res: SpamContractRes = serde_json::from_slice(&scan_contract_res)?;
+    Ok(spam_res)
 }
 
 fn prepare_uri_for_blocklist_endpoint(
@@ -291,13 +301,13 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         &req.url,
     )
     .await?;
-    let req = NftMetadataReq {
+    let req_meta = NftMetadataReq {
         token_address: req.token_address,
         token_id: req.token_id,
         chain: req.chain,
         protect_from_spam: false,
     };
-    let mut nft_db = get_nft_metadata(ctx.clone(), req).await?;
+    let mut nft_db = get_nft_metadata(ctx.clone(), req_meta).await?;
     let token_uri = check_moralis_ipfs_bafy(moralis_meta.common.token_uri.as_deref());
     let token_domain = get_domain_from_url(token_uri.as_deref());
     let uri_meta = get_uri_meta(token_uri.as_deref(), moralis_meta.common.metadata.as_deref()).await;
@@ -309,8 +319,22 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     nft_db.common.last_token_uri_sync = moralis_meta.common.last_token_uri_sync;
     nft_db.common.last_metadata_sync = moralis_meta.common.last_metadata_sync;
     nft_db.common.possible_spam = moralis_meta.common.possible_spam;
-    // todo also update possible_phishing and check spam with antispam proxy additionally
     nft_db.uri_meta = uri_meta;
+
+    let addresses = [nft_db.common.token_address]
+        .iter()
+        .map(eth_addr_to_hex)
+        .collect::<Vec<_>>()
+        .join(",");
+    let spam_res = send_spam_request(&req.chain, &req.url_antispam, addresses).await?;
+    if let Some(true) = spam_res.result.get(&nft_db.common.token_address) {
+        nft_db.common.possible_spam = true;
+        let address_hex = eth_addr_to_hex(&nft_db.common.token_address);
+        storage
+            .update_transfer_spam_by_token_address(&req.chain, address_hex, true)
+            .await?;
+    }
+    // todo also update possible_phishing
     drop_mutability!(nft_db);
     storage
         .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
@@ -433,7 +457,6 @@ async fn get_moralis_nft_transfers(
                         verified: transfer_moralis.common.verified,
                         operator: transfer_moralis.common.operator,
                         possible_spam: transfer_moralis.common.possible_spam,
-                        possible_phishing: false,
                     },
                     chain: *chain,
                     block_number: *transfer_moralis.block_number,
@@ -446,6 +469,7 @@ async fn get_moralis_nft_transfers(
                     image_domain: None,
                     token_name: None,
                     status,
+                    possible_phishing: false,
                 };
                 // collect NFTs transfers from the page
                 res_list.push(transfer_history);
@@ -526,7 +550,6 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
     Ok(body)
 }
 
-#[allow(dead_code)]
 async fn send_post_request_to_uri(uri: &str, body: String) -> MmResult<Vec<u8>, GetInfoFromUriError> {
     let (status, _header, body) = slurp_post_json(uri, body).await?;
     if !status.is_success() {
@@ -856,12 +879,12 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
                     last_metadata_sync: moralis_meta.common.last_metadata_sync,
                     minter_address: moralis_meta.common.minter_address,
                     possible_spam: moralis_meta.common.possible_spam,
-                    possible_phishing: false,
                 },
                 chain: *chain,
                 block_number_minted: moralis_meta.block_number_minted,
                 block_number: transfer.block_number,
                 contract_type: moralis_meta.contract_type,
+                possible_phishing: false,
                 uri_meta,
             };
             storage
@@ -1059,12 +1082,12 @@ async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, cont
             last_metadata_sync: nft_moralis.common.last_metadata_sync,
             minter_address: nft_moralis.common.minter_address,
             possible_spam: nft_moralis.common.possible_spam,
-            possible_phishing: false,
         },
         chain: *chain,
         block_number_minted: nft_moralis.block_number_minted.map(|v| v.0),
         block_number: *nft_moralis.block_number,
         contract_type,
+        possible_phishing: false,
         uri_meta,
     }
 }

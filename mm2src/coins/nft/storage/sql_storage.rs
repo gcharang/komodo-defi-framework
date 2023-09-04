@@ -1,6 +1,6 @@
 use crate::nft::eth_addr_to_hex;
-use crate::nft::nft_structs::{Chain, ContractType, ConvertChain, Nft, NftCommon, NftList, NftTokenAddrId,
-                              NftTransferCommon, NftTransferHistory, NftTransferHistoryFilters,
+use crate::nft::nft_structs::{Chain, ContractType, ConvertChain, Nft, NftCommon, NftList, NftListFilters,
+                              NftTokenAddrId, NftTransferCommon, NftTransferHistory, NftTransferHistoryFilters,
                               NftsTransferHistoryList, TransferMeta, UriMeta};
 use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftDetailsJson, NftListStorageOps, NftStorageError,
                           NftTransferHistoryStorageOps, RemoveNftResult, TransferDetailsJson};
@@ -128,13 +128,16 @@ impl SqliteNftStorage {
     }
 }
 
-fn get_nft_list_builder_preimage(chains: Vec<Chain>) -> MmResult<SqlBuilder, SqlError> {
+fn get_nft_list_builder_preimage(
+    chains: Vec<Chain>,
+    filters: Option<NftListFilters>,
+) -> MmResult<SqlBuilder, SqlError> {
     let union_sql_strings = chains
         .iter()
         .map(|chain| {
             let table_name = nft_list_table_name(chain);
             validate_table_name(&table_name)?;
-            let sql_builder = SqlBuilder::select_from(table_name.as_str());
+            let sql_builder = nft_list_builder_preimage(table_name.as_str(), filters)?;
             let sql_string = sql_builder
                 .sql()
                 .map_err(|e| SqlError::ToSqlConversionFailure(e.into()))?
@@ -148,6 +151,20 @@ fn get_nft_list_builder_preimage(chains: Vec<Chain>) -> MmResult<SqlBuilder, Sql
     final_sql_builder.order_desc("nft_list.block_number");
     drop_mutability!(final_sql_builder);
     Ok(final_sql_builder)
+}
+
+fn nft_list_builder_preimage(table_name: &str, filters: Option<NftListFilters>) -> Result<SqlBuilder, SqlError> {
+    let mut sql_builder = SqlBuilder::select_from(table_name);
+    if let Some(filters) = filters {
+        if filters.exclude_spam {
+            sql_builder.and_where("possible_spam == 0");
+        }
+        if filters.exclude_phishing {
+            sql_builder.and_where("possible_phishing == 0");
+        }
+    }
+    drop_mutability!(sql_builder);
+    Ok(sql_builder)
 }
 
 fn get_nft_transfer_builder_preimage(
@@ -191,6 +208,12 @@ fn nft_history_table_builder_preimage(
         }
         if let Some(date) = filters.to_date {
             sql_builder.and_where(format!("block_timestamp <= {}", date));
+        }
+        if filters.exclude_spam {
+            sql_builder.and_where("possible_spam == 0");
+        }
+        if filters.exclude_phishing {
+            sql_builder.and_where("possible_phishing == 0");
         }
     }
     drop_mutability!(sql_builder);
@@ -282,7 +305,6 @@ fn nft_from_row(row: &Row<'_>) -> Result<Nft, SqlError> {
         last_metadata_sync,
         minter_address: nft_details.minter_address,
         possible_spam: possible_spam != 0,
-        possible_phishing: possible_phishing != 0,
     };
     let nft = Nft {
         common,
@@ -290,6 +312,7 @@ fn nft_from_row(row: &Row<'_>) -> Result<Nft, SqlError> {
         block_number_minted: nft_details.block_number_minted,
         block_number,
         contract_type,
+        possible_phishing: possible_phishing != 0,
         uri_meta,
     };
     Ok(nft)
@@ -333,7 +356,6 @@ fn transfer_history_from_row(row: &Row<'_>) -> Result<NftTransferHistory, SqlErr
         verified: details.verified,
         operator: details.operator,
         possible_spam: possible_spam != 0,
-        possible_phishing: possible_phishing != 0,
     };
 
     let transfer_history = NftTransferHistory {
@@ -349,6 +371,7 @@ fn transfer_history_from_row(row: &Row<'_>) -> Result<NftTransferHistory, SqlErr
         image_domain,
         token_name,
         status,
+        possible_phishing: possible_phishing != 0,
     };
 
     Ok(transfer_history)
@@ -664,11 +687,12 @@ impl NftListStorageOps for SqliteNftStorage {
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
+        filters: Option<NftListFilters>,
     ) -> MmResult<NftList, Self::Error> {
         let selfi = self.clone();
         async_blocking(move || {
             let conn = selfi.0.lock().unwrap();
-            let sql_builder = get_nft_list_builder_preimage(chains)?;
+            let sql_builder = get_nft_list_builder_preimage(chains, filters)?;
             let total_count_builder_sql = sql_builder
                 .clone()
                 .count("*")
@@ -722,7 +746,7 @@ impl NftListStorageOps for SqliteNftStorage {
                     Some(nft.block_number.to_string()),
                     Some(nft.contract_type.to_string()),
                     Some(i32::from(nft.common.possible_spam).to_string()),
-                    Some(i32::from(nft.common.possible_phishing).to_string()),
+                    Some(i32::from(nft.possible_phishing).to_string()),
                     nft.common.collection_name,
                     nft.common.symbol,
                     nft.common.token_uri,
@@ -821,7 +845,7 @@ impl NftListStorageOps for SqliteNftStorage {
             let sql_transaction = conn.transaction()?;
             let params = [
                 Some(i32::from(nft.common.possible_spam).to_string()),
-                Some(i32::from(nft.common.possible_phishing).to_string()),
+                Some(i32::from(nft.possible_phishing).to_string()),
                 nft.common.collection_name,
                 nft.common.symbol,
                 nft.common.token_uri,
@@ -1062,7 +1086,7 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
                     transfer.image_domain,
                     transfer.token_name,
                     Some(i32::from(transfer.common.possible_spam).to_string()),
-                    Some(i32::from(transfer.common.possible_phishing).to_string()),
+                    Some(i32::from(transfer.possible_phishing).to_string()),
                     Some(transfer_json),
                 ];
                 sql_transaction.execute(&insert_transfer_in_history_sql(&chain)?, params)?;

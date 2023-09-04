@@ -1,6 +1,6 @@
 use crate::eth::eth_addr_to_hex;
-use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCtx, NftList, NftTransferHistory, NftsTransferHistoryList,
-                              TransferMeta, TransferStatus};
+use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCtx, NftList, NftListFilters, NftTransferHistory,
+                              NftsTransferHistoryList, TransferMeta, TransferStatus};
 use crate::nft::storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
 use crate::nft::storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
 use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftTokenAddrId,
@@ -53,6 +53,24 @@ impl IndexedDbNftStorage {
         })
     }
 
+    fn take_nfts_according_to_filters<I>(nfts: I, filters: Option<NftListFilters>) -> WasmNftCacheResult<Vec<Nft>>
+    where
+        I: Iterator<Item = NftListTable>,
+    {
+        let mut filtered_nfts = Vec::new();
+        for nft_table in nfts {
+            let nft = nft_details_from_item(nft_table)?;
+            if let Some(filters) = &filters {
+                if filters.is_spam_match(&nft) && filters.is_phishing_match(&nft) {
+                    filtered_nfts.push(nft);
+                }
+            } else {
+                filtered_nfts.push(nft);
+            }
+        }
+        Ok(filtered_nfts)
+    }
+
     fn take_transfers_according_to_paging_opts(
         mut transfers: Vec<NftTransferHistory>,
         max: bool,
@@ -80,7 +98,11 @@ impl IndexedDbNftStorage {
         for transfers_table in transfers {
             let transfer = transfer_details_from_item(transfers_table)?;
             if let Some(filters) = &filters {
-                if filters.is_status_match(&transfer) && filters.is_date_match(&transfer) {
+                if filters.is_status_match(&transfer)
+                    && filters.is_date_match(&transfer)
+                    && filters.is_spam_match(&transfer)
+                    && filters.is_phishing_match(&transfer)
+                {
                     filtered_transfers.push(transfer);
                 }
             } else {
@@ -89,6 +111,12 @@ impl IndexedDbNftStorage {
         }
         Ok(filtered_transfers)
     }
+}
+
+impl NftListFilters {
+    fn is_spam_match(&self, nft: &Nft) -> bool { !self.exclude_spam || !nft.common.possible_spam }
+
+    fn is_phishing_match(&self, nft: &Nft) -> bool { !self.exclude_phishing || !nft.possible_phishing }
 }
 
 impl NftTransferHistoryFilters {
@@ -101,6 +129,14 @@ impl NftTransferHistoryFilters {
     fn is_date_match(&self, transfer: &NftTransferHistory) -> bool {
         self.from_date.map_or(true, |from| transfer.block_timestamp >= from)
             && self.to_date.map_or(true, |to| transfer.block_timestamp <= to)
+    }
+
+    fn is_spam_match(&self, transfer: &NftTransferHistory) -> bool {
+        !self.exclude_spam || !transfer.common.possible_spam
+    }
+
+    fn is_phishing_match(&self, transfer: &NftTransferHistory) -> bool {
+        !self.exclude_phishing || !transfer.possible_phishing
     }
 }
 
@@ -118,17 +154,20 @@ impl NftListStorageOps for IndexedDbNftStorage {
         max: bool,
         limit: usize,
         page_number: Option<NonZeroUsize>,
+        filters: Option<NftListFilters>,
     ) -> MmResult<NftList, Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
         let mut nfts = Vec::new();
         for chain in chains {
-            let items = table.get_items("chain", chain.to_string()).await?;
-            for (_item_id, item) in items.into_iter() {
-                let nft_detail = nft_details_from_item(item)?;
-                nfts.push(nft_detail);
-            }
+            let nft_tables = table
+                .get_items("chain", chain.to_string())
+                .await?
+                .into_iter()
+                .map(|(_item_id, nft)| nft);
+            let filtered = Self::take_nfts_according_to_filters(nft_tables, filters)?;
+            nfts.extend(filtered);
         }
         Self::take_nft_according_to_paging_opts(nfts, max, limit, page_number)
     }
@@ -668,6 +707,7 @@ pub(crate) struct NftListTable {
     block_number: BeBigUint,
     contract_type: ContractType,
     possible_spam: bool,
+    possible_phishing: bool,
     details_json: Json,
 }
 
@@ -688,6 +728,7 @@ impl NftListTable {
             block_number: BeBigUint::from(nft.block_number),
             contract_type: nft.contract_type,
             possible_spam: nft.common.possible_spam,
+            possible_phishing: nft.possible_phishing,
             details_json,
         })
     }
@@ -730,6 +771,7 @@ pub(crate) struct NftTransferHistoryTable {
     image_url: Option<String>,
     token_name: Option<String>,
     possible_spam: bool,
+    possible_phishing: bool,
     details_json: Json,
 }
 
@@ -761,6 +803,7 @@ impl NftTransferHistoryTable {
             image_url: transfer.image_url.clone(),
             token_name: transfer.token_name.clone(),
             possible_spam: transfer.common.possible_spam,
+            possible_phishing: transfer.possible_phishing,
             details_json,
         })
     }
