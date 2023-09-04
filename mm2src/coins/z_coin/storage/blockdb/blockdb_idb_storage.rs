@@ -144,7 +144,7 @@ impl BlockDbImpl {
 
         let get_latest_block = self.get_latest_block().await?;
         let height_to_remove_from = height + 1;
-        for i in height_to_remove_from..=get_latest_block {
+        for i in height_to_remove_from..get_latest_block {
             let index_keys = MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
                 .with_value(&ticker)?
                 .with_value(BeBigUint::from(i))?;
