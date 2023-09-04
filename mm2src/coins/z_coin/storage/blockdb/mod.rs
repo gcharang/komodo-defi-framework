@@ -93,9 +93,6 @@ mod native_tests {
 
     #[test]
     fn test_rewind_to_height() { block_on(test_rewind_to_height_impl()) }
-
-    //    #[test]
-    //    fn test_with_blocks() { block_on(test_with_blocks_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -107,14 +104,8 @@ mod wasm_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn test() {}
-
-    #[wasm_bindgen_test]
     async fn test_insert_block_and_get_latest_block() { test_insert_block_and_get_latest_block_impl().await }
 
     #[wasm_bindgen_test]
     async fn test_rewind_to_height() { test_rewind_to_height_impl().await }
-
-    //    #[wasm_bindgen_test]
-    //    async fn test_with_blocks() { test_with_blocks_impl().await }
 }
