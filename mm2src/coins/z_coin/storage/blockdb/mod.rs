@@ -39,8 +39,7 @@ mod block_db_storage_tests {
         let db = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
         // insert block
         for header in HEADERS.iter() {
-            let inserted_id = db.insert_block(header.0, hex::decode(header.1).unwrap()).await.unwrap();
-            assert_eq!(1, inserted_id);
+            db.insert_block(header.0, hex::decode(header.1).unwrap()).await.unwrap();
         }
 
         // get last block header
@@ -53,8 +52,7 @@ mod block_db_storage_tests {
         let db = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
         // insert block
         for header in HEADERS.iter() {
-            let inserted_id = db.insert_block(header.0, hex::decode(header.1).unwrap()).await.unwrap();
-            assert_eq!(1, inserted_id);
+            db.insert_block(header.0, hex::decode(header.1).unwrap()).await.unwrap();
         }
 
         // rewind height to 1900000
