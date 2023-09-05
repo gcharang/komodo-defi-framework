@@ -23,7 +23,7 @@ use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::{Diversifier, Node, Nullifier, PaymentAddress, Rseed};
 use zcash_primitives::transaction::components::Amount;
-use zcash_primitives::transaction::TxId;
+use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
 const DB_NAME: &str = "wallet_db_cache";
@@ -138,6 +138,48 @@ impl WalletIndexedDb {
         Ok(())
     }
 
+    pub async fn put_tx_data(&self, tx: &Transaction, created_at: Option<String>) -> MmResult<i64, ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
+
+        let mut raw_tx = vec![];
+        tx.write(&mut raw_tx).unwrap();
+        let txid = tx.txid().0.to_vec();
+
+        if let Some((id_tx, some_tx)) = self.get_single_tx(txid.clone()).await? {
+            let updated_tx = WalletDbTransactionsTable {
+                txid: txid.clone(),
+                created: some_tx.created,
+                block: some_tx.block,
+                tx_index: some_tx.tx_index,
+                expiry_height: Some(u32::from(tx.expiry_height)),
+                raw: Some(raw_tx),
+                ticker: ticker.clone(),
+            };
+            tx_table.replace_item(id_tx, &updated_tx).await?;
+
+            return Ok(id_tx as i64);
+        };
+
+        let new_tx = WalletDbTransactionsTable {
+            txid: txid.clone(),
+            created: created_at,
+            block: None,
+            tx_index: None,
+            expiry_height: Some(u32::from(tx.expiry_height)),
+            raw: Some(raw_tx),
+            ticker: ticker.clone(),
+        };
+        let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
+            .with_value(&ticker)?
+            .with_value(txid)?;
+        let id = tx_table.replace_item_by_unique_multi_index(index_keys, &new_tx).await?;
+
+        Ok(id.into())
+    }
+
     pub async fn put_tx_meta<N>(&self, tx: &WalletTx<N>, height: BlockHeight) -> MmResult<i64, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
@@ -156,12 +198,7 @@ impl WalletIndexedDb {
                 raw: some_tx.raw,
                 ticker: ticker.clone(),
             };
-            let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
-                .with_value(&ticker)?
-                .with_value(u32::from(height))?;
-            tx_table
-                .replace_item_by_unique_multi_index(index_keys, &updated_tx)
-                .await?;
+            tx_table.replace_item(id_tx, &updated_tx).await?;
 
             return Ok(id_tx as i64);
         };
@@ -175,16 +212,12 @@ impl WalletIndexedDb {
             raw: None,
             ticker: ticker.clone(),
         };
-        let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+        let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
             .with_value(&ticker)?
-            .with_value(u32::from(height))?;
-        tx_table.replace_item_by_unique_multi_index(index_keys, &new_tx).await?;
+            .with_value(txid)?;
+        let id = tx_table.replace_item_by_unique_multi_index(index_keys, &new_tx).await?;
 
-        Ok(self
-            .get_single_tx(txid.clone())
-            .await?
-            .map(|(id_tx, _)| id_tx as i64)
-            .ok_or_else(|| ZcoinStorageError::GetFromStorageError("Error while putting tx_meta".to_string()))?)
+        Ok(id.into())
     }
 
     pub async fn mark_spent(&self, tx_ref: i64, nf: &Nullifier) -> MmResult<(), ZcoinStorageError> {
@@ -1006,7 +1039,7 @@ impl WalletWrite for WalletIndexedDb {
 
     async fn store_received_tx(&mut self, _received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
         //        let selfi = self.deref();
-        //        let tx_ref = selfi.put_tx_data(received_tx.tx, None)?;
+        //        let tx_ref = selfi.put_tx_data(received_tx.tx, None).await?;
         //
         //        for output in received_tx.outputs {
         //            if output.outgoing {
@@ -1017,6 +1050,7 @@ impl WalletWrite for WalletIndexedDb {
         //        }
         //
         //        Ok(tx_ref)
+
         todo!()
     }
 
@@ -1198,7 +1232,7 @@ pub struct WalletDbTransactionsTable {
     block: Option<u32>,
     tx_index: Option<i64>,
     expiry_height: Option<u32>,
-    raw: Option<String>,
+    raw: Option<Vec<u8>>,
     ticker: String,
 }
 
