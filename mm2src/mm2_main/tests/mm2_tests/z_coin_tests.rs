@@ -401,7 +401,7 @@ fn trade_rick_zombie_light() {
 
     println!("Bob ZOMBIE activation {:?}", zombie_activation);
 
-    let rick_activation = block_on(enable_electrum_json(&mm_bob, RICK, false, rick_electrums(), None));
+    let rick_activation = block_on(enable_electrum_json(&mm_bob, RICK, false, rick_electrums()));
 
     println!("Bob RICK activation {:?}", rick_activation);
 
@@ -434,7 +434,7 @@ fn trade_rick_zombie_light() {
 
     println!("Alice ZOMBIE activation {:?}", zombie_activation);
 
-    let rick_activation = block_on(enable_electrum_json(&mm_alice, RICK, false, rick_electrums(), None));
+    let rick_activation = block_on(enable_electrum_json(&mm_alice, RICK, false, rick_electrums()));
 
     println!("Alice RICK activation {:?}", rick_activation);
 

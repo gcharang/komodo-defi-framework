@@ -1469,26 +1469,14 @@ pub fn mm_spat() -> (&'static str, MarketMakerIt, RaiiDump, RaiiDump) {
 
 /// Asks MM to enable the given currency in electrum mode
 /// fresh list of servers at https://github.com/jl777/coins/blob/master/electrums/.
-pub async fn enable_electrum(
-    mm: &MarketMakerIt,
-    coin: &str,
-    tx_history: bool,
-    urls: &[&str],
-    path_to_address: Option<StandardHDCoinAddress>,
-) -> Json {
+pub async fn enable_electrum(mm: &MarketMakerIt, coin: &str, tx_history: bool, urls: &[&str]) -> Json {
     let servers = urls.iter().map(|url| json!({ "url": url })).collect();
-    enable_electrum_json(mm, coin, tx_history, servers, path_to_address).await
+    enable_electrum_json(mm, coin, tx_history, servers).await
 }
 
 /// Asks MM to enable the given currency in electrum mode
 /// fresh list of servers at https://github.com/jl777/coins/blob/master/electrums/.
-pub async fn enable_electrum_json(
-    mm: &MarketMakerIt,
-    coin: &str,
-    tx_history: bool,
-    servers: Vec<Json>,
-    path_to_address: Option<StandardHDCoinAddress>,
-) -> Json {
+pub async fn enable_electrum_json(mm: &MarketMakerIt, coin: &str, tx_history: bool, servers: Vec<Json>) -> Json {
     let electrum = mm
         .rpc(&json!({
             "userpass": mm.userpass,
@@ -1497,7 +1485,6 @@ pub async fn enable_electrum_json(
             "servers": servers,
             "mm2": 1,
             "tx_history": tx_history,
-            "path_to_address": path_to_address.unwrap_or_default(),
         }))
         .await
         .unwrap();
@@ -2655,7 +2642,12 @@ pub async fn enable_tendermint_token(mm: &MarketMakerIt, coin: &str) -> Json {
     json::from_str(&request.1).unwrap()
 }
 
-pub async fn init_utxo_electrum(mm: &MarketMakerIt, coin: &str, servers: Vec<Json>) -> Json {
+pub async fn init_utxo_electrum(
+    mm: &MarketMakerIt,
+    coin: &str,
+    servers: Vec<Json>,
+    path_to_address: Option<StandardHDCoinAddress>,
+) -> Json {
     let request = mm
         .rpc(&json!({
             "userpass": mm.userpass,
@@ -2667,7 +2659,8 @@ pub async fn init_utxo_electrum(mm: &MarketMakerIt, coin: &str, servers: Vec<Jso
                     "mode": {
                         "rpc": "Electrum",
                         "rpc_data": {
-                            "servers": servers
+                            "servers": servers,
+                            "path_to_address": path_to_address,
                         }
                     }
                 },
@@ -2703,6 +2696,33 @@ pub async fn init_utxo_status(mm: &MarketMakerIt, task_id: u64) -> Json {
         request.1
     );
     json::from_str(&request.1).unwrap()
+}
+
+pub async fn enable_utxo_v2_electrum(
+    mm: &MarketMakerIt,
+    coin: &str,
+    servers: Vec<Json>,
+    path_to_address: Option<StandardHDCoinAddress>,
+    timeout: u64,
+) -> UtxoStandardActivationResult {
+    let init = init_utxo_electrum(mm, coin, servers, path_to_address).await;
+    let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
+    let timeout = wait_until_ms(timeout * 1000);
+
+    loop {
+        if now_ms() > timeout {
+            panic!("{} initialization timed out", coin);
+        }
+
+        let status = init_utxo_status(mm, init.result.task_id).await;
+        let status: RpcV2Response<InitUtxoStatus> = json::from_value(status).unwrap();
+        log!("init_utxo_status: {:?}", status);
+        match status.result {
+            InitUtxoStatus::Ok(result) => break result,
+            InitUtxoStatus::Error(e) => panic!("{} initialization error {:?}", coin, e),
+            _ => Timer::sleep(1.).await,
+        }
+    }
 }
 
 /// Note that mm2 ignores `volume` if `max` is true.

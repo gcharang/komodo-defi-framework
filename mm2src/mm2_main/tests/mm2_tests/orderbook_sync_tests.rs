@@ -897,28 +897,16 @@ fn orderbook_extended_data() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = &mm.mm_dump();
     log!("Log path: {}", mm.log_path.display());
-    block_on(enable_electrum(
-        &mm,
-        "RICK",
-        false,
-        &[
-            "electrum3.cipig.net:10017",
-            "electrum2.cipig.net:10017",
-            "electrum1.cipig.net:10017",
-        ],
-        None,
-    ));
-    block_on(enable_electrum(
-        &mm,
-        "MORTY",
-        false,
-        &[
-            "electrum3.cipig.net:10018",
-            "electrum2.cipig.net:10018",
-            "electrum1.cipig.net:10018",
-        ],
-        None,
-    ));
+    block_on(enable_electrum(&mm, "RICK", false, &[
+        "electrum3.cipig.net:10017",
+        "electrum2.cipig.net:10017",
+        "electrum1.cipig.net:10017",
+    ]));
+    block_on(enable_electrum(&mm, "MORTY", false, &[
+        "electrum3.cipig.net:10018",
+        "electrum2.cipig.net:10018",
+        "electrum1.cipig.net:10018",
+    ]));
 
     let bob_orders = &[
         // (base, rel, price, volume)
@@ -1029,28 +1017,16 @@ fn orderbook_should_display_base_rel_volumes() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = &mm.mm_dump();
     log!("Log path: {}", mm.log_path.display());
-    block_on(enable_electrum(
-        &mm,
-        "RICK",
-        false,
-        &[
-            "electrum3.cipig.net:10017",
-            "electrum2.cipig.net:10017",
-            "electrum1.cipig.net:10017",
-        ],
-        None,
-    ));
-    block_on(enable_electrum(
-        &mm,
-        "MORTY",
-        false,
-        &[
-            "electrum3.cipig.net:10018",
-            "electrum2.cipig.net:10018",
-            "electrum1.cipig.net:10018",
-        ],
-        None,
-    ));
+    block_on(enable_electrum(&mm, "RICK", false, &[
+        "electrum3.cipig.net:10017",
+        "electrum2.cipig.net:10017",
+        "electrum1.cipig.net:10017",
+    ]));
+    block_on(enable_electrum(&mm, "MORTY", false, &[
+        "electrum3.cipig.net:10018",
+        "electrum2.cipig.net:10018",
+        "electrum1.cipig.net:10018",
+    ]));
 
     let price = BigRational::new(2.into(), 1.into());
     let volume = BigRational::new(1.into(), 1.into());
@@ -1171,7 +1147,7 @@ fn orderbook_should_work_without_coins_activation() {
 
     log!(
         "enable_coins (bob): {:?}",
-        block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None))
+        block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES))
     );
 
     let rc = block_on(mm_bob.rpc(&json!({
@@ -1228,28 +1204,16 @@ fn test_all_orders_per_pair_per_node_must_be_displayed_in_orderbook() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = mm.mm_dump();
     log!("Log path: {}", mm.log_path.display());
-    block_on(enable_electrum(
-        &mm,
-        "RICK",
-        false,
-        &[
-            "electrum3.cipig.net:10017",
-            "electrum2.cipig.net:10017",
-            "electrum1.cipig.net:10017",
-        ],
-        None,
-    ));
-    block_on(enable_electrum(
-        &mm,
-        "MORTY",
-        false,
-        &[
-            "electrum3.cipig.net:10018",
-            "electrum2.cipig.net:10018",
-            "electrum1.cipig.net:10018",
-        ],
-        None,
-    ));
+    block_on(enable_electrum(&mm, "RICK", false, &[
+        "electrum3.cipig.net:10017",
+        "electrum2.cipig.net:10017",
+        "electrum1.cipig.net:10017",
+    ]));
+    block_on(enable_electrum(&mm, "MORTY", false, &[
+        "electrum3.cipig.net:10018",
+        "electrum2.cipig.net:10018",
+        "electrum1.cipig.net:10018",
+    ]));
 
     // set 2 orders with different prices
     let rc = block_on(mm.rpc(&json!({
@@ -1343,11 +1307,11 @@ fn setprice_min_volume_should_be_displayed_in_orderbook() {
 
     log!(
         "enable_coins (bob): {:?}",
-        block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None))
+        block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES))
     );
     log!(
         "enable_coins (alice): {:?}",
-        block_on(enable_coins_eth_electrum(&mm_alice, ETH_DEV_NODES, None))
+        block_on(enable_coins_eth_electrum(&mm_alice, ETH_DEV_NODES))
     );
 
     // issue orderbook call on Alice side to trigger subscription to a topic
@@ -1430,7 +1394,7 @@ fn zhtlc_orders_sync_alice_connected_before_creation() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_alice.mm_dump();
     log!("Alice log path: {}", mm_alice.log_path.display());
 
-    block_on(enable_electrum_json(&mm_bob, RICK, false, rick_electrums(), None));
+    block_on(enable_electrum_json(&mm_bob, RICK, false, rick_electrums()));
     block_on(enable_z_coin_light(
         &mm_bob,
         ZOMBIE_TICKER,
@@ -1493,7 +1457,7 @@ fn zhtlc_orders_sync_alice_connected_after_creation() {
     let (_dump_log, _dump_dashboard) = mm_bob.mm_dump();
     log!("Bob log path: {}", mm_bob.log_path.display());
 
-    block_on(enable_electrum_json(&mm_bob, "RICK", false, rick_electrums(), None));
+    block_on(enable_electrum_json(&mm_bob, "RICK", false, rick_electrums()));
     block_on(enable_z_coin_light(
         &mm_bob,
         ZOMBIE_TICKER,
@@ -1522,7 +1486,7 @@ fn zhtlc_orders_sync_alice_connected_after_creation() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_alice.mm_dump();
     log!("Alice log path: {}", mm_alice.log_path.display());
 
-    block_on(enable_electrum_json(&mm_alice, RICK, false, rick_electrums(), None));
+    block_on(enable_electrum_json(&mm_alice, RICK, false, rick_electrums()));
     block_on(enable_z_coin_light(
         &mm_alice,
         ZOMBIE_TICKER,

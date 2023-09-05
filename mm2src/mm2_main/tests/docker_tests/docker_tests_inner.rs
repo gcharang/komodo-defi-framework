@@ -2138,17 +2138,11 @@ fn test_get_max_taker_vol_with_kmd() {
 
     log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
-    let electrum = block_on(enable_electrum(
-        &mm_alice,
-        "KMD",
-        false,
-        &[
-            "electrum1.cipig.net:10001",
-            "electrum2.cipig.net:10001",
-            "electrum3.cipig.net:10001",
-        ],
-        None,
-    ));
+    let electrum = block_on(enable_electrum(&mm_alice, "KMD", false, &[
+        "electrum1.cipig.net:10001",
+        "electrum2.cipig.net:10001",
+        "electrum3.cipig.net:10001",
+    ]));
     log!("{:?}", electrum);
     let rc = block_on(mm_alice.rpc(&json!({
         "userpass": mm_alice.userpass,
