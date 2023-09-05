@@ -700,7 +700,7 @@ mod tests {
         let previous_tx_hash =
             H256::from_reversed_str("0bc54ed426950f50bf2c2776034a03592e844757b42330eb908eb04492dad2c6");
         let previous_output_index = 1;
-        let to: Address = Address::from_legacyaddress("msj7SEQmH7pUCUx8YU6R87DrAHYzcABdzw", 61, 0, 5, 0).unwrap();
+        let to: Address = Address::from_legacyaddress("msj7SEQmH7pUCUx8YU6R87DrAHYzcABdzw", 111, 0, 0, 0).unwrap();
         assert!(to.hash.is_address_hash());
         let previous_output = "76a914df3bd30160e6c6145baaf2c88a8844c13a00d1d588ac".into();
         let current_output: Bytes = "76a91485ee21a7f8cdd9034fb55004e0d8ed27db1c03c288ac".into();
@@ -737,7 +737,7 @@ mod tests {
             shielded_spends: vec![],
             shielded_outputs: vec![],
             zcash: false,
-            posv: true,
+            posv: true, // TODO: Is this intended? In coins file for coin "tBLK", with this prefix 111, the field "pos" is true, not "posv". 
             str_d_zeel: None,
             hash_algo: SignerHashAlgo::DSHA256,
         };

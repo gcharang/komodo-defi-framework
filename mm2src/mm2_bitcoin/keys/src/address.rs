@@ -421,7 +421,7 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
-            script_type: AddressScriptType::P2PKH,
+            script_type: AddressScriptType::P2SH,
         };
 
         assert_eq!(
