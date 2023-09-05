@@ -8,9 +8,8 @@ use {AddressHashEnum, DisplayLayout};
 
 use crate::{address::detect_checksum, Error};
 
-/// Struct for legacy address representation
-/// Note: no legacy address type field in LegacyAddress like in SegwitAddress or CashAddress. 
-/// This is done to allow default LegacyAddress::from_str conversion what is used at least in the convertaddress rpc
+/// Struct for legacy address representation.
+/// Note: LegacyAddress::from_str deserialization is added, which is used at least in the convertaddress rpc.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct LegacyAddress {
     /// The prefix of the address.

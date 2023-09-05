@@ -640,18 +640,8 @@ pub fn addresses_from_script<T: UtxoCommonOps>(coin: &T, script: &Script) -> Res
                     coin.addr_format_for_standard_scripts(),
                     AddressScriptType::P2SH,
                 ),
-                AddressScriptType::P2WPKH => (
-                    0,
-                    0,
-                    UtxoAddressFormat::Segwit,
-                    AddressScriptType::P2WPKH,
-                ),
-                AddressScriptType::P2WSH => (
-                    0,
-                    0,
-                    UtxoAddressFormat::Segwit,
-                    AddressScriptType::P2WSH,
-                ),
+                AddressScriptType::P2WPKH => (0, 0, UtxoAddressFormat::Segwit, AddressScriptType::P2WPKH),
+                AddressScriptType::P2WSH => (0, 0, UtxoAddressFormat::Segwit, AddressScriptType::P2WSH),
             };
 
             Address {
