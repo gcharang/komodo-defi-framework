@@ -1371,6 +1371,8 @@ pub struct UtxoActivationParams {
     pub check_utxo_maturity: Option<bool>,
     /// This determines which Address of the HD account to be used for swaps for this UTXO coin.
     /// If not specified, the first non-change address for the first account is used.
+    // Todo: Do I still need this? Maybe we should use the same structs used in withdraw from.
+    // Todo: Clean up the electrum and enable methods after implementing HD wallet for all coins
     #[serde(default)]
     pub path_to_address: StandardHDCoinAddress,
 }

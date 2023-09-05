@@ -6,10 +6,11 @@ use crypto::StandardHDCoinAddress;
 use mm2_main::mm2::{lp_main, LpMainParams};
 use mm2_rpc::data::legacy::CoinInitResponse;
 use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
-use mm2_test_helpers::for_tests::{enable_native as enable_native_impl, init_utxo_electrum, init_utxo_status,
-                                  init_z_coin_light, init_z_coin_status, MarketMakerIt};
-use mm2_test_helpers::structs::{CoinActivationResult, InitTaskResult, InitUtxoStatus, InitZcoinStatus, RpcV2Response,
-                                UtxoStandardActivationResult};
+use mm2_test_helpers::for_tests::{create_new_account_status, enable_native as enable_native_impl,
+                                  init_create_new_account, init_utxo_electrum, init_utxo_status, init_z_coin_light,
+                                  init_z_coin_status, MarketMakerIt};
+use mm2_test_helpers::structs::{CoinActivationResult, CreateNewAccountStatus, HDAccountBalance, InitTaskResult,
+                                InitUtxoStatus, InitZcoinStatus, RpcV2Response, UtxoStandardActivationResult};
 use serde_json::{self as json, Value as Json};
 use std::collections::HashMap;
 use std::env::var;
@@ -161,4 +162,30 @@ pub fn addr_from_enable<'a>(enable_response: &'a HashMap<&str, CoinInitResponse>
 
 pub fn rmd160_from_passphrase(passphrase: &str) -> [u8; 20] {
     key_pair_from_seed(passphrase).unwrap().public().address_hash().take()
+}
+
+pub async fn create_new_account(
+    mm: &MarketMakerIt,
+    coin: &str,
+    account_id: Option<u32>,
+    timeout: u64,
+) -> HDAccountBalance {
+    let init = init_create_new_account(mm, coin, account_id).await;
+    let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
+    let timeout = wait_until_ms(timeout * 1000);
+
+    loop {
+        if now_ms() > timeout {
+            panic!("{} initialization timed out", coin);
+        }
+
+        let status = create_new_account_status(mm, init.result.task_id).await;
+        let status: RpcV2Response<CreateNewAccountStatus> = json::from_value(status).unwrap();
+        log!("create_new_account_status: {:?}", status);
+        match status.result {
+            CreateNewAccountStatus::Ok(result) => break result,
+            CreateNewAccountStatus::Error(e) => panic!("{} initialization error {:?}", coin, e),
+            _ => Timer::sleep(1.).await,
+        }
+    }
 }

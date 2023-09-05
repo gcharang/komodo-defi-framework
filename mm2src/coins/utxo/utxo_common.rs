@@ -243,6 +243,8 @@ pub async fn create_new_account<'a, Coin, XPubExtractor>(
     coin: &Coin,
     hd_wallet: &'a UtxoHDWallet,
     xpub_extractor: &XPubExtractor,
+    // Todo: instead of passing this through multiple functions, can we do this in a different way?
+    account_id: Option<u32>,
 ) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreatingError>
 where
     Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey>
@@ -251,15 +253,19 @@ where
     XPubExtractor: HDXPubExtractor,
 {
     const INIT_ACCOUNT_ID: u32 = 0;
-    let new_account_id = hd_wallet
-        .accounts
-        .lock()
-        .await
-        .iter()
-        // The last element of the BTreeMap has the max account index.
-        .last()
-        .map(|(account_id, _account)| *account_id + 1)
-        .unwrap_or(INIT_ACCOUNT_ID);
+    // Todo: what about scanning for accounts?
+    let new_account_id = match account_id {
+        Some(account_id) => account_id,
+        None => {
+            let accounts = hd_wallet.accounts.lock().await;
+            let last_account_id = accounts.iter().last().map(|(account_id, _account)| *account_id);
+            last_account_id.map_or(INIT_ACCOUNT_ID, |last_id| {
+                (INIT_ACCOUNT_ID..=last_id)
+                    .find(|id| !accounts.contains_key(id))
+                    .unwrap_or(last_id + 1)
+            })
+        },
+    };
     let max_accounts_number = hd_wallet.account_limit();
     if new_account_id >= max_accounts_number {
         return MmError::err(NewAccountCreatingError::AccountLimitReached { max_accounts_number });

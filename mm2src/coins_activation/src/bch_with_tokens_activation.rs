@@ -146,6 +146,7 @@ impl TryFromCoinProtocol for BchProtocolInfo {
 }
 
 #[derive(Debug, Serialize)]
+// Todo: should return wallet_balance using CoinBalanceReport if enabled in HD mode similar to UtxoStandardActivationResult
 pub struct BchWithTokensActivationResult {
     current_block: u64,
     bch_addresses_infos: HashMap<String, CoinAddressInfo<CoinBalance>>,

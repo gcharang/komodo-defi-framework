@@ -5,6 +5,7 @@ use serde_derive::Serialize;
 use std::collections::HashMap;
 
 #[derive(Clone, Serialize)]
+// Todo: how to use something similar in get_activation_result of bch_activation, or any with_toke activation?
 pub struct UtxoStandardActivationResult {
     pub ticker: String,
     pub current_block: u64,

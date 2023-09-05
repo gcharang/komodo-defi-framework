@@ -538,6 +538,26 @@ pub enum EnableCoinBalance {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct GetNewAddressResponse {
+    pub new_address: HDAddressBalance,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HDAccountBalanceResponse {
+    pub account_index: u32,
+    pub derivation_path: String,
+    pub addresses: Vec<HDAddressBalance>,
+    pub page_balance: CoinBalance,
+    pub limit: usize,
+    pub skipped: u32,
+    pub total: u32,
+    pub total_pages: usize,
+    pub paging_options: PagingOptionsEnum<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CoinActivationResult {
     pub ticker: String,
     pub current_block: u64,
@@ -595,6 +615,15 @@ pub enum InitUtxoStatus {
 #[serde(deny_unknown_fields, tag = "status", content = "details")]
 pub enum InitLightningStatus {
     Ok(LightningActivationResult),
+    Error(Json),
+    InProgress(Json),
+    UserActionRequired(Json),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, tag = "status", content = "details")]
+pub enum CreateNewAccountStatus {
+    Ok(HDAccountBalance),
     Error(Json),
     InProgress(Json),
     UserActionRequired(Json),

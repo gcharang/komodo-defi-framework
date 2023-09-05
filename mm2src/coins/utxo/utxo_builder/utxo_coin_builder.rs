@@ -152,7 +152,6 @@ pub trait UtxoFieldsWithIguanaSecretBuilder: UtxoCoinBuilderCommonOps {
             checksum_type: conf.checksum_type,
         };
         let key_pair = KeyPair::from_private(private).map_to_mm(|e| UtxoCoinBuildError::Internal(e.to_string()))?;
-        // Todo: is this needed?
         let priv_key_policy = PrivKeyPolicy::Iguana(key_pair);
         let addr_format = self.address_format()?;
         let my_address = Address {

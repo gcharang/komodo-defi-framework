@@ -2987,3 +2987,90 @@ pub async fn get_locked_amount(mm: &MarketMakerIt, coin: &str) -> GetLockedAmoun
     let response: RpcV2Response<GetLockedAmountResponse> = json::from_str(&request.1).unwrap();
     response.result
 }
+
+pub async fn get_new_address(
+    mm: &MarketMakerIt,
+    coin: &str,
+    account_id: u32,
+    chain: Option<Bip44Chain>,
+) -> GetNewAddressResponse {
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "get_new_address",
+        "mmrpc": "2.0",
+        "params": {
+            "coin": coin,
+            "account_id": account_id,
+            "chain": chain
+        }
+    });
+
+    let request = mm.rpc(&request).await.unwrap();
+    assert_eq!(request.0, StatusCode::OK, "'get_new_address' failed: {}", request.1);
+    let response: RpcV2Response<GetNewAddressResponse> = json::from_str(&request.1).unwrap();
+    response.result
+}
+
+pub async fn account_balance(
+    mm: &MarketMakerIt,
+    coin: &str,
+    account_index: u32,
+    chain: Bip44Chain,
+) -> HDAccountBalanceResponse {
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "account_balance",
+        "mmrpc": "2.0",
+        "params": {
+            "coin": coin,
+            "account_index": account_index,
+            "chain": chain
+        }
+    });
+
+    let request = mm.rpc(&request).await.unwrap();
+    assert_eq!(request.0, StatusCode::OK, "'account_balance' failed: {}", request.1);
+    let response: RpcV2Response<HDAccountBalanceResponse> = json::from_str(&request.1).unwrap();
+    response.result
+}
+
+pub async fn init_create_new_account(mm: &MarketMakerIt, coin: &str, account_id: Option<u32>) -> Json {
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "task::create_new_account::init",
+        "mmrpc": "2.0",
+        "params": {
+            "coin": coin,
+            "account_id": account_id
+        }
+    });
+
+    let request = mm.rpc(&request).await.unwrap();
+    assert_eq!(
+        request.0,
+        StatusCode::OK,
+        "'task::create_new_account::init' failed: {}",
+        request.1
+    );
+    json::from_str(&request.1).unwrap()
+}
+
+pub async fn create_new_account_status(mm: &MarketMakerIt, task_id: u64) -> Json {
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "task::create_new_account::status",
+        "mmrpc": "2.0",
+        "params": {
+            "task_id": task_id,
+        }
+    });
+
+    let request = mm.rpc(&request).await.unwrap();
+    assert_eq!(
+        request.0,
+        StatusCode::OK,
+        "'task::create_new_account::status' failed: {}",
+        request.1
+    );
+    json::from_str(&request.1).unwrap()
+}

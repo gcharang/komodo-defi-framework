@@ -405,7 +405,8 @@ pub mod common_impl {
             );
 
             // Create new HD account.
-            let mut new_account = coin.create_new_account(hd_wallet, xpub_extractor).await?;
+            // Todo: instead of account_id being none, we should use the account_id from the activation request. We should also add the address in the activation request.
+            let mut new_account = coin.create_new_account(hd_wallet, xpub_extractor, None).await?;
             let scan_new_addresses = matches!(
                 params.scan_policy,
                 EnableCoinScanPolicy::ScanIfNewWallet | EnableCoinScanPolicy::Scan

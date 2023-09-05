@@ -1082,11 +1082,12 @@ impl HDWalletCoinOps for QtumCoin {
         &self,
         hd_wallet: &'a Self::HDWallet,
         xpub_extractor: &XPubExtractor,
+        account_id: Option<u32>,
     ) -> MmResult<HDAccountMut<'a, Self::HDAccount>, NewAccountCreatingError>
     where
         XPubExtractor: HDXPubExtractor,
     {
-        utxo_common::create_new_account(self, hd_wallet, xpub_extractor).await
+        utxo_common::create_new_account(self, hd_wallet, xpub_extractor, account_id).await
     }
 
     async fn set_known_addresses_number(

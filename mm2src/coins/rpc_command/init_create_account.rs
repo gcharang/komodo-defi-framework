@@ -169,6 +169,7 @@ pub struct CreateNewAccountParams {
     // The max number of empty addresses in a row.
     // If transactions were sent to an address outside the `gap_limit`, they will not be identified.
     gap_limit: Option<u32>,
+    account_id: Option<u32>,
 }
 
 #[derive(Clone, Serialize)]
@@ -261,7 +262,9 @@ impl RpcTask for InitCreateAccountTask {
                 on_passphrase_request: CreateAccountAwaitingStatus::EnterTrezorPassphrase,
                 on_ready: CreateAccountInProgressStatus::RequestingAccountBalance,
             };
-            let xpub_extractor = CreateAccountXPubExtractor::new(ctx, task_handle, hw_statuses)?;
+            // Todo: revert the below 2 lines and use the HD wallet pubkey extractor instead, this is related to another todo
+            // let xpub_extractor = CreateAccountXPubExtractor::new(ctx, task_handle, hw_statuses)?;
+            let xpub_extractor = CreateAccountXPubExtractor::new_unchecked(ctx, task_handle, hw_statuses);
             coin.init_create_account_rpc(params, state, &xpub_extractor).await
         }
 
@@ -366,7 +369,9 @@ pub(crate) mod common_impl {
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
-        let mut new_account = coin.create_new_account(hd_wallet, xpub_extractor).await?;
+        let mut new_account = coin
+            .create_new_account(hd_wallet, xpub_extractor, params.account_id)
+            .await?;
         let account_index = new_account.account_id();
         let account_derivation_path = new_account.account_derivation_path();
 

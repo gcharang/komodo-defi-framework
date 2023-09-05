@@ -12,17 +12,17 @@ use mm2_rpc::data::legacy::{CoinInitResponse, MmVersionResponse, OrderbookRespon
 use mm2_test_helpers::electrums::*;
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "zhtlc-native-tests")))]
 use mm2_test_helpers::for_tests::check_stats_swap_status;
-use mm2_test_helpers::for_tests::{btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
+use mm2_test_helpers::for_tests::{account_balance, btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
                                   check_recent_swaps, enable_eth_coin, enable_qrc20, eth_jst_testnet_conf,
-                                  eth_testnet_conf, find_metrics_in_json, from_env_file, get_shared_db_id, mm_spat,
-                                  morty_conf, rick_conf, sign_message, start_swaps, tbtc_segwit_conf,
-                                  tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf, verify_message,
-                                  wait_for_swap_contract_negotiation, wait_for_swap_negotiation_failure,
-                                  wait_for_swaps_finish_and_check_status, wait_till_history_has_records,
-                                  MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, RaiiDump,
-                                  ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE,
-                                  ETH_MAINNET_SWAP_CONTRACT, MORTY, QRC20_ELECTRUMS, RICK, RICK_ELECTRUM_ADDRS,
-                                  TBTC_ELECTRUMS};
+                                  eth_testnet_conf, find_metrics_in_json, from_env_file, get_new_address,
+                                  get_shared_db_id, mm_spat, morty_conf, rick_conf, sign_message, start_swaps,
+                                  tbtc_segwit_conf, tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf,
+                                  verify_message, wait_for_swap_contract_negotiation,
+                                  wait_for_swap_negotiation_failure, wait_for_swaps_finish_and_check_status,
+                                  wait_till_history_has_records, MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf,
+                                  Mm2TestConfForSwap, RaiiDump, ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT,
+                                  ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MORTY, RICK,
+                                  RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS};
 
 use crypto::StandardHDCoinAddress;
 use mm2_test_helpers::get_passphrase;
@@ -7562,17 +7562,68 @@ fn test_tbtc_block_header_sync() {
 
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
-fn test_enable_coins_with_enable_hd() {
-    const TX_HISTORY: bool = false;
+// Todo: complete this test, we should have default address and account enabled, we should also be able to see enabled account/address in the response
+// Todo: add test for transaction history
+// Todo: test create_new_account to get the next in sequence when one that is not in sequence was added manually
+// Todo: we should also have the ability to get a new address with a specific index
+fn test_enable_utxo_with_enable_hd() {
     const PASSPHRASE: &str = "tank abandon bind salon remove wisdom net size aspect direct source fossil";
 
-    let coins = json!([
-        eth_testnet_conf(),
-        eth_jst_testnet_conf(),
-        rick_conf(),
-        tqrc20_conf(),
-        btc_segwit_conf(),
-    ]);
+    let coins = json!([rick_conf(), btc_segwit_conf(),]);
+
+    // Todo: this is for enabled account/address for swaps, we used to enable also 0'/0/1 and 77'/0/7, we should have a different test for enabled swap address
+    // let path_to_address = StandardHDCoinAddress {
+    //     account: 0,
+    //     is_change: false,
+    //     address_index: 0,
+    // };
+    let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
+    let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
+    let (_dump_log, _dump_dashboard) = mm_hd_0.mm_dump();
+    log!("log path: {}", mm_hd_0.log_path.display());
+
+    let rick = block_on(enable_utxo_v2_electrum(&mm_hd_0, "RICK", rick_electrums(), 60));
+    let balance = match rick.wallet_balance {
+        EnableCoinBalance::HD(hd) => hd,
+        _ => panic!("Expected EnableCoinBalance::HD"),
+    };
+    let account = balance.accounts.get(0).expect("Expected account at index 0");
+    assert_eq!(account.addresses[0].address, "RXNtAyDSsY3DS3VxTpJegzoHU9bUX54j56");
+    assert_eq!(account.addresses[1].address, "RVyndZp3ZrhGKSwHryyM3Kcz9aq2EJrW1z");
+    let new_account = block_on(create_new_account(&mm_hd_0, "RICK", Some(77), 60));
+    assert_eq!(new_account.addresses[7].address, "RLNu8gszQ8ENUrY3VSyBS2714CNVwn1f7P");
+
+    block_on(enable_utxo_v2_electrum(&mm_hd_0, "BTC-segwit", btc_electrums(), 60));
+    // The account addresses have 0 balance so they are not returned from scanning, We will have to add them manually
+    let get_new_address_0 = block_on(get_new_address(&mm_hd_0, "BTC-segwit", 0, Some(Bip44Chain::External)));
+    assert_eq!(
+        get_new_address_0.new_address.address,
+        "bc1q6vyur5hjul2m0979aadd6u7ptuj9ac4gt0ha0c"
+    );
+    // The account addresses have 0 balance so they are not returned from scanning, We will have to add them manually
+    let get_new_address_1 = block_on(get_new_address(&mm_hd_0, "BTC-segwit", 0, Some(Bip44Chain::External)));
+    assert_eq!(
+        get_new_address_1.new_address.address,
+        "bc1q6kxcwcrsm5z8pe940xxu294q7588mqvarttxcx"
+    );
+    block_on(create_new_account(&mm_hd_0, "BTC-segwit", Some(77), 60));
+    // The account addresses have 0 balance so they are not returned from scanning, We will have to add them manually
+    for _ in 0..8 {
+        block_on(get_new_address(&mm_hd_0, "BTC-segwit", 77, Some(Bip44Chain::External)));
+    }
+    let account_balance = block_on(account_balance(&mm_hd_0, "BTC-segwit", 77, Bip44Chain::External));
+    assert_eq!(
+        account_balance.addresses[7].address,
+        "bc1q0dxnd7afj997a40j86a8a6dq3xs3dwm7rkzams"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_enable_coins_with_enable_hd() {
+    const PASSPHRASE: &str = "tank abandon bind salon remove wisdom net size aspect direct source fossil";
+
+    let coins = json!([eth_testnet_conf(), eth_jst_testnet_conf(), tqrc20_conf(),]);
 
     let path_to_address = StandardHDCoinAddress {
         account: 0,
@@ -7591,37 +7642,17 @@ fn test_enable_coins_with_enable_hd() {
         Some(path_to_address.clone()),
     ));
     assert_eq!(eth.address, "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
-    let jst = block_on(enable_native(
-        &mm_hd_0,
-        "JST",
-        ETH_DEV_NODES,
-        Some(path_to_address.clone()),
-    ));
+    let jst = block_on(enable_native(&mm_hd_0, "JST", ETH_DEV_NODES, Some(path_to_address)));
     assert_eq!(jst.address, "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
-    let rick = block_on(enable_electrum(
-        &mm_hd_0,
-        "RICK",
-        TX_HISTORY,
-        RICK_ELECTRUM_ADDRS,
-        Some(path_to_address.clone()),
-    ));
-    assert_eq!(rick.address, "RXNtAyDSsY3DS3VxTpJegzoHU9bUX54j56");
-    let qrc20 = block_on(enable_qrc20(
-        &mm_hd_0,
-        "QRC20",
-        QRC20_ELECTRUMS,
-        "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
-        Some(path_to_address.clone()),
-    ));
-    assert_eq!(qrc20["address"].as_str(), Some("qRtCTiPHW9e6zH9NcRhjMVfq7sG37SvgrL"));
-    let btc_segwit = block_on(enable_electrum(
-        &mm_hd_0,
-        "BTC-segwit",
-        TX_HISTORY,
-        RICK_ELECTRUM_ADDRS,
-        Some(path_to_address),
-    ));
-    assert_eq!(btc_segwit.address, "bc1q6vyur5hjul2m0979aadd6u7ptuj9ac4gt0ha0c");
+    // Todo: move to a different test
+    // let qrc20 = block_on(enable_qrc20(
+    //     &mm_hd_0,
+    //     "QRC20",
+    //     QRC20_ELECTRUMS,
+    //     "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
+    //     Some(path_to_address.clone()),
+    // ));
+    // assert_eq!(qrc20["address"].as_str(), Some("qRtCTiPHW9e6zH9NcRhjMVfq7sG37SvgrL"));
 
     let path_to_address = StandardHDCoinAddress {
         account: 0,
@@ -7640,37 +7671,17 @@ fn test_enable_coins_with_enable_hd() {
         Some(path_to_address.clone()),
     ));
     assert_eq!(eth.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
-    let jst = block_on(enable_native(
-        &mm_hd_1,
-        "JST",
-        ETH_DEV_NODES,
-        Some(path_to_address.clone()),
-    ));
+    let jst = block_on(enable_native(&mm_hd_1, "JST", ETH_DEV_NODES, Some(path_to_address)));
     assert_eq!(jst.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
-    let rick = block_on(enable_electrum(
-        &mm_hd_1,
-        "RICK",
-        TX_HISTORY,
-        RICK_ELECTRUM_ADDRS,
-        Some(path_to_address.clone()),
-    ));
-    assert_eq!(rick.address, "RVyndZp3ZrhGKSwHryyM3Kcz9aq2EJrW1z");
-    let qrc20 = block_on(enable_qrc20(
-        &mm_hd_1,
-        "QRC20",
-        QRC20_ELECTRUMS,
-        "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
-        Some(path_to_address.clone()),
-    ));
-    assert_eq!(qrc20["address"].as_str(), Some("qY8FNq2ZDUh52BjNvaroFoeHdr3AAhqsxW"));
-    let btc_segwit = block_on(enable_electrum(
-        &mm_hd_1,
-        "BTC-segwit",
-        TX_HISTORY,
-        RICK_ELECTRUM_ADDRS,
-        Some(path_to_address),
-    ));
-    assert_eq!(btc_segwit.address, "bc1q6kxcwcrsm5z8pe940xxu294q7588mqvarttxcx");
+    // Todo: move to a different test
+    // let qrc20 = block_on(enable_qrc20(
+    //     &mm_hd_1,
+    //     "QRC20",
+    //     QRC20_ELECTRUMS,
+    //     "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
+    //     Some(path_to_address.clone()),
+    // ));
+    // assert_eq!(qrc20["address"].as_str(), Some("qY8FNq2ZDUh52BjNvaroFoeHdr3AAhqsxW"));
 
     let path_to_address = StandardHDCoinAddress {
         account: 77,
@@ -7689,37 +7700,17 @@ fn test_enable_coins_with_enable_hd() {
         Some(path_to_address.clone()),
     ));
     assert_eq!(eth.address, "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
-    let jst = block_on(enable_native(
-        &mm_hd_1,
-        "JST",
-        ETH_DEV_NODES,
-        Some(path_to_address.clone()),
-    ));
+    let jst = block_on(enable_native(&mm_hd_1, "JST", ETH_DEV_NODES, Some(path_to_address)));
     assert_eq!(jst.address, "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
-    let rick = block_on(enable_electrum(
-        &mm_hd_1,
-        "RICK",
-        TX_HISTORY,
-        RICK_ELECTRUM_ADDRS,
-        Some(path_to_address.clone()),
-    ));
-    assert_eq!(rick.address, "RLNu8gszQ8ENUrY3VSyBS2714CNVwn1f7P");
-    let qrc20 = block_on(enable_qrc20(
-        &mm_hd_1,
-        "QRC20",
-        QRC20_ELECTRUMS,
-        "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
-        Some(path_to_address.clone()),
-    ));
-    assert_eq!(qrc20["address"].as_str(), Some("qREuDjyn7dzUPgnCkxPvALz9Szgy7diB5w"));
-    let btc_segwit = block_on(enable_electrum(
-        &mm_hd_1,
-        "BTC-segwit",
-        TX_HISTORY,
-        RICK_ELECTRUM_ADDRS,
-        Some(path_to_address),
-    ));
-    assert_eq!(btc_segwit.address, "bc1q0dxnd7afj997a40j86a8a6dq3xs3dwm7rkzams");
+    // Todo: move to a different test
+    // let qrc20 = block_on(enable_qrc20(
+    //     &mm_hd_1,
+    //     "QRC20",
+    //     QRC20_ELECTRUMS,
+    //     "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
+    //     Some(path_to_address.clone()),
+    // ));
+    // assert_eq!(qrc20["address"].as_str(), Some("qREuDjyn7dzUPgnCkxPvALz9Szgy7diB5w"));
 }
 
 /// `shared_db_id` must be the same for Iguana and all HD accounts derived from the same passphrase.

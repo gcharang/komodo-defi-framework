@@ -313,6 +313,7 @@ pub trait HDWalletCoinOps {
         &self,
         hd_wallet: &'a Self::HDWallet,
         xpub_extractor: &XPubExtractor,
+        account_id: Option<u32>,
     ) -> MmResult<HDAccountMut<'a, Self::HDAccount>, NewAccountCreatingError>
     where
         XPubExtractor: HDXPubExtractor;
