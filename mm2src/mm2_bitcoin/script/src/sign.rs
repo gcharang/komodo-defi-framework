@@ -737,7 +737,7 @@ mod tests {
             shielded_spends: vec![],
             shielded_outputs: vec![],
             zcash: false,
-            posv: true, // TODO: Is this intended? In coins file for coin "tBLK", with this prefix 111, the field "pos" is true, not "posv". 
+            posv: true, // TODO: Is this intended? In coins file for coin "tBLK", with this prefix 111, the field "pos" is true, not "posv".
             str_d_zeel: None,
             hash_algo: SignerHashAlgo::DSHA256,
         };
