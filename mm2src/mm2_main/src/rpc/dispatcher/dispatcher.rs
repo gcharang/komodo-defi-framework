@@ -185,6 +185,7 @@ async fn dispatcher_v2(request: MmRpcRequest, ctx: MmArc) -> DispatcherResult<Re
         "remove_node_from_version_stat" => handle_mmrpc(ctx, request, remove_node_from_version_stat).await,
         "sign_message" => handle_mmrpc(ctx, request, sign_message).await,
         "sign_raw_transaction" => handle_mmrpc(ctx, request, sign_raw_transaction).await,
+        #[cfg(not(target_arch = "wasm32"))]
         "sign_eth_transaction" => handle_mmrpc(ctx, request, sign_eth_transaction).await,
         "start_simple_market_maker_bot" => handle_mmrpc(ctx, request, start_simple_market_maker_bot).await,
         "start_version_stat_collection" => handle_mmrpc(ctx, request, start_version_stat_collection).await,
