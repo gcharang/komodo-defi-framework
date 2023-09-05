@@ -12,6 +12,7 @@ use mm2_number::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+use std::ops::Deref;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address};
 use zcash_client_backend::wallet::{AccountId, SpendableNote, WalletTx};
@@ -122,7 +123,7 @@ impl WalletIndexedDb {
         let block = WalletDbBlocksTable {
             height: u32::from(block_height),
             hash: hash.to_vec(),
-            time: block_time,
+            time: block_time as u32,
             sapling_tree: encoded_tree,
             ticker: ticker.clone(),
         };
@@ -226,7 +227,7 @@ impl WalletIndexedDb {
     pub async fn put_received_note<T: ShieldedOutput>(
         &self,
         output: &T,
-        tx_ref: u32,
+        tx_ref: i64,
     ) -> MmResult<NoteId, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
@@ -239,7 +240,7 @@ impl WalletIndexedDb {
         let rcm = rcm.to_vec();
         let memo = output.memo().map(|m| m.as_slice().to_vec());
         let is_change = output.is_change();
-        let tx = tx_ref;
+        let tx = tx_ref as u32;
         let output_index = output.index() as u32;
         let nf_bytes = output.nullifier().map(|nf| nf.0.to_vec());
 
@@ -950,13 +951,72 @@ impl WalletRead for WalletIndexedDb {
 impl WalletWrite for WalletIndexedDb {
     async fn advance_by_block(
         &mut self,
-        _block: &PrunedBlock,
-        _updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
+        block: &PrunedBlock,
+        updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
-        todo!()
+        let selfi = self.deref();
+        let insert = selfi
+            .insert_block(
+                block.block_height,
+                block.block_hash,
+                block.block_time,
+                block.commitment_tree,
+            )
+            .await?;
+
+        let mut new_witnesses = vec![];
+        for tx in block.transactions {
+            let tx_row = selfi.put_tx_meta(tx, block.block_height).await?;
+
+            // Mark notes as spent and remove them from the scanning cache
+            for spend in &tx.shielded_spends {
+                selfi.mark_spent(tx_row, &spend.nf).await?;
+            }
+
+            for output in &tx.shielded_outputs {
+                let received_note_id = selfi.put_received_note(output, tx_row).await?;
+
+                // Save witness for note.
+                new_witnesses.push((received_note_id, output.witness.clone()));
+            }
+        }
+
+        // Insert current new_witnesses into the database.
+        for (received_note_id, witness) in updated_witnesses.iter().chain(new_witnesses.iter()) {
+            if let NoteId::ReceivedNoteId(rnid) = *received_note_id {
+                selfi.insert_witness(rnid, witness, block.block_height).await?;
+            } else {
+                return MmError::err(ZcoinStorageError::InvalidNoteId);
+            }
+        }
+
+        // Prune the stored witnesses (we only expect rollbacks of at most 100 blocks).
+        let below_height = if block.block_height < BlockHeight::from(100) {
+            BlockHeight::from(0)
+        } else {
+            block.block_height - 100
+        };
+        selfi.prune_witnesses(below_height).await?;
+
+        // Update now-expired transactions that didn't get mined.
+        selfi.update_expired_notes(block.block_height).await?;
+
+        Ok(new_witnesses)
     }
 
     async fn store_received_tx(&mut self, _received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
+        //        let selfi = self.deref();
+        //        let tx_ref = selfi.put_tx_data(received_tx.tx, None)?;
+        //
+        //        for output in received_tx.outputs {
+        //            if output.outgoing {
+        //                selfi.put_sent_note(output, tx_ref).await?;
+        //            } else {
+        //                selfi.put_received_note(output, tx_ref).await?;
+        //            }
+        //        }
+        //
+        //        Ok(tx_ref)
         todo!()
     }
 
