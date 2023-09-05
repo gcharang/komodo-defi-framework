@@ -7854,6 +7854,7 @@ fn test_sign_raw_transaction_rick() {
 
     let response = block_on(test_sign_raw_transaction_rpc_helper(
         &mm_bob,
+        StatusCode::OK,
         &json!({
             "coin": "RICK",
             "tx_hex": "0400008085202f89015794e93fbec895035c5321ad5b8b3f9212c25694d9cc67de2093114ab4bd69530000000000ffffffff01605af405000000001976a914b506088aa2a3b4bb1da3a29bf00ce1a550ea1df988ac00000000c1d31e000000000000000000000000",
@@ -7935,6 +7936,7 @@ fn test_sign_raw_transaction_p2wpkh() {
 
     let response = block_on(test_sign_raw_transaction_rpc_helper(
         &mm_bob,
+        StatusCode::OK,
         &json!({
             "coin": "tBTC",
             "tx_hex": "02000000010d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb20100000000fdffffff01f40100000000000016001488accd2145b7232b958db5cdf09336ad619541e200000000",
@@ -7947,4 +7949,28 @@ fn test_sign_raw_transaction_p2wpkh() {
         }),
     ));
     assert_eq!(response["result"]["tx_hex"], Json::from("020000000001010d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb20100000000fdffffff01f40100000000000016001488accd2145b7232b958db5cdf09336ad619541e2024730440220156d185b3fb21725c040b7ddcf84bf862b46f079bb66067eef1941023b8451e602204d877ac51b74932dea34c20874fa8112b3636eb506ac429548f7c05fe54e3faf0121039ad38f67dbc22cf5a6bd48b26920d9fac71681836faf80a9a678ddbaa0fe92f800000000"));
+
+    let response = block_on(test_sign_raw_transaction_rpc_helper(
+        &mm_bob,
+        StatusCode::BAD_REQUEST,
+        &json!({
+            "coin": "tBTC",
+            "tx_hex": "02000000020d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb20100000000fdffffff257c76e76a42c6833d137230ce94c0300178f3f84bd1ef2d1f8fa53d062fc9960000000000fdffffff01f40100000000000016001488accd2145b7232b958db5cdf09336ad619541e200000000",
+            "prev_txns": [{
+                "tx_hash": "0d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb2",
+                "index": 1,
+                "script_pub_key": "001449e3b6b4684c4d4a914b29411af51843c59bfff0",
+                "amount": 0.00001000,
+            }, {
+                "tx_hash": "96c92f063da58f1f2defd14bf8f3780130c094ce3072133d83c6426ae7767c25",
+                "index": 0,
+                "script_pub_key": "00146538caea0d5579f5b9f4e19ddbe2d6c663f3ea56",
+                "amount": 0.00002306,
+            }]
+        }),
+    ));
+    assert_eq!(
+        response["error"],
+        Json::from("Invalid param: spends are from same address only")
+    );
 }

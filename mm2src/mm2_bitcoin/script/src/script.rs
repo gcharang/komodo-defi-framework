@@ -73,7 +73,7 @@ impl ScriptAddress {
 }
 
 /// Serialized script, used inside transaction inputs and outputs.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Script {
     data: Bytes,
 }

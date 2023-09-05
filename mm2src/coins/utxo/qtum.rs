@@ -35,8 +35,7 @@ use crate::{eth, CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, CoinWithD
             ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput,
             ValidateWatcherSpendInput, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward,
             WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
-            WatcherValidateTakerFeeInput, WithdrawFut, WithdrawSenderAddress, 
-            RawTransactionError, SignEthTransactionRequest, SignEthTransactionResult};
+            WatcherValidateTakerFeeInput, WithdrawFut, WithdrawSenderAddress};
 use common::executor::{AbortableSystem, AbortedError};
 use crypto::Bip44Chain;
 use ethereum_types::H160;
@@ -860,8 +859,8 @@ impl MarketCoinOps for QtumCoin {
     async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult {
         utxo_common::sign_raw_tx(self, args).await
     }
-    
-    /// Stub for sign eth tx 
+
+    /// Stub for sign eth tx
     #[inline(always)]
     async fn sign_eth_tx(&self, _args: &SignEthTransactionRequest) -> SignEthTransactionResult {
         MmError::err(RawTransactionError::NotImplemented {

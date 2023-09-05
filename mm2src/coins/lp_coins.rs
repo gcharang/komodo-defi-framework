@@ -368,8 +368,8 @@ pub enum RawTransactionError {
 impl HttpStatusCode for RawTransactionError {
     fn status_code(&self) -> StatusCode {
         match self {
-            RawTransactionError::Transport(_) 
-            | RawTransactionError::InternalError(_) 
+            RawTransactionError::Transport(_)
+            | RawTransactionError::InternalError(_)
             | RawTransactionError::SigningError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             RawTransactionError::NoSuchCoin { .. }
             | RawTransactionError::InvalidHashError(_)
@@ -451,28 +451,28 @@ pub struct PrevTxns {
     pub amount: BigDecimal,
 }
 
-/// RPC request with unsigned utxo transaction and params for signing 
+/// RPC request with unsigned utxo transaction and params for signing
 #[derive(Clone, Debug, Deserialize)]
 pub struct SignRawTransactionRequest {
     /// coin ticker name
     pub coin: String,
     /// unsigned utxo transaction in hex
     pub tx_hex: String,
-    /// optional data of previous transactions referred by unsigned transaction inputs 
+    /// optional data of previous transactions referred by unsigned transaction inputs
     pub prev_txns: Option<Vec<PrevTxns>>,
     // TODO: add if needed:
     // pub sighash_type: Option<String>, optional signature hash type, one of values: NONE, SINGLE, ALL, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY, ALL|ANYONECANPAY (if not set 'ALL' is used)
-    // pub branch_id: Option<u32>, zcash or komodo optional consensus branch id, used for signing transactions ahead of current height 
+    // pub branch_id: Option<u32>, zcash or komodo optional consensus branch id, used for signing transactions ahead of current height
 }
 
-/// RPC response with signed utxo transaction 
+/// RPC response with signed utxo transaction
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SignRawTransactionResponse {
     /// Raw bytes of signed transaction in hexadecimal string which is the response from the sign_raw_transaction request
     pub tx_hex: BytesJson,
 }
 
-/// RPC request with unsigned eth transaction and params for signing 
+/// RPC request with unsigned eth transaction and params for signing
 #[derive(Clone, Debug, Deserialize)]
 pub struct SignEthTransactionRequest {
     /// Coin ticker name
@@ -487,14 +487,12 @@ pub struct SignEthTransactionRequest {
     gas_limit: U256,
 }
 
-/// RPC response with signed eth transaction 
+/// RPC response with signed eth transaction
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SignEthTransactionResponse {
     /// Raw bytes of signed transaction in hexadecimal string which is the response from the sign_eth_transaction request
     pub tx_hex: BytesJson,
 }
-
-
 
 #[derive(Debug, Deserialize)]
 pub struct MyAddressReq {

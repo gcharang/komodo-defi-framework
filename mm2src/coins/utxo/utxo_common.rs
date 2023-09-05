@@ -36,7 +36,7 @@ use chain::constants::SEQUENCE_FINAL;
 use chain::{OutPoint, TransactionInput, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
-use common::log::{error, warn, debug};
+use common::log::{debug, error, warn};
 use crypto::{Bip32DerPathOps, Bip44Chain, RpcDerivationPath, StandardHDPath, StandardHDPathError};
 use futures::compat::Future01CompatExt;
 use futures::future::{FutureExt, TryFutureExt};
@@ -757,7 +757,6 @@ pub fn tx_size_in_v_bytes(from_addr_format: &UtxoAddressFormat, tx: &UtxoTx) -> 
 
 /// Implements building utxo script pubkey for an address by the address format
 pub fn get_script_for_address(coin: &UtxoCoinFields, addr: &Address) -> Script {
-
     match addr.addr_format {
         UtxoAddressFormat::Standard => {
             if addr.prefix == coin.conf.pub_addr_prefix && addr.t_addr_prefix == coin.conf.pub_t_addr_prefix {
@@ -769,13 +768,17 @@ pub fn get_script_for_address(coin: &UtxoCoinFields, addr: &Address) -> Script {
         UtxoAddressFormat::Segwit => {
             return Builder::build_p2witness(&addr.hash);
         },
-        UtxoAddressFormat::CashAddress { network: _, pub_addr_prefix, p2sh_addr_prefix } => {
+        UtxoAddressFormat::CashAddress {
+            network: _,
+            pub_addr_prefix,
+            p2sh_addr_prefix,
+        } => {
             if pub_addr_prefix == coin.conf.pub_addr_prefix {
                 return Builder::build_p2pkh(&addr.hash);
             } else if p2sh_addr_prefix == coin.conf.p2sh_addr_prefix {
                 return Builder::build_p2sh(&addr.hash);
-            }        
-        }
+            }
+        },
     }
     Builder::default().into_script()
 }
@@ -3046,17 +3049,15 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
         hex::decode(args.tx_hex.as_bytes()).map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
     let tx: UtxoTx = deserialize(tx_bytes.as_slice()).map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
 
-    let mut prev_script = None;
+    let mut prev_script = HashSet::new();
     let mut unspents = vec![];
 
     if let Some(prev_txns) = &args.prev_txns {
         for prev_utxo in prev_txns.iter() {
-            if prev_script.is_none() {
-                // get first previous utxo script assuming all are the same
-                let script_bytes = hex::decode(prev_utxo.clone().script_pub_key)
-                    .map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
-                prev_script = Some(Script::from(script_bytes));
-            }
+            // get first previous utxo script assuming all are the same
+            let script_bytes = hex::decode(prev_utxo.clone().script_pub_key)
+                .map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
+            prev_script.insert(Script::from(script_bytes));
 
             let prev_hash = hex::decode(prev_utxo.tx_hash.as_bytes())
                 .map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
@@ -3088,15 +3089,13 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
     if !inputs_to_load.is_empty() {
         let (loaded_script, loaded_unspents) = get_unspents_for_inputs(coin.as_ref(), &inputs_to_load).await?;
         unspents.extend(loaded_unspents.into_iter());
-        prev_script = if prev_script.is_none() {
-            loaded_script
-        } else {
-            prev_script
-        };
+        if let Some(loaded_script) = loaded_script {
+            prev_script.insert(loaded_script);
+        }
     }
 
     // TODO: use zeroise for privkey
-    let key_pair = coin.as_ref().priv_key_policy.key_pair_or_err().unwrap();
+    let key_pair = coin.as_ref().priv_key_policy.activated_key_or_err().unwrap();
 
     let mut input_signer_incomplete = TransactionInputSigner::from(tx);
     input_signer_incomplete.consensus_branch_id = coin.as_ref().conf.consensus_branch_id;
@@ -3110,8 +3109,19 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
         .map_err(|e| RawTransactionError::InvalidParam(e.to_string()))?;
     debug!("Unsigned tx = {:?} for signing", unsigned);
 
-    let prev_script = prev_script
-        .ok_or_else(|| RawTransactionError::NonExistentPrevOutputError(String::from("no previous script")))?;
+    let prev_script = match prev_script.len() {
+        0 => {
+            return MmError::err(RawTransactionError::NonExistentPrevOutputError(String::from(
+                "no previous script",
+            )))
+        },
+        1 => prev_script.into_iter().next().unwrap(),
+        _ => {
+            return MmError::err(RawTransactionError::InvalidParam(String::from(
+                "spends are from same address only",
+            )))
+        },
+    };
     let signature_version = match prev_script.is_pay_to_witness_key_hash() {
         true => SignatureVersion::WitnessV0,
         _ => coin.as_ref().conf.signature_version,

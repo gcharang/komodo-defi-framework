@@ -3115,7 +3115,7 @@ fn test_parse_env_file() {
 }
 
 // test helper to call sign_raw_transaction rpc with coin param
-pub async fn test_sign_raw_transaction_rpc_helper(mm: &MarketMakerIt, json_params: &Json) -> Json {
+pub async fn test_sign_raw_transaction_rpc_helper(mm: &MarketMakerIt, ret: StatusCode, json_params: &Json) -> Json {
     let response = mm
         .rpc(&json!({
             "userpass": mm.userpass,
@@ -3127,9 +3127,8 @@ pub async fn test_sign_raw_transaction_rpc_helper(mm: &MarketMakerIt, json_param
         .await
         .expect("sign_raw_transaction rpc result okay");
     assert_eq!(
-        response.0,
-        StatusCode::OK,
-        "'sign_raw_transaction' failed: {}",
+        response.0, ret,
+        "'sign_raw_transaction' unexpected return code: {}",
         response.1
     );
     json::from_str(&response.1).expect("response to json conversion must be okay")

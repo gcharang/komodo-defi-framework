@@ -194,10 +194,7 @@ async fn enable_eth(mm: &MarketMakerIt, platform_coin: &str, nodes: &[&str]) -> 
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn call_sign_eth_transaction(
-    mm: &MarketMakerIt,
-    platform_coin: &str,
-) -> Json {
+async fn call_sign_eth_transaction(mm: &MarketMakerIt, platform_coin: &str) -> Json {
     let signed_tx = mm
         .rpc(&json!({
         "userpass": mm.userpass,

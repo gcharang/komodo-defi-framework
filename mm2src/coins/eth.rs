@@ -89,9 +89,10 @@ use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut,
             PrivKeyBuildPolicy, PrivKeyPolicyNotAllowed, RawTransactionError, RawTransactionFut,
             RawTransactionRequest, RawTransactionRes, RawTransactionResult, RefundError, RefundPaymentArgs,
             RefundResult, RewardTarget, RpcClientType, RpcTransportEventHandler, RpcTransportEventHandlerShared,
-            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignRawTransactionRequest,
-            SignRawTransactionResult, SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin,
-            TradeFee, TradePreimageError, TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction,
+            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignEthTransactionRequest,
+            SignEthTransactionResponse, SignEthTransactionResult, SignRawTransactionRequest, SignRawTransactionResult,
+            SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee,
+            TradePreimageError, TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction,
             TransactionDetails, TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
             UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
             ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, VerificationError,
@@ -99,7 +100,7 @@ use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut,
             WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
             WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest, WithdrawResult, EARLY_CONFIRMATION_ERR_LOG,
             INVALID_CONTRACT_ADDRESS_ERR_LOG, INVALID_PAYMENT_STATE_ERR_LOG, INVALID_RECEIVER_ERR_LOG,
-            INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG, SignEthTransactionRequest, SignEthTransactionResponse, SignEthTransactionResult};
+            INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG};
 pub use rlp;
 
 #[cfg(test)] mod eth_tests;
@@ -2170,7 +2171,7 @@ impl MarketCoinOps for EthCoin {
         )
     }
 
-    /// Stub for sign utxo tx 
+    /// Stub for sign utxo tx
     #[inline(always)]
     async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
         MmError::err(RawTransactionError::NotImplemented {
@@ -2178,27 +2179,38 @@ impl MarketCoinOps for EthCoin {
         })
     }
 
-    /// Stub for sign eth tx 
+    /// Stub for sign eth tx
     #[inline(always)]
     async fn sign_eth_tx(&self, args: &SignEthTransactionRequest) -> SignEthTransactionResult {
-        let ctx = MmArc::from_weak(&self.ctx).ok_or("!ctx")
+        let ctx = MmArc::from_weak(&self.ctx)
+            .ok_or("!ctx")
             .map_to_mm(|err| RawTransactionError::TransactionError(err.to_string()))?;
         let coin = self.clone();
-        let value = if let Some(value) = args.value { value } else { U256::from(0) };
-
-        let action = if let Some(to) = &args.to { 
-            Action::Call(
-                Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?
-            ) 
-        } else { 
-            Action::Create 
+        let value = if let Some(value) = args.value {
+            value
+        } else {
+            U256::from(0)
         };
-        let data = if let Some(data) = &args.data { data.clone() } else { vec![] };
+
+        let action = if let Some(to) = &args.to {
+            Action::Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
+        } else {
+            Action::Create
+        };
+        let data = if let Some(data) = &args.data {
+            data.clone()
+        } else {
+            vec![]
+        };
         let gas_limit = args.gas_limit;
         match coin.priv_key_policy {
             // TODO: use zeroise for privkey
-            EthPrivKeyPolicy::KeyPair(ref key_pair) => {
-                return sign_transaction_with_keypair(ctx, &coin, key_pair, value, action, data, gas_limit).await
+            EthPrivKeyPolicy::HDWallet {
+                activated_key: ref key_pair,
+                ..
+            } => {
+                return sign_transaction_with_keypair(ctx, &coin, key_pair, value, action, data, gas_limit)
+                    .await
                     .map(|(signed_tx, _)| SignEthTransactionResponse {
                         tx_hex: signed_tx.tx_hex().into(),
                     })
@@ -2206,6 +2218,9 @@ impl MarketCoinOps for EthCoin {
             },
             #[cfg(target_arch = "wasm32")]
             EthPrivKeyPolicy::Metamask(_) => {
+                unimplemented!()
+            },
+            _ => {
                 unimplemented!()
             },
         }
@@ -2482,7 +2497,10 @@ async fn sign_transaction_with_keypair(
         data,
     };
 
-    Ok((tx.sign(key_pair.secret(), coin.chain_id), web3_instances_with_latest_nonce))
+    Ok((
+        tx.sign(key_pair.secret(), coin.chain_id),
+        web3_instances_with_latest_nonce,
+    ))
 }
 
 async fn sign_and_send_transaction_with_keypair(
@@ -2500,7 +2518,8 @@ async fn sign_and_send_transaction_with_keypair(
             &[&"sign-and-send"]
         };
     }
-    let (signed, web3_instances_with_latest_nonce) = sign_transaction_with_keypair(ctx, coin, key_pair, value, action, data, gas).await?;
+    let (signed, web3_instances_with_latest_nonce) =
+        sign_transaction_with_keypair(ctx, coin, key_pair, value, action, data, gas).await?;
     let bytes = Bytes(rlp::encode(&signed).to_vec());
     status.status(tags!(), "send_raw_transaction…");
 
@@ -2510,7 +2529,8 @@ async fn sign_and_send_transaction_with_keypair(
     try_tx_s!(select_ok(futures).await.map_err(|e| ERRL!("{}", e)), signed);
 
     status.status(tags!(), "get_addr_nonce…");
-    coin.wait_for_addr_nonce_increase(coin.my_address, signed.transaction.unsigned.nonce).await;
+    coin.wait_for_addr_nonce_increase(coin.my_address, signed.transaction.unsigned.nonce)
+        .await;
     Ok(signed)
 }
 

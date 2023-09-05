@@ -682,6 +682,7 @@ impl SwapOpsV2 for UtxoStandardCoin {
     }
 }
 
+#[async_trait]
 impl MarketCoinOps for UtxoStandardCoin {
     fn ticker(&self) -> &str { &self.utxo_arc.conf.ticker }
 
@@ -724,8 +725,8 @@ impl MarketCoinOps for UtxoStandardCoin {
     async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult {
         utxo_common::sign_raw_tx(self, args).await
     }
-    
-    /// Stub for sign eth tx 
+
+    /// Stub for sign eth tx
     #[inline(always)]
     async fn sign_eth_tx(&self, _args: &SignEthTransactionRequest) -> SignEthTransactionResult {
         MmError::err(RawTransactionError::NotImplemented {

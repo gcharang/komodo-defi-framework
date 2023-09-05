@@ -450,7 +450,7 @@ impl MarketCoinOps for SolanaCoin {
         })
     }
 
-    /// Stub for sign eth tx 
+    /// Stub for sign eth tx
     #[inline(always)]
     async fn sign_eth_tx(&self, _args: &SignEthTransactionRequest) -> SignEthTransactionResult {
         MmError::err(RawTransactionError::NotImplemented {
