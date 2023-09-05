@@ -48,10 +48,10 @@ pub mod tables {
     }
 
     impl TableSignature for SwapLockTable {
-        fn table_name() -> &'static str { "swap_lock" }
+        const TABLE_NAME: &'static str = "swap_lock";
 
         fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-            on_upgrade_swap_table_by_uuid_v1(upgrader, old_version, new_version, Self::table_name())
+            on_upgrade_swap_table_by_uuid_v1(upgrader, old_version, new_version, Self::TABLE_NAME)
         }
     }
 
@@ -62,10 +62,10 @@ pub mod tables {
     }
 
     impl TableSignature for SavedSwapTable {
-        fn table_name() -> &'static str { "saved_swap" }
+        const TABLE_NAME: &'static str = "saved_swap";
 
         fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-            on_upgrade_swap_table_by_uuid_v1(upgrader, old_version, new_version, Self::table_name())
+            on_upgrade_swap_table_by_uuid_v1(upgrader, old_version, new_version, Self::TABLE_NAME)
         }
     }
 
@@ -81,11 +81,11 @@ pub mod tables {
     }
 
     impl TableSignature for MySwapsFiltersTable {
-        fn table_name() -> &'static str { "my_swaps" }
+        const TABLE_NAME: &'static str = "my_swaps";
 
         fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
             if let (0, 1) = (old_version, new_version) {
-                let table = upgrader.create_table(Self::table_name())?;
+                let table = upgrader.create_table(Self::TABLE_NAME)?;
                 table.create_index("uuid", true)?;
                 table.create_index("started_at", false)?;
                 table.create_multi_index("with_my_coin", &["my_coin", "started_at"], false)?;

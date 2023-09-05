@@ -34,11 +34,11 @@ impl BlockDbTable {
 }
 
 impl TableSignature for BlockDbTable {
-    fn table_name() -> &'static str { "compactblocks" }
+    const TABLE_NAME: &'static str = "compactblocks";
 
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
         if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::table_name())?;
+            let table = upgrader.create_table(Self::TABLE_NAME)?;
             table.create_multi_index(Self::TICKER_HEIGHT_INDEX, &["ticker", "height"], true)?;
             table.create_index("ticker", false)?;
             table.create_index("height", false)?;

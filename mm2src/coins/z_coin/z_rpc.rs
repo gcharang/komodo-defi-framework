@@ -676,8 +676,7 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
 
         if let Some(tx_id) = sync_handle.watch_for_tx {
             let walletdb = &sync_handle.wallet_db;
-            let is_tx_imported = walletdb.is_tx_imported(tx_id).await;
-            if !is_tx_imported {
+            if !walletdb.is_tx_imported(tx_id).await {
                 info!("Tx {} is not imported yet", tx_id);
                 Timer::sleep(10.).await;
                 continue;
