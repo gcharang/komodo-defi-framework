@@ -47,9 +47,7 @@ impl TableSignature for BlockDbTable {
     }
 }
 
-pub struct BlockDbInner {
-    pub inner: IndexedDb,
-}
+pub struct BlockDbInner(IndexedDb);
 
 #[async_trait]
 impl DbInstance for BlockDbInner {
@@ -62,12 +60,12 @@ impl DbInstance for BlockDbInner {
             .build()
             .await?;
 
-        Ok(Self { inner })
+        Ok(Self(inner))
     }
 }
 
 impl BlockDbInner {
-    pub fn get_inner(&self) -> &IndexedDb { &self.inner }
+    pub fn get_inner(&self) -> &IndexedDb { &self.0 }
 }
 
 impl BlockDbImpl {
@@ -85,6 +83,7 @@ impl BlockDbImpl {
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
     }
 
+    /// Get latest block of the current active ZCOIN.
     pub async fn get_latest_block(&self) -> MmResult<u32, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
@@ -92,7 +91,7 @@ impl BlockDbImpl {
         let block_db = db_transaction.table::<BlockDbTable>().await?;
         let maybe_height = block_db
             .cursor_builder()
-            .only("ticker", ticker.clone())?
+            .only("ticker", &ticker)?
             .bound("height", 0u32, u32::MAX)
             .reverse()
             .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
@@ -115,29 +114,28 @@ impl BlockDbImpl {
         Ok(height)
     }
 
+    /// Insert new block to BlockDbTable given the provided data.
     pub async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> MmResult<usize, ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
 
-        Ok(block_db
-            .add_item_or_ignore_by_unique_multi_index(
-                MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
-                    .with_value(&ticker)?
-                    .with_value(BeBigUint::from(height))?,
-                &BlockDbTable {
-                    height,
-                    data: cb_bytes,
-                    ticker: ticker.clone(),
-                },
-            )
-            .await?
-            .item_id() as usize)
+        let indexes = MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
+            .with_value(&ticker)?
+            .with_value(BeBigUint::from(height))?;
+        let block = BlockDbTable {
+            height,
+            data: cb_bytes,
+            ticker,
+        };
+
+        Ok(block_db.replace_item_by_unique_multi_index(indexes, &block).await? as usize)
     }
 
+    /// Asynchronously rewinds the storage to a specified block height, effectively
+    /// removing data beyond the specified height from the storage.    
     pub async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
-        let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
@@ -146,7 +144,7 @@ impl BlockDbImpl {
         let height_to_remove_from = height + 1;
         for i in height_to_remove_from..get_latest_block {
             let index_keys = MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
-                .with_value(&ticker)?
+                .with_value(&self.ticker)?
                 .with_value(BeBigUint::from(i))?;
 
             block_db.delete_item_by_unique_multi_index(index_keys).await?;
@@ -155,12 +153,13 @@ impl BlockDbImpl {
         Ok((height_to_remove_from + get_latest_block) as usize)
     }
 
+    /// Queries and retrieves a list of `CompactBlockRow` records from the database, starting
+    /// from a specified block height and optionally limited by a maximum number of blocks.
     pub async fn query_blocks_by_limit(
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
     ) -> MmResult<Vec<CompactBlockRow>, ZcoinStorageError> {
-        let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
@@ -168,7 +167,7 @@ impl BlockDbImpl {
         // Fetch CompactBlocks block_db are needed for scanning.
         let mut maybe_blocks = block_db
             .cursor_builder()
-            .only("ticker", ticker.clone())?
+            .only("ticker", &self.ticker)?
             .bound("block", u32::from(from_height), limit.unwrap_or(u32::MAX))
             .open_cursor("ticker")
             .await?;
@@ -190,6 +189,10 @@ impl BlockDbImpl {
         Ok(blocks_to_scan)
     }
 
+    /// Processes blockchain blocks with a specified mode of operation, such as validation or scanning.
+    ///
+    /// Processes blocks based on the provided `BlockProcessingMode` and other parameters,
+    /// which may include a starting block height, validation criteria, and a processing limit.
     #[allow(unused)]
     pub(crate) async fn process_blocks_with_mode(
         &self,

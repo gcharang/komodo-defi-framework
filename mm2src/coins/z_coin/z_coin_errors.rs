@@ -281,6 +281,8 @@ pub enum SpendableNotesError {
 #[derive(Debug, Display)]
 pub enum ZCoinBalanceError {}
 
+/// The `ValidateBlocksError` enum encapsulates different types of errors that may occur
+/// during the validation and scanning process of zcoin blocks.
 #[derive(Debug, Display)]
 pub enum ValidateBlocksError {
     #[display(fmt = "Chain Invalid occurred at height: {height:?} — with error {err:?}")]
@@ -339,6 +341,8 @@ impl From<SqliteClientError> for ValidateBlocksError {
     }
 }
 
+/// The `ZcoinStorageError` enum encapsulates different types of errors that may occur
+/// when interacting with storage operations specific to the Zcoin blockchain.
 #[allow(unused)]
 #[derive(Debug, Display)]
 pub enum ZcoinStorageError {

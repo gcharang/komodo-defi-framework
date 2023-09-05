@@ -28,6 +28,7 @@ cfg_native!(
     use http::Uri;
     use prost::Message;
     use rpc::v1::types::H256 as H256Json;
+    use std::convert::TryFrom;
     use std::pin::Pin;
     use std::str::FromStr;
     use tonic::transport::{Channel, ClientTlsConfig};
@@ -124,12 +125,15 @@ impl ZRpcOps for LightRpcClient {
             .await
             .map_to_mm(UpdateBlocksCacheErr::GrpcError)?
             .into_inner();
-        //         without Pin method get_mut is not found in current scope
+        // without Pin method get_mut is not found in current scope
         while let Some(block) = Pin::new(&mut response).get_mut().message().await? {
             debug!("Got block {:?}", block);
-            db.insert_block(block.height as u32, block.encode_to_vec())
+            let height = u32::try_from(block.height)
+                .map_err(|_| UpdateBlocksCacheErr::InternalError("Block height too large".to_string()))?;
+            db.insert_block(height, block.encode_to_vec())
                 .await
                 .map_err(|err| UpdateBlocksCacheErr::ZcashDBError(err.to_string()))?;
+
             handler.notify_blocks_cache_status(block.height, last_block);
         }
         Ok(())
