@@ -5,7 +5,7 @@ use crate::qrc20::{contract_addr_into_rpc_format, ContractCallOutput, GenerateQr
 use crate::utxo::qtum::{QtumBasedCoin, QtumCoin, QtumDelegationOps, QtumDelegationRequest, QtumStakingInfosDetails};
 use crate::utxo::rpc_clients::UtxoRpcClientEnum;
 use crate::utxo::utxo_common::{big_decimal_from_sat_unsigned, UtxoTxBuilder};
-use crate::utxo::{qtum, utxo_common, Address, GetUtxoListOps, UtxoCommonOps};
+use crate::utxo::{output_script, qtum, utxo_common, Address, GetUtxoListOps, UtxoCommonOps};
 use crate::utxo::{PrivKeyPolicyNotAllowed, UTXO_LOCK};
 use crate::{DelegationError, DelegationFut, DelegationResult, MarketCoinOps, StakingInfos, StakingInfosError,
             StakingInfosFut, StakingInfosResult, TransactionDetails, TransactionType};
@@ -20,7 +20,6 @@ use keys::{AddressHashEnum, Signature};
 use mm2_err_handle::prelude::*;
 use mm2_number::bigdecimal::{BigDecimal, Zero};
 use rpc::v1::types::ToTxHash;
-use script::Builder as ScriptBuilder;
 use serialization::serialize;
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -235,8 +234,14 @@ impl QtumCoin {
         if let Some(staking_addr) = self.am_i_currently_staking().await? {
             return MmError::err(DelegationError::AlreadyDelegating(staking_addr));
         }
-        let to_addr =
-            Address::from_str(request.address.as_str()).map_to_mm(|e| DelegationError::AddressError(e.to_string()))?;
+        let to_addr = Address::from_legacyaddress(
+            request.address.as_str(),
+            self.as_ref().conf.pub_addr_prefix,
+            self.as_ref().conf.pub_t_addr_prefix,
+            self.as_ref().conf.p2sh_addr_prefix,
+            self.as_ref().conf.p2sh_t_addr_prefix,
+        )
+        .map_to_mm(DelegationError::AddressError)?;
         let fee = request.fee.unwrap_or(QTUM_DELEGATION_STANDARD_FEE);
         let _utxo_lock = UTXO_LOCK.lock();
         let staker_address_hex = qtum::contract_addr_from_utxo_addr(to_addr.clone())?;
@@ -290,7 +295,7 @@ impl QtumCoin {
                 DelegationError::from_generate_tx_error(gen_tx_error, self.ticker().to_string(), utxo.decimals)
             })?;
 
-        let prev_script = ScriptBuilder::build_p2pkh(&my_address.hash);
+        let prev_script = output_script(my_address);
         let signed = sign_tx(
             unsigned,
             key_pair,

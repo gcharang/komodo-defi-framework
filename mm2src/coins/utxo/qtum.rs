@@ -111,16 +111,20 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
 
     /// Try to parse address from either wallet (UTXO) format or contract format.
     fn utxo_address_from_any_format(&self, from: &str) -> Result<Address, String> {
-        let utxo_err = match Address::from_str(from) {
+        let utxo_err = match Address::from_legacyaddress(
+            from,
+            self.as_ref().conf.pub_addr_prefix,
+            self.as_ref().conf.pub_t_addr_prefix,
+            self.as_ref().conf.p2sh_addr_prefix,
+            self.as_ref().conf.p2sh_t_addr_prefix,
+        ) {
             Ok(addr) => {
-                let is_p2pkh = addr.prefix == self.as_ref().conf.pub_addr_prefix
-                    && addr.t_addr_prefix == self.as_ref().conf.pub_t_addr_prefix;
-                if is_p2pkh {
+                if addr.script_type == AddressScriptType::P2PKH {
                     return Ok(addr);
                 }
                 "Address has invalid prefixes".to_string()
             },
-            Err(e) => e.to_string(),
+            Err(e) => e,
         };
         let utxo_segwit_err = match Address::from_segwitaddress(
             from,
@@ -159,6 +163,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
             checksum_type: utxo.conf.checksum_type,
             hrp: utxo.conf.bech32_hrp.clone(),
             addr_format: self.addr_format().clone(),
+            script_type: AddressScriptType::P2PKH,
         }
     }
 
@@ -176,6 +181,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
             checksum_type: utxo.conf.checksum_type,
             hrp: utxo.conf.bech32_hrp.clone(),
             addr_format: self.addr_format().clone(),
+            script_type: AddressScriptType::P2PKH,
         }
     }
 

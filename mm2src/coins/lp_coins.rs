@@ -4100,7 +4100,7 @@ struct ConvertUtxoAddressReq {
 
 pub async fn convert_utxo_address(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
     let req: ConvertUtxoAddressReq = try_s!(json::from_value(req));
-    let mut addr: utxo::Address = try_s!(req.address.parse());
+    let mut addr: utxo::LegacyAddress = try_s!(req.address.parse()); // Only legacy addresses supported as source
     let coin = match lp_coinfind(&ctx, &req.to_coin).await {
         Ok(Some(c)) => c,
         _ => return ERR!("Coin {} is not activated", req.to_coin),

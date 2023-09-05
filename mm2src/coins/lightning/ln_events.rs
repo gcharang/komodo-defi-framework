@@ -2,6 +2,7 @@ use super::*;
 use crate::lightning::ln_db::{DBChannelDetails, HTLCStatus, LightningDB, PaymentType};
 use crate::lightning::ln_errors::{SaveChannelClosingError, SaveChannelClosingResult};
 use crate::lightning::ln_sql::SqliteLightningDB;
+use crate::utxo::output_script;
 use bitcoin::blockdata::script::Script;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::consensus::encode::serialize_hex;
@@ -190,7 +191,7 @@ pub enum SignFundingTransactionError {
 // Generates the raw funding transaction with one output equal to the channel value.
 fn sign_funding_transaction(
     uuid: Uuid,
-    output_script: &Script,
+    output_script_pubkey: &Script,
     platform: Arc<Platform>,
 ) -> Result<Transaction, SignFundingTransactionError> {
     let coin = &platform.coin;
@@ -206,7 +207,7 @@ fn sign_funding_transaction(
             })?
             .clone()
     };
-    unsigned.outputs[0].script_pubkey = output_script.to_bytes().into();
+    unsigned.outputs[0].script_pubkey = output_script_pubkey.to_bytes().into();
 
     let my_address = coin
         .as_ref()
@@ -219,7 +220,7 @@ fn sign_funding_transaction(
         .activated_key_or_err()
         .map_err(|e| SignFundingTransactionError::Internal(e.to_string()))?;
 
-    let prev_script = Builder::build_p2pkh(&my_address.hash);
+    let prev_script = output_script(my_address);
     let signed = sign_tx(
         unsigned,
         key_pair,

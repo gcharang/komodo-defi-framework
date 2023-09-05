@@ -76,6 +76,11 @@ pub(super) fn utxo_coin_fields_for_test(
         } else {
             UtxoAddressFormat::Standard
         },
+        script_type: if is_segwit_coin {
+            AddressScriptType::P2WPKH
+        } else {
+            AddressScriptType::P2PKH
+        },
     };
     let my_script_pubkey = Builder::build_p2pkh(&my_address.hash).to_bytes();
 
@@ -194,29 +199,29 @@ pub(super) fn get_morty_hd_transactions_ordered(tx_hashes: &[&str]) -> Vec<Trans
 
 pub(super) async fn test_electrum_display_balances(rpc_client: &ElectrumClient) {
     let addresses = vec![
-        "RG278CfeNPFtNztFZQir8cgdWexVhViYVy".into(),
-        "RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN".into(),
-        "RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi".into(),
-        "RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF".into(),
+        Address::from_legacyaddress("RG278CfeNPFtNztFZQir8cgdWexVhViYVy", 60, 0, 85, 0).unwrap(),
+        Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", 60, 0, 85, 0).unwrap(),
+        Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", 60, 0, 85, 0).unwrap(),
+        Address::from_legacyaddress("RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF", 60, 0, 85, 0).unwrap(),
     ];
     let actual = rpc_client.display_balances(addresses, 8).compat().await.unwrap();
 
     let expected: Vec<(Address, BigDecimal)> = vec![
         (
-            "RG278CfeNPFtNztFZQir8cgdWexVhViYVy".into(),
-            BigDecimal::from_str("5.77699").unwrap(),
+            Address::from_legacyaddress("RG278CfeNPFtNztFZQir8cgdWexVhViYVy", 60, 0, 85, 0).unwrap(),
+            BigDecimal::try_from(5.77699).unwrap(),
         ),
         (
-            "RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN".into(),
-            BigDecimal::from_str("3.33").unwrap(),
+            Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", 60, 0, 85, 0).unwrap(),
+            BigDecimal::from(3.33),
         ),
         (
-            "RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi".into(),
-            BigDecimal::from_str("0.77699").unwrap(),
+            Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", 60, 0, 85, 0).unwrap(),
+            BigDecimal::try_from(0.77699).unwrap(),
         ),
         (
-            "RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF".into(),
-            BigDecimal::from_str("16.55398").unwrap(),
+            Address::from_legacyaddress("RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF", 60, 0, 85, 0).unwrap(),
+            BigDecimal::try_from(16.55398).unwrap(),
         ),
     ];
     assert_eq!(actual, expected);

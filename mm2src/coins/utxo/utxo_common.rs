@@ -43,8 +43,8 @@ use futures::future::{FutureExt, TryFutureExt};
 use futures01::future::Either;
 use itertools::Itertools;
 use keys::bytes::Bytes;
-use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, CompactSignature, Public, SegwitAddress,
-           Type as ScriptType};
+use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, AddressScriptType, CompactSignature, Public,
+           SegwitAddress};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::bigdecimal_custom::CheckedDivision;
@@ -627,19 +627,31 @@ pub fn addresses_from_script<T: UtxoCommonOps>(coin: &T, script: &Script) -> Res
     let addresses = destinations
         .into_iter()
         .map(|dst| {
-            let (prefix, t_addr_prefix, addr_format) = match dst.kind {
-                ScriptType::P2PKH => (
+            let (prefix, t_addr_prefix, addr_format, script_type) = match dst.kind {
+                AddressScriptType::P2PKH => (
                     conf.pub_addr_prefix,
                     conf.pub_t_addr_prefix,
                     coin.addr_format_for_standard_scripts(),
+                    AddressScriptType::P2PKH,
                 ),
-                ScriptType::P2SH => (
+                AddressScriptType::P2SH => (
                     conf.p2sh_addr_prefix,
                     conf.p2sh_t_addr_prefix,
                     coin.addr_format_for_standard_scripts(),
+                    AddressScriptType::P2SH,
                 ),
-                ScriptType::P2WPKH => (conf.pub_addr_prefix, conf.pub_t_addr_prefix, UtxoAddressFormat::Segwit),
-                ScriptType::P2WSH => (conf.pub_addr_prefix, conf.pub_t_addr_prefix, UtxoAddressFormat::Segwit),
+                AddressScriptType::P2WPKH => (
+                    0,
+                    0,
+                    UtxoAddressFormat::Segwit,
+                    AddressScriptType::P2WPKH,
+                ),
+                AddressScriptType::P2WSH => (
+                    0,
+                    0,
+                    UtxoAddressFormat::Segwit,
+                    AddressScriptType::P2WSH,
+                ),
             };
 
             Address {
@@ -649,6 +661,7 @@ pub fn addresses_from_script<T: UtxoCommonOps>(coin: &T, script: &Script) -> Res
                 t_addr_prefix,
                 hrp: conf.bech32_hrp.clone(),
                 addr_format,
+                script_type,
             }
         })
         .collect();
@@ -670,9 +683,15 @@ where
 pub fn address_from_str_unchecked(coin: &UtxoCoinFields, address: &str) -> MmResult<Address, AddrFromStrError> {
     let mut errors = Vec::with_capacity(3);
 
-    match Address::from_str(address) {
+    match Address::from_legacyaddress(
+        address,
+        coin.conf.pub_addr_prefix,
+        coin.conf.pub_t_addr_prefix,
+        coin.conf.p2sh_addr_prefix,
+        coin.conf.p2sh_t_addr_prefix,
+    ) {
         Ok(legacy) => return Ok(legacy),
-        Err(e) => errors.push(e.to_string()),
+        Err(e) => errors.push(e),
     };
 
     match Address::from_segwitaddress(
@@ -929,7 +948,7 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
             .from
             .clone()
             .or_mm_err(|| GenerateTxError::Internal("'from' address is not specified".to_owned()))?;
-        let change_script_pubkey = output_script(&from, ScriptType::P2PKH).to_bytes();
+        let change_script_pubkey = output_script(&from).to_bytes();
 
         let actual_tx_fee = match self.fee {
             Some(fee) => fee,
@@ -1792,7 +1811,7 @@ pub fn send_maker_spends_taker_payment<T: UtxoCommonOps + SwapOps>(coin: T, args
                 payment_value
             );
         }
-        let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+        let script_pubkey = output_script(&my_address).to_bytes();
         let output = TransactionOutput {
             value: payment_value - fee,
             script_pubkey,
@@ -1898,7 +1917,7 @@ pub fn create_maker_payment_spend_preimage<T: UtxoCommonOps + SwapOps>(
                 payment_value
             );
         }
-        let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+        let script_pubkey = output_script(&my_address).to_bytes();
         let output = TransactionOutput {
             value: payment_value - fee,
             script_pubkey,
@@ -1957,7 +1976,7 @@ pub fn create_taker_payment_refund_preimage<T: UtxoCommonOps + SwapOps>(
                 payment_value
             );
         }
-        let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+        let script_pubkey = output_script(&my_address).to_bytes();
         let output = TransactionOutput {
             value: payment_value - fee,
             script_pubkey,
@@ -2014,7 +2033,7 @@ pub fn send_taker_spends_maker_payment<T: UtxoCommonOps + SwapOps>(coin: T, args
                 payment_value
             );
         }
-        let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+        let script_pubkey = output_script(&my_address).to_bytes();
         let output = TransactionOutput {
             value: payment_value - fee,
             script_pubkey,
@@ -2080,7 +2099,7 @@ async fn refund_htlc_payment<T: UtxoCommonOps + SwapOps>(
             payment_value
         );
     }
-    let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+    let script_pubkey = output_script(&my_address).to_bytes();
     let output = TransactionOutput {
         value: payment_value - fee,
         script_pubkey,
@@ -2613,6 +2632,7 @@ pub fn check_if_my_payment_sent<T: UtxoCommonOps + SwapOps>(
                     checksum_type: coin.as_ref().conf.checksum_type,
                     hrp: coin.as_ref().conf.bech32_hrp.clone(),
                     addr_format: coin.addr_format().clone(),
+                    script_type: AddressScriptType::P2SH,
                 };
                 let target_addr = target_addr.to_string();
                 let is_imported = try_s!(client.is_address_imported(&target_addr).await);
@@ -3519,7 +3539,7 @@ where
                 Ok(my_address) => my_address,
                 Err(e) => return RequestTxHistoryResult::CriticalError(e.to_string()),
             };
-            let script = output_script(my_address, ScriptType::P2PKH);
+            let script = output_script(my_address);
             let script_hash = electrum_script_hash(&script);
 
             mm_counter!(metrics, "tx.history.request.count", 1,
@@ -4279,6 +4299,7 @@ pub fn address_from_raw_pubkey(
         checksum_type,
         hrp,
         addr_format,
+        script_type: AddressScriptType::P2PKH,
     })
 }
 
@@ -4297,6 +4318,7 @@ pub fn address_from_pubkey(
         checksum_type,
         hrp,
         addr_format,
+        script_type: AddressScriptType::P2PKH,
     }
 }
 
@@ -4517,6 +4539,7 @@ where
         t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Standard,
+        script_type: AddressScriptType::P2SH,
     };
     let result = SwapPaymentOutputsResult {
         payment_address,

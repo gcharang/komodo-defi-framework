@@ -28,7 +28,7 @@ use futures01::{Future, Sink, Stream};
 use http::Uri;
 use itertools::Itertools;
 use keys::hash::H256;
-use keys::{Address, Type as ScriptType};
+use keys::Address;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigInt, MmNumber};
 use mm2_rpc::data::legacy::ElectrumProtocol;
@@ -2169,7 +2169,7 @@ impl ElectrumClient {
 #[cfg_attr(test, mockable)]
 impl UtxoRpcClientOps for ElectrumClient {
     fn list_unspent(&self, address: &Address, _decimals: u8) -> UtxoRpcFut<Vec<UnspentInfo>> {
-        let script = output_script(address, ScriptType::P2PKH);
+        let script = output_script(address);
         let script_hash = electrum_script_hash(&script);
         Box::new(
             self.scripthash_list_unspent(&hex::encode(script_hash))
@@ -2194,7 +2194,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         let script_hashes = addresses
             .iter()
             .map(|addr| {
-                let script = output_script(addr, ScriptType::P2PKH);
+                let script = output_script(addr);
                 let script_hash = electrum_script_hash(&script);
                 hex::encode(script_hash)
             })
@@ -2269,7 +2269,7 @@ impl UtxoRpcClientOps for ElectrumClient {
     }
 
     fn display_balance(&self, address: Address, decimals: u8) -> RpcRes<BigDecimal> {
-        let hash = electrum_script_hash(&output_script(&address, ScriptType::P2PKH));
+        let hash = electrum_script_hash(&output_script(&address));
         let hash_str = hex::encode(hash);
         Box::new(
             self.scripthash_get_balance(&hash_str)
@@ -2281,7 +2281,7 @@ impl UtxoRpcClientOps for ElectrumClient {
         let this = self.clone();
         let fut = async move {
             let hashes = addresses.iter().map(|address| {
-                let hash = electrum_script_hash(&output_script(address, ScriptType::P2PKH));
+                let hash = electrum_script_hash(&output_script(address));
                 hex::encode(hash)
             });
 

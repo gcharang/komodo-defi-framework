@@ -25,8 +25,8 @@ use futures::compat::Future01CompatExt;
 use futures::lock::Mutex as AsyncMutex;
 use futures::StreamExt;
 use keys::bytes::Bytes;
-pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, KeyPair, Private, Public, Secret,
-               Type as ScriptType};
+pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, AddressScriptType, KeyPair, Private,
+               Public, Secret};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use primitives::hash::H160;
@@ -210,9 +210,10 @@ where
         checksum_type: conf.checksum_type,
         hrp: conf.bech32_hrp.clone(),
         addr_format,
+        script_type: AddressScriptType::P2PKH,
     };
 
-    let my_script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+    let my_script_pubkey = output_script(&my_address).to_bytes();
     let derivation_method = DerivationMethod::SingleAddress(my_address);
 
     // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,

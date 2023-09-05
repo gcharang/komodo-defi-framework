@@ -15,7 +15,7 @@ use common::jsonrpc_client::JsonRpcErrorType;
 use crypto::Bip44Chain;
 use futures::compat::Future01CompatExt;
 use itertools::Itertools;
-use keys::{Address, Type as ScriptType};
+use keys::Address;
 use mm2_err_handle::prelude::*;
 use mm2_metrics::MetricsArc;
 use mm2_number::BigDecimal;
@@ -366,7 +366,7 @@ async fn request_tx_history_with_electrum(
     for_addresses: &HashSet<Address>,
 ) -> RequestTxHistoryResult {
     fn addr_to_script_hash(addr: &Address) -> String {
-        let script = output_script(addr, ScriptType::P2PKH);
+        let script = output_script(addr);
         let script_hash = electrum_script_hash(&script);
         hex::encode(script_hash)
     }

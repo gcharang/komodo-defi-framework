@@ -10,7 +10,7 @@ use common::log::info;
 use common::now_sec;
 use crypto::trezor::{TrezorError, TrezorProcessingError};
 use crypto::{from_hw_error, CryptoCtx, CryptoCtxError, DerivationPath, HwError, HwProcessingError, HwRpcError};
-use keys::{AddressHashEnum, KeyPair, Private, Public as PublicKey, Type as ScriptType};
+use keys::{AddressHashEnum, AddressScriptType, KeyPair, Private, Public as PublicKey};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use rpc::v1::types::ToTxHash;
@@ -126,18 +126,14 @@ where
         let is_p2pkh = to.prefix == conf.pub_addr_prefix && to.t_addr_prefix == conf.pub_t_addr_prefix;
         let is_p2sh = to.prefix == conf.p2sh_addr_prefix && to.t_addr_prefix == conf.p2sh_t_addr_prefix;
 
-        let script_type = if is_p2pkh {
-            ScriptType::P2PKH
-        } else if is_p2sh {
-            ScriptType::P2SH
-        } else {
+        if !is_p2pkh && !is_p2sh {
             return MmError::err(WithdrawError::InvalidAddress("Expected either P2PKH or P2SH".into()));
         };
 
         // Generate unsigned transaction.
         self.on_generating_transaction()?;
 
-        let script_pubkey = output_script(&to, script_type).to_bytes();
+        let script_pubkey = output_script(&to).to_bytes();
 
         let _utxo_lock = UTXO_LOCK.lock().await;
         let (unspents, _) = coin.get_unspent_ordered_list(&self.sender_address()).await?;
@@ -442,6 +438,7 @@ where
                     checksum_type: coin.as_ref().conf.checksum_type,
                     hrp: coin.as_ref().conf.bech32_hrp.clone(),
                     addr_format,
+                    script_type: AddressScriptType::P2PKH,
                 };
                 (key_pair, my_address)
             },

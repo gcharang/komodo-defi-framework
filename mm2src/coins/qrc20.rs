@@ -11,10 +11,11 @@ use crate::utxo::utxo_builder::{UtxoCoinBuildError, UtxoCoinBuildResult, UtxoCoi
                                 UtxoFieldsWithGlobalHDBuilder, UtxoFieldsWithHardwareWalletBuilder,
                                 UtxoFieldsWithIguanaSecretBuilder};
 use crate::utxo::utxo_common::{self, big_decimal_from_sat, check_all_utxo_inputs_signed_by_pub, UtxoTxBuilder};
-use crate::utxo::{qtum, ActualTxFee, AdditionalTxData, AddrFromStrError, BroadcastTxErr, FeePolicy, GenerateTxError,
-                  GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList, RecentlySpentOutPointsGuard,
-                  UtxoActivationParams, UtxoAddressFormat, UtxoCoinFields, UtxoCommonOps, UtxoFromLegacyReqErr,
-                  UtxoTx, UtxoTxBroadcastOps, UtxoTxGenerationOps, VerboseTransactionFrom, UTXO_LOCK};
+use crate::utxo::{output_script, qtum, ActualTxFee, AdditionalTxData, AddrFromStrError, BroadcastTxErr, FeePolicy,
+                  GenerateTxError, GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList,
+                  RecentlySpentOutPointsGuard, UtxoActivationParams, UtxoAddressFormat, UtxoCoinFields, UtxoCommonOps,
+                  UtxoFromLegacyReqErr, UtxoTx, UtxoTxBroadcastOps, UtxoTxGenerationOps, VerboseTransactionFrom,
+                  UTXO_LOCK};
 use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, CoinFutSpawner, ConfirmPaymentInput,
             FeeApproxStage, FoundSwapTxSpend, HistorySyncState, IguanaPrivKey, MakerSwapTakerCoin, MarketCoinOps,
             MmCoin, MmCoinEnum, NegotiateSwapContractAddrErr, PaymentInstructionArgs, PaymentInstructions,
@@ -42,7 +43,7 @@ use futures::compat::Future01CompatExt;
 use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
 use keys::bytes::Bytes as ScriptBytes;
-use keys::{Address as UtxoAddress, Address, KeyPair, Public};
+use keys::{Address as UtxoAddress, AddressScriptType, KeyPair, Public};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, MmNumber};
@@ -537,7 +538,7 @@ impl Qrc20Coin {
         let my_address = self.utxo.derivation_method.single_addr_or_err()?;
         let key_pair = self.utxo.priv_key_policy.activated_key_or_err()?;
 
-        let prev_script = ScriptBuilder::build_p2pkh(&my_address.hash);
+        let prev_script = output_script(my_address);
         let signed = sign_tx(
             unsigned,
             key_pair,
@@ -628,21 +629,21 @@ impl UtxoTxGenerationOps for Qrc20Coin {
 impl GetUtxoListOps for Qrc20Coin {
     async fn get_unspent_ordered_list(
         &self,
-        address: &Address,
+        address: &UtxoAddress,
     ) -> UtxoRpcResult<(Vec<UnspentInfo>, RecentlySpentOutPointsGuard<'_>)> {
         utxo_common::get_unspent_ordered_list(self, address).await
     }
 
     async fn get_all_unspent_ordered_list(
         &self,
-        address: &Address,
+        address: &UtxoAddress,
     ) -> UtxoRpcResult<(Vec<UnspentInfo>, RecentlySpentOutPointsGuard<'_>)> {
         utxo_common::get_all_unspent_ordered_list(self, address).await
     }
 
     async fn get_mature_unspent_ordered_list(
         &self,
-        address: &Address,
+        address: &UtxoAddress,
     ) -> UtxoRpcResult<(MatureUnspentList, RecentlySpentOutPointsGuard<'_>)> {
         utxo_common::get_mature_unspent_ordered_list(self, address).await
     }
@@ -738,7 +739,7 @@ impl UtxoCommonOps for Qrc20Coin {
         utxo_common::addr_format_for_standard_scripts(self)
     }
 
-    fn address_from_pubkey(&self, pubkey: &Public) -> Address {
+    fn address_from_pubkey(&self, pubkey: &Public) -> UtxoAddress {
         let conf = &self.utxo.conf;
         utxo_common::address_from_pubkey(
             pubkey,
@@ -1518,12 +1519,16 @@ pub struct Qrc20FeeDetails {
 }
 
 async fn qrc20_withdraw(coin: Qrc20Coin, req: WithdrawRequest) -> WithdrawResult {
-    let to_addr = UtxoAddress::from_str(&req.to)
-        .map_err(|e| e.to_string())
-        .map_to_mm(WithdrawError::InvalidAddress)?;
+    let to_addr = UtxoAddress::from_legacyaddress(
+        &req.to,
+        coin.as_ref().conf.pub_addr_prefix,
+        coin.as_ref().conf.pub_t_addr_prefix,
+        coin.as_ref().conf.p2sh_addr_prefix,
+        coin.as_ref().conf.p2sh_t_addr_prefix,
+    )
+    .map_to_mm(WithdrawError::InvalidAddress)?;
     let conf = &coin.utxo.conf;
-    let is_p2pkh = to_addr.prefix == conf.pub_addr_prefix && to_addr.t_addr_prefix == conf.pub_t_addr_prefix;
-    if !is_p2pkh {
+    if to_addr.script_type != AddressScriptType::P2PKH {
         let error = "QRC20 can be sent to P2PKH addresses only".to_owned();
         return MmError::err(WithdrawError::InvalidAddress(error));
     }

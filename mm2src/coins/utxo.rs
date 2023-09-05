@@ -61,7 +61,7 @@ use futures::lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use futures01::Future;
 use keys::bytes::Bytes;
 use keys::Signature;
-pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, KeyPair, Private, Public, Secret,
+pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, KeyPair, Private, Public, Secret, LegacyAddress,
                Type as ScriptType};
 #[cfg(not(target_arch = "wasm32"))]
 use lightning_invoice::Currency as LightningCurrency;
@@ -864,7 +864,7 @@ impl HDAddressBalanceScanner for UtxoAddressScanner {
         let is_used = match self {
             UtxoAddressScanner::Native { non_empty_addresses } => non_empty_addresses.contains(&address.to_string()),
             UtxoAddressScanner::Electrum(electrum_client) => {
-                let script = output_script(address, ScriptType::P2PKH);
+                let script = output_script(address);
                 let script_hash = electrum_script_hash(&script);
 
                 let electrum_history = electrum_client
@@ -1868,7 +1868,7 @@ where
         _ => coin.as_ref().conf.signature_version,
     };
 
-    let prev_script = Builder::build_p2pkh(&my_address.hash);
+    let prev_script = output_script(my_address);
     let signed = try_tx_s!(sign_tx(
         unsigned,
         key_pair,
@@ -1884,14 +1884,15 @@ where
     Ok(signed)
 }
 
-pub fn output_script(address: &Address, script_type: ScriptType) -> Script {
+pub fn output_script(address: &Address) -> Script {
     match address.addr_format {
         UtxoAddressFormat::Segwit => Builder::build_witness_script(&address.hash),
-        _ => match script_type {
-            ScriptType::P2PKH => Builder::build_p2pkh(&address.hash),
-            ScriptType::P2SH => Builder::build_p2sh(&address.hash),
-            ScriptType::P2WPKH => Builder::build_witness_script(&address.hash),
-            ScriptType::P2WSH => Builder::build_witness_script(&address.hash),
+        _ => match address.script_type {
+            AddressScriptType::P2PKH => Builder::build_p2pkh(&address.hash),
+            AddressScriptType::P2SH => Builder::build_p2sh(&address.hash),
+            AddressScriptType::P2WPKH | AddressScriptType::P2WSH => {
+                panic!("internal error: wrong segwit script type");
+            },
         },
     }
 }
@@ -1929,6 +1930,7 @@ pub fn address_by_conf_and_pubkey_str(
         checksum_type: utxo_conf.checksum_type,
         hrp: utxo_conf.bech32_hrp,
         addr_format,
+        script_type: AddressScriptType::P2PKH,
     };
     address.display_address()
 }

@@ -56,6 +56,8 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use utxo_signer::with_key_pair::{p2pkh_spend, p2sh_spend, sign_tx, UtxoSignWithKeyPairError};
 
+use super::output_script;
+
 const SLP_SWAP_VOUT: usize = 1;
 const SLP_FEE_VOUT: usize = 1;
 const SLP_HTLC_SPEND_SIZE: u64 = 555;
@@ -1669,7 +1671,7 @@ impl MmCoin for SlpToken {
                 WithdrawError::from_generate_tx_error(gen_tx_error, coin.platform_ticker().into(), platform_decimals)
             })?;
 
-            let prev_script = ScriptBuilder::build_p2pkh(&my_address.hash);
+            let prev_script = output_script(my_address);
             let signed = sign_tx(
                 unsigned,
                 key_pair,

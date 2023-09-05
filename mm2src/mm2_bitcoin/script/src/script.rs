@@ -33,7 +33,7 @@ pub enum ScriptType {
 #[derive(PartialEq, Debug)]
 pub struct ScriptAddress {
     /// The type of the address.
-    pub kind: keys::Type,
+    pub kind: keys::AddressScriptType,
     /// Public key hash.
     pub hash: AddressHashEnum,
 }
@@ -42,7 +42,7 @@ impl ScriptAddress {
     /// Creates P2PKH-type ScriptAddress
     pub fn new_p2pkh(hash: AddressHashEnum) -> Self {
         ScriptAddress {
-            kind: keys::Type::P2PKH,
+            kind: keys::AddressScriptType::P2PKH,
             hash,
         }
     }
@@ -50,7 +50,7 @@ impl ScriptAddress {
     /// Creates P2SH-type ScriptAddress
     pub fn new_p2sh(hash: AddressHashEnum) -> Self {
         ScriptAddress {
-            kind: keys::Type::P2SH,
+            kind: keys::AddressScriptType::P2SH,
             hash,
         }
     }
@@ -58,7 +58,7 @@ impl ScriptAddress {
     /// Creates P2WPKH-type ScriptAddress
     pub fn new_p2wpkh(hash: AddressHashEnum) -> Self {
         ScriptAddress {
-            kind: keys::Type::P2WPKH,
+            kind: keys::AddressScriptType::P2WPKH,
             hash,
         }
     }
@@ -66,7 +66,7 @@ impl ScriptAddress {
     /// Creates P2WSH-type ScriptAddress
     pub fn new_p2wsh(hash: AddressHashEnum) -> Self {
         ScriptAddress {
-            kind: keys::Type::P2WSH,
+            kind: keys::AddressScriptType::P2WSH,
             hash,
         }
     }
@@ -790,7 +790,9 @@ OP_ADD
 
     #[test]
     fn test_extract_destinations_pub_key_hash() {
-        let address = Address::from("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S").hash;
+        let address = Address::from_legacyaddress("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S", 0, 0, 5, 0)
+            .unwrap()
+            .hash;
         let script = Builder::build_p2pkh(&address);
         assert_eq!(script.script_type(), ScriptType::PubKeyHash);
         assert_eq!(
@@ -801,7 +803,9 @@ OP_ADD
 
     #[test]
     fn test_extract_destinations_script_hash() {
-        let address = Address::from("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S").hash;
+        let address = Address::from_legacyaddress("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S", 0, 0, 5, 0)
+            .unwrap()
+            .hash;
         let script = Builder::build_p2sh(&address);
         assert_eq!(script.script_type(), ScriptType::ScriptHash);
         assert_eq!(

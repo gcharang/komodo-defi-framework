@@ -5,20 +5,18 @@
 //!
 //! https://en.bitcoin.it/wiki/Address
 
-use base58::{FromBase58, ToBase58};
-use crypto::{checksum, dgroestl512, dhash256, keccak256, ChecksumType};
+use crypto::{dgroestl512, dhash256, keccak256, ChecksumType};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::ops::Deref;
 use std::str::FromStr;
-use {AddressHashEnum, CashAddrType, CashAddress, DisplayLayout, Error, SegwitAddress};
+use {AddressHashEnum, CashAddrType, CashAddress, Error, LegacyAddress, SegwitAddress};
 
 /// There are two address formats currently in use.
 /// https://bitcoin.org/en/developer-reference#address-conversion
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Type {
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum AddressScriptType {
     /// Pay to PubKey Hash
     /// Common P2PKH which begin with the number 1, eg: 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2.
     /// https://bitcoin.org/en/glossary/p2pkh-address
@@ -76,24 +74,6 @@ impl AddressFormat {
     pub fn is_legacy(&self) -> bool { matches!(*self, AddressFormat::Standard) }
 }
 
-// TODO add ScriptType field to this struct for easier use of output_script function
-/// `AddressHash` with prefix and t addr zcash prefix
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Address {
-    /// The prefix of the address.
-    pub prefix: u8,
-    /// T addr prefix, additional prefix used by Zcash and some forks
-    pub t_addr_prefix: u8,
-    /// Segwit addr human readable part
-    pub hrp: Option<String>,
-    /// Public key hash.
-    pub hash: AddressHashEnum,
-    /// Checksum type
-    pub checksum_type: ChecksumType,
-    /// Address Format
-    pub addr_format: AddressFormat,
-}
-
 // Todo: add segwit checksum detection
 pub fn detect_checksum(data: &[u8], checksum: &[u8]) -> Result<ChecksumType, Error> {
     if checksum == &dhash256(data)[0..4] {
@@ -110,119 +90,33 @@ pub fn detect_checksum(data: &[u8], checksum: &[u8]) -> Result<ChecksumType, Err
     Err(Error::InvalidChecksum)
 }
 
-pub struct AddressDisplayLayout(Vec<u8>);
-
-impl Deref for AddressDisplayLayout {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target { &self.0 }
-}
-
-impl DisplayLayout for Address {
-    type Target = AddressDisplayLayout;
-
-    fn layout(&self) -> Self::Target {
-        let mut result = vec![];
-
-        if self.t_addr_prefix > 0 {
-            result.push(self.t_addr_prefix);
-        }
-
-        result.push(self.prefix);
-        result.extend_from_slice(&self.hash.to_vec());
-        let cs = checksum(&result, &self.checksum_type);
-        result.extend_from_slice(&*cs);
-
-        AddressDisplayLayout(result)
-    }
-
-    fn from_layout(data: &[u8]) -> Result<Self, Error>
-    where
-        Self: Sized,
-    {
-        match data.len() {
-            25 => {
-                let sum_type = detect_checksum(&data[0..21], &data[21..])?;
-
-                let mut hash = AddressHashEnum::default_address_hash();
-                hash.copy_from_slice(&data[1..21]);
-
-                let address = Address {
-                    t_addr_prefix: 0,
-                    prefix: data[0],
-                    hash,
-                    checksum_type: sum_type,
-                    hrp: None,
-                    addr_format: AddressFormat::Standard,
-                };
-
-                Ok(address)
-            },
-            26 => {
-                let sum_type = detect_checksum(&data[0..22], &data[22..])?;
-
-                let mut hash = AddressHashEnum::default_address_hash();
-                hash.copy_from_slice(&data[2..22]);
-
-                let address = Address {
-                    t_addr_prefix: data[0],
-                    prefix: data[1],
-                    hash,
-                    checksum_type: sum_type,
-                    hrp: None,
-                    addr_format: AddressFormat::Standard,
-                };
-
-                Ok(address)
-            },
-            _ => Err(Error::InvalidAddress),
-        }
-    }
-}
-
-impl fmt::Display for Address {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.addr_format {
-            AddressFormat::Segwit => {
-                SegwitAddress::new(&self.hash, self.hrp.clone().expect("Segwit address should have an hrp"))
-                    .to_string()
-                    .fmt(f)
-            },
-            AddressFormat::CashAddress {
-                network,
-                pub_addr_prefix,
-                p2sh_addr_prefix,
-            } => {
-                let cash_address = self
-                    .to_cashaddress(network, *pub_addr_prefix, *p2sh_addr_prefix)
-                    .expect("A valid address");
-                cash_address.encode().expect("A valid address").fmt(f)
-            },
-            AddressFormat::Standard => self.layout().to_base58().fmt(f),
-        }
-    }
-}
-
-impl FromStr for Address {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Error>
-    where
-        Self: Sized,
-    {
-        let hex = s.from_base58().map_err(|_| Error::InvalidAddress)?;
-        Address::from_layout(&hex)
-    }
-}
-
-impl From<&'static str> for Address {
-    fn from(s: &'static str) -> Self { s.parse().unwrap() }
+/// Struct for utxo address types representation
+/// Contains address hash, format, script type to generate output script
+/// Also added ScriptType field for easier output script building.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Address {
+    /// The prefix of the address.
+    pub prefix: u8,
+    /// T addr prefix, additional prefix used by Zcash and some forks
+    pub t_addr_prefix: u8,
+    /// Segwit addr human readable part
+    pub hrp: Option<String>,
+    /// Public key hash.
+    pub hash: AddressHashEnum,
+    /// Checksum type
+    pub checksum_type: ChecksumType,
+    /// Address Format
+    pub addr_format: AddressFormat,
+    // which output script corresponds to this address format and prefixes
+    pub script_type: AddressScriptType,
 }
 
 impl Address {
     pub fn display_address(&self) -> Result<String, String> {
         match &self.addr_format {
-            AddressFormat::Standard => Ok(self.to_string()),
+            AddressFormat::Standard => {
+                Ok(LegacyAddress::new(&self.hash, self.prefix, self.t_addr_prefix, self.checksum_type).to_string())
+            },
             AddressFormat::Segwit => match &self.hrp {
                 Some(hrp) => Ok(SegwitAddress::new(&self.hash, hrp.clone()).to_string()),
                 None => Err("Cannot display segwit address for a coin with no bech32_hrp in config".into()),
@@ -236,6 +130,43 @@ impl Address {
                 .to_cashaddress(network, *pub_addr_prefix, *p2sh_addr_prefix)
                 .and_then(|cashaddress| cashaddress.encode()),
         }
+    }
+
+    pub fn from_legacyaddress(
+        s: &str,
+        p2pkh_addr_prefix: u8,
+        p2pkh_t_addr_prefix: u8,
+        p2sh_addr_prefix: u8,
+        p2sh_t_addr_prefix: u8,
+    ) -> Result<Address, String> {
+        //let hex = s.from_base58().map_err(|_| String::from("invalid address"))?;
+        //let address = LegacyAddress::from_layout(&hex).map_err(|_| String::from("invalid address"))?;
+        let address = LegacyAddress::from_str(s).map_err(|_| String::from("invalid address"))?;
+
+        if address.hash.len() != 20 {
+            return Err("Expect 20 bytes long hash".into());
+        }
+
+        let mut hash = AddressHashEnum::default_address_hash();
+        hash.copy_from_slice(address.hash.as_slice());
+
+        let script_type = if (address.prefix, address.t_addr_prefix) == (p2pkh_addr_prefix, p2pkh_t_addr_prefix) {
+            AddressScriptType::P2PKH
+        } else if (address.prefix, address.t_addr_prefix) == (p2sh_addr_prefix, p2sh_t_addr_prefix) {
+            AddressScriptType::P2SH
+        } else {
+            return Err(String::from("invalid address prefix"));
+        };
+
+        Ok(Address {
+            prefix: address.prefix,
+            t_addr_prefix: address.t_addr_prefix,
+            hash,
+            checksum_type: address.checksum_type,
+            hrp: None,
+            addr_format: AddressFormat::Standard,
+            script_type,
+        })
     }
 
     pub fn from_cashaddress(
@@ -254,9 +185,9 @@ impl Address {
         let mut hash = AddressHashEnum::default_address_hash();
         hash.copy_from_slice(address.hash.as_slice());
 
-        let prefix = match address.address_type {
-            CashAddrType::P2PKH => p2pkh_prefix,
-            CashAddrType::P2SH => p2sh_prefix,
+        let (script_type, prefix) = match address.address_type {
+            CashAddrType::P2PKH => (AddressScriptType::P2PKH, p2pkh_prefix),
+            CashAddrType::P2SH => (AddressScriptType::P2SH, p2sh_prefix),
         };
 
         Ok(Address {
@@ -270,6 +201,7 @@ impl Address {
                 pub_addr_prefix: p2pkh_prefix,
                 p2sh_addr_prefix: p2sh_prefix,
             },
+            script_type,
         })
     }
 
@@ -301,10 +233,10 @@ impl Address {
     ) -> Result<Address, String> {
         let address = SegwitAddress::from_str(segaddr).map_err(|e| e.to_string())?;
 
-        let mut hash = if address.program.len() == 20 {
-            AddressHashEnum::default_address_hash()
+        let (script_type, mut hash) = if address.program.len() == 20 {
+            (AddressScriptType::P2WPKH, AddressHashEnum::default_address_hash())
         } else if address.program.len() == 32 {
-            AddressHashEnum::default_witness_script_hash()
+            (AddressScriptType::P2WSH, AddressHashEnum::default_witness_script_hash())
         } else {
             return Err("Expect either 20 or 32 bytes long hash".into());
         };
@@ -319,6 +251,7 @@ impl Address {
             checksum_type,
             hrp,
             addr_format: AddressFormat::Segwit,
+            script_type,
         })
     }
 
@@ -330,9 +263,36 @@ impl Address {
     }
 }
 
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.addr_format {
+            AddressFormat::Segwit => {
+                SegwitAddress::new(&self.hash, self.hrp.clone().expect("Segwit address should have an hrp"))
+                    .to_string()
+                    .fmt(f)
+            },
+            AddressFormat::CashAddress {
+                network,
+                pub_addr_prefix,
+                p2sh_addr_prefix,
+            } => {
+                let cash_address = self
+                    .to_cashaddress(network, *pub_addr_prefix, *p2sh_addr_prefix)
+                    .expect("A valid address");
+                cash_address.encode().expect("A valid address").fmt(f)
+            },
+            AddressFormat::Standard => {
+                LegacyAddress::new(&self.hash, self.prefix, self.t_addr_prefix, self.checksum_type)
+                    .to_string()
+                    .fmt(f)
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Address, AddressFormat, AddressHashEnum, CashAddrType, CashAddress, ChecksumType};
+    use super::{Address, AddressFormat, AddressHashEnum, AddressScriptType, CashAddrType, CashAddress, ChecksumType};
     use crate::NetworkPrefix;
 
     #[test]
@@ -344,6 +304,7 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
         assert_eq!("16meyfSoQV6twkAAxPe51RtMVz7PGRmWna".to_owned(), address.to_string());
@@ -358,6 +319,7 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
         assert_eq!("R9o9xTocqr6CeEDGDH6mEYpwLoMz6jNjMW".to_owned(), address.to_string());
@@ -372,6 +334,7 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
         assert_eq!("tmAEKD7psc1ajK76QMGEW8WGQSBBHf9SqCp".to_owned(), address.to_string());
@@ -386,6 +349,7 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
         assert_eq!("bX9bppqdGvmCCAujd76Tq76zs1suuPnB9A".to_owned(), address.to_string());
@@ -400,9 +364,13 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
-        assert_eq!(address, "16meyfSoQV6twkAAxPe51RtMVz7PGRmWna".into());
+        assert_eq!(
+            address,
+            Address::from_legacyaddress("16meyfSoQV6twkAAxPe51RtMVz7PGRmWna", 0, 0, 5, 0).unwrap()
+        );
         assert_eq!(address.to_string(), "16meyfSoQV6twkAAxPe51RtMVz7PGRmWna".to_owned());
     }
 
@@ -415,9 +383,13 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
-        assert_eq!(address, "R9o9xTocqr6CeEDGDH6mEYpwLoMz6jNjMW".into());
+        assert_eq!(
+            address,
+            Address::from_legacyaddress("R9o9xTocqr6CeEDGDH6mEYpwLoMz6jNjMW", 60, 0, 85, 0).unwrap()
+        );
         assert_eq!(address.to_string(), "R9o9xTocqr6CeEDGDH6mEYpwLoMz6jNjMW".to_owned());
     }
 
@@ -430,9 +402,13 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
-        assert_eq!(address, "tmAEKD7psc1ajK76QMGEW8WGQSBBHf9SqCp".into());
+        assert_eq!(
+            address,
+            Address::from_legacyaddress("tmAEKD7psc1ajK76QMGEW8WGQSBBHf9SqCp", 37, 29, 0, 0).unwrap()
+        );
         assert_eq!(address.to_string(), "tmAEKD7psc1ajK76QMGEW8WGQSBBHf9SqCp".to_owned());
     }
 
@@ -445,9 +421,13 @@ mod tests {
             checksum_type: ChecksumType::DSHA256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
-        assert_eq!(address, "bX9bppqdGvmCCAujd76Tq76zs1suuPnB9A".into());
+        assert_eq!(
+            address,
+            Address::from_legacyaddress("bX9bppqdGvmCCAujd76Tq76zs1suuPnB9A", 60, 0, 85, 0).unwrap()
+        );
         assert_eq!(address.to_string(), "bX9bppqdGvmCCAujd76Tq76zs1suuPnB9A".to_owned());
     }
 
@@ -460,9 +440,13 @@ mod tests {
             checksum_type: ChecksumType::DGROESTL512,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
-        assert_eq!(address, "Fo2tBkpzaWQgtjFUkemsYnKyfvd2i8yTki".into());
+        assert_eq!(
+            address,
+            Address::from_legacyaddress("Fo2tBkpzaWQgtjFUkemsYnKyfvd2i8yTki", 36, 0, 5, 0).unwrap()
+        );
         assert_eq!(address.to_string(), "Fo2tBkpzaWQgtjFUkemsYnKyfvd2i8yTki".to_owned());
     }
 
@@ -475,9 +459,13 @@ mod tests {
             checksum_type: ChecksumType::KECCAK256,
             hrp: None,
             addr_format: AddressFormat::Standard,
+            script_type: AddressScriptType::P2PKH,
         };
 
-        assert_eq!(address, "SVCbBs6FvPYxJrYoJc4TdCe47QNCgmTabv".into());
+        assert_eq!(
+            address,
+            Address::from_legacyaddress("SVCbBs6FvPYxJrYoJc4TdCe47QNCgmTabv", 63, 0, 5, 0).unwrap()
+        );
         assert_eq!(address.to_string(), "SVCbBs6FvPYxJrYoJc4TdCe47QNCgmTabv".to_owned());
     }
 
@@ -496,7 +484,7 @@ mod tests {
 
         for i in 0..3 {
             let actual_address = Address::from_cashaddress(cashaddresses[i], ChecksumType::DSHA256, 0, 5, 0).unwrap();
-            let expected_address: Address = expected[i].into();
+            let expected_address: Address = Address::from_legacyaddress(expected[i], 0, 0, 5, 0).unwrap();
             // comparing only hashes here as Address::from_cashaddress has a different internal format from into()
             assert_eq!(actual_address.hash, expected_address.hash);
             let actual_cashaddress = actual_address
@@ -541,6 +529,7 @@ mod tests {
                 pub_addr_prefix: 0,
                 p2sh_addr_prefix: 5,
             },
+            script_type: AddressScriptType::P2PKH, // actually prefix == 2 is unknown and is neither P2PKH nor P2SH
         };
 
         assert_eq!(
@@ -558,7 +547,7 @@ mod tests {
             ],
             address_type: CashAddrType::P2PKH,
         };
-        let address: Address = "1DmFp16U73RrVZtYUbo2Ectt8mAnYScpqM".into();
+        let address: Address = Address::from_legacyaddress("1DmFp16U73RrVZtYUbo2Ectt8mAnYScpqM", 0, 0, 5, 0).unwrap();
         assert_eq!(address.to_cashaddress("prefix", 0, 5).unwrap(), expected_address);
     }
 }

@@ -26,7 +26,7 @@ use crypto::Secp256k1Secret;
 use ethereum_types::H160 as H160Eth;
 use futures01::Future;
 use http::StatusCode;
-use keys::{Address, AddressHashEnum, KeyPair, NetworkPrefix as CashAddrPrefix};
+use keys::{Address, AddressHashEnum, AddressScriptType, KeyPair, NetworkPrefix as CashAddrPrefix};
 use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
 use mm2_number::BigDecimal;
 use mm2_test_helpers::get_passphrase;
@@ -258,6 +258,7 @@ impl BchDockerOps {
                 hash: address_hash.into(),
                 checksum_type: Default::default(),
                 addr_format: Default::default(),
+                script_type: AddressScriptType::P2PKH,
             };
 
             self.native_client()
@@ -997,6 +998,7 @@ pub fn utxo_burn_address() -> Address {
         checksum_type: ChecksumType::DSHA256,
         hrp: None,
         addr_format: UtxoAddressFormat::Standard,
+        script_type: AddressScriptType::P2PKH,
     }
 }
 

@@ -16,8 +16,7 @@ use crate::{PrivKeyPolicyNotAllowed, TransactionEnum};
 use bitcrypto::dhash160;
 use derive_more::Display;
 use futures::compat::Future01CompatExt;
-use keys::Address;
-use keys::{KeyPair, Public};
+use keys::{Address, AddressScriptType, KeyPair, Public};
 use mm2_err_handle::prelude::*;
 use mm2_number::BigDecimal;
 use script::Script;
@@ -54,6 +53,7 @@ pub async fn z_send_htlc(
         checksum_type: coin.utxo_arc.conf.checksum_type,
         addr_format: UtxoAddressFormat::Standard,
         hrp: None,
+        script_type: AddressScriptType::P2SH,
     };
 
     let amount_sat = sat_from_big_decimal(&amount, coin.utxo_arc.decimals)?;
