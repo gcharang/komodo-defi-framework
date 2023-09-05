@@ -123,7 +123,7 @@ impl WalletIndexedDb {
         let block = WalletDbBlocksTable {
             height: u32::from(block_height),
             hash: hash.to_vec(),
-            time: block_time as u32,
+            time: block_time,
             sapling_tree: encoded_tree,
             ticker: ticker.clone(),
         };
@@ -955,7 +955,7 @@ impl WalletWrite for WalletIndexedDb {
         updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
         let selfi = self.deref();
-        let insert = selfi
+        selfi
             .insert_block(
                 block.block_height,
                 block.block_hash,

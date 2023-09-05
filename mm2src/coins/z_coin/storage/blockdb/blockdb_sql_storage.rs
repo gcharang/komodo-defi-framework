@@ -25,7 +25,7 @@ impl From<ZcashClientError> for ZcoinStorageError {
             SqliteClientError::CorruptedData(err) => Self::CorruptedData(err),
             SqliteClientError::IncorrectHrpExtFvk => Self::IncorrectHrpExtFvk,
             SqliteClientError::InvalidNote => Self::InvalidNote(value.to_string()),
-            SqliteClientError::InvalidNoteId => Self::InvalidNoteId(value.to_string()),
+            SqliteClientError::InvalidNoteId => Self::InvalidNoteId,
             SqliteClientError::TableNotEmpty => Self::TableNotEmpty(value.to_string()),
             SqliteClientError::Bech32(err) => Self::DecodingError(err.to_string()),
             SqliteClientError::Base58(err) => Self::DecodingError(err.to_string()),
