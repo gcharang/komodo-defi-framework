@@ -16,33 +16,55 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 
+use crate::nft::nft_errors::ParseChainTypeError;
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
 
 #[cfg(target_arch = "wasm32")]
 use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
 
+/// Represents a request to list NFTs owned by the user across specified chains.
+///
+/// The request provides options such as pagination, limiting the number of results,
+/// and applying specific filters to the list.
 #[derive(Debug, Deserialize)]
 pub struct NftListReq {
+    /// List of chains to fetch the NFTs from.
     pub(crate) chains: Vec<Chain>,
+    /// Parameter indicating if the maximum number of NFTs should be fetched.
+    /// If true, then `limit` will be ignored.
     #[serde(default)]
     pub(crate) max: bool,
+    /// Limit to the number of NFTs returned in a single request.
     #[serde(default = "ten")]
     pub(crate) limit: usize,
+    /// Page number for pagination.
     pub(crate) page_number: Option<NonZeroUsize>,
+    /// Flag indicating if the returned list should be protected from potential spam.
     #[serde(default)]
     pub(crate) protect_from_spam: bool,
+    /// Optional filters to apply when listing the NFTs.
     pub(crate) filters: Option<NftListFilters>,
 }
 
+/// Filters that can be applied when listing NFTs to exclude potential threats or nuisances.
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub struct NftListFilters {
+    /// Exclude NFTs that are flagged as possible spam.
     #[serde(default)]
     pub(crate) exclude_spam: bool,
+    /// Exclude NFTs that are flagged as phishing attempts.
     #[serde(default)]
     pub(crate) exclude_phishing: bool,
 }
 
+/// Contains parameters required to fetch metadata for a specified NFT.
+/// # Fields
+/// * `token_address`: The address of the NFT token.
+/// * `token_id`: The ID of the NFT token.
+/// * `chain`: The blockchain chain where the NFT exists.
+/// * `protect_from_spam`: Indicates whether to check and redact potential spam. If set to true,
+///                        the internal function `protect_from_nft_spam` is utilized.
 #[derive(Debug, Deserialize)]
 pub struct NftMetadataReq {
     pub(crate) token_address: Address,
@@ -52,6 +74,14 @@ pub struct NftMetadataReq {
     pub(crate) protect_from_spam: bool,
 }
 
+/// Contains parameters required to refresh metadata for a specified NFT.
+/// # Fields
+/// * `token_address`: The address of the NFT token whose metadata needs to be refreshed.
+/// * `token_id`: The ID of the NFT token.
+/// * `chain`: The blockchain chain where the NFT exists.
+/// * `url`: URL to fetch the metadata.
+/// * `url_antispam`: URL used to validate if the fetched contract addresses are associated
+/// with spam contracts or if domain fields in the fetched metadata match known phishing domains.
 #[derive(Debug, Deserialize)]
 pub struct RefreshMetadataReq {
     pub(crate) token_address: Address,
@@ -61,11 +91,8 @@ pub struct RefreshMetadataReq {
     pub(crate) url_antispam: Url,
 }
 
-#[derive(Debug, Display)]
-pub enum ParseChainTypeError {
-    UnsupportedChainType,
-}
-
+/// Represents blockchains which are supported by NFT feature.
+/// Currently there are only EVM based chains.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Chain {
@@ -247,6 +274,8 @@ pub struct NftCommon {
     pub(crate) possible_spam: bool,
 }
 
+/// Represents an NFT with specific chain details, contract type, and other relevant attributes.
+/// This structure captures detailed information about an NFT.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Nft {
     #[serde(flatten)]
@@ -260,7 +289,9 @@ pub struct Nft {
     pub(crate) uri_meta: UriMeta,
 }
 
-/// This structure is for deserializing moralis NFT json to struct.
+/// Represents an NFT structure specifically for deserialization from Moralis's JSON response.
+///
+/// This structure is adapted to the specific format provided by Moralis's API.
 #[derive(Debug, Deserialize)]
 pub(crate) struct NftFromMoralis {
     #[serde(flatten)]
@@ -293,6 +324,8 @@ impl<T> std::ops::Deref for SerdeStringWrap<T> {
     fn deref(&self) -> &T { &self.0 }
 }
 
+/// Represents a detailed list of NFTs, including the total number of NFTs and the number of skipped NFTs.
+/// It is used as response of `get_nft_list` if it is successful.
 #[derive(Debug, Serialize)]
 pub struct NftList {
     pub(crate) nfts: Vec<Nft>,
@@ -473,6 +506,12 @@ pub struct NftTransferHistoryFilters {
     pub(crate) exclude_phishing: bool,
 }
 
+/// Contains parameters required to update NFT transfer history and NFT list.
+/// # Fields
+/// * `chains`: A list of blockchain chains for which the NFTs need to be updated.
+/// * `url`: URL to fetch the NFT data.
+/// * `url_antispam`: URL used to validate if the fetched contract addresses are associated
+/// with spam contracts or if domain fields in the fetched metadata match known phishing domains.
 #[derive(Debug, Deserialize)]
 pub struct UpdateNftReq {
     pub(crate) chains: Vec<Chain>,

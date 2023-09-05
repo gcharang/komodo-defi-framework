@@ -50,6 +50,8 @@ const BLOCKLIST_DOMAIN: &str = "domain";
 const BLOCKLIST_WALLET: &str = "wallet";
 const BLOCKLIST_SCAN: &str = "scan";
 
+/// `WithdrawNftResult` type represents the result of an NFT withdrawal operation. On success, it provides the details
+/// of the generated transaction meant for transferring the NFT. On failure, it details the encountered error.
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
 /// `get_nft_list` function returns list of NFTs on requested chains owned by user.
@@ -75,7 +77,20 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
     Ok(nft_list)
 }
 
-/// `get_nft_metadata` function returns info of one specific NFT.
+/// Retrieves detailed metadata for a specified NFT.
+///
+/// The function accesses the stored NFT data, based on provided token address,
+/// token ID, and chain, and returns comprehensive information about the NFT.
+/// It also checks and redacts potential spam if `protect_from_spam` in the request is set to true.
+///
+/// # Arguments
+///
+/// * `ctx`: Context required for handling internal operations.
+/// * `req`: A request containing details about the NFT to fetch.
+///
+/// # Returns
+///
+/// * `MmResult<Nft, GetNftInfoError>`: Result containing the desired NFT or an error.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -121,7 +136,20 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
     Ok(transfer_history_list)
 }
 
-/// `update_nft` function updates cache of nft transfer history and nft list.
+/// Updates NFT transfer history and NFT list in the DB.
+///
+/// This function refreshes the NFT transfer history and NFT list cache based on new
+/// data fetched from the provided `url`. The function ensures the local cache is in
+/// sync with the latest data from the source, validates against spam contract addresses and phishing domains.
+///
+/// # Arguments
+///
+/// * `ctx`: Context required for handling internal operations.
+/// * `req`: A request containing details about the NFTs to be updated and the source URL.
+///
+/// # Returns
+///
+/// * `MmResult<(), UpdateNftError>`: A result indicating success or an error.
 pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNftError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -290,7 +318,22 @@ fn prepare_uri_for_blocklist_endpoint(
     Ok(uri)
 }
 
-/// `refresh_nft_metadata` function refreshes metadata related to NFT with specified token address and token id.
+/// Refreshes and updates metadata associated with a specific NFT.
+///
+/// The function obtains updated metadata for an NFT using its token address and token id.
+/// It fetches the metadata from the provided `url` and validates it against possible spam and
+/// phishing domains using the provided `url_antispam`. If the fetched metadata or its domain
+/// is identified as spam or matches with any phishing domains, the NFT's `possible_spam` and/or
+/// `possible_phishing` flags are set to true.
+///
+/// # Arguments
+///
+/// * `ctx`: Context required for handling internal operations.
+/// * `req`: A request containing details about the NFT whose metadata needs to be refreshed.
+///
+/// # Returns
+///
+/// * `MmResult<(), UpdateNftError>`: A result indicating success or an error.
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -1013,6 +1056,7 @@ fn protect_from_history_spam(transfer: &mut NftTransferHistory) -> MmResult<(), 
 /// `collection_name` and `token_name` in `Nft` shouldn't contain any links,
 /// they must be just an arbitrary text, which represents NFT names.
 /// `symbol` also must be a text or sign that represents a symbol.
+/// This function also checks `metadata` field for spam.
 fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), ProtectFromSpamError> {
     let collection_name_spam = check_and_redact_if_spam(&mut nft.common.collection_name)?;
     let symbol_spam = check_and_redact_if_spam(&mut nft.common.symbol)?;
@@ -1024,6 +1068,7 @@ fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), ProtectFromSpamError> {
     }
     Ok(())
 }
+
 /// `check_nft_metadata_for_spam` function checks and redact spam in `metadata` field from `Nft`.
 ///
 /// **note:** `token_name` is usually called `name` in `metadata`.

@@ -9,6 +9,7 @@ use mm2_net::transport::SlurpError;
 use serde::{Deserialize, Serialize};
 use web3::Error;
 
+/// Enumerates potential errors that can arise when fetching NFT information.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum GetNftInfoError {
@@ -119,6 +120,16 @@ impl HttpStatusCode for GetNftInfoError {
     }
 }
 
+/// Enumerates possible errors that can occur while updating NFT details in the database.
+///
+/// The errors capture various issues that can arise during:
+/// - Metadata refresh
+/// - NFT transfer history updating
+/// - NFT list updating
+///
+/// The issues addressed include database errors, invalid hex strings,
+/// inconsistencies in block numbers, and problems related to fetching or interpreting
+/// fetched metadata.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum UpdateNftError {
@@ -290,4 +301,9 @@ impl From<GetInfoFromUriError> for UpdateSpamPhishingError {
 
 impl<T: NftStorageError> From<T> for UpdateSpamPhishingError {
     fn from(err: T) -> Self { UpdateSpamPhishingError::DbError(format!("{:?}", err)) }
+}
+
+#[derive(Debug, Display)]
+pub enum ParseChainTypeError {
+    UnsupportedChainType,
 }
