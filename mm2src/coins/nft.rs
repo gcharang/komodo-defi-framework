@@ -155,48 +155,48 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
-    for chain in req.chains.into_iter() {
-        let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, &chain).await?;
+    for chain in req.chains.iter() {
+        let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
 
         let from_block = if transfer_history_initialized {
-            let last_transfer_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, &chain).await?;
+            let last_transfer_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, chain).await?;
             last_transfer_block.map(|b| b + 1)
         } else {
-            NftTransferHistoryStorageOps::init(&storage, &chain).await?;
+            NftTransferHistoryStorageOps::init(&storage, chain).await?;
             None
         };
-        let nft_transfers = get_moralis_nft_transfers(&ctx, &chain, from_block, &req.url).await?;
-        storage.add_transfers_to_history(chain, nft_transfers).await?;
+        let nft_transfers = get_moralis_nft_transfers(&ctx, chain, from_block, &req.url).await?;
+        storage.add_transfers_to_history(*chain, nft_transfers).await?;
 
-        let nft_block = match NftListStorageOps::get_last_block_number(&storage, &chain).await {
+        let nft_block = match NftListStorageOps::get_last_block_number(&storage, chain).await {
             Ok(Some(block)) => block,
             Ok(None) => {
                 // if there are no rows in NFT LIST table we can try to get all info from moralis.
-                let nfts = cache_nfts_from_moralis(&ctx, &storage, &chain, &req.url).await?;
-                update_meta_in_transfers(&storage, &chain, nfts).await?;
-                update_transfers_with_empty_meta(&storage, &chain, &req.url).await?;
-                update_spam(&ctx, &storage, chain, &req.url_antispam).await?;
+                let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
+                update_meta_in_transfers(&storage, chain, nfts).await?;
+                update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
+                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
                 continue;
             },
             Err(_) => {
                 // if there is an error, then NFT LIST table doesnt exist, so we need to cache from mroalis.
-                NftListStorageOps::init(&storage, &chain).await?;
-                let nft_list = get_moralis_nft_list(&ctx, &chain, &req.url).await?;
-                let last_scanned_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, &chain)
+                NftListStorageOps::init(&storage, chain).await?;
+                let nft_list = get_moralis_nft_list(&ctx, chain, &req.url).await?;
+                let last_scanned_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, chain)
                     .await?
                     .unwrap_or(0);
                 storage
-                    .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
+                    .add_nfts_to_list(*chain, nft_list.clone(), last_scanned_block)
                     .await?;
-                update_meta_in_transfers(&storage, &chain, nft_list).await?;
-                update_transfers_with_empty_meta(&storage, &chain, &req.url).await?;
-                update_spam(&ctx, &storage, chain, &req.url_antispam).await?;
+                update_meta_in_transfers(&storage, chain, nft_list).await?;
+                update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
+                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
                 continue;
             },
         };
         let scanned_block =
             storage
-                .get_last_scanned_block(&chain)
+                .get_last_scanned_block(chain)
                 .await?
                 .ok_or_else(|| UpdateNftError::LastScannedBlockNotFound {
                     last_nft_block: nft_block.to_string(),
@@ -209,9 +209,9 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 last_nft_block: nft_block.to_string(),
             });
         }
-        update_nft_list(ctx.clone(), &storage, &chain, scanned_block + 1, &req.url).await?;
-        update_transfers_with_empty_meta(&storage, &chain, &req.url).await?;
-        update_spam(&ctx, &storage, chain, &req.url_antispam).await?;
+        update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
+        update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
+        update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
         // todo update phishing domains
     }
     Ok(())
