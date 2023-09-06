@@ -516,8 +516,8 @@ impl Qrc20Coin {
         &self,
         contract_outputs: Vec<ContractCallOutput>,
     ) -> Result<GenerateQrc20TxResult, MmError<Qrc20GenTxError>> {
-        let my_address = self.utxo.derivation_method.single_addr_or_err()?;
-        let (unspents, _) = self.get_unspent_ordered_list(my_address).await?;
+        let my_address = self.utxo.derivation_method.single_addr_or_err().await?;
+        let (unspents, _) = self.get_unspent_ordered_list(&my_address).await?;
 
         let mut gas_fee = 0;
         let mut outputs = Vec::with_capacity(contract_outputs.len());
@@ -527,13 +527,14 @@ impl Qrc20Coin {
         }
 
         let (unsigned, data) = UtxoTxBuilder::new(self)
+            .await
             .add_available_inputs(unspents)
             .add_outputs(outputs)
             .with_gas_fee(gas_fee)
             .build()
             .await?;
 
-        let my_address = self.utxo.derivation_method.single_addr_or_err()?;
+        let my_address = self.utxo.derivation_method.single_addr_or_err().await?;
         let key_pair = self.utxo.priv_key_policy.activated_key_or_err()?;
 
         let prev_script = ScriptBuilder::build_p2pkh(&my_address.hash);
@@ -1183,6 +1184,7 @@ impl MarketCoinOps for Qrc20Coin {
         let fut = async move {
             let my_address = coin
                 .my_addr_as_contract_addr()
+                .await
                 .mm_err(|e| BalanceError::Internal(e.to_string()))?;
             let params = [Token::Address(my_address)];
             let contract_address = coin.contract_address;
@@ -1547,8 +1549,8 @@ async fn qrc20_withdraw(coin: Qrc20Coin, req: WithdrawRequest) -> WithdrawResult
         .await
         .mm_err(|gen_tx_error| gen_tx_error.into_withdraw_error(coin.platform.clone(), coin.utxo.decimals))?;
 
-    let my_address = coin.utxo.derivation_method.single_addr_or_err()?;
-    let received_by_me = if to_addr == *my_address {
+    let my_address = coin.utxo.derivation_method.single_addr_or_err().await?;
+    let received_by_me = if to_addr == my_address {
         qrc20_amount.clone()
     } else {
         0.into()

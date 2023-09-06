@@ -153,6 +153,7 @@ where
         let outputs = vec![TransactionOutput { value, script_pubkey }];
 
         let mut tx_builder = UtxoTxBuilder::new(coin)
+            .await
             .with_from_address(self.sender_address())
             .add_available_inputs(unspents)
             .add_outputs(outputs)

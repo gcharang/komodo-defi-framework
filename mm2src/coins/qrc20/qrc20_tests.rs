@@ -67,9 +67,9 @@ fn test_withdraw_to_p2sh_address_should_fail() {
 
     let p2sh_address = Address {
         prefix: coin.as_ref().conf.p2sh_addr_prefix,
-        hash: coin.as_ref().derivation_method.unwrap_single_addr().hash.clone(),
+        hash: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash,
         t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
-        checksum_type: coin.as_ref().derivation_method.unwrap_single_addr().checksum_type,
+        checksum_type: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).checksum_type,
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Standard,
     };
@@ -149,7 +149,7 @@ fn test_validate_maker_payment() {
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
 
     assert_eq!(
-        *coin.utxo.derivation_method.unwrap_single_addr(),
+        block_on(coin.utxo.derivation_method.unwrap_single_addr()),
         "qUX9FGHubczidVjWPCUWuwCUJWpkAtGCgf".into()
     );
 
@@ -248,7 +248,7 @@ fn test_wait_for_confirmations_excepted() {
     let (_ctx, coin) = qrc20_coin_for_test(priv_key, None);
 
     assert_eq!(
-        *coin.utxo.derivation_method.unwrap_single_addr(),
+        block_on(coin.utxo.derivation_method.unwrap_single_addr()),
         "qUX9FGHubczidVjWPCUWuwCUJWpkAtGCgf".into()
     );
 

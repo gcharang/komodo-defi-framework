@@ -363,8 +363,12 @@ pub(crate) mod common_impl {
         xpub_extractor: &XPubExtractor,
     ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
     where
-        Coin:
-            HDWalletBalanceOps + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + Send + Sync,
+        Coin: HDWalletBalanceOps
+            + CoinWithDerivationMethod<
+                Address = <Coin as HDWalletCoinOps>::Address,
+                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+            > + Send
+            + Sync,
         XPubExtractor: HDXPubExtractor,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
@@ -403,7 +407,11 @@ pub(crate) mod common_impl {
 
     pub async fn revert_creating_account<Coin>(coin: &Coin, account_id: u32)
     where
-        Coin: HDWalletBalanceOps + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + Sync,
+        Coin: HDWalletBalanceOps
+            + CoinWithDerivationMethod<
+                Address = <Coin as HDWalletCoinOps>::Address,
+                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+            > + Sync,
     {
         if let Some(hd_wallet) = coin.derivation_method().hd_wallet() {
             hd_wallet.remove_account_if_last(account_id).await;

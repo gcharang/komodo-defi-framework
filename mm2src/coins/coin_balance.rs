@@ -110,6 +110,9 @@ pub struct EnabledCoinBalanceParams {
     #[serde(default)]
     pub scan_policy: EnableCoinScanPolicy,
     pub min_addresses_number: Option<u32>,
+    // Todo: check if this is right or we should rename those?
+    pub account_id: Option<u32>,
+    pub address_id: Option<u32>,
 }
 
 #[async_trait]
@@ -120,8 +123,10 @@ pub trait CoinBalanceReportOps {
 #[async_trait]
 impl<Coin> CoinBalanceReportOps for Coin
 where
-    Coin: CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
-        + HDWalletBalanceOps
+    Coin: CoinWithDerivationMethod<
+            Address = <Coin as HDWalletCoinOps>::Address,
+            HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+        > + HDWalletBalanceOps
         + MarketCoinOps
         + Sync,
     <Coin as CoinWithDerivationMethod>::Address: fmt::Display + Sync,
@@ -161,8 +166,10 @@ pub trait EnableCoinBalanceOps {
 #[async_trait]
 impl<Coin> EnableCoinBalanceOps for Coin
 where
-    Coin: CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
-        + HDWalletBalanceOps
+    Coin: CoinWithDerivationMethod<
+            Address = <Coin as HDWalletCoinOps>::Address,
+            HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+        > + HDWalletBalanceOps
         + MarketCoinOps
         + Sync,
     <Coin as CoinWithDerivationMethod>::Address: fmt::Display + Sync,
@@ -396,7 +403,7 @@ pub mod common_impl {
             accounts: Vec::with_capacity(accounts.len() + 1),
         };
 
-        if accounts.is_empty() {
+        if accounts.is_empty() || params.account_id.and_then(|id| accounts.get(&id)).is_none() {
             // Is seems that we couldn't find any HD account from the HD wallet storage.
             drop(accounts);
             info!(
@@ -406,7 +413,10 @@ pub mod common_impl {
 
             // Create new HD account.
             // Todo: instead of account_id being none, we should use the account_id from the activation request. We should also add the address in the activation request.
-            let mut new_account = coin.create_new_account(hd_wallet, xpub_extractor, None).await?;
+            // Todo: we should use the account for the swap address even if accounts are not empty.
+            let mut new_account = coin
+                .create_new_account(hd_wallet, xpub_extractor, params.account_id)
+                .await?;
             let scan_new_addresses = matches!(
                 params.scan_policy,
                 EnableCoinScanPolicy::ScanIfNewWallet | EnableCoinScanPolicy::Scan
@@ -418,7 +428,7 @@ pub mod common_impl {
                 &mut new_account,
                 &address_scanner,
                 scan_new_addresses,
-                params.min_addresses_number,
+                params.min_addresses_number.max(params.address_id),
             )
             .await?;
             result.accounts.push(account_balance);
@@ -474,6 +484,7 @@ pub mod common_impl {
         }
 
         let to_generate = min_addresses_number - actual_addresses_number;
+        // Todo: should we use chain from the activation request for swap account too?
         let chain = hd_wallet.default_receiver_chain();
         let ticker = coin.ticker();
         let account_id = hd_account.account_id();

@@ -313,8 +313,9 @@ impl BchCoin {
             .as_ref()
             .derivation_method
             .single_addr_or_err()
+            .await
             .mm_err(|e| UtxoRpcError::Internal(e.to_string()))?;
-        let (mut bch_unspents, recently_spent) = self.bch_unspents_for_spend(my_address).await?;
+        let (mut bch_unspents, recently_spent) = self.bch_unspents_for_spend(&my_address).await?;
         let (mut slp_unspents, standard_utxos) = (
             bch_unspents.slp.remove(token_id).unwrap_or_default(),
             bch_unspents.standard,
@@ -332,8 +333,9 @@ impl BchCoin {
             .as_ref()
             .derivation_method
             .single_addr_or_err()
+            .await
             .mm_err(|e| UtxoRpcError::Internal(e.to_string()))?;
-        let mut bch_unspents = self.bch_unspents_for_display(my_address).await?;
+        let mut bch_unspents = self.bch_unspents_for_display(&my_address).await?;
         let (mut slp_unspents, standard_utxos) = (
             bch_unspents.slp.remove(token_id).unwrap_or_default(),
             bch_unspents.standard,
@@ -351,8 +353,8 @@ impl BchCoin {
         self.slp_tokens_infos.lock().unwrap()
     }
 
-    pub fn get_my_slp_address(&self) -> Result<CashAddress, String> {
-        let my_address = try_s!(self.as_ref().derivation_method.single_addr_or_err());
+    pub async fn get_my_slp_address(&self) -> Result<CashAddress, String> {
+        let my_address = try_s!(self.as_ref().derivation_method.single_addr_or_err().await);
         let slp_address = my_address.to_cashaddress(
             &self.slp_prefix().to_string(),
             self.as_ref().conf.pub_addr_prefix,
@@ -1163,8 +1165,8 @@ impl MarketCoinOps for BchCoin {
     fn my_balance(&self) -> BalanceFut<CoinBalance> {
         let coin = self.clone();
         let fut = async move {
-            let my_address = coin.as_ref().derivation_method.single_addr_or_err()?;
-            let bch_unspents = coin.bch_unspents_for_display(my_address).await?;
+            let my_address = coin.as_ref().derivation_method.single_addr_or_err().await?;
+            let bch_unspents = coin.bch_unspents_for_display(&my_address).await?;
             Ok(bch_unspents.platform_balance(coin.as_ref().decimals))
         };
         Box::new(fut.boxed().compat())
@@ -1439,8 +1441,8 @@ impl CoinWithTxHistoryV2 for BchCoin {
 #[async_trait]
 impl UtxoTxHistoryOps for BchCoin {
     async fn my_addresses(&self) -> MmResult<HashSet<Address>, UtxoMyAddressesHistoryError> {
-        let my_address = self.as_ref().derivation_method.single_addr_or_err()?;
-        Ok(std::iter::once(my_address.clone()).collect())
+        let my_address = self.as_ref().derivation_method.single_addr_or_err().await?;
+        Ok(std::iter::once(my_address).collect())
     }
 
     async fn tx_details_by_hash<Storage>(

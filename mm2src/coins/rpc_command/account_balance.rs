@@ -70,7 +70,11 @@ pub mod common_impl {
         params: AccountBalanceParams,
     ) -> MmResult<HDAccountBalanceResponse, HDAccountBalanceRpcError>
     where
-        Coin: HDWalletBalanceOps + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + Sync,
+        Coin: HDWalletBalanceOps
+            + CoinWithDerivationMethod<
+                Address = <Coin as HDWalletCoinOps>::Address,
+                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+            > + Sync,
         <Coin as HDWalletCoinOps>::Address: fmt::Display + Clone,
     {
         let account_id = params.account_index;

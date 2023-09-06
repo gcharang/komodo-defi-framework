@@ -263,9 +263,10 @@ impl PlatformWithTokensActivationOps for BchCoin {
     ) -> Result<BchWithTokensActivationResult, MmError<BchWithTokensActivationError>> {
         let current_block = self.as_ref().rpc_client.get_block_count().compat().await?;
 
-        let my_address = self.as_ref().derivation_method.single_addr_or_err()?;
+        let my_address = self.as_ref().derivation_method.single_addr_or_err().await?;
         let my_slp_address = self
             .get_my_slp_address()
+            .await
             .map_to_mm(BchWithTokensActivationError::Internal)?
             .encode()
             .map_to_mm(BchWithTokensActivationError::Internal)?;
@@ -298,7 +299,7 @@ impl PlatformWithTokensActivationOps for BchCoin {
             });
         }
 
-        let bch_unspents = self.bch_unspents_for_display(my_address).await?;
+        let bch_unspents = self.bch_unspents_for_display(&my_address).await?;
         bch_address_info.balances = Some(bch_unspents.platform_balance(self.decimals()));
         drop_mutability!(bch_address_info);
 

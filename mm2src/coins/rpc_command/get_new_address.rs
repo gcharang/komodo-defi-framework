@@ -201,6 +201,8 @@ pub struct GetNewAddressRequest {
 pub struct GetNewAddressParams {
     pub(crate) account_id: u32,
     pub(crate) chain: Option<Bip44Chain>,
+    // Todo: should we use min_address_number instead????
+    pub(crate) address_id: Option<u32>,
     // The max number of empty addresses in a row.
     // If there are more or equal to the `gap_limit` last empty addresses in a row,
     // we'll not allow to generate new address.
@@ -310,6 +312,7 @@ impl RpcTask for InitGetNewAddressTask {
 
 /// Generates a new address.
 /// TODO remove once GUI integrates `task::get_new_address::init`.
+// Todo: should keep this function probably?
 pub async fn get_new_address(
     ctx: MmArc,
     req: GetNewAddressRequest,
@@ -391,8 +394,12 @@ pub(crate) mod common_impl {
         params: GetNewAddressParams,
     ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
     where
-        Coin:
-            HDWalletBalanceOps + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + Sync + Send,
+        Coin: HDWalletBalanceOps
+            + CoinWithDerivationMethod<
+                Address = <Coin as HDWalletCoinOps>::Address,
+                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+            > + Sync
+            + Send,
         <Coin as HDWalletCoinOps>::Address: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
@@ -407,7 +414,7 @@ pub(crate) mod common_impl {
         let gap_limit = params.gap_limit.unwrap_or_else(|| hd_wallet.gap_limit());
 
         // Check if we can generate new address.
-        check_if_can_get_new_address(coin, hd_wallet, &hd_account, chain, gap_limit).await?;
+        check_if_can_get_new_address(coin, hd_wallet, &hd_account, chain, params.address_id, gap_limit).await?;
 
         let HDAddress {
             address,
@@ -435,8 +442,12 @@ pub(crate) mod common_impl {
     ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
     where
         ConfirmAddress: HDConfirmAddress,
-        Coin:
-            HDWalletBalanceOps + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + Send + Sync,
+        Coin: HDWalletBalanceOps
+            + CoinWithDerivationMethod<
+                Address = <Coin as HDWalletCoinOps>::Address,
+                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
+            > + Send
+            + Sync,
         <Coin as HDWalletCoinOps>::Address: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
@@ -451,7 +462,7 @@ pub(crate) mod common_impl {
         let gap_limit = params.gap_limit.unwrap_or_else(|| hd_wallet.gap_limit());
 
         // Check if we can generate new address.
-        check_if_can_get_new_address(coin, hd_wallet, &hd_account, chain, gap_limit).await?;
+        check_if_can_get_new_address(coin, hd_wallet, &hd_account, chain, params.address_id, gap_limit).await?;
 
         let HDAddress {
             address,
@@ -477,6 +488,7 @@ pub(crate) mod common_impl {
         hd_wallet: &Coin::HDWallet,
         hd_account: &Coin::HDAccount,
         chain: Bip44Chain,
+        address_id: Option<u32>,
         gap_limit: u32,
     ) -> MmResult<(), GetNewAddressRpcError>
     where
@@ -497,7 +509,8 @@ pub(crate) mod common_impl {
 
         // Address IDs start from 0, so the `last_known_address_id = known_addresses_number - 1`.
         // At this point we are sure that `known_addresses_number > 0`.
-        let last_address_id = known_addresses_number - 1;
+        // Todo: maybe change this in the future?
+        let last_address_id = address_id.unwrap_or(known_addresses_number - 1);
 
         for address_id in (0..=last_address_id).rev() {
             let HDAddress { address, .. } = coin.derive_address(hd_account, chain, address_id).await?;
@@ -505,6 +518,7 @@ pub(crate) mod common_impl {
                 return Ok(());
             }
 
+            // Todo: fix this or pass right gap_limit
             let empty_addresses_number = last_address_id - address_id + 1;
             if empty_addresses_number >= gap_limit {
                 // We already have `gap_limit` empty addresses.

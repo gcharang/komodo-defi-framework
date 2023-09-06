@@ -1420,19 +1420,23 @@ impl UtxoActivationParams {
         let scan_policy = json::from_value::<Option<EnableCoinScanPolicy>>(req["scan_policy"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidScanPolicy)?
             .unwrap_or_default();
+        // Todo: should we use this instead of the one from path_to_address?
         let min_addresses_number = json::from_value(req["min_addresses_number"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidMinAddressesNumber)?;
-        let enable_params = EnabledCoinBalanceParams {
-            scan_policy,
-            min_addresses_number,
-        };
-        let priv_key_policy = json::from_value::<Option<PrivKeyActivationPolicy>>(req["priv_key_policy"].clone())
-            .map_to_mm(UtxoFromLegacyReqErr::InvalidPrivKeyPolicy)?
-            .unwrap_or(PrivKeyActivationPolicy::ContextPrivKey);
         // Todo: should this be removed? It's used in BCH v2 activation though but HD wallet shouldn't be supported for legacy methods after this PR
         let path_to_address = json::from_value::<Option<StandardHDCoinAddress>>(req["path_to_address"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidAddressIndex)?
             .unwrap_or_default();
+        let enable_params = EnabledCoinBalanceParams {
+            scan_policy,
+            min_addresses_number,
+            // Todo: recheck this
+            account_id: Some(path_to_address.account),
+            address_id: Some(path_to_address.address_index),
+        };
+        let priv_key_policy = json::from_value::<Option<PrivKeyActivationPolicy>>(req["priv_key_policy"].clone())
+            .map_to_mm(UtxoFromLegacyReqErr::InvalidPrivKeyPolicy)?
+            .unwrap_or(PrivKeyActivationPolicy::ContextPrivKey);
 
         Ok(UtxoActivationParams {
             mode,
@@ -1491,12 +1495,21 @@ pub struct UtxoHDWallet {
     pub derivation_path: StandardHDPathToCoin,
     /// User accounts.
     pub accounts: HDAccountsMutex<UtxoHDAccount>,
+    /// The address that's specifically enabled for swap operations.
+    ///
+    /// For some wallet types, such as hardware wallets, this will be `None`
+    /// until swap support is implemented for them. When set, this address
+    /// is ready to facilitate swap transactions.
+    // Todo: should use the same structs used in withdraw from. E.g. use HDAccountAddressId here instead
+    pub enabled_address: Option<StandardHDCoinAddress>,
     // The max number of empty addresses in a row.
     // If transactions were sent to an address outside the `gap_limit`, they will not be identified.
     pub gap_limit: u32,
 }
 
+#[async_trait]
 impl HDWalletOps for UtxoHDWallet {
+    type Address = Address;
     type HDAccount = UtxoHDAccount;
 
     fn coin_type(&self) -> u32 { self.derivation_path.coin_type() }
@@ -1504,6 +1517,35 @@ impl HDWalletOps for UtxoHDWallet {
     fn gap_limit(&self) -> u32 { self.gap_limit }
 
     fn get_accounts_mutex(&self) -> &HDAccountsMutex<Self::HDAccount> { &self.accounts }
+
+    async fn get_enabled_address(&self) -> Option<Self::Address> {
+        let enabled_address = match self.enabled_address.clone() {
+            Some(id) => id,
+            None => return None,
+        };
+
+        let account = match self.get_account(enabled_address.account).await {
+            Some(account) => account,
+            None => return None,
+        };
+
+        let hd_address_id = HDAddressId {
+            chain: match enabled_address.is_change {
+                false => Bip44Chain::External,
+                true => Bip44Chain::Internal,
+            },
+            address_id: enabled_address.address_index,
+        };
+
+        let address = account
+            .derived_addresses
+            .lock()
+            .await
+            .get(&hd_address_id)
+            .map(|addr| addr.address.clone());
+
+        address
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1718,9 +1760,9 @@ pub async fn kmd_rewards_info<T: UtxoCommonOps>(coin: &T) -> Result<Vec<KmdRewar
     }
 
     let utxo = coin.as_ref();
-    let my_address = try_s!(utxo.derivation_method.single_addr_or_err());
+    let my_address = try_s!(utxo.derivation_method.single_addr_or_err().await);
     let rpc_client = &utxo.rpc_client;
-    let mut unspents = try_s!(rpc_client.list_unspent(my_address, utxo.decimals).compat().await);
+    let mut unspents = try_s!(rpc_client.list_unspent(&my_address, utxo.decimals).compat().await);
     // Reorder from highest to lowest unspent outputs.
     unspents.sort_unstable_by(|x, y| y.value.cmp(&x.value));
 
@@ -1785,8 +1827,8 @@ async fn send_outputs_from_my_address_impl<T>(
 where
     T: UtxoCommonOps + GetUtxoListOps,
 {
-    let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err());
-    let (unspents, recently_sent_txs) = try_tx_s!(coin.get_unspent_ordered_list(my_address).await);
+    let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err().await);
+    let (unspents, recently_sent_txs) = try_tx_s!(coin.get_unspent_ordered_list(&my_address).await);
     generate_and_send_tx(&coin, unspents, None, FeePolicy::SendExact, recently_sent_txs, outputs).await
 }
 
@@ -1802,10 +1844,11 @@ async fn generate_and_send_tx<T>(
 where
     T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps + UtxoTxBroadcastOps,
 {
-    let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err());
+    let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err().await);
     let key_pair = try_tx_s!(coin.as_ref().priv_key_policy.activated_key_or_err());
 
     let mut builder = UtxoTxBuilder::new(coin)
+        .await
         .add_available_inputs(unspents)
         .add_outputs(outputs)
         .with_fee_policy(fee_policy);

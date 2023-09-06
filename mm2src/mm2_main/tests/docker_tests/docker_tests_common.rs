@@ -28,6 +28,7 @@ use coins::{CoinProtocol, ConfirmPaymentInput, MarketCoinOps, PrivKeyBuildPolicy
 use crypto::privkey::key_pair_from_seed;
 use crypto::Secp256k1Secret;
 use ethereum_types::H160 as H160Eth;
+use futures::TryFutureExt;
 use futures01::Future;
 use http::StatusCode;
 use keys::{Address, AddressHashEnum, KeyPair, NetworkPrefix as CashAddrPrefix};
@@ -536,7 +537,7 @@ pub fn fill_qrc20_address(coin: &Qrc20Coin, amount: BigDecimal, timeout: u64) {
     };
 
     let from_addr = get_address_by_label(coin, QTUM_ADDRESS_LABEL);
-    let to_addr = coin.my_addr_as_contract_addr().unwrap();
+    let to_addr = coin.my_addr_as_contract_addr().compat().wait().unwrap();
     let satoshis = sat_from_big_decimal(&amount, coin.as_ref().decimals).expect("!sat_from_big_decimal");
 
     let hash = client

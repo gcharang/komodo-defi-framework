@@ -175,12 +175,13 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
     ) -> UtxoCoinBuildResult<UtxoCoinFields> {
         let conf = UtxoConfBuilder::new(self.conf(), self.activation_params(), self.ticker()).build()?;
 
+        let path_to_address = self.activation_params().path_to_address.clone();
         let derivation_path = conf
             .derivation_path
             .as_ref()
             .or_mm_err(|| UtxoConfError::DerivationPathIsNotSet)?;
         let secret = global_hd_ctx
-            .derive_secp256k1_secret(derivation_path, &self.activation_params().path_to_address)
+            .derive_secp256k1_secret(derivation_path, &path_to_address)
             .mm_err(|e| UtxoCoinBuildError::Internal(e.to_string()))?;
         let private = Private {
             prefix: conf.wif_prefix,
@@ -211,6 +212,7 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
             address_format,
             derivation_path: derivation_path.clone(),
             accounts: HDAccountsMutex::new(accounts),
+            enabled_address: Some(path_to_address),
             gap_limit,
         };
         let derivation_method = DerivationMethod::HDWallet(hd_wallet);
@@ -322,6 +324,7 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             address_format,
             derivation_path,
             accounts: HDAccountsMutex::new(accounts),
+            enabled_address: None,
             gap_limit,
         };
 

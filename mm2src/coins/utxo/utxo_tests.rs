@@ -199,7 +199,7 @@ fn test_generate_transaction() {
         value: 999,
     }];
 
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs);
     let generated = block_on(builder.build());
@@ -217,7 +217,7 @@ fn test_generate_transaction() {
         value: 98001,
     }];
 
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs);
     let generated = block_on(builder.build()).unwrap();
@@ -237,12 +237,13 @@ fn test_generate_transaction() {
     }];
 
     let outputs = vec![TransactionOutput {
-        script_pubkey: Builder::build_p2pkh(&coin.as_ref().derivation_method.unwrap_single_addr().hash).to_bytes(),
+        script_pubkey: Builder::build_p2pkh(&block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash)
+            .to_bytes(),
         value: 100000,
     }];
 
     // test that fee is properly deducted from output amount equal to input amount (max withdraw case)
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs)
         .with_fee_policy(FeePolicy::DeductFromOutput(0));
@@ -268,7 +269,7 @@ fn test_generate_transaction() {
     }];
 
     // test that generate_transaction returns an error when input amount is not sufficient to cover output + fee
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs);
 
@@ -957,7 +958,8 @@ fn test_utxo_lock() {
     let coin = utxo_coin_for_test(client.into(), None, false);
     let output = TransactionOutput {
         value: 1000000,
-        script_pubkey: Builder::build_p2pkh(&coin.as_ref().derivation_method.unwrap_single_addr().hash).to_bytes(),
+        script_pubkey: Builder::build_p2pkh(&block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash)
+            .to_bytes(),
     };
     let mut futures = vec![];
     for _ in 0..5 {
@@ -1146,7 +1148,7 @@ fn test_generate_transaction_relay_fee_is_used_when_dynamic_fee_is_lower() {
         value: 900000000,
     }];
 
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs)
         .with_fee(ActualTxFee::Dynamic(100));
@@ -1188,7 +1190,7 @@ fn test_generate_transaction_relay_fee_is_used_when_dynamic_fee_is_lower_and_ded
         value: 1000000000,
     }];
 
-    let tx_builder = UtxoTxBuilder::new(&coin)
+    let tx_builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs)
         .with_fee_policy(FeePolicy::DeductFromOutput(0))
@@ -1236,7 +1238,7 @@ fn test_generate_tx_fee_is_correct_when_dynamic_fee_is_larger_than_relay() {
         value: 19000000000,
     }];
 
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents)
         .add_outputs(outputs)
         .with_fee(ActualTxFee::Dynamic(1000));
@@ -1554,7 +1556,8 @@ fn test_spam_rick() {
 
     let output = TransactionOutput {
         value: 1000000,
-        script_pubkey: Builder::build_p2pkh(&coin.as_ref().derivation_method.unwrap_single_addr().hash).to_bytes(),
+        script_pubkey: Builder::build_p2pkh(&block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash)
+            .to_bytes(),
     };
     let mut futures = vec![];
     for _ in 0..5 {
@@ -2740,7 +2743,7 @@ fn test_generate_tx_doge_fee() {
         value: 100000000,
         script_pubkey: vec![0; 26].into(),
     }];
-    let builder = UtxoTxBuilder::new(&doge)
+    let builder = block_on(UtxoTxBuilder::new(&doge))
         .add_available_inputs(unspents)
         .add_outputs(outputs);
     let (_, data) = block_on(builder.build()).unwrap();
@@ -2760,7 +2763,7 @@ fn test_generate_tx_doge_fee() {
         40
     ];
 
-    let builder = UtxoTxBuilder::new(&doge)
+    let builder = block_on(UtxoTxBuilder::new(&doge))
         .add_available_inputs(unspents)
         .add_outputs(outputs);
     let (_, data) = block_on(builder.build()).unwrap();
@@ -2780,7 +2783,7 @@ fn test_generate_tx_doge_fee() {
         60
     ];
 
-    let builder = UtxoTxBuilder::new(&doge)
+    let builder = block_on(UtxoTxBuilder::new(&doge))
         .add_available_inputs(unspents)
         .add_outputs(outputs);
     let (_, data) = block_on(builder.build()).unwrap();
@@ -3090,9 +3093,9 @@ fn test_withdraw_to_p2pkh() {
     // Create a p2pkh address for the test coin
     let p2pkh_address = Address {
         prefix: coin.as_ref().conf.pub_addr_prefix,
-        hash: coin.as_ref().derivation_method.unwrap_single_addr().hash.clone(),
+        hash: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash,
         t_addr_prefix: coin.as_ref().conf.pub_t_addr_prefix,
-        checksum_type: coin.as_ref().derivation_method.unwrap_single_addr().checksum_type,
+        checksum_type: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).checksum_type,
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Standard,
     };
@@ -3138,9 +3141,9 @@ fn test_withdraw_to_p2sh() {
     // Create a p2sh address for the test coin
     let p2sh_address = Address {
         prefix: coin.as_ref().conf.p2sh_addr_prefix,
-        hash: coin.as_ref().derivation_method.unwrap_single_addr().hash.clone(),
+        hash: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash,
         t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
-        checksum_type: coin.as_ref().derivation_method.unwrap_single_addr().checksum_type,
+        checksum_type: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).checksum_type,
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Standard,
     };
@@ -3186,9 +3189,9 @@ fn test_withdraw_to_p2wpkh() {
     // Create a p2wpkh address for the test coin
     let p2wpkh_address = Address {
         prefix: coin.as_ref().conf.pub_addr_prefix,
-        hash: coin.as_ref().derivation_method.unwrap_single_addr().hash.clone(),
+        hash: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).hash,
         t_addr_prefix: coin.as_ref().conf.pub_t_addr_prefix,
-        checksum_type: coin.as_ref().derivation_method.unwrap_single_addr().checksum_type,
+        checksum_type: block_on(coin.as_ref().derivation_method.unwrap_single_addr()).checksum_type,
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Segwit,
     };
@@ -3358,10 +3361,10 @@ fn test_split_qtum() {
     let ctx = MmCtxBuilder::new().into_mm_arc();
     let params = UtxoActivationParams::from_legacy_req(&req).unwrap();
     let coin = block_on(qtum_coin_with_priv_key(&ctx, "QTUM", &conf, &params, priv_key)).unwrap();
-    let p2pkh_address = coin.as_ref().derivation_method.unwrap_single_addr();
-    let script: Script = output_script(p2pkh_address, ScriptType::P2PKH);
+    let p2pkh_address = block_on(coin.as_ref().derivation_method.unwrap_single_addr());
+    let script: Script = output_script(&p2pkh_address, ScriptType::P2PKH);
     let key_pair = coin.as_ref().priv_key_policy.activated_key_or_err().unwrap();
-    let (unspents, _) = block_on(coin.get_mature_unspent_ordered_list(p2pkh_address)).expect("Unspent list is empty");
+    let (unspents, _) = block_on(coin.get_mature_unspent_ordered_list(&p2pkh_address)).expect("Unspent list is empty");
     log!("Mature unspents vec = {:?}", unspents.mature);
     let outputs = vec![
         TransactionOutput {
@@ -3370,7 +3373,7 @@ fn test_split_qtum() {
         };
         40
     ];
-    let builder = UtxoTxBuilder::new(&coin)
+    let builder = block_on(UtxoTxBuilder::new(&coin))
         .add_available_inputs(unspents.mature)
         .add_outputs(outputs);
     let (unsigned, data) = block_on(builder.build()).unwrap();
@@ -3519,6 +3522,7 @@ fn test_account_balance_rpc() {
         address_format: UtxoAddressFormat::Standard,
         derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
         accounts: HDAccountsMutex::new(hd_accounts),
+        enabled_address: None,
         gap_limit: 3,
     });
     let coin = utxo_coin_from_fields(fields);
@@ -3846,6 +3850,7 @@ fn test_scan_for_new_addresses() {
         address_format: UtxoAddressFormat::Standard,
         derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
         accounts: HDAccountsMutex::new(hd_accounts),
+        enabled_address: None,
         gap_limit: 3,
     });
     let coin = utxo_coin_from_fields(fields);
@@ -3983,6 +3988,7 @@ fn test_get_new_address() {
         address_format: UtxoAddressFormat::Standard,
         derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
         accounts: HDAccountsMutex::new(hd_accounts),
+        enabled_address: None,
         gap_limit: 2,
     });
     fields.conf.trezor_coin = Some("Komodo".to_string());
@@ -3997,6 +4003,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 0,
         chain: Some(Bip44Chain::External),
+        address_id: None,
         gap_limit: None, // Will be used 2 from `UtxoHDWallet` by default.
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4009,6 +4016,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 1,
         chain: Some(Bip44Chain::External),
+        address_id: None,
         gap_limit: Some(1),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
@@ -4027,6 +4035,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 1,
         chain: Some(Bip44Chain::External),
+        address_id: None,
         gap_limit: Some(2),
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4042,6 +4051,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 2,
         chain: Some(Bip44Chain::External),
+        address_id: None,
         gap_limit: Some(2),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
@@ -4057,6 +4067,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 2,
         chain: Some(Bip44Chain::External),
+        address_id: None,
         gap_limit: Some(0),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
@@ -4072,6 +4083,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 2,
         chain: Some(Bip44Chain::External),
+        address_id: None,
         gap_limit: Some(5),
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4084,6 +4096,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 0,
         chain: Some(Bip44Chain::Internal),
+        address_id: None,
         gap_limit: Some(0),
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4102,6 +4115,7 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 0,
         chain: Some(Bip44Chain::Internal),
+        address_id: None,
         gap_limit: Some(2),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))

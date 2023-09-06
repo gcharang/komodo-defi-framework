@@ -236,9 +236,9 @@ pub struct HDAddressId {
 
 #[async_trait]
 pub trait HDWalletCoinOps {
-    type Address: Send + Sync;
+    type Address: Clone + Send + Sync;
     type Pubkey: Send;
-    type HDWallet: HDWalletOps<HDAccount = Self::HDAccount>;
+    type HDWallet: HDWalletOps<Address = Self::Address, HDAccount = Self::HDAccount>;
     type HDAccount: HDAccountOps;
 
     /// Derives an address from the given info.
@@ -329,6 +329,8 @@ pub trait HDWalletCoinOps {
 
 #[async_trait]
 pub trait HDWalletOps: Send + Sync {
+    /// Represents the specific type of address that is used by this wallet.
+    type Address;
     type HDAccount: HDAccountOps + Clone + Send;
 
     fn coin_type(&self) -> u32;
@@ -382,6 +384,15 @@ pub trait HDWalletOps: Send + Sync {
             None
         }
     }
+
+    /// Retrieves the address that might be enabled for swap operations.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` wrapping a value of the associated `Address` type.
+    /// Returns `Some(Address)` if the address is available and enabled,
+    /// or `None` if there's no address enabled for swap operations at the moment.
+    async fn get_enabled_address(&self) -> Option<Self::Address>;
 }
 
 pub trait HDAccountOps: Send + Sync {

@@ -291,6 +291,7 @@ pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 
 pub mod z_coin;
+use crate::hd_wallet::HDWalletOps;
 use z_coin::{ZCoin, ZcoinProtocolInfo};
 
 pub type TransactionFut = Box<dyn Future<Item = TransactionEnum, Error = TransactionErr> + Send>;
@@ -3021,21 +3022,29 @@ impl PrivKeyBuildPolicy {
 }
 
 #[derive(Debug)]
-pub enum DerivationMethod<Address, HDWallet> {
+pub enum DerivationMethod<Address, HDWallet>
+where
+    HDWallet: HDWalletOps<Address = Address>,
+{
     SingleAddress(Address),
     HDWallet(HDWallet),
 }
 
-impl<Address, HDWallet> DerivationMethod<Address, HDWallet> {
-    pub fn single_addr(&self) -> Option<&Address> {
+impl<Address, HDWallet> DerivationMethod<Address, HDWallet>
+where
+    Address: Clone,
+    HDWallet: HDWalletOps<Address = Address>,
+{
+    pub async fn single_addr(&self) -> Option<Address> {
         match self {
-            DerivationMethod::SingleAddress(my_address) => Some(my_address),
-            DerivationMethod::HDWallet(_) => None,
+            DerivationMethod::SingleAddress(my_address) => Some(my_address.clone()),
+            DerivationMethod::HDWallet(hd_wallet) => hd_wallet.get_enabled_address().await,
         }
     }
 
-    pub fn single_addr_or_err(&self) -> MmResult<&Address, UnexpectedDerivationMethod> {
+    pub async fn single_addr_or_err(&self) -> MmResult<Address, UnexpectedDerivationMethod> {
         self.single_addr()
+            .await
             .or_mm_err(|| UnexpectedDerivationMethod::ExpectedSingleAddress)
     }
 
@@ -3054,13 +3063,13 @@ impl<Address, HDWallet> DerivationMethod<Address, HDWallet> {
     /// # Panic
     ///
     /// Panic if the address mode is [`DerivationMethod::HDWallet`].
-    pub fn unwrap_single_addr(&self) -> &Address { self.single_addr_or_err().unwrap() }
+    pub async fn unwrap_single_addr(&self) -> Address { self.single_addr_or_err().await.unwrap() }
 }
 
 #[async_trait]
 pub trait CoinWithDerivationMethod {
     type Address;
-    type HDWallet;
+    type HDWallet: HDWalletOps<Address = Self::Address>;
 
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet>;
 

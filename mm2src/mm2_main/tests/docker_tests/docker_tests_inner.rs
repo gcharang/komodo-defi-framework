@@ -2950,8 +2950,8 @@ fn test_utxo_merge() {
     block_on(mm_bob.wait_for_log(4., |log| log.contains("UTXO merge successful for coin MYCOIN, tx_hash"))).unwrap();
 
     thread::sleep(Duration::from_secs(2));
-    let (unspents, _) =
-        block_on(coin.get_unspent_ordered_list(coin.as_ref().derivation_method.unwrap_single_addr())).unwrap();
+    let address = block_on(coin.as_ref().derivation_method.unwrap_single_addr());
+    let (unspents, _) = block_on(coin.get_unspent_ordered_list(&address)).unwrap();
     assert_eq!(unspents.len(), 1);
 }
 
@@ -3004,8 +3004,8 @@ fn test_utxo_merge_max_merge_at_once() {
     block_on(mm_bob.wait_for_log(4., |log| log.contains("UTXO merge successful for coin MYCOIN, tx_hash"))).unwrap();
 
     thread::sleep(Duration::from_secs(2));
-    let (unspents, _) =
-        block_on(coin.get_unspent_ordered_list(coin.as_ref().derivation_method.unwrap_single_addr())).unwrap();
+    let address = block_on(coin.as_ref().derivation_method.unwrap_single_addr());
+    let (unspents, _) = block_on(coin.get_unspent_ordered_list(&address)).unwrap();
     // 4 utxos are merged of 5 so the resulting unspents len must be 2
     assert_eq!(unspents.len(), 2);
 }

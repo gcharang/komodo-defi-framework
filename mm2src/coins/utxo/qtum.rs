@@ -162,8 +162,8 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
         }
     }
 
-    fn my_addr_as_contract_addr(&self) -> MmResult<H160, Qrc20AddressError> {
-        let my_address = self.as_ref().derivation_method.single_addr_or_err()?.clone();
+    async fn my_addr_as_contract_addr(&self) -> MmResult<H160, Qrc20AddressError> {
+        let my_address = self.as_ref().derivation_method.single_addr_or_err().await?;
         contract_addr_from_utxo_addr(my_address).mm_err(Qrc20AddressError::from)
     }
 
