@@ -46,7 +46,6 @@ impl DataConnStmtCacheWrapper {
     pub fn inner(&self) -> DataConnStmtCacheWasm { self.clone().cache }
 }
 
-#[allow(unused)]
 pub struct CompactBlockRow {
     pub(crate) height: BlockHeight,
     pub(crate) data: Vec<u8>,
@@ -145,9 +144,6 @@ pub async fn scan_cached_block(
         ));
     }
 
-    let block_hash = BlockHash::from_slice(&block.hash);
-    let block_time = block.time;
-
     let txs: Vec<WalletTx<Nullifier>> = {
         let mut witness_refs: Vec<_> = witnesses.iter_mut().map(|w| &mut w.1).collect();
         scan_block(
@@ -164,10 +160,8 @@ pub async fn scan_cached_block(
     #[cfg(debug_assertions)]
     {
         let cur_root = tree.root();
-        for row in &witnesses {
-            if row.1.root() != cur_root {
-                return Err(Error::InvalidWitnessAnchor(row.0, current_height).into());
-            }
+        if witnesses.iter().any(|row| row.1.root() != cur_root) {
+            return Err(Error::InvalidWitnessAnchor(row.0, current_height).into());
         }
         for tx in &txs {
             for output in tx.shielded_outputs.iter() {
@@ -188,8 +182,8 @@ pub async fn scan_cached_block(
         .advance_by_block(
             &(PrunedBlock {
                 block_height: current_height,
-                block_hash,
-                block_time,
+                block_hash: BlockHash::from_slice(&block.hash),
+                block_time: block.time,
                 commitment_tree: &tree,
                 transactions: &txs,
             }),

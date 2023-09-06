@@ -5,10 +5,9 @@ cfg_native!(
     use zcash_client_sqlite::with_async::WalletDbAsync;
 );
 
-cfg_wasm32!(
-    pub mod wallet_idb_storage;
-    use wallet_idb_storage::WalletIndexedDb;
-);
+#[cfg(target_arch = "wasm32")] pub mod wallet_idb_storage;
+#[cfg(target_arch = "wasm32")]
+use wallet_idb_storage::WalletIndexedDb;
 
 #[derive(Clone)]
 pub struct WalletDbShared {

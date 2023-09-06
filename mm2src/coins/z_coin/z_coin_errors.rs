@@ -343,7 +343,6 @@ impl From<SqliteClientError> for ValidateBlocksError {
 
 /// The `ZcoinStorageError` enum encapsulates different types of errors that may occur
 /// when interacting with storage operations specific to the Zcoin blockchain.
-#[allow(unused)]
 #[derive(Debug, Display)]
 pub enum ZcoinStorageError {
     #[cfg(not(target_arch = "wasm32"))]
