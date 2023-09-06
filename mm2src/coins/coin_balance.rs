@@ -428,10 +428,10 @@ pub mod common_impl {
                 &mut new_account,
                 &address_scanner,
                 scan_new_addresses,
-                // Todo: should this be address_index + 1? if another address index is used (a larger one) it will be skipped in enable_coin_balance
-                params.min_addresses_number.max(Some(path_to_address.address_index)),
+                params.min_addresses_number.max(Some(path_to_address.address_index + 1)),
             )
             .await?;
+            // Todo: we should flag the enabled address in the response here and in other responses as well.
             result.accounts.push(account_balance);
             return Ok(result);
         }
@@ -442,14 +442,22 @@ pub mod common_impl {
             coin.ticker()
         );
         let scan_new_addresses = matches!(params.scan_policy, EnableCoinScanPolicy::Scan);
-        for (_account_id, hd_account) in accounts.iter_mut() {
+        for (account_id, hd_account) in accounts.iter_mut() {
+            let min_addresses_number = if *account_id == path_to_address.account {
+                // The account for the enabled address is already indexed.
+                // But in case the address index is larger than the number of derived addresses,
+                // we need to derive new addresses to make sure that the enabled address is indexed.
+                params.min_addresses_number.max(Some(path_to_address.address_index + 1))
+            } else {
+                params.min_addresses_number
+            };
             let account_balance = enable_hd_account(
                 coin,
                 hd_wallet,
                 hd_account,
                 &address_scanner,
                 scan_new_addresses,
-                params.min_addresses_number,
+                min_addresses_number,
             )
             .await?;
             result.accounts.push(account_balance);

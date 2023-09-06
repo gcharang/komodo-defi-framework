@@ -7471,20 +7471,25 @@ fn test_enable_utxo_with_enable_hd() {
     let new_account = block_on(create_new_account(&mm_hd_0, "RICK", Some(77), 60));
     assert_eq!(new_account.addresses[7].address, "RLNu8gszQ8ENUrY3VSyBS2714CNVwn1f7P");
 
-    block_on(enable_utxo_v2_electrum(
+    let btc_segwit = block_on(enable_utxo_v2_electrum(
         &mm_hd_0,
         "BTC-segwit",
         btc_electrums(),
         Some(path_to_address),
         60,
     ));
-    // The account addresses have 0 balance so they are not returned from scanning, We will have to add them manually
-    let get_new_address_0 = block_on(get_new_address(&mm_hd_0, "BTC-segwit", 0, Some(Bip44Chain::External)));
+    let balance = match btc_segwit.wallet_balance {
+        EnableCoinBalance::HD(hd) => hd,
+        _ => panic!("Expected EnableCoinBalance::HD"),
+    };
+    let account = balance.accounts.get(0).expect("Expected account at index 0");
+    // This is the enabled address, so it should be derived and added to the account
     assert_eq!(
-        get_new_address_0.new_address.address,
+        account.addresses[0].address,
         "bc1q6vyur5hjul2m0979aadd6u7ptuj9ac4gt0ha0c"
     );
-    // The account addresses have 0 balance so they are not returned from scanning, We will have to add them manually
+    // The next account address have 0 balance so they are not returned from scanning, We will have to add them manually
+    assert!(account.addresses.get(1).is_none());
     let get_new_address_1 = block_on(get_new_address(&mm_hd_0, "BTC-segwit", 0, Some(Bip44Chain::External)));
     assert_eq!(
         get_new_address_1.new_address.address,

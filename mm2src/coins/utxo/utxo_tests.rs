@@ -4003,7 +4003,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 0,
         chain: Some(Bip44Chain::External),
-        address_id: None,
         gap_limit: None, // Will be used 2 from `UtxoHDWallet` by default.
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4016,7 +4015,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 1,
         chain: Some(Bip44Chain::External),
-        address_id: None,
         gap_limit: Some(1),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
@@ -4035,7 +4033,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 1,
         chain: Some(Bip44Chain::External),
-        address_id: None,
         gap_limit: Some(2),
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4051,7 +4048,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 2,
         chain: Some(Bip44Chain::External),
-        address_id: None,
         gap_limit: Some(2),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
@@ -4067,7 +4063,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 2,
         chain: Some(Bip44Chain::External),
-        address_id: None,
         gap_limit: Some(0),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
@@ -4083,7 +4078,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 2,
         chain: Some(Bip44Chain::External),
-        address_id: None,
         gap_limit: Some(5),
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4096,7 +4090,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 0,
         chain: Some(Bip44Chain::Internal),
-        address_id: None,
         gap_limit: Some(0),
     };
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
@@ -4115,7 +4108,6 @@ fn test_get_new_address() {
     let params = GetNewAddressParams {
         account_id: 0,
         chain: Some(Bip44Chain::Internal),
-        address_id: None,
         gap_limit: Some(2),
     };
     let err = block_on(coin.get_new_address_rpc(params, &confirm_address))
