@@ -4,8 +4,8 @@ use crate::z_coin::{ZCoinBuilder, ZcoinConsensusParams};
 
 use async_trait::async_trait;
 use ff::PrimeField;
-use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb,
-                         IndexedDbBuilder, InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
+use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
+                         InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::prelude::*;
 use mm2_number::num_bigint::ToBigInt;
 use mm2_number::BigInt;
@@ -13,12 +13,14 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Deref;
+use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address};
+use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address, encode_payment_address};
 use zcash_client_backend::wallet::{AccountId, SpendableNote, WalletTx};
+use zcash_client_backend::DecryptedOutput;
 use zcash_extras::{ShieldedOutput, WalletRead, WalletWrite};
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::{Diversifier, Node, Nullifier, PaymentAddress, Rseed};
@@ -284,7 +286,7 @@ impl WalletIndexedDb {
             .with_value(output_index)?;
         let current_note = received_note_table.get_item_by_unique_multi_index(index_keys).await?;
 
-        let id = if let Some((_id, note)) = current_note {
+        let id = if let Some((id, note)) = current_note {
             let temp_note = WalletDbReceivedNotesTable {
                 tx,
                 output_index,
@@ -298,14 +300,7 @@ impl WalletIndexedDb {
                 spent: note.spent,
                 ticker: ticker.clone(),
             };
-
-            let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_TX_OUTPUT_INDEX)
-                .with_value(&ticker)?
-                .with_value(tx)?
-                .with_value(output_index)?;
-            received_note_table
-                .replace_item_by_unique_multi_index(index_keys, &temp_note)
-                .await?
+            received_note_table.replace_item(id, &temp_note).await?
         } else {
             let new_note = WalletDbReceivedNotesTable {
                 tx,
@@ -324,7 +319,7 @@ impl WalletIndexedDb {
             let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_TX_OUTPUT_INDEX)
                 .with_value(&ticker)?
                 .with_value(tx)?
-                .with_value(output_index)?;
+                .with_value(output_index.to_bigint())?;
             received_note_table
                 .replace_item_by_unique_multi_index(index_keys, &new_note)
                 .await?
@@ -425,6 +420,181 @@ impl WalletIndexedDb {
         }
 
         Ok(())
+    }
+
+    pub async fn put_sent_note(&self, output: &DecryptedOutput, tx_ref: i64) -> MmResult<(), ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+
+        let tx_ref = tx_ref.to_bigint().expect("BigInt is too large to fit in an i64");
+        let output_index = output.index.to_bigint().expect("BigInt is too large to fit in an i64");
+        let from_account = output
+            .account
+            .0
+            .to_bigint()
+            .expect("BigInt is too large to fit in an i64");
+        let value = output
+            .note
+            .value
+            .to_bigint()
+            .expect("BigInt is too large to fit in an i64");
+        let address = encode_payment_address(self.params.hrp_sapling_payment_address(), &output.to);
+
+        let sent_note_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
+        let index_keys = MultiIndex::new(WalletDbSentNotesTable::TICKER_TX_OUTPUT_INDEX)
+            .with_value(&ticker)?
+            .with_value(&tx_ref)?
+            .with_value(&output_index)?;
+        let maybe_note = sent_note_table.get_item_by_unique_multi_index(index_keys).await?;
+
+        let update_note = WalletDbSentNotesTable {
+            tx: tx_ref.clone(),
+            output_index: output_index.clone(),
+            from_account,
+            address,
+            value,
+            memo: Some(output.memo.as_slice().to_vec()),
+            ticker: ticker.clone(),
+        };
+        if let Some((id, _)) = maybe_note {
+            sent_note_table.replace_item(id, &update_note).await?;
+        } else {
+            let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_TX_OUTPUT_INDEX)
+                .with_value(&ticker)?
+                .with_value(tx_ref)?
+                .with_value(output_index)?;
+            sent_note_table
+                .replace_item_by_unique_multi_index(index_keys, &update_note)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn insert_sent_note(
+        &self,
+        tx_ref: i64,
+        output_index: usize,
+        account: AccountId,
+        to: &RecipientAddress,
+        value: Amount,
+        memo: Option<&MemoBytes>,
+    ) -> MmResult<(), ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let sent_note_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
+
+        let tx_ref = tx_ref.to_bigint().expect("BigInt is too large to fit in an i64");
+        let output_index = output_index.to_bigint().expect("BigInt is too large to fit in an i64");
+        let from_account = account.0.to_bigint().expect("BigInt is too large to fit in an i64");
+        let value = i64::from(value)
+            .to_bigint()
+            .expect("BigInt is too large to fit in an i64");
+        let address = to.encode(&self.params);
+
+        let new_note = WalletDbSentNotesTable {
+            tx: tx_ref.clone(),
+            output_index: output_index.clone(),
+            from_account,
+            address,
+            value,
+            memo: memo.map(|m| m.as_slice().to_vec()),
+            ticker: ticker.clone(),
+        };
+        let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_TX_OUTPUT_INDEX)
+            .with_value(&ticker)?
+            .with_value(tx_ref)?
+            .with_value(output_index)?;
+        sent_note_table
+            .replace_item_by_unique_multi_index(index_keys, &new_note)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Asynchronously rewinds the storage to a specified block height, effectively
+    /// removing data beyond the specified height from the storage.    
+    pub async fn rewind_to_height(&self, block_height: u32) -> MmResult<(), ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+
+        let blocks_table = db_transaction.table::<WalletDbBlocksTable>().await?;
+        let witnesses_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
+        let transactions_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
+
+        // Recall where we synced up to previously.
+        let maybe_height = blocks_table
+            .cursor_builder()
+            .only("ticker", &ticker)?
+            .bound("height", 0u32, u32::MAX)
+            .reverse()
+            .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+            .await?
+            .next()
+            .await?;
+        let maybe_height = maybe_height
+            .map(|(_, item)| {
+                item.height
+                    .to_u32()
+                    .ok_or_else(|| ZcoinStorageError::GetFromStorageError("height is too large".to_string()))
+            })
+            .transpose()?;
+        let sapling_activation_height = self
+            .params
+            .activation_height(NetworkUpgrade::Sapling)
+            .ok_or_else(|| ZcoinStorageError::BackendError("Sapling not active".to_string()))?;
+        let maybe_height = maybe_height.unwrap_or_else(|| (sapling_activation_height - 1).into());
+
+        if block_height >= maybe_height {
+            Ok(())
+        } else {
+            // Decrement witnesses.
+            let mut maybe_witnesses_cursor = witnesses_table
+                .cursor_builder()
+                .only("ticker", &ticker)?
+                .bound("block", block_height + 1, u32::MAX)
+                .open_cursor(WalletDbSaplingWitnessesTable::TICKER_BLOCK_INDEX)
+                .await?;
+            while let Some((id, _)) = maybe_witnesses_cursor.next().await? {
+                witnesses_table.delete_item(id).await?;
+            }
+
+            // Un-mine transactions.
+            let mut maybe_txs_cursor = transactions_table
+                .cursor_builder()
+                .only("ticker", &ticker)?
+                .bound("block", block_height + 1, u32::MAX)
+                .open_cursor(WalletDbSaplingWitnessesTable::TICKER_BLOCK_INDEX)
+                .await?;
+            while let Some((id, tx)) = maybe_txs_cursor.next().await? {
+                let modified_tx = WalletDbTransactionsTable {
+                    txid: tx.txid.clone(),
+                    created: tx.created.clone(),
+                    block: None,
+                    tx_index: None,
+                    expiry_height: tx.expiry_height,
+                    raw: tx.raw.clone(),
+                    ticker: ticker.clone(),
+                };
+                transactions_table.replace_item(id, &modified_tx).await?;
+            }
+
+            // Now that they aren't depended on, delete scanned blocks.
+            let mut maybe_blocks_cursor = blocks_table
+                .cursor_builder()
+                .only("ticker", &ticker)?
+                .bound("height", block_height + 1, u32::MAX)
+                .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+                .await?;
+            while let Some((id, _)) = maybe_blocks_cursor.next().await? {
+                blocks_table.delete_item(id).await?;
+            }
+
+            Ok(())
+        }
     }
 
     pub async fn get_single_tx(
@@ -710,7 +880,7 @@ impl WalletRead for WalletIndexedDb {
         };
 
         if let Some(Some(memo)) = memo {
-            return MemoBytes::from_bytes(memo.as_bytes())
+            return MemoBytes::from_bytes(&memo)
                 .and_then(Memo::try_from)
                 .map_to_mm(|err| ZcoinStorageError::InvalidMemo(err.to_string()));
         };
@@ -1037,24 +1207,44 @@ impl WalletWrite for WalletIndexedDb {
         Ok(new_witnesses)
     }
 
-    async fn store_received_tx(&mut self, _received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
-        //        let selfi = self.deref();
-        //        let tx_ref = selfi.put_tx_data(received_tx.tx, None).await?;
-        //
-        //        for output in received_tx.outputs {
-        //            if output.outgoing {
-        //                selfi.put_sent_note(output, tx_ref).await?;
-        //            } else {
-        //                selfi.put_received_note(output, tx_ref).await?;
-        //            }
-        //        }
-        //
-        //        Ok(tx_ref)
+    async fn store_received_tx(&mut self, received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
+        let selfi = self.deref();
+        let tx_ref = selfi.put_tx_data(received_tx.tx, None).await?;
 
-        todo!()
+        for output in received_tx.outputs {
+            if output.outgoing {
+                selfi.put_sent_note(output, tx_ref).await?;
+            } else {
+                selfi.put_received_note(output, tx_ref).await?;
+            }
+        }
+
+        Ok(tx_ref)
     }
 
-    async fn store_sent_tx(&mut self, _sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> { todo!() }
+    async fn store_sent_tx(&mut self, sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> {
+        let selfi = self.deref();
+        let tx_ref = selfi.put_tx_data(sent_tx.tx, Some(sent_tx.created.to_string())).await?;
+
+        // Mark notes as spent.
+        for spend in &sent_tx.tx.shielded_spends {
+            selfi.mark_spent(tx_ref, &spend.nullifier).await?;
+        }
+
+        selfi
+            .insert_sent_note(
+                tx_ref,
+                sent_tx.output_index,
+                sent_tx.account,
+                sent_tx.recipient_address,
+                sent_tx.value,
+                sent_tx.memo.as_ref(),
+            )
+            .await?;
+
+        // Return the row number of the transaction, so the caller can fetch it for sending.
+        Ok(tx_ref)
+    }
 
     async fn rewind_to_height(&mut self, _block_height: BlockHeight) -> Result<(), Self::Error> { todo!() }
 }
@@ -1146,19 +1336,23 @@ impl WalletRead for DataConnStmtCacheWasm {
 impl WalletWrite for DataConnStmtCacheWasm {
     async fn advance_by_block(
         &mut self,
-        _block: &PrunedBlock,
-        _updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
+        block: &PrunedBlock,
+        updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
-        todo!()
+        self.inner.advance_by_block(block, updated_witnesses).await
     }
 
-    async fn store_received_tx(&mut self, _received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
-        todo!()
+    async fn store_received_tx(&mut self, received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
+        self.inner.store_received_tx(received_tx).await
     }
 
-    async fn store_sent_tx(&mut self, _sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> { todo!() }
+    async fn store_sent_tx(&mut self, sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> {
+        self.inner.store_sent_tx(sent_tx).await
+    }
 
-    async fn rewind_to_height(&mut self, _block_height: BlockHeight) -> Result<(), Self::Error> { todo!() }
+    async fn rewind_to_height(&mut self, block_height: BlockHeight) -> Result<(), Self::Error> {
+        self.inner.rewind_to_height(u32::from(block_height)).await
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1356,15 +1550,14 @@ impl TableSignature for WalletDbSaplingWitnessesTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSentNotesTable {
-    id_note: BigInt,
     // REFERENCES transactions(id_tx)
-    tx: BeBigUint,
-    output_index: BeBigUint,
+    tx: BigInt,
+    output_index: BigInt,
     // REFERENCES accounts(account)
     from_account: BigInt,
     address: String,
     value: BigInt,
-    memo: Option<String>,
+    memo: Option<Vec<u8>>,
     ticker: String,
 }
 
