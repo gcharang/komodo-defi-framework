@@ -139,14 +139,10 @@ impl Address {
         p2sh_addr_prefix: u8,
         p2sh_t_addr_prefix: u8,
     ) -> Result<Address, String> {
-        //let hex = s.from_base58().map_err(|_| String::from("invalid address"))?;
-        //let address = LegacyAddress::from_layout(&hex).map_err(|_| String::from("invalid address"))?;
         let address = LegacyAddress::from_str(s).map_err(|_| String::from("invalid address"))?;
-
         if address.hash.len() != 20 {
             return Err("Expect 20 bytes long hash".into());
         }
-
         let mut hash = AddressHashEnum::default_address_hash();
         hash.copy_from_slice(address.hash.as_slice());
 
