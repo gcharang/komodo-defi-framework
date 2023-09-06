@@ -5,7 +5,7 @@ use crate::{BalanceError, BalanceResult, CoinBalance, CoinWithDerivationMethod, 
             MarketCoinOps};
 use async_trait::async_trait;
 use common::log::{debug, info};
-use crypto::{Bip44Chain, RpcDerivationPath};
+use crypto::{Bip44Chain, RpcDerivationPath, StandardHDCoinAddress};
 use futures::compat::Future01CompatExt;
 use mm2_err_handle::prelude::*;
 use mm2_number::BigDecimal;
@@ -110,9 +110,6 @@ pub struct EnabledCoinBalanceParams {
     #[serde(default)]
     pub scan_policy: EnableCoinScanPolicy,
     pub min_addresses_number: Option<u32>,
-    // Todo: check if this is right or we should rename those?
-    pub account_id: Option<u32>,
-    pub address_id: Option<u32>,
 }
 
 #[async_trait]
@@ -158,6 +155,7 @@ pub trait EnableCoinBalanceOps {
         &self,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
+        path_to_address: &StandardHDCoinAddress,
     ) -> MmResult<CoinBalanceReport, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor;
@@ -178,6 +176,7 @@ where
         &self,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
+        path_to_address: &StandardHDCoinAddress,
     ) -> MmResult<CoinBalanceReport, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor,
@@ -195,7 +194,7 @@ where
                 })
                 .mm_err(EnableCoinBalanceError::from),
             DerivationMethod::HDWallet(hd_wallet) => self
-                .enable_hd_wallet(hd_wallet, xpub_extractor, params)
+                .enable_hd_wallet(hd_wallet, xpub_extractor, params, path_to_address)
                 .await
                 .map(CoinBalanceReport::HD),
         }
@@ -216,6 +215,7 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
         hd_wallet: &Self::HDWallet,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
+        path_to_address: &StandardHDCoinAddress,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor;
@@ -346,6 +346,7 @@ pub enum AddressBalanceStatus<Balance> {
 pub mod common_impl {
     use super::*;
     use crate::hd_wallet::{HDAccountOps, HDWalletOps};
+    use crypto::StandardHDCoinAddress;
 
     pub(crate) async fn enable_hd_account<Coin>(
         coin: &Coin,
@@ -390,6 +391,7 @@ pub mod common_impl {
         hd_wallet: &Coin::HDWallet,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
+        path_to_address: &StandardHDCoinAddress,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
@@ -403,7 +405,7 @@ pub mod common_impl {
             accounts: Vec::with_capacity(accounts.len() + 1),
         };
 
-        if accounts.is_empty() || params.account_id.and_then(|id| accounts.get(&id)).is_none() {
+        if accounts.get(&path_to_address.account).is_none() {
             // Is seems that we couldn't find any HD account from the HD wallet storage.
             drop(accounts);
             info!(
@@ -412,10 +414,8 @@ pub mod common_impl {
             );
 
             // Create new HD account.
-            // Todo: instead of account_id being none, we should use the account_id from the activation request. We should also add the address in the activation request.
-            // Todo: we should use the account for the swap address even if accounts are not empty.
             let mut new_account = coin
-                .create_new_account(hd_wallet, xpub_extractor, params.account_id)
+                .create_new_account(hd_wallet, xpub_extractor, Some(path_to_address.account))
                 .await?;
             let scan_new_addresses = matches!(
                 params.scan_policy,
@@ -428,7 +428,8 @@ pub mod common_impl {
                 &mut new_account,
                 &address_scanner,
                 scan_new_addresses,
-                params.min_addresses_number.max(params.address_id),
+                // Todo: should this be address_index + 1? if another address index is used (a larger one) it will be skipped in enable_coin_balance
+                params.min_addresses_number.max(Some(path_to_address.address_index)),
             )
             .await?;
             result.accounts.push(account_balance);

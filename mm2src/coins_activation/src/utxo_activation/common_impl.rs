@@ -47,13 +47,12 @@ where
     // Todo: fix this too, we need to create xpub_extractor for HD wallet or similar method
     let xpub_extractor = RpcTaskXPubExtractor::new_unchecked(ctx, task_handle, xpub_extractor_rpc_statuses());
     task_handle.update_in_progress_status(UtxoStandardInProgressStatus::RequestingWalletBalance)?;
-    // Todo: remove other usage of account_id etc.. in from_legacy_req? and recheck the few lines below
-    let mut enable_params = activation_params.enable_params.clone();
-    enable_params.account_id = Some(activation_params.path_to_address.account);
-    // Todo: should this be address_index + 1? if another address index is used (a larger one) it will be skipped in enable_coin_balance
-    enable_params.address_id = Some(activation_params.path_to_address.address_index);
     let wallet_balance = coin
-        .enable_coin_balance(&xpub_extractor, enable_params)
+        .enable_coin_balance(
+            &xpub_extractor,
+            activation_params.enable_params.clone(),
+            &activation_params.path_to_address,
+        )
         .await
         .mm_err(|enable_err| InitUtxoStandardError::from_enable_coin_balance_err(enable_err, ticker.clone()))?;
     task_handle.update_in_progress_status(UtxoStandardInProgressStatus::ActivatingCoin)?;

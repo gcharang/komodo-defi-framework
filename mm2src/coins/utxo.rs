@@ -1420,23 +1420,19 @@ impl UtxoActivationParams {
         let scan_policy = json::from_value::<Option<EnableCoinScanPolicy>>(req["scan_policy"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidScanPolicy)?
             .unwrap_or_default();
-        // Todo: should we use this instead of the one from path_to_address?
         let min_addresses_number = json::from_value(req["min_addresses_number"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidMinAddressesNumber)?;
-        // Todo: should this be removed? It's used in BCH v2 activation though but HD wallet shouldn't be supported for legacy methods after this PR
-        let path_to_address = json::from_value::<Option<StandardHDCoinAddress>>(req["path_to_address"].clone())
-            .map_to_mm(UtxoFromLegacyReqErr::InvalidAddressIndex)?
-            .unwrap_or_default();
         let enable_params = EnabledCoinBalanceParams {
             scan_policy,
             min_addresses_number,
-            // Todo: recheck this
-            account_id: Some(path_to_address.account),
-            address_id: Some(path_to_address.address_index),
         };
         let priv_key_policy = json::from_value::<Option<PrivKeyActivationPolicy>>(req["priv_key_policy"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidPrivKeyPolicy)?
             .unwrap_or(PrivKeyActivationPolicy::ContextPrivKey);
+        // Todo: should this be removed? It's used in BCH v2 activation though but HD wallet shouldn't be supported for legacy methods after this PR
+        let path_to_address = json::from_value::<Option<StandardHDCoinAddress>>(req["path_to_address"].clone())
+            .map_to_mm(UtxoFromLegacyReqErr::InvalidAddressIndex)?
+            .unwrap_or_default();
 
         Ok(UtxoActivationParams {
             mode,
