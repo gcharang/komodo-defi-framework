@@ -9,6 +9,7 @@ use mm2_err_handle::mm_error::MmResult;
 use mm2_err_handle::mm_error::{NotEqual, NotMmError};
 use mm2_number::BigDecimal;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::num::NonZeroUsize;
 
 #[cfg(any(test, target_arch = "wasm32"))]
@@ -154,7 +155,7 @@ pub trait NftTransferHistoryStorageOps {
         transfer_meta: TransferMeta,
     ) -> MmResult<(), Self::Error>;
 
-    async fn get_transfers_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error>;
+    async fn get_transfers_with_empty_meta(&self, chain: Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error>;
 
     /// `get_transfers_by_token_address` function returns list of NFT transfers which have specified token address.
     async fn get_transfers_by_token_address(
@@ -172,7 +173,7 @@ pub trait NftTransferHistoryStorageOps {
     ) -> MmResult<(), Self::Error>;
 
     /// `get_token_addresses` return all unique token addresses.
-    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<Vec<Address>, Self::Error>;
+    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<HashSet<Address>, Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]

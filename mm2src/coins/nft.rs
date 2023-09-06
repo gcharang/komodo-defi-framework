@@ -1005,7 +1005,7 @@ async fn update_transfers_with_empty_meta<T>(storage: &T, chain: &Chain, url: &U
 where
     T: NftListStorageOps + NftTransferHistoryStorageOps,
 {
-    let nft_token_addr_id = storage.get_transfers_with_empty_meta(chain).await?;
+    let nft_token_addr_id = storage.get_transfers_with_empty_meta(*chain).await?;
     for addr_id_pair in nft_token_addr_id.into_iter() {
         let nft_meta = get_moralis_metadata(addr_id_pair.token_address, addr_id_pair.token_id, chain, url).await?;
         let transfer_meta = TransferMeta::from(nft_meta);

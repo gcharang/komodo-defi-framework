@@ -658,7 +658,7 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(&chain, transfers).await.unwrap();
 
-    let vec_token_add_id = storage.get_transfers_with_empty_meta(&chain).await.unwrap();
+    let vec_token_add_id = storage.get_transfers_with_empty_meta(chain).await.unwrap();
     assert_eq!(vec_token_add_id.len(), 3);
 
     let token_add = "0x5c7d6712dfaf0cb079d48981781c8705e8417ca0".to_string();

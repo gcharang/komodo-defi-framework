@@ -53,7 +53,7 @@ impl IndexedDbNftStorage {
         })
     }
 
-    fn take_nfts_according_to_filters<I>(nfts: I, filters: Option<NftListFilters>) -> WasmNftCacheResult<Vec<Nft>>
+    fn filter_nfts<I>(nfts: I, filters: Option<NftListFilters>) -> WasmNftCacheResult<Vec<Nft>>
     where
         I: Iterator<Item = NftListTable>,
     {
@@ -61,7 +61,7 @@ impl IndexedDbNftStorage {
         for nft_table in nfts {
             let nft = nft_details_from_item(nft_table)?;
             if let Some(filters) = &filters {
-                if filters.is_spam_match(&nft) && filters.is_phishing_match(&nft) {
+                if filters.passes_spam_filter(&nft) && filters.passes_phishing_filter(&nft) {
                     filtered_nfts.push(nft);
                 }
             } else {
@@ -87,7 +87,7 @@ impl IndexedDbNftStorage {
         })
     }
 
-    fn take_transfers_according_to_filters<I>(
+    fn filter_transfers<I>(
         transfers: I,
         filters: Option<NftTransferHistoryFilters>,
     ) -> WasmNftCacheResult<Vec<NftTransferHistory>>
@@ -100,8 +100,8 @@ impl IndexedDbNftStorage {
             if let Some(filters) = &filters {
                 if filters.is_status_match(&transfer)
                     && filters.is_date_match(&transfer)
-                    && filters.is_spam_match(&transfer)
-                    && filters.is_phishing_match(&transfer)
+                    && filters.passes_spam_filter(&transfer)
+                    && filters.passes_phishing_filter(&transfer)
                 {
                     filtered_transfers.push(transfer);
                 }
@@ -114,9 +114,9 @@ impl IndexedDbNftStorage {
 }
 
 impl NftListFilters {
-    fn is_spam_match(&self, nft: &Nft) -> bool { !self.exclude_spam || !nft.common.possible_spam }
+    fn passes_spam_filter(&self, nft: &Nft) -> bool { !self.exclude_spam || !nft.common.possible_spam }
 
-    fn is_phishing_match(&self, nft: &Nft) -> bool { !self.exclude_phishing || !nft.possible_phishing }
+    fn passes_phishing_filter(&self, nft: &Nft) -> bool { !self.exclude_phishing || !nft.possible_phishing }
 }
 
 impl NftTransferHistoryFilters {
@@ -131,11 +131,11 @@ impl NftTransferHistoryFilters {
             && self.to_date.map_or(true, |to| transfer.block_timestamp <= to)
     }
 
-    fn is_spam_match(&self, transfer: &NftTransferHistory) -> bool {
+    fn passes_spam_filter(&self, transfer: &NftTransferHistory) -> bool {
         !self.exclude_spam || !transfer.common.possible_spam
     }
 
-    fn is_phishing_match(&self, transfer: &NftTransferHistory) -> bool {
+    fn passes_phishing_filter(&self, transfer: &NftTransferHistory) -> bool {
         !self.exclude_phishing || !transfer.possible_phishing
     }
 }
@@ -166,7 +166,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
                 .await?
                 .into_iter()
                 .map(|(_item_id, nft)| nft);
-            let filtered = Self::take_nfts_according_to_filters(nft_tables, filters)?;
+            let filtered = Self::filter_nfts(nft_tables, filters)?;
             nfts.extend(filtered);
         }
         Self::take_nft_according_to_paging_opts(nfts, max, limit, page_number)
@@ -379,8 +379,8 @@ impl NftListStorageOps for IndexedDbNftStorage {
         token_address: String,
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
-        let nfts: Vec<Nft> = self.get_nfts_by_token_address(chain, token_address.clone()).await?;
         let locked_db = self.lock_db().await?;
+        let nfts: Vec<Nft> = self.get_nfts_by_token_address(chain, token_address.clone()).await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
 
@@ -426,7 +426,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
                 .await?
                 .into_iter()
                 .map(|(_item_id, transfer)| transfer);
-            let filtered = Self::take_transfers_according_to_filters(transfer_tables, filters)?;
+            let filtered = Self::filter_transfers(transfer_tables, filters)?;
             transfers.extend(filtered);
         }
         Self::take_transfers_according_to_paging_opts(transfers, max, limit, page_number)
@@ -531,10 +531,10 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         chain: &Chain,
         transfer_meta: TransferMeta,
     ) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
         let transfers: Vec<NftTransferHistory> = self
             .get_transfers_by_token_addr_id(chain, transfer_meta.token_address, transfer_meta.token_id)
             .await?;
-        let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
         for mut transfer in transfers {
@@ -557,7 +557,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         Ok(())
     }
 
-    async fn get_transfers_with_empty_meta(&self, chain: &Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> {
+    async fn get_transfers_with_empty_meta(&self, chain: Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
@@ -615,10 +615,10 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         token_address: String,
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
         let transfers: Vec<NftTransferHistory> = self
             .get_transfers_by_token_address(chain, token_address.clone())
             .await?;
-        let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
 
@@ -637,7 +637,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         Ok(())
     }
 
-    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<Vec<Address>, Self::Error> {
+    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<HashSet<Address>, Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
@@ -648,7 +648,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
             let transfer = transfer_details_from_item(item)?;
             token_addresses.insert(transfer.common.token_address);
         }
-        Ok(token_addresses.into_iter().collect())
+        Ok(token_addresses)
     }
 }
 
