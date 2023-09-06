@@ -20,6 +20,10 @@ use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 
+const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
+const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
+const CHAIN_TOKEN_ADD_INDEX: &str = "chain_token_add_index";
+
 #[derive(Clone)]
 pub struct IndexedDbNftStorage {
     db: SharedDb<NftCacheIDB>,
@@ -204,7 +208,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
             .with_value(token_id.to_string())?;
@@ -228,7 +232,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let nft_table = db_transaction.table::<NftListTable>().await?;
         let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
 
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
             .with_value(token_id.to_string())?;
@@ -258,7 +262,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
             .with_value(token_id.to_string())?;
@@ -274,7 +278,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
             .with_value(nft.common.token_id.to_string())?;
@@ -288,7 +292,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
-        get_last_block_from_table(chain, table, NftListTable::CHAIN_BLOCK_NUMBER_INDEX).await
+        get_last_block_from_table(chain, table, CHAIN_BLOCK_NUMBER_INDEX).await
     }
 
     async fn get_last_scanned_block(&self, chain: &Chain) -> MmResult<Option<u64>, Self::Error> {
@@ -312,7 +316,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let nft_table = db_transaction.table::<NftListTable>().await?;
         let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
 
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
             .with_value(nft.common.token_id.to_string())?;
@@ -337,7 +341,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let nft_table = db_transaction.table::<NftListTable>().await?;
         let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
 
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
             .with_value(nft.common.token_id.to_string())?;
@@ -361,7 +365,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
 
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?;
 
@@ -388,7 +392,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             nft.common.possible_spam = possible_spam;
             drop_mutability!(nft);
 
-            let index_keys = MultiIndex::new(NftListTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
                 .with_value(chain.to_string())?
                 .with_value(eth_addr_to_hex(&nft.common.token_address))?
                 .with_value(nft.common.token_id.to_string())?;
@@ -451,7 +455,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
-        get_last_block_from_table(chain, table, NftTransferHistoryTable::CHAIN_BLOCK_NUMBER_INDEX).await
+        get_last_block_from_table(chain, table, CHAIN_BLOCK_NUMBER_INDEX).await
     }
 
     async fn get_transfers_from_block(
@@ -467,7 +471,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
             .only("chain", chain.to_string())
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .bound("block_number", BeBigUint::from(from_block), BeBigUint::from(u64::MAX))
-            .open_cursor(NftTransferHistoryTable::CHAIN_BLOCK_NUMBER_INDEX)
+            .open_cursor(CHAIN_BLOCK_NUMBER_INDEX)
             .await
             .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
             .collect()
@@ -492,7 +496,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
 
-        let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
             .with_value(token_id.to_string())?;
@@ -597,7 +601,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
 
-        let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TOKEN_ADD_INDEX)
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?;
 
@@ -712,12 +716,6 @@ pub(crate) struct NftListTable {
 }
 
 impl NftListTable {
-    const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
-
-    const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
-
-    const CHAIN_TOKEN_ADD_INDEX: &str = "chain_token_add_index";
-
     fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
         let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
         Ok(NftListTable {
@@ -741,12 +739,12 @@ impl TableSignature for NftListTable {
         if is_initial_upgrade(old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_multi_index(
-                Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
+                CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
                 &["chain", "token_address", "token_id"],
                 true,
             )?;
-            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
-            table.create_multi_index(Self::CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
+            table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
             table.create_index("chain", false)?;
             table.create_index("block_number", false)?;
         }
@@ -776,13 +774,7 @@ pub(crate) struct NftTransferHistoryTable {
 }
 
 impl NftTransferHistoryTable {
-    const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
-
     const CHAIN_TX_HASH_LOG_INDEX_INDEX: &str = "chain_tx_hash_log_index_index";
-
-    const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
-
-    const CHAIN_TOKEN_ADD_INDEX: &str = "chain_token_add_index";
 
     fn from_transfer_history(transfer: &NftTransferHistory) -> WasmNftCacheResult<NftTransferHistoryTable> {
         let details_json =
@@ -816,7 +808,7 @@ impl TableSignature for NftTransferHistoryTable {
         if is_initial_upgrade(old_version, new_version) {
             let table = upgrader.create_table(Self::table_name())?;
             table.create_multi_index(
-                Self::CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
+                CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
                 &["chain", "token_address", "token_id"],
                 false,
             )?;
@@ -825,8 +817,8 @@ impl TableSignature for NftTransferHistoryTable {
                 &["chain", "transaction_hash", "log_index"],
                 true,
             )?;
-            table.create_multi_index(Self::CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
-            table.create_multi_index(Self::CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
+            table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
             table.create_index("block_number", false)?;
             table.create_index("chain", false)?;
         }
