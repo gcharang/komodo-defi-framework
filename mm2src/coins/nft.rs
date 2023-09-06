@@ -155,48 +155,48 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
-    for chain in req.chains.iter() {
-        let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
+    for chain in req.chains.into_iter() {
+        let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, &chain).await?;
 
         let from_block = if transfer_history_initialized {
-            let last_transfer_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, chain).await?;
+            let last_transfer_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, &chain).await?;
             last_transfer_block.map(|b| b + 1)
         } else {
-            NftTransferHistoryStorageOps::init(&storage, chain).await?;
+            NftTransferHistoryStorageOps::init(&storage, &chain).await?;
             None
         };
-        let nft_transfers = get_moralis_nft_transfers(&ctx, chain, from_block, &req.url).await?;
+        let nft_transfers = get_moralis_nft_transfers(&ctx, &chain, from_block, &req.url).await?;
         storage.add_transfers_to_history(chain, nft_transfers).await?;
 
-        let nft_block = match NftListStorageOps::get_last_block_number(&storage, chain).await {
+        let nft_block = match NftListStorageOps::get_last_block_number(&storage, &chain).await {
             Ok(Some(block)) => block,
             Ok(None) => {
                 // if there are no rows in NFT LIST table we can try to get all info from moralis.
-                let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url).await?;
-                update_meta_in_transfers(&storage, chain, nfts).await?;
-                update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
-                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+                let nfts = cache_nfts_from_moralis(&ctx, &storage, &chain, &req.url).await?;
+                update_meta_in_transfers(&storage, &chain, nfts).await?;
+                update_transfers_with_empty_meta(&storage, &chain, &req.url).await?;
+                update_spam(&ctx, &storage, chain, &req.url_antispam).await?;
                 continue;
             },
             Err(_) => {
                 // if there is an error, then NFT LIST table doesnt exist, so we need to cache from mroalis.
-                NftListStorageOps::init(&storage, chain).await?;
-                let nft_list = get_moralis_nft_list(&ctx, chain, &req.url).await?;
-                let last_scanned_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, chain)
+                NftListStorageOps::init(&storage, &chain).await?;
+                let nft_list = get_moralis_nft_list(&ctx, &chain, &req.url).await?;
+                let last_scanned_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, &chain)
                     .await?
                     .unwrap_or(0);
                 storage
                     .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
                     .await?;
-                update_meta_in_transfers(&storage, chain, nft_list).await?;
-                update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
-                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+                update_meta_in_transfers(&storage, &chain, nft_list).await?;
+                update_transfers_with_empty_meta(&storage, &chain, &req.url).await?;
+                update_spam(&ctx, &storage, chain, &req.url_antispam).await?;
                 continue;
             },
         };
         let scanned_block =
             storage
-                .get_last_scanned_block(chain)
+                .get_last_scanned_block(&chain)
                 .await?
                 .ok_or_else(|| UpdateNftError::LastScannedBlockNotFound {
                     last_nft_block: nft_block.to_string(),
@@ -209,9 +209,9 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 last_nft_block: nft_block.to_string(),
             });
         }
-        update_nft_list(ctx.clone(), &storage, chain, scanned_block + 1, &req.url).await?;
-        update_transfers_with_empty_meta(&storage, chain, &req.url).await?;
-        update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+        update_nft_list(ctx.clone(), &storage, &chain, scanned_block + 1, &req.url).await?;
+        update_transfers_with_empty_meta(&storage, &chain, &req.url).await?;
+        update_spam(&ctx, &storage, chain, &req.url_antispam).await?;
         // todo update phishing domains
     }
     Ok(())
@@ -230,7 +230,7 @@ where
     if chain == Chain::Eth || chain == Chain::Polygon {
         return update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await;
     }
-    let token_addresses = storage.get_token_addresses(&chain).await?;
+    let token_addresses = storage.get_token_addresses(chain).await?;
     let addresses = token_addresses
         .iter()
         .map(eth_addr_to_hex)
@@ -422,7 +422,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
                     Some(contract_type) => contract_type,
                     None => continue,
                 };
-                let nft = build_nft_from_moralis(chain, nft_moralis, contract_type).await;
+                let nft = build_nft_from_moralis(*chain, nft_moralis, contract_type).await;
                 // collect NFTs from the page
                 res_list.push(nft);
             }
@@ -560,7 +560,7 @@ async fn get_moralis_metadata(
         Some(contract_type) => contract_type,
         None => return MmError::err(GetNftInfoError::ContractTypeIsNull),
     };
-    let nft_metadata = build_nft_from_moralis(chain, nft_moralis, contract_type).await;
+    let nft_metadata = build_nft_from_moralis(*chain, nft_moralis, contract_type).await;
     Ok(nft_metadata)
 }
 
@@ -700,7 +700,7 @@ async fn update_nft_list<T: NftListStorageOps + NftTransferHistoryStorageOps>(
     scan_from_block: u64,
     url: &Url,
 ) -> MmResult<(), UpdateNftError> {
-    let transfers = storage.get_transfers_from_block(chain, scan_from_block).await?;
+    let transfers = storage.get_transfers_from_block(*chain, scan_from_block).await?;
     let req = MyAddressReq {
         coin: chain.to_ticker(),
         path_to_address: StandardHDCoinAddress::default(),
@@ -808,7 +808,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTransferHistoryStorageO
             nft.block_number = transfer.block_number;
             drop_mutability!(nft);
             storage
-                .add_nfts_to_list(chain, vec![nft.clone()], transfer.block_number)
+                .add_nfts_to_list(*chain, vec![nft.clone()], transfer.block_number)
                 .await?;
             nft
         },
@@ -933,7 +933,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
                 uri_meta,
             };
             storage
-                .add_nfts_to_list(chain, [nft.clone()], transfer.block_number)
+                .add_nfts_to_list(*chain, [nft.clone()], transfer.block_number)
                 .await?;
             nft
         },
@@ -981,7 +981,7 @@ async fn cache_nfts_from_moralis<T: NftListStorageOps + NftTransferHistoryStorag
         .await?
         .unwrap_or(0);
     storage
-        .add_nfts_to_list(chain, nft_list.clone(), last_scanned_block)
+        .add_nfts_to_list(*chain, nft_list.clone(), last_scanned_block)
         .await?;
     Ok(nft_list)
 }
@@ -1109,7 +1109,7 @@ fn check_spam_and_redact_metadata_field(
     }
 }
 
-async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, contract_type: ContractType) -> Nft {
+async fn build_nft_from_moralis(chain: Chain, nft_moralis: NftFromMoralis, contract_type: ContractType) -> Nft {
     let token_uri = check_moralis_ipfs_bafy(nft_moralis.common.token_uri.as_deref());
     let uri_meta = get_uri_meta(token_uri.as_deref(), nft_moralis.common.metadata.as_deref()).await;
     let token_domain = get_domain_from_url(token_uri.as_deref());
@@ -1130,7 +1130,7 @@ async fn build_nft_from_moralis(chain: &Chain, nft_moralis: NftFromMoralis, cont
             minter_address: nft_moralis.common.minter_address,
             possible_spam: nft_moralis.common.possible_spam,
         },
-        chain: *chain,
+        chain,
         block_number_minted: nft_moralis.block_number_minted.map(|v| v.0),
         block_number: *nft_moralis.block_number,
         contract_type,

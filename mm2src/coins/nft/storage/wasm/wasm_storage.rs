@@ -172,7 +172,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         Self::take_nft_according_to_paging_opts(nfts, max, limit, page_number)
     }
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send,
@@ -356,7 +356,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         Ok(())
     }
 
-    async fn get_nfts_by_token_address(&self, chain: &Chain, token_address: String) -> MmResult<Vec<Nft>, Self::Error> {
+    async fn get_nfts_by_token_address(&self, chain: Chain, token_address: String) -> MmResult<Vec<Nft>, Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
@@ -380,7 +380,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
         let locked_db = self.lock_db().await?;
-        let nfts: Vec<Nft> = self.get_nfts_by_token_address(chain, token_address.clone()).await?;
+        let nfts: Vec<Nft> = self.get_nfts_by_token_address(*chain, token_address.clone()).await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
 
@@ -432,7 +432,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         Self::take_transfers_according_to_paging_opts(transfers, max, limit, page_number)
     }
 
-    async fn add_transfers_to_history<I>(&self, _chain: &Chain, transfers: I) -> MmResult<(), Self::Error>
+    async fn add_transfers_to_history<I>(&self, _chain: Chain, transfers: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send,
@@ -456,7 +456,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
 
     async fn get_transfers_from_block(
         &self,
-        chain: &Chain,
+        chain: Chain,
         from_block: u64,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
         let locked_db = self.lock_db().await?;
@@ -484,7 +484,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
 
     async fn get_transfers_by_token_addr_id(
         &self,
-        chain: &Chain,
+        chain: Chain,
         token_address: String,
         token_id: BigDecimal,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
@@ -533,7 +533,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
     ) -> MmResult<(), Self::Error> {
         let locked_db = self.lock_db().await?;
         let transfers: Vec<NftTransferHistory> = self
-            .get_transfers_by_token_addr_id(chain, transfer_meta.token_address, transfer_meta.token_id)
+            .get_transfers_by_token_addr_id(*chain, transfer_meta.token_address, transfer_meta.token_id)
             .await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
@@ -590,7 +590,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
 
     async fn get_transfers_by_token_address(
         &self,
-        chain: &Chain,
+        chain: Chain,
         token_address: String,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
         let locked_db = self.lock_db().await?;
@@ -617,7 +617,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
     ) -> MmResult<(), Self::Error> {
         let locked_db = self.lock_db().await?;
         let transfers: Vec<NftTransferHistory> = self
-            .get_transfers_by_token_address(chain, token_address.clone())
+            .get_transfers_by_token_address(*chain, token_address.clone())
             .await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
@@ -637,7 +637,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         Ok(())
     }
 
-    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<HashSet<Address>, Self::Error> {
+    async fn get_token_addresses(&self, chain: Chain) -> MmResult<HashSet<Address>, Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;

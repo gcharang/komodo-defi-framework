@@ -48,7 +48,7 @@ pub trait NftListStorageOps {
         filters: Option<NftListFilters>,
     ) -> MmResult<NftList, Self::Error>;
 
-    async fn add_nfts_to_list<I>(&self, chain: &Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
+    async fn add_nfts_to_list<I>(&self, chain: Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = Nft> + Send + 'static,
         I::IntoIter: Send;
@@ -90,7 +90,7 @@ pub trait NftListStorageOps {
     async fn update_nft_amount_and_block_number(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
 
     /// `get_nfts_by_token_address` function returns list of NFTs which have specified token address.
-    async fn get_nfts_by_token_address(&self, chain: &Chain, token_address: String) -> MmResult<Vec<Nft>, Self::Error>;
+    async fn get_nfts_by_token_address(&self, chain: Chain, token_address: String) -> MmResult<Vec<Nft>, Self::Error>;
 
     /// `update_nft_spam_by_token_address` function updates `possible_spam` field in NFTs which have specified token address.
     async fn update_nft_spam_by_token_address(
@@ -120,7 +120,7 @@ pub trait NftTransferHistoryStorageOps {
         filters: Option<NftTransferHistoryFilters>,
     ) -> MmResult<NftsTransferHistoryList, Self::Error>;
 
-    async fn add_transfers_to_history<I>(&self, chain: &Chain, transfers: I) -> MmResult<(), Self::Error>
+    async fn add_transfers_to_history<I>(&self, chain: Chain, transfers: I) -> MmResult<(), Self::Error>
     where
         I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
         I::IntoIter: Send;
@@ -131,13 +131,13 @@ pub trait NftTransferHistoryStorageOps {
     /// block_number in ascending order. It is needed to update the NFT LIST table correctly.
     async fn get_transfers_from_block(
         &self,
-        chain: &Chain,
+        chain: Chain,
         from_block: u64,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
 
     async fn get_transfers_by_token_addr_id(
         &self,
-        chain: &Chain,
+        chain: Chain,
         token_address: String,
         token_id: BigDecimal,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
@@ -160,7 +160,7 @@ pub trait NftTransferHistoryStorageOps {
     /// `get_transfers_by_token_address` function returns list of NFT transfers which have specified token address.
     async fn get_transfers_by_token_address(
         &self,
-        chain: &Chain,
+        chain: Chain,
         token_address: String,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
 
@@ -173,7 +173,7 @@ pub trait NftTransferHistoryStorageOps {
     ) -> MmResult<(), Self::Error>;
 
     /// `get_token_addresses` return all unique token addresses.
-    async fn get_token_addresses(&self, chain: &Chain) -> MmResult<HashSet<Address>, Self::Error>;
+    async fn get_token_addresses(&self, chain: Chain) -> MmResult<HashSet<Address>, Self::Error>;
 }
 
 #[derive(Debug, Deserialize, Display, Serialize)]

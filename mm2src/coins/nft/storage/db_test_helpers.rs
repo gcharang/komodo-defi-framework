@@ -379,7 +379,7 @@ pub(crate) async fn test_add_get_nfts_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
-    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
     let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
     let nft = storage
@@ -394,7 +394,7 @@ pub(crate) async fn test_last_nft_block_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
-    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
     let last_block = NftListStorageOps::get_last_block_number(&storage, &chain)
         .await
@@ -407,7 +407,7 @@ pub(crate) async fn test_nft_list_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
-    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
     let nft_list = storage
         .get_nft_list(vec![chain], false, 1, Some(NonZeroUsize::new(3).unwrap()), None)
@@ -424,7 +424,7 @@ pub(crate) async fn test_remove_nft_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
-    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
     let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
     let remove_rslt = storage
@@ -448,7 +448,7 @@ pub(crate) async fn test_nft_amount_impl() {
     let storage = init_nft_list_storage(&chain).await;
     let mut nft = nft();
     storage
-        .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
+        .add_nfts_to_list(chain, vec![nft.clone()], 25919780)
         .await
         .unwrap();
 
@@ -489,7 +489,7 @@ pub(crate) async fn test_refresh_metadata_impl() {
     let new_symbol = "NEW_SYMBOL";
     let mut nft = nft();
     storage
-        .add_nfts_to_list(&chain, vec![nft.clone()], 25919780)
+        .add_nfts_to_list(chain, vec![nft.clone()], 25919780)
         .await
         .unwrap();
     nft.common.symbol = Some(new_symbol.to_string());
@@ -505,14 +505,14 @@ pub(crate) async fn test_update_nft_spam_by_token_address_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
-    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
     storage
         .update_nft_spam_by_token_address(&chain, TOKEN_ADD.to_string(), true)
         .await
         .unwrap();
     let nfts = storage
-        .get_nfts_by_token_address(&chain, TOKEN_ADD.to_string())
+        .get_nfts_by_token_address(chain, TOKEN_ADD.to_string())
         .await
         .unwrap();
     for nft in nfts {
@@ -524,7 +524,7 @@ pub(crate) async fn test_exclude_nft_spam_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_list_storage(&chain).await;
     let nft_list = nft_list();
-    storage.add_nfts_to_list(&chain, nft_list, 28056726).await.unwrap();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
     let filters = NftListFilters {
         exclude_spam: true,
@@ -541,11 +541,11 @@ pub(crate) async fn test_add_get_transfers_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
     let transfer1 = storage
-        .get_transfers_by_token_addr_id(&chain, TOKEN_ADD.to_string(), token_id)
+        .get_transfers_by_token_addr_id(chain, TOKEN_ADD.to_string(), token_id)
         .await
         .unwrap()
         .get(0)
@@ -558,7 +558,7 @@ pub(crate) async fn test_add_get_transfers_impl() {
         .unwrap()
         .unwrap();
     assert_eq!(transfer2.block_number, 28056726);
-    let transfer_from = storage.get_transfers_from_block(&chain, 28056721).await.unwrap();
+    let transfer_from = storage.get_transfers_from_block(chain, 28056721).await.unwrap();
     assert_eq!(transfer_from.len(), 3);
 }
 
@@ -566,7 +566,7 @@ pub(crate) async fn test_last_transfer_block_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     let last_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, &chain)
         .await
@@ -579,7 +579,7 @@ pub(crate) async fn test_transfer_history_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     let transfer_history = storage
         .get_transfer_history(vec![chain], false, 1, Some(NonZeroUsize::new(3).unwrap()), None)
@@ -596,7 +596,7 @@ pub(crate) async fn test_transfer_history_filters_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     let filters = NftTransferHistoryFilters {
         receive: true,
@@ -656,7 +656,7 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     let vec_token_add_id = storage.get_transfers_with_empty_meta(chain).await.unwrap();
     assert_eq!(vec_token_add_id.len(), 3);
@@ -677,7 +677,7 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
         .await
         .unwrap();
     let transfer_upd = storage
-        .get_transfers_by_token_addr_id(&chain, token_add, Default::default())
+        .get_transfers_by_token_addr_id(chain, token_add, Default::default())
         .await
         .unwrap();
     let transfer_upd = transfer_upd.get(0).unwrap();
@@ -688,14 +688,14 @@ pub(crate) async fn test_update_transfer_spam_by_token_address_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     storage
         .update_transfer_spam_by_token_address(&chain, TOKEN_ADD.to_string(), true)
         .await
         .unwrap();
     let transfers = storage
-        .get_transfers_by_token_address(&chain, TOKEN_ADD.to_string())
+        .get_transfers_by_token_address(chain, TOKEN_ADD.to_string())
         .await
         .unwrap();
     for transfers in transfers {
@@ -707,9 +707,9 @@ pub(crate) async fn test_get_token_addresses_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
-    let token_addresses = storage.get_token_addresses(&chain).await.unwrap();
+    let token_addresses = storage.get_token_addresses(chain).await.unwrap();
     assert_eq!(token_addresses.len(), 2);
 }
 
@@ -717,7 +717,7 @@ pub(crate) async fn test_exclude_transfer_spam_impl() {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
     let transfers = nft_transfer_history();
-    storage.add_transfers_to_history(&chain, transfers).await.unwrap();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
     let filters = NftTransferHistoryFilters {
         receive: true,
