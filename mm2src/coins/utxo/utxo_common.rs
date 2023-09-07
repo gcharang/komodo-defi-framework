@@ -571,7 +571,6 @@ where
 
 pub fn derivation_method(coin: &UtxoCoinFields) -> &DerivationMethod<Address, UtxoHDWallet> { &coin.derivation_method }
 
-// Todo: maybe rename this function
 pub async fn extract_extended_pubkey<XPubExtractor>(
     coin: &UtxoCoinFields,
     xpub_extractor: &XPubExtractor,
@@ -592,9 +591,18 @@ where
             .map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()));
     }
 
-    coin.priv_key_policy
-        .hd_wallet_derived_pubkey(derivation_path)
-        .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))
+    let mut priv_key = coin
+        .priv_key_policy
+        .bip39_secp_priv_key_or_err()
+        .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
+        .clone();
+    for child in derivation_path {
+        priv_key = priv_key
+            .derive_child(child)
+            .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
+    }
+    drop_mutability!(priv_key);
+    Ok(priv_key.public_key())
 }
 
 /// returns the fee required to be paid for HTLC spend transaction
