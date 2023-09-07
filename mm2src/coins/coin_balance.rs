@@ -351,6 +351,7 @@ pub mod common_impl {
         coin: &Coin,
         hd_wallet: &Coin::HDWallet,
         hd_account: &mut Coin::HDAccount,
+        chain: Bip44Chain,
         address_scanner: &Coin::HDAddressScanner,
         scan_new_addresses: bool,
         min_addresses_number: Option<u32>,
@@ -369,7 +370,7 @@ pub mod common_impl {
         }
 
         if let Some(min_addresses_number) = min_addresses_number {
-            gen_new_addresses(coin, hd_wallet, hd_account, &mut addresses, min_addresses_number).await?
+            gen_new_addresses(coin, hd_wallet, hd_account, chain, &mut addresses, min_addresses_number).await?
         }
 
         let total_balance = addresses.iter().fold(CoinBalance::default(), |total, addr_balance| {
@@ -425,6 +426,7 @@ pub mod common_impl {
                 coin,
                 hd_wallet,
                 &mut new_account,
+                path_to_address.chain,
                 &address_scanner,
                 scan_new_addresses,
                 params.min_addresses_number.max(Some(path_to_address.address_id + 1)),
@@ -454,6 +456,7 @@ pub mod common_impl {
                 coin,
                 hd_wallet,
                 hd_account,
+                path_to_address.chain,
                 &address_scanner,
                 scan_new_addresses,
                 min_addresses_number,
@@ -470,6 +473,7 @@ pub mod common_impl {
         coin: &Coin,
         hd_wallet: &Coin::HDWallet,
         hd_account: &mut Coin::HDAccount,
+        chain: Bip44Chain,
         result_addresses: &mut Vec<HDAddressBalance>,
         min_addresses_number: u32,
     ) -> MmResult<(), EnableCoinBalanceError>
@@ -492,8 +496,6 @@ pub mod common_impl {
         }
 
         let to_generate = min_addresses_number - actual_addresses_number;
-        // Todo: should we use chain from the activation request for swap account too?
-        let chain = hd_wallet.default_receiver_chain();
         let ticker = coin.ticker();
         let account_id = hd_account.account_id();
         info!("Generate '{to_generate}' addresses: ticker={ticker} account_id={account_id}, chain={chain:?}");
