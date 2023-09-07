@@ -49,9 +49,9 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        AbortSettings, AbortedError, SpawnAbortable, SpawnFuture};
 use common::log::{warn, LogOnError};
 use common::{calc_total_pages, now_sec, ten, HttpStatusCode};
-use crypto::{derive_secp256k1_secret, derive_secp256k1_secret_from_full_path, Bip32Error, CryptoCtx, CryptoCtxError,
-             DerivationPath, GlobalHDAccountArc, HwRpcError, KeyPairPolicy, Secp256k1ExtendedPublicKey,
-             Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin, WithHwRpcError};
+use crypto::{derive_secp256k1_secret, Bip32Error, CryptoCtx, CryptoCtxError, DerivationPath, GlobalHDAccountArc,
+             HwRpcError, KeyPairPolicy, Secp256k1ExtendedPublicKey, Secp256k1Secret, StandardHDCoinAddress,
+             StandardHDPathToCoin, WithHwRpcError};
 use derive_more::Display;
 use enum_from::{EnumFromStringify, EnumFromTrait};
 use ethereum_types::H256;
@@ -2978,9 +2978,16 @@ impl<T> PrivKeyPolicy<T> {
         &self,
         derivation_path: DerivationPath,
     ) -> Result<Secp256k1Secret, MmError<PrivKeyPolicyNotAllowed>> {
-        let bip39_secp_priv_key = self.bip39_secp_priv_key_or_err()?;
-        derive_secp256k1_secret_from_full_path(bip39_secp_priv_key.clone(), derivation_path)
-            .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
+        let mut priv_key = self.bip39_secp_priv_key_or_err()?.clone();
+        for child in derivation_path {
+            priv_key = priv_key
+                .derive_child(child)
+                .map_to_mm(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))?;
+        }
+        drop_mutability!(priv_key);
+
+        let secret = *priv_key.private_key().as_ref();
+        Ok(Secp256k1Secret::from(secret))
     }
 
     // Todo: move Secp256k1ExtendedPublicKey to a common place and make it generic
