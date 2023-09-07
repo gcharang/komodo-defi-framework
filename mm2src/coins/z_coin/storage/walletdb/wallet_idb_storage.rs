@@ -1,8 +1,10 @@
 use super::WalletDbShared;
+use crate::z_coin::storage::walletdb::is_init_height_modified;
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
-use crate::z_coin::{ZCoinBuilder, ZcoinConsensusParams};
+use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinConsensusParams};
 
 use async_trait::async_trait;
+use common::log::info;
 use ff::PrimeField;
 use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
                          InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
@@ -15,7 +17,8 @@ use std::convert::{TryFrom, TryInto};
 use std::ops::Deref;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address, encode_payment_address};
+use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address,
+                                     encode_extended_full_viewing_key, encode_payment_address};
 use zcash_client_backend::wallet::{AccountId, SpendableNote, WalletTx};
 use zcash_client_backend::DecryptedOutput;
 use zcash_extras::{ShieldedOutput, WalletRead, WalletWrite};
@@ -37,10 +40,11 @@ pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
 impl<'a> WalletDbShared {
     pub async fn new(
         zcoin_builder: &ZCoinBuilder<'a>,
+        checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
     ) -> MmResult<Self, ZcoinStorageError> {
         let ticker = zcoin_builder.ticker;
-        let db = WalletIndexedDb::new(zcoin_builder, z_spending_key).await?;
+        let db = WalletIndexedDb::new(zcoin_builder, checkpoint_block, z_spending_key).await?;
         Ok(Self {
             db,
             ticker: ticker.to_string(),
@@ -86,13 +90,45 @@ pub struct WalletIndexedDb {
 impl<'a> WalletIndexedDb {
     pub async fn new(
         zcoin_builder: &ZCoinBuilder<'a>,
-        _z_spending_key: &ExtendedSpendingKey,
+        checkpoint_block: Option<CheckPointBlockInfo>,
+        z_spending_key: &ExtendedSpendingKey,
     ) -> MmResult<Self, ZcoinStorageError> {
-        Ok(Self {
+        let evk = ExtendedFullViewingKey::from(z_spending_key);
+        let db = Self {
             db: ConstructibleDb::new(zcoin_builder.ctx).into_shared(),
             ticker: zcoin_builder.ticker.to_string(),
             params: zcoin_builder.protocol_info.consensus_params.clone(),
-        })
+        };
+
+        let extrema = db.block_height_extrema().await?;
+        let (is_init_height_modified, init_height) =
+            is_init_height_modified(extrema, &checkpoint_block)
+                .await
+                .mm_err(|e| ZcoinStorageError::InitDbError {
+                    ticker: zcoin_builder.ticker.to_owned(),
+                    err: e.to_string(),
+                })?;
+        let get_evk = db.get_extended_full_viewing_keys().await?;
+
+        if get_evk.is_empty() || !is_init_height_modified {
+            info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_height:?}");
+            db.rewind_to_height(u32::MIN).await?;
+            if let Some(block) = checkpoint_block {
+                db.init_blocks_table(
+                    BlockHeight::from_u32(block.height),
+                    BlockHash(block.hash.0),
+                    block.time,
+                    &block.sapling_tree.0,
+                )
+                .await?;
+            }
+        }
+
+        if get_evk.is_empty() {
+            db.init_accounts_table(&[evk]).await?;
+        };
+
+        Ok(db)
     }
 
     #[allow(unused)]
@@ -101,6 +137,97 @@ impl<'a> WalletIndexedDb {
             .get_or_initialize()
             .await
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
+    }
+
+    pub async fn init_accounts_table(&self, extfvks: &[ExtendedFullViewingKey]) -> MmResult<(), ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let walletdb_account_table = db_transaction.table::<WalletDbAccountsTable>().await?;
+
+        // check if account exists
+        let maybe_min_account = walletdb_account_table
+            .cursor_builder()
+            .only("ticker", &ticker)?
+            .bound("height", 0u32, u32::MAX)
+            .open_cursor(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
+            .await?
+            .next()
+            .await?;
+        if maybe_min_account.is_some() {
+            return MmError::err(ZcoinStorageError::TableNotEmpty(
+                "Account table is not empty".to_string(),
+            ));
+        }
+
+        // Insert accounts
+        for (account, extfvk) in extfvks.iter().enumerate() {
+            let account_int = account.to_bigint().expect("BigInt is too large to fit in an i64");
+            // address
+            let address = extfvk.default_address().unwrap().1;
+            let address = encode_payment_address(self.params.hrp_sapling_payment_address(), &address);
+
+            let account = WalletDbAccountsTable {
+                account: account_int.clone(),
+                extfvk: encode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), extfvk),
+                address,
+                ticker: ticker.clone(),
+            };
+
+            let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+                .with_value(&ticker)?
+                .with_value(account_int)?;
+            walletdb_account_table
+                .replace_item_by_unique_multi_index(index_keys, &account)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn init_blocks_table(
+        &self,
+        height: BlockHeight,
+        hash: BlockHash,
+        time: u32,
+        sapling_tree: &[u8],
+    ) -> MmResult<(), ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let walletdb_account_table = db_transaction.table::<WalletDbAccountsTable>().await?;
+
+        // check if account exists
+        let maybe_min_account = walletdb_account_table
+            .cursor_builder()
+            .only("ticker", &ticker)?
+            .bound("height", 0u32, u32::MAX)
+            .open_cursor(WalletDbTransactionsTable::TICKER_BLOCK_INDEX)
+            .await?
+            .next()
+            .await?;
+        if maybe_min_account.is_some() {
+            return MmError::err(ZcoinStorageError::TableNotEmpty(
+                "Account table is not empty".to_string(),
+            ));
+        }
+
+        let block = WalletDbBlocksTable {
+            height: u32::from(height),
+            hash: hash.0.to_vec(),
+            time,
+            sapling_tree: sapling_tree.to_vec(),
+            ticker: ticker.clone(),
+        };
+        let walletdb_blocks_table = db_transaction.table::<WalletDbBlocksTable>().await?;
+        let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+            .with_value(&ticker)?
+            .with_value(u32::from(height).to_bigint())?;
+        walletdb_blocks_table
+            .replace_item_by_unique_multi_index(index_keys, &block)
+            .await?;
+
+        Ok(())
     }
 }
 

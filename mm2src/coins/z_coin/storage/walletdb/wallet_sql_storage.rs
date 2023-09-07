@@ -1,3 +1,4 @@
+use crate::z_coin::storage::walletdb::is_init_height_modified;
 use crate::z_coin::storage::WalletDbShared;
 use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinClientInitError, ZcoinConsensusParams, ZcoinStorageError};
 use common::async_blocking;
@@ -36,15 +37,14 @@ pub async fn create_wallet_db(
     run_optimization_pragmas_helper(&db)?;
     init_wallet_db(&db).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 
-    let extrema = db.block_height_extrema().await?;
-    let min_sync_height = extrema.map(|(min, _)| u32::from(min));
-    let init_block_height = checkpoint_block.clone().map(|block| block.height);
-
     // Check if the initial block height is less than the previous synchronization height and
     // Rewind walletdb to the minimum possible height.
+    let extrema = db.block_height_extrema().await?;
+    let (is_init_height_modified, init_height) = is_init_height_modified(extrema, &checkpoint_block).await?;
     let get_evk = db.get_extended_full_viewing_keys().await?;
-    if get_evk.is_empty() || init_block_height != min_sync_height {
-        info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_block_height:?}");
+
+    if get_evk.is_empty() || is_init_height_modified {
+        info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_height:?}");
         let mut wallet_ops = db.get_update_ops().expect("get_update_ops always returns Ok");
         wallet_ops
             .rewind_to_height(u32::MIN.into())

@@ -152,20 +152,22 @@ impl BlockDbImpl {
 
         Ok((height_to_remove_from + get_latest_block) as usize)
     }
-    pub(crate) async fn get_earliest_block(&self) -> Result<u32, ZcashClientError> {
+
+    #[allow(unused)]
+    pub(crate) async fn get_earliest_block(&self) -> MmResult<u32, ZcoinStorageError> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
         let maybe_min_block = block_db
             .cursor_builder()
-            .only("ticker", ticker.clone())?
+            .only("ticker", &self.ticker)?
             .bound("height", 0u32, u32::MAX)
             .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
             .await?
             .next()
             .await?;
 
-        Ok(maybe_min_block.map(|b| b.height))
+        Ok(maybe_min_block.map(|(_, b)| b.height).unwrap_or(0))
     }
 
     /// Queries and retrieves a list of `CompactBlockRow` records from the database, starting
