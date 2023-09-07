@@ -9,6 +9,7 @@ use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, enab
                                   wait_for_swaps_finish_and_check_status, MarketMakerIt, Mm2InitPrivKeyPolicy,
                                   Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK};
 use mm2_test_helpers::get_passphrase;
+use mm2_test_helpers::structs::{Bip44Chain, HDAccountAddressId};
 use serde_json::json;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -186,9 +187,9 @@ async fn trade_test_rick_and_morty() {
     let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
     let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
     let alice_path_to_address = HDAccountAddressId {
-        account: 0,
-        is_change: false,
-        address_index: 0,
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 0,
     };
     let pairs: &[_] = &[("RICK", "MORTY")];
     trade_base_rel_electrum(
