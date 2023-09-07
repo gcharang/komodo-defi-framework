@@ -122,6 +122,17 @@ impl BlockDbImpl {
             .map_to_mm(|err| ZcoinStorageError::RemoveFromStorageErr(err.to_string()))
     }
 
+    pub(crate) async fn get_earliest_block(&self) -> Result<u32, ZcashClientError> {
+        Ok(query_single_row(
+            &self.db.lock().unwrap(),
+            "SELECT MIN(height) from compactblocks",
+            [],
+            |row| row.get::<_, Option<u32>>(0),
+        )?
+        .flatten()
+        .unwrap_or(0))
+    }
+
     pub(crate) async fn query_blocks_by_limit(
         &self,
         from_height: BlockHeight,

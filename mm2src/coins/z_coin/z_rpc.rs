@@ -21,11 +21,8 @@ cfg_native!(
     use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper};
     use crate::z_coin::z_coin_errors::{ZcoinStorageError, ValidateBlocksError};
     use crate::utxo::utxo_builder::{UtxoCoinBuilderCommonOps, DAY_IN_SECONDS};
-    use crate::z_coin::CheckPointBlockInfo;
 
-    use db_common::sqlite::rusqlite::Connection;
-    use db_common::sqlite::{query_single_row, run_optimization_pragmas};
-    use common::{async_blocking, now_sec};
+    use common::{now_sec};
     use common::executor::Timer;
     use common::log::{debug, error, info, LogOnError};
     use futures::channel::mpsc::channel;
@@ -34,10 +31,8 @@ cfg_native!(
     use hex::{FromHex, FromHexError};
     use http::Uri;
     use prost::Message;
-    use rpc::v1::types::H256 as H256Json;
     use std::convert::TryFrom;
     use rpc::v1::types::{Bytes, H256 as H256Json};
-    use std::path::PathBuf;
     use std::pin::Pin;
     use std::str::FromStr;
     use tonic::transport::{Channel, ClientTlsConfig};
@@ -355,57 +350,6 @@ impl ZRpcOps for NativeClient {
     }
 }
 
-/// `create_wallet_db` is responsible for creating a new Zcoin wallet database, initializing it
-/// with the provided parameters, and executing various initialization steps. These steps include checking and
-/// potentially rewinding the database to a specified synchronization height, performing optimizations, and
-/// setting up the initial state of the wallet database.
-#[cfg(not(target_arch = "wasm32"))]
-pub async fn create_wallet_db(
-    wallet_db_path: PathBuf,
-    consensus_params: ZcoinConsensusParams,
-    checkpoint_block: Option<CheckPointBlockInfo>,
-    evk: ExtendedFullViewingKey,
-) -> Result<WalletDb<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-    async_blocking({
-        move || -> Result<WalletDb<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-            let db = WalletDb::for_path(wallet_db_path, consensus_params)
-                .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-            let extrema = db.block_height_extrema()?;
-            let min_sync_height = extrema.map(|(min, _)| u32::from(min));
-            let init_block_height = checkpoint_block.clone().map(|block| block.height);
-
-            run_optimization_pragmas(db.sql_conn())
-                .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-            init_wallet_db(&db).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-
-            // Check if the initial block height is less than the previous synchronization height and
-            // Rewind walletdb to the minimum possible height.
-            if db.get_extended_full_viewing_keys()?.is_empty() || init_block_height != min_sync_height {
-                info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_block_height:?}");
-                let mut wallet_ops = db.get_update_ops().expect("get_update_ops always returns Ok");
-                wallet_ops
-                    .rewind_to_height(u32::MIN.into())
-                    .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-                if let Some(block) = checkpoint_block.clone() {
-                    init_blocks_table(
-                        &db,
-                        BlockHeight::from_u32(block.height),
-                        BlockHash(block.hash.0),
-                        block.time,
-                        &block.sapling_tree.0,
-                    )?;
-                }
-            }
-
-            if db.get_extended_full_viewing_keys()?.is_empty() {
-                init_accounts_table(&db, &[evk])?;
-            }
-            Ok(db)
-        }
-    })
-    .await
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn init_light_client<'a>(
     builder: &ZCoinBuilder<'a>,
@@ -487,6 +431,7 @@ pub(super) async fn init_light_client<'a>(
     if sync_height != min_height as u64 {
         blocks_db
             .rewind_to_height(u32::MIN)
+            .await
             .map_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
     };
 
