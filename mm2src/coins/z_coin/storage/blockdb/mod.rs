@@ -78,6 +78,17 @@ mod block_db_storage_tests {
         let block_height = db.get_latest_block().await.unwrap();
         assert_eq!(1900002, block_height);
     }
+
+    pub(crate) async fn get_earliest_block(&self) -> Result<u32, ZcashClientError> {
+        Ok(query_single_row(
+            &self.db.lock().unwrap(),
+            "SELECT MIN(height) from compactblocks",
+            [],
+            |row| row.get::<_, Option<u32>>(0),
+        )?
+        .flatten()
+        .unwrap_or(0))
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
