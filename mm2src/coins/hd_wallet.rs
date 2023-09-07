@@ -334,11 +334,11 @@ pub trait HDWalletCoinOps {
     async fn create_new_account<'a, XPubExtractor>(
         &self,
         hd_wallet: &'a Self::HDWallet,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         account_id: Option<u32>,
     ) -> MmResult<HDAccountMut<'a, Self::HDAccount>, NewAccountCreatingError>
     where
-        XPubExtractor: HDXPubExtractor;
+        XPubExtractor: HDXPubExtractor + Send;
 
     async fn set_known_addresses_number(
         &self,

@@ -1278,6 +1278,8 @@ impl MarketCoinOps for Qrc20Coin {
         let pow = self.utxo.decimals / 3;
         MmNumber::from(1) / MmNumber::from(10u64.pow(pow as u32))
     }
+
+    fn is_trezor(&self) -> bool { self.as_ref().priv_key_policy.is_trezor() }
 }
 
 #[async_trait]

@@ -77,11 +77,11 @@ pub trait ExtractExtendedPubkey {
 
     async fn extract_extended_pubkey<XPubExtractor>(
         &self,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         derivation_path: DerivationPath,
     ) -> MmResult<Self::ExtendedPublicKey, HDExtractPubkeyError>
     where
-        XPubExtractor: HDXPubExtractor;
+        XPubExtractor: HDXPubExtractor + Send;
 }
 
 #[async_trait]
@@ -144,15 +144,6 @@ where
             task_handle,
             statuses,
         })
-    }
-
-    /// Constructs an Xpub extractor without checking if the MarketMaker is initialized with a hardware wallet.
-    pub fn new_unchecked(
-        ctx: &MmArc,
-        task_handle: &'task RpcTaskHandle<Task>,
-        statuses: HwConnectStatuses<Task::InProgressStatus, Task::AwaitingStatus>,
-    ) -> XPubExtractorUnchecked<RpcTaskXPubExtractor<'task, Task>> {
-        XPubExtractorUnchecked(Self::new(ctx, task_handle, statuses))
     }
 
     async fn extract_utxo_xpub_from_trezor(

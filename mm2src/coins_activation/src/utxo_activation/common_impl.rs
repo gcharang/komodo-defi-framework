@@ -11,7 +11,7 @@ use coins::utxo::{UtxoActivationParams, UtxoCoinFields};
 use coins::{CoinFutSpawner, MarketCoinOps, PrivKeyActivationPolicy, PrivKeyBuildPolicy};
 use common::executor::{AbortSettings, SpawnAbortable};
 use crypto::hw_rpc_task::HwConnectStatuses;
-use crypto::CryptoCtxError;
+use crypto::{CryptoCtxError, HwRpcError};
 use futures::compat::Future01CompatExt;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
@@ -41,15 +41,18 @@ where
         .await
         .map_to_mm(InitUtxoStandardError::Transport)?;
 
-    // Construct an Xpub extractor without checking if the MarketMaker supports HD wallet ops.
-    // [`EnableCoinBalanceOps::enable_coin_balance`] won't just use `xpub_extractor`
-    // if the coin has been initialized with an Iguana priv key.
-    // Todo: fix this too, we need to create xpub_extractor for HD wallet or similar method
-    let xpub_extractor = RpcTaskXPubExtractor::new_unchecked(ctx, task_handle, xpub_extractor_rpc_statuses());
+    let xpub_extractor = if coin.is_trezor() {
+        Some(
+            RpcTaskXPubExtractor::new(ctx, task_handle, xpub_extractor_rpc_statuses())
+                .mm_err(|_| InitUtxoStandardError::HwError(HwRpcError::NotInitialized))?,
+        )
+    } else {
+        None
+    };
     task_handle.update_in_progress_status(UtxoStandardInProgressStatus::RequestingWalletBalance)?;
     let wallet_balance = coin
         .enable_coin_balance(
-            &xpub_extractor,
+            xpub_extractor,
             activation_params.enable_params.clone(),
             &activation_params.path_to_address,
         )

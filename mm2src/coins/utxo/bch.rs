@@ -1214,6 +1214,8 @@ impl MarketCoinOps for BchCoin {
     fn min_tx_amount(&self) -> BigDecimal { utxo_common::min_tx_amount(self.as_ref()) }
 
     fn min_trading_vol(&self) -> MmNumber { utxo_common::min_trading_vol(self.as_ref()) }
+
+    fn is_trezor(&self) -> bool { self.as_ref().priv_key_policy.is_trezor() }
 }
 
 #[async_trait]
@@ -1346,11 +1348,11 @@ impl ExtractExtendedPubkey for BchCoin {
 
     async fn extract_extended_pubkey<XPubExtractor>(
         &self,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         derivation_path: DerivationPath,
     ) -> MmResult<Self::ExtendedPublicKey, HDExtractPubkeyError>
     where
-        XPubExtractor: HDXPubExtractor,
+        XPubExtractor: HDXPubExtractor + Send,
     {
         utxo_common::extract_extended_pubkey(&self.utxo_arc, xpub_extractor, derivation_path).await
     }
@@ -1390,11 +1392,11 @@ impl HDWalletCoinOps for BchCoin {
     async fn create_new_account<'a, XPubExtractor>(
         &self,
         hd_wallet: &'a Self::HDWallet,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         account_id: Option<u32>,
     ) -> MmResult<HDAccountMut<'a, Self::HDAccount>, NewAccountCreatingError>
     where
-        XPubExtractor: HDXPubExtractor,
+        XPubExtractor: HDXPubExtractor + Send,
     {
         utxo_common::create_new_account(self, hd_wallet, xpub_extractor, account_id).await
     }

@@ -465,6 +465,8 @@ impl MarketCoinOps for SolanaCoin {
     fn min_tx_amount(&self) -> BigDecimal { BigDecimal::from(0) }
 
     fn min_trading_vol(&self) -> MmNumber { MmNumber::from("0.00777") }
+
+    fn is_trezor(&self) -> bool { unimplemented!() }
 }
 
 #[async_trait]

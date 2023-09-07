@@ -242,14 +242,14 @@ where
 pub async fn create_new_account<'a, Coin, XPubExtractor>(
     coin: &Coin,
     hd_wallet: &'a UtxoHDWallet,
-    xpub_extractor: &XPubExtractor,
+    xpub_extractor: Option<XPubExtractor>,
     account_id: Option<u32>,
 ) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreatingError>
 where
     Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey>
         + HDWalletCoinWithStorageOps<HDWallet = UtxoHDWallet, HDAccount = UtxoHDAccount>
         + Sync,
-    XPubExtractor: HDXPubExtractor,
+    XPubExtractor: HDXPubExtractor + Send,
 {
     const INIT_ACCOUNT_ID: u32 = 0;
     let new_account_id = match account_id {
@@ -573,36 +573,37 @@ pub fn derivation_method(coin: &UtxoCoinFields) -> &DerivationMethod<Address, Ut
 
 pub async fn extract_extended_pubkey<XPubExtractor>(
     coin: &UtxoCoinFields,
-    xpub_extractor: &XPubExtractor,
+    xpub_extractor: Option<XPubExtractor>,
     derivation_path: DerivationPath,
 ) -> MmResult<Secp256k1ExtendedPublicKey, HDExtractPubkeyError>
 where
-    XPubExtractor: HDXPubExtractor,
+    XPubExtractor: HDXPubExtractor + Send,
 {
-    // Todo: refactor this whole function
-    if let PrivKeyPolicy::Trezor = coin.priv_key_policy {
-        let trezor_coin = coin
-            .conf
-            .trezor_coin
-            .clone()
-            .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
-        let xpub = xpub_extractor.extract_utxo_xpub(trezor_coin, derivation_path).await?;
-        return Secp256k1ExtendedPublicKey::from_str(&xpub)
-            .map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()));
+    match xpub_extractor {
+        Some(xpub_extractor) => {
+            let trezor_coin = coin
+                .conf
+                .trezor_coin
+                .clone()
+                .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
+            let xpub = xpub_extractor.extract_utxo_xpub(trezor_coin, derivation_path).await?;
+            Secp256k1ExtendedPublicKey::from_str(&xpub).map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
+        },
+        None => {
+            let mut priv_key = coin
+                .priv_key_policy
+                .bip39_secp_priv_key_or_err()
+                .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
+                .clone();
+            for child in derivation_path {
+                priv_key = priv_key
+                    .derive_child(child)
+                    .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
+            }
+            drop_mutability!(priv_key);
+            Ok(priv_key.public_key())
+        },
     }
-
-    let mut priv_key = coin
-        .priv_key_policy
-        .bip39_secp_priv_key_or_err()
-        .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
-        .clone();
-    for child in derivation_path {
-        priv_key = priv_key
-            .derive_child(child)
-            .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
-    }
-    drop_mutability!(priv_key);
-    Ok(priv_key.public_key())
 }
 
 /// returns the fee required to be paid for HTLC spend transaction

@@ -594,6 +594,8 @@ impl MarketCoinOps for TendermintToken {
 
     /// !! This function includes dummy implementation for P.O.C work
     fn min_trading_vol(&self) -> MmNumber { MmNumber::from("0.00777") }
+
+    fn is_trezor(&self) -> bool { self.platform_coin.priv_key_policy.is_trezor() }
 }
 
 #[async_trait]

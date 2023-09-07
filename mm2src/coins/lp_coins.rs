@@ -1205,6 +1205,8 @@ pub trait MarketCoinOps {
     fn min_trading_vol(&self) -> MmNumber;
 
     fn is_privacy(&self) -> bool { false }
+
+    fn is_trezor(&self) -> bool;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -2996,6 +2998,8 @@ impl<T> PrivKeyPolicy<T> {
         derive_secp256k1_secret(bip39_secp_priv_key.clone(), derivation_path)
             .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
     }
+
+    fn is_trezor(&self) -> bool { matches!(self, PrivKeyPolicy::Trezor) }
 }
 
 #[derive(Clone)]

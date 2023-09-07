@@ -2,7 +2,7 @@ use crate::coin_balance::HDAccountBalance;
 use crate::hd_pubkey::{HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
 use crate::hd_wallet::NewAccountCreatingError;
 use crate::{lp_coinfind_or_err, BalanceError, CoinBalance, CoinFindError, CoinWithDerivationMethod, CoinsContext,
-            MmCoinEnum, UnexpectedDerivationMethod};
+            MarketCoinOps, MmCoinEnum, UnexpectedDerivationMethod};
 use async_trait::async_trait;
 use common::{true_f, HttpStatusCode, SuccessResponse};
 use crypto::hw_rpc_task::{HwConnectStatuses, HwRpcTaskAwaitingStatus, HwRpcTaskUserAction, HwRpcTaskUserActionRequest};
@@ -203,10 +203,10 @@ pub trait InitCreateAccountRpcOps {
         &self,
         params: CreateNewAccountParams,
         state: CreateAccountState,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
     ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
     where
-        XPubExtractor: HDXPubExtractor;
+        XPubExtractor: HDXPubExtractor + Send;
 
     async fn revert_creating_account(&self, account_id: u32);
 }
@@ -249,23 +249,26 @@ impl RpcTask for InitCreateAccountTask {
             params: CreateNewAccountParams,
             state: CreateAccountState,
             task_handle: &CreateAccountTaskHandle,
+            is_trezor: bool,
         ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
         where
             Coin: InitCreateAccountRpcOps + Send + Sync,
         {
-            let hw_statuses = HwConnectStatuses {
-                on_connect: CreateAccountInProgressStatus::WaitingForTrezorToConnect,
-                on_connected: CreateAccountInProgressStatus::Preparing,
-                on_connection_failed: CreateAccountInProgressStatus::Finishing,
-                on_button_request: CreateAccountInProgressStatus::FollowHwDeviceInstructions,
-                on_pin_request: CreateAccountAwaitingStatus::EnterTrezorPin,
-                on_passphrase_request: CreateAccountAwaitingStatus::EnterTrezorPassphrase,
-                on_ready: CreateAccountInProgressStatus::RequestingAccountBalance,
+            let xpub_extractor = if is_trezor {
+                let hw_statuses = HwConnectStatuses {
+                    on_connect: CreateAccountInProgressStatus::WaitingForTrezorToConnect,
+                    on_connected: CreateAccountInProgressStatus::Preparing,
+                    on_connection_failed: CreateAccountInProgressStatus::Finishing,
+                    on_button_request: CreateAccountInProgressStatus::FollowHwDeviceInstructions,
+                    on_pin_request: CreateAccountAwaitingStatus::EnterTrezorPin,
+                    on_passphrase_request: CreateAccountAwaitingStatus::EnterTrezorPassphrase,
+                    on_ready: CreateAccountInProgressStatus::RequestingAccountBalance,
+                };
+                Some(CreateAccountXPubExtractor::new(ctx, task_handle, hw_statuses)?)
+            } else {
+                None
             };
-            // Todo: revert the below 2 lines and use the HD wallet pubkey extractor instead, this is related to another todo
-            // let xpub_extractor = CreateAccountXPubExtractor::new(ctx, task_handle, hw_statuses)?;
-            let xpub_extractor = CreateAccountXPubExtractor::new_unchecked(ctx, task_handle, hw_statuses);
-            coin.init_create_account_rpc(params, state, &xpub_extractor).await
+            coin.init_create_account_rpc(params, state, xpub_extractor).await
         }
 
         match self.coin {
@@ -276,6 +279,7 @@ impl RpcTask for InitCreateAccountTask {
                     self.req.params.clone(),
                     self.task_state.clone(),
                     task_handle,
+                    utxo.is_trezor(),
                 )
                 .await
             },
@@ -286,6 +290,7 @@ impl RpcTask for InitCreateAccountTask {
                     self.req.params.clone(),
                     self.task_state.clone(),
                     task_handle,
+                    qtum.is_trezor(),
                 )
                 .await
             },
@@ -360,7 +365,7 @@ pub(crate) mod common_impl {
         coin: &Coin,
         params: CreateNewAccountParams,
         state: CreateAccountState,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
     ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
     where
         Coin: HDWalletBalanceOps
@@ -369,7 +374,7 @@ pub(crate) mod common_impl {
                 HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
             > + Send
             + Sync,
-        XPubExtractor: HDXPubExtractor,
+        XPubExtractor: HDXPubExtractor + Send,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 

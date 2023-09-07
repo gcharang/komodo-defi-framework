@@ -153,12 +153,12 @@ where
 pub trait EnableCoinBalanceOps {
     async fn enable_coin_balance<XPubExtractor>(
         &self,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         params: EnabledCoinBalanceParams,
         path_to_address: &HDAccountAddressId,
     ) -> MmResult<CoinBalanceReport, EnableCoinBalanceError>
     where
-        XPubExtractor: HDXPubExtractor;
+        XPubExtractor: HDXPubExtractor + Send;
 }
 
 #[async_trait]
@@ -174,12 +174,12 @@ where
 {
     async fn enable_coin_balance<XPubExtractor>(
         &self,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         params: EnabledCoinBalanceParams,
         path_to_address: &HDAccountAddressId,
     ) -> MmResult<CoinBalanceReport, EnableCoinBalanceError>
     where
-        XPubExtractor: HDXPubExtractor,
+        XPubExtractor: HDXPubExtractor + Send,
     {
         match self.derivation_method() {
             DerivationMethod::SingleAddress(my_address) => self
@@ -213,12 +213,12 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
     async fn enable_hd_wallet<XPubExtractor>(
         &self,
         hd_wallet: &Self::HDWallet,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         params: EnabledCoinBalanceParams,
         path_to_address: &HDAccountAddressId,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
-        XPubExtractor: HDXPubExtractor;
+        XPubExtractor: HDXPubExtractor + Send;
 
     /// Scans for the new addresses of the specified `hd_account` using the given `address_scanner`.
     /// Returns balances of the new addresses.
@@ -389,14 +389,14 @@ pub mod common_impl {
     pub(crate) async fn enable_hd_wallet<Coin, XPubExtractor>(
         coin: &Coin,
         hd_wallet: &Coin::HDWallet,
-        xpub_extractor: &XPubExtractor,
+        xpub_extractor: Option<XPubExtractor>,
         params: EnabledCoinBalanceParams,
         path_to_address: &HDAccountAddressId,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
         Coin::Address: fmt::Display,
-        XPubExtractor: HDXPubExtractor,
+        XPubExtractor: HDXPubExtractor + Send,
     {
         let mut accounts = hd_wallet.get_accounts_mut().await;
         let address_scanner = coin.produce_hd_address_scanner().await?;
