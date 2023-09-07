@@ -1427,7 +1427,6 @@ impl UtxoActivationParams {
         let priv_key_policy = json::from_value::<Option<PrivKeyActivationPolicy>>(req["priv_key_policy"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidPrivKeyPolicy)?
             .unwrap_or(PrivKeyActivationPolicy::ContextPrivKey);
-        // Todo: should this be removed? It's used in BCH v2 activation though but HD wallet shouldn't be supported for legacy methods after this PR
         let path_to_address = json::from_value::<Option<HDAccountAddressId>>(req["path_to_address"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidAddressIndex)?
             .unwrap_or_default();

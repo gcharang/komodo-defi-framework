@@ -21,8 +21,8 @@ use mm2_test_helpers::for_tests::{account_balance, btc_segwit_conf, btc_with_spv
                                   wait_for_swap_negotiation_failure, wait_for_swaps_finish_and_check_status,
                                   wait_till_history_has_records, MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf,
                                   Mm2TestConfForSwap, RaiiDump, ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT,
-                                  ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MORTY, RICK,
-                                  RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS};
+                                  ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MORTY,
+                                  QRC20_ELECTRUMS, RICK, RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::*;
 use serde_json::{self as json, json, Value as Json};
@@ -7431,16 +7431,11 @@ fn test_tbtc_block_header_sync() {
 
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
-// Todo: complete this test, we should have default address and account enabled, we should also be able to see enabled account/address in the response
-// Todo: add test for transaction history
-// Todo: test create_new_account to get the next in sequence when one that is not in sequence was added manually
-// Todo: we should also have the ability to get a new address with a specific index
 fn test_enable_utxo_with_enable_hd() {
     const PASSPHRASE: &str = "tank abandon bind salon remove wisdom net size aspect direct source fossil";
 
     let coins = json!([rick_conf(), btc_segwit_conf(),]);
 
-    // Todo: this is for enabled account/address for swaps, we used to enable also 0'/0/1 and 77'/0/7, we should have a different test for enabled swap address
     let path_to_address = HDAccountAddressId {
         account_id: 0,
         chain: Bip44Chain::External,
@@ -7530,15 +7525,6 @@ fn test_enable_coins_with_enable_hd() {
     assert_eq!(eth.address, "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
     let jst = block_on(enable_native(&mm_hd_0, "JST", ETH_DEV_NODES, Some(path_to_address)));
     assert_eq!(jst.address, "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
-    // Todo: move to a different test
-    // let qrc20 = block_on(enable_qrc20(
-    //     &mm_hd_0,
-    //     "QRC20",
-    //     QRC20_ELECTRUMS,
-    //     "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
-    //     Some(path_to_address.clone()),
-    // ));
-    // assert_eq!(qrc20["address"].as_str(), Some("qRtCTiPHW9e6zH9NcRhjMVfq7sG37SvgrL"));
 
     let path_to_address = HDAccountAddressId {
         account_id: 0,
@@ -7559,15 +7545,6 @@ fn test_enable_coins_with_enable_hd() {
     assert_eq!(eth.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
     let jst = block_on(enable_native(&mm_hd_1, "JST", ETH_DEV_NODES, Some(path_to_address)));
     assert_eq!(jst.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
-    // Todo: move to a different test
-    // let qrc20 = block_on(enable_qrc20(
-    //     &mm_hd_1,
-    //     "QRC20",
-    //     QRC20_ELECTRUMS,
-    //     "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
-    //     Some(path_to_address.clone()),
-    // ));
-    // assert_eq!(qrc20["address"].as_str(), Some("qY8FNq2ZDUh52BjNvaroFoeHdr3AAhqsxW"));
 
     let path_to_address = HDAccountAddressId {
         account_id: 77,
@@ -7588,15 +7565,73 @@ fn test_enable_coins_with_enable_hd() {
     assert_eq!(eth.address, "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
     let jst = block_on(enable_native(&mm_hd_1, "JST", ETH_DEV_NODES, Some(path_to_address)));
     assert_eq!(jst.address, "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
-    // Todo: move to a different test
-    // let qrc20 = block_on(enable_qrc20(
-    //     &mm_hd_1,
-    //     "QRC20",
-    //     QRC20_ELECTRUMS,
-    //     "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
-    //     Some(path_to_address.clone()),
-    // ));
-    // assert_eq!(qrc20["address"].as_str(), Some("qREuDjyn7dzUPgnCkxPvALz9Szgy7diB5w"));
+}
+
+// Todo: Ignored until enable_qtum_with_tokens is implemented, and also implemented for HD wallet using task manager.
+#[test]
+#[ignore]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_enable_qrc20_with_enable_hd() {
+    const PASSPHRASE: &str = "tank abandon bind salon remove wisdom net size aspect direct source fossil";
+
+    let coins = json!([eth_testnet_conf(), eth_jst_testnet_conf(), tqrc20_conf(),]);
+
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 0,
+    };
+    let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
+    let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
+    let (_dump_log, _dump_dashboard) = mm_hd_0.mm_dump();
+    log!("log path: {}", mm_hd_0.log_path.display());
+
+    let qrc20 = block_on(enable_qrc20(
+        &mm_hd_0,
+        "QRC20",
+        QRC20_ELECTRUMS,
+        "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
+        Some(path_to_address),
+    ));
+    assert_eq!(qrc20["address"].as_str(), Some("qRtCTiPHW9e6zH9NcRhjMVfq7sG37SvgrL"));
+
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 1,
+    };
+    let conf_1 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
+    let mm_hd_1 = MarketMakerIt::start(conf_1.conf, conf_1.rpc_password, None).unwrap();
+    let (_dump_log, _dump_dashboard) = mm_hd_1.mm_dump();
+    log!("log path: {}", mm_hd_1.log_path.display());
+
+    let qrc20 = block_on(enable_qrc20(
+        &mm_hd_1,
+        "QRC20",
+        QRC20_ELECTRUMS,
+        "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
+        Some(path_to_address),
+    ));
+    assert_eq!(qrc20["address"].as_str(), Some("qY8FNq2ZDUh52BjNvaroFoeHdr3AAhqsxW"));
+
+    let path_to_address = HDAccountAddressId {
+        account_id: 77,
+        chain: Bip44Chain::External,
+        address_id: 7,
+    };
+    let conf_1 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
+    let mm_hd_1 = MarketMakerIt::start(conf_1.conf, conf_1.rpc_password, None).unwrap();
+    let (_dump_log, _dump_dashboard) = mm_hd_1.mm_dump();
+    log!("log path: {}", mm_hd_1.log_path.display());
+
+    let qrc20 = block_on(enable_qrc20(
+        &mm_hd_1,
+        "QRC20",
+        QRC20_ELECTRUMS,
+        "0xd362e096e873eb7907e205fadc6175c6fec7bc44",
+        Some(path_to_address),
+    ));
+    assert_eq!(qrc20["address"].as_str(), Some("qREuDjyn7dzUPgnCkxPvALz9Szgy7diB5w"));
 }
 
 /// `shared_db_id` must be the same for Iguana and all HD accounts derived from the same passphrase.

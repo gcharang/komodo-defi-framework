@@ -419,7 +419,6 @@ where
 {
     #[allow(clippy::result_large_err)]
     pub async fn new(coin: Coin, req: WithdrawRequest) -> Result<Self, MmError<WithdrawError>> {
-        // Todo: make this block of code into a common function
         let from = coin.get_withdraw_sender_address(&req).await?;
         let from_address_string = from.address.display_address().map_to_mm(WithdrawError::InternalError)?;
 

@@ -432,7 +432,7 @@ pub mod common_impl {
                 params.min_addresses_number.max(Some(path_to_address.address_id + 1)),
             )
             .await?;
-            // Todo: we should flag the enabled address in the response here and in other responses as well.
+            // Todo: The enabled address should be indicated in the response.
             result.accounts.push(account_balance);
             return Ok(result);
         }

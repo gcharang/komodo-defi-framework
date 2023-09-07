@@ -13,7 +13,6 @@ pub enum UtxoStandardInProgressStatus {
         last_block: u64,
     },
     TemporaryError(String),
-    // Todo: Requesting of balance should be done concurrently.
     RequestingWalletBalance,
     Finishing,
     /// This status doesn't require the user to send `UserAction`,
