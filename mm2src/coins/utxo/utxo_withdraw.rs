@@ -442,7 +442,6 @@ where
                 let error = "Cannot determine 'from' address derivation path".to_owned();
                 return MmError::err(WithdrawError::UnexpectedFromAddress(error));
             },
-            // Todo: recheck this
             None => *coin.as_ref().priv_key_policy.activated_key_or_err()?,
         };
 
@@ -450,7 +449,6 @@ where
             coin,
             req,
             key_pair,
-            // Todo: rename this
             from_address: from.address,
             from_address_string,
         })

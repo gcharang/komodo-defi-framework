@@ -206,7 +206,6 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
         let hd_wallet_storage =
             HDWalletCoinStorage::init_with_rmd160(self.ctx(), self.ticker().to_owned(), hd_wallet_rmd160).await?;
         let accounts = self.load_hd_wallet_accounts(&hd_wallet_storage, path_to_coin).await?;
-        // Todo: should I combine fn gap_limit with ones from trezor???
         let gap_limit = self.gap_limit();
         let hd_wallet = UtxoHDWallet {
             hd_wallet_rmd160,

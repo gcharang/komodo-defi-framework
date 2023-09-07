@@ -512,7 +512,6 @@ pub(crate) mod common_impl {
                 return Ok(());
             }
 
-            // Todo: fix this or pass right gap_limit
             let empty_addresses_number = last_address_id - address_id + 1;
             if empty_addresses_number >= gap_limit {
                 // We already have `gap_limit` empty addresses.

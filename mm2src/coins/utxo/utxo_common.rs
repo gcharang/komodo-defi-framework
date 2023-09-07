@@ -243,7 +243,6 @@ pub async fn create_new_account<'a, Coin, XPubExtractor>(
     coin: &Coin,
     hd_wallet: &'a UtxoHDWallet,
     xpub_extractor: &XPubExtractor,
-    // Todo: instead of passing this through multiple functions, can we do this in a different way?
     account_id: Option<u32>,
 ) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreatingError>
 where
