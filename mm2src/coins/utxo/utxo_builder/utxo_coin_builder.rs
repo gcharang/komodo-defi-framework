@@ -5,28 +5,24 @@ use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumConnS
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::utxo_builder::utxo_conf_builder::{UtxoConfBuilder, UtxoConfError};
-use crate::utxo::{output_script, utxo_common, ElectrumBuilderArgs, ElectrumProtoVerifier, ElectrumProtoVerifierEvent,
-                  RecentlySpentOutPoints, TxFee, UtxoCoinConf, UtxoCoinFields, UtxoHDAccount, UtxoHDWallet,
-                  UtxoRpcMode, UtxoSyncStatus, UtxoSyncStatusLoopHandle, DEFAULT_GAP_LIMIT, UTXO_DUST_AMOUNT};
+use crate::utxo::{output_script, utxo_common, ElectrumBuilderArgs, RecentlySpentOutPoints, TxFee, UtxoCoinConf,
+                  UtxoCoinFields, UtxoHDAccount, UtxoHDWallet, UtxoRpcMode, UtxoSyncStatus, UtxoSyncStatusLoopHandle,
+                  DEFAULT_GAP_LIMIT, UTXO_DUST_AMOUNT};
 use crate::{BlockchainNetwork, CoinTransportMetrics, DerivationMethod, HistorySyncState, IguanaPrivKey,
             PrivKeyBuildPolicy, PrivKeyPolicy, PrivKeyPolicyNotAllowed, RpcClientType, RpcTransportEventHandlerShared,
             UtxoActivationParams};
-use std::ops::Deref;
 
 use async_trait::async_trait;
 use chain::TxHashAlgo;
-use common::custom_futures::repeatable::{Ready, Retry};
-use common::executor::{abortable_queue::AbortableQueue, AbortSettings, AbortableSystem, AbortedError, SpawnAbortable,
-                       Timer};
-use common::log::{debug, error, info, LogOnError};
+use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, AbortedError, Timer};
+use common::log::{debug, error};
 use common::small_rng;
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, Secp256k1Secret,
              StandardHDPathError, StandardHDPathToCoin};
 use derive_more::Display;
-use futures::channel::mpsc::{channel, unbounded, Receiver as AsyncReceiver, UnboundedReceiver};
+use futures::channel::mpsc::{channel, Receiver as AsyncReceiver};
 use futures::compat::Future01CompatExt;
 use futures::lock::Mutex as AsyncMutex;
-use futures::StreamExt;
 use keys::bytes::Bytes;
 pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, KeyPair, Private, Public, Secret,
                Type as ScriptType};
@@ -38,7 +34,7 @@ use serde_json::{self as json, Value as Json};
 use spv_validation::conf::SPVConf;
 use spv_validation::helpers_validation::SPVError;
 use spv_validation::storage::{BlockHeaderStorageError, BlockHeaderStorageOps};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 
 cfg_native! {
     use crate::utxo::coin_daemon_data_dir;
@@ -475,7 +471,6 @@ pub trait UtxoCoinBuilderCommonOps {
         args: ElectrumBuilderArgs,
         mut servers: Vec<ElectrumConnSettings>,
     ) -> UtxoCoinBuildResult<ElectrumClient> {
-        let (on_event_tx, on_event_rx) = unbounded();
         let ticker = self.ticker().to_owned();
         let ctx = self.ctx();
         let mut event_handlers = vec![];
@@ -483,10 +478,6 @@ pub trait UtxoCoinBuilderCommonOps {
             event_handlers.push(
                 CoinTransportMetrics::new(ctx.metrics.weak(), ticker.clone(), RpcClientType::Electrum).into_shared(),
             );
-        }
-
-        if args.negotiate_version {
-            event_handlers.push(ElectrumProtoVerifier { on_event_tx }.into_shared());
         }
 
         let storage_ticker = self.ticker().replace('-', "_");
@@ -500,29 +491,32 @@ pub trait UtxoCoinBuilderCommonOps {
         let mut rng = small_rng();
         servers.as_mut_slice().shuffle(&mut rng);
 
-        // Client can be created with servers
-        let client = Arc::new(ElectrumClientImpl::new(
+        let gui = ctx.gui().unwrap_or("UNKNOWN").to_string();
+        let mm_version = ctx.mm_version().to_string();
+        let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
+
+        let client = ElectrumClient(Arc::new(ElectrumClientImpl::new(
+            client_name.clone(),
             servers.clone(),
             ticker,
             event_handlers,
             block_headers_storage,
             abortable_system,
             args.negotiate_version,
-        ));
-        let handler: RpcTransportEventHandlerShared = client.clone();
+        )));
+        client.0.set_weak(Arc::downgrade(&client.0));
+
+        let handler: RpcTransportEventHandlerShared = client.0.clone();
         client.register(handler).await;
 
         if let Err(err) = client.connect().await {
             error!("Error connecting to the electrum server address: {}", err);
         };
 
-        // client should be started first, using timers is very bad I should get rid of timers, i think the condition should be used
-        // just connect and timer simultaneously
-        // connect with a timeout :D
-
-        // to be gotten rid of
+        // TODO: use connected and verified notify!!! At least try to make it better. Current uproach is not good )
         let mut attempts = 0i32;
-        while !client.is_connected().await {
+        while !client.is_connected().await || !client.is_protocol_version_verified().await {
+            debug!("check if client is connected and version is negotiated");
             if attempts >= 1000 {
                 return MmError::err(UtxoCoinBuildError::FailedToConnectToElectrums {
                     electrum_servers: servers.clone(),
@@ -534,38 +528,7 @@ pub trait UtxoCoinBuilderCommonOps {
             attempts += 1;
         }
 
-        let client_copy = client.clone();
-        let gui = ctx.gui().unwrap_or("UNKNOWN").to_string();
-        let mm_version = ctx.mm_version().to_string();
-        let negotiate_version = args.negotiate_version;
-        let negotiate_version_fut = async move {
-            let weak_client = Arc::downgrade(&client_copy);
-            if negotiate_version {
-                let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
-                let Some(spawner) = client_copy.spawner() else {
-                    error!("Failed to spawn negotiate version, no spawner available");
-                    return;
-                };
-                spawn_electrum_version_loop(&spawner, weak_client, on_event_rx, client_name);
-
-                let _ = wait_for_protocol_version_checked(client_copy.deref()).await;
-                //.map_to_mm(UtxoCoinBuildError::ElectrumProtocolVersionCheckError)?;
-            }
-        };
-        let client_copy = client.clone();
-        let ping_fut = async move {
-            if args.spawn_ping {
-                let weak_client = Arc::downgrade(&client_copy);
-                let Some(spawner) = client_copy.spawner() else {
-                    error!("Failed to spawn ping, no spawner available");
-                    return;
-                };
-                spawn_electrum_ping_loop(&spawner, weak_client, servers);
-            }
-        };
-        use crate::common::executor::SpawnFuture;
-
-        Ok(ElectrumClient(client))
+        Ok(client)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -735,142 +698,4 @@ fn read_native_mode_conf(
         filename.as_ref().display()
     )));
     Ok((rpc_port, rpc_user.clone(), rpc_password.clone()))
-}
-
-/// Ping the electrum servers every 30 seconds to prevent them from disconnecting us.
-/// According to docs server can do it if there are no messages in ~10 minutes.
-/// https://electrumx.readthedocs.io/en/latest/protocol-methods.html?highlight=keep#server-ping
-/// Weak reference will allow to stop the thread if client is dropped.
-fn spawn_electrum_ping_loop<Spawner: SpawnAbortable>(
-    spawner: &Spawner,
-    weak_client: Weak<ElectrumClientImpl>,
-    servers: Vec<ElectrumConnSettings>,
-) {
-    let msg_on_stopped = format!("Electrum servers {servers:?} ping loop stopped");
-    let fut = async move {
-        loop {
-            if let Some(client) = weak_client.upgrade() {
-                if let Err(e) = ElectrumClient(client).server_ping().compat().await {
-                    error!("Electrum servers {:?} ping error: {}", servers, e);
-                }
-            } else {
-                break;
-            }
-            Timer::sleep(30.).await
-        }
-    };
-
-    let settings = AbortSettings::info_on_any_stop(msg_on_stopped);
-    spawner.spawn_with_settings(fut, settings);
-}
-
-/// Follow the `on_connect_rx` stream and verify the protocol version of each connected electrum server.
-/// https://electrumx.readthedocs.io/en/latest/protocol-methods.html?highlight=keep#server-version
-/// Weak reference will allow to stop the thread if client is dropped.
-fn spawn_electrum_version_loop<Spawner: SpawnAbortable>(
-    spawner: &Spawner,
-    weak_client: Weak<ElectrumClientImpl>,
-    mut on_event_rx: UnboundedReceiver<ElectrumProtoVerifierEvent>,
-    client_name: String,
-) {
-    let fut = async move {
-        while let Some(event) = on_event_rx.next().await {
-            match event {
-                ElectrumProtoVerifierEvent::Connected(electrum_addr) => {
-                    check_electrum_server_version(weak_client.clone(), client_name.clone(), electrum_addr).await
-                },
-                ElectrumProtoVerifierEvent::Disconnected(electrum_addr) => {
-                    if let Some(client) = weak_client.upgrade() {
-                        client.reset_protocol_version(&electrum_addr).await.error_log();
-                    }
-                },
-            }
-        }
-    };
-    let settings = AbortSettings::info_on_any_stop("Electrum server.version loop stopped".to_string());
-    spawner.spawn_with_settings(fut, settings);
-}
-
-async fn check_electrum_server_version(
-    weak_client: Weak<ElectrumClientImpl>,
-    client_name: String,
-    electrum_addr: String,
-) {
-    // client.remove_server() is called too often
-    async fn remove_server(client: ElectrumClient, electrum_addr: &str) {
-        if let Err(e) = client.remove_server(electrum_addr).await {
-            error!("Error on remove server: {}", e);
-        }
-    }
-
-    if let Some(c) = weak_client.upgrade() {
-        let client = ElectrumClient(c);
-        let available_protocols = client.protocol_version();
-        debug!("Check version, supported protocols: {:?}", available_protocols);
-        let version = match client
-            .server_version(&electrum_addr, &client_name, available_protocols)
-            .compat()
-            .await
-        {
-            Ok(version) => version,
-            Err(e) => {
-                error!("Electrum {} server.version error: {:?}", electrum_addr, e);
-                if !e.error.is_transport() {
-                    remove_server(client, &electrum_addr).await;
-                };
-                return;
-            },
-        };
-        debug!("Available protocols: {:?}", available_protocols);
-        // check if the version is allowed
-        let actual_version = match version.protocol_version.parse::<f32>() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Error on parse protocol_version: {:?}", e);
-                remove_server(client, &electrum_addr).await;
-                return;
-            },
-        };
-
-        if !available_protocols.contains(&actual_version) {
-            error!(
-                "Received unsupported protocol version {:?} from {:?}. Remove the connection",
-                actual_version, electrum_addr
-            );
-            remove_server(client, &electrum_addr).await;
-            return;
-        }
-
-        match client.set_protocol_version(&electrum_addr, actual_version).await {
-            Ok(()) => info!(
-                "Use protocol version {:?} for Electrum {:?}",
-                actual_version, electrum_addr
-            ),
-            Err(e) => error!("Error on set protocol_version: {}", e),
-        };
-    }
-}
-
-/// Wait until the protocol version of at least one client's Electrum is checked.
-async fn wait_for_protocol_version_checked(client: &ElectrumClientImpl) -> Result<(), String> {
-    repeatable!(async {
-        if !client.is_connected().await {
-            // All of the connections were removed because of server.version checking
-            return Ready(ERR!(
-                "There are no Electrums with the required protocol version {:?}",
-                client.protocol_version()
-            ));
-        }
-
-        if client.is_protocol_version_checked().await {
-            return Ready(Ok(()));
-        }
-        Retry(())
-    })
-    .repeat_every_secs(0.5)
-    .attempts(10)
-    .await
-    .map_err(|_exceed| ERRL!("Failed protocol version verifying of at least 1 of Electrums in 5 seconds."))
-    // Flatten `Result< Result<(), String>, String >`
-    .flatten()
 }

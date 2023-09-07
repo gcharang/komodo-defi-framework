@@ -462,6 +462,7 @@ fn test_wait_for_payment_spend_timeout_electrum() {
     let abortable_system = AbortableQueue::default();
 
     let client = ElectrumClientImpl::new(
+        "test".to_string(),
         vec![],
         TEST_COIN_NAME.into(),
         Default::default(),
@@ -1503,8 +1504,9 @@ fn test_network_info_negative_time_offset() {
 #[test]
 fn test_unavailable_electrum_proto_version() {
     ElectrumClientImpl::new.mock_safe(
-        |servers, coin_ticker, event_handlers, block_headers_storage, abortable_system, _| {
+        |client_name, servers, coin_ticker, event_handlers, block_headers_storage, abortable_system, _| {
             MockResult::Return(ElectrumClientImpl::with_protocol_version(
+                client_name,
                 servers,
                 coin_ticker,
                 event_handlers,

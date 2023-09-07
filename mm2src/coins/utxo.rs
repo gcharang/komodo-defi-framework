@@ -44,7 +44,7 @@ use bitcoin::network::constants::Network as BitcoinNetwork;
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 pub use chain::Transaction as UtxoTx;
 use chain::{OutPoint, TransactionOutput, TxHashAlgo};
-use common::executor::abortable_queue::AbortableQueue;
+use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
 #[cfg(not(target_arch = "wasm32"))]
 use common::first_char_to_upper;
 use common::jsonrpc_client::JsonRpcError;
@@ -101,9 +101,9 @@ use super::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BalanceResu
             CoinsContext, DerivationMethod, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, KmdRewardsDetails,
             MarketCoinOps, MmCoin, NumConversError, NumConversResult, PrivKeyActivationPolicy, PrivKeyPolicy,
             PrivKeyPolicyNotAllowed, RawTransactionFut, RawTransactionRequest, RawTransactionResult,
-            RpcTransportEventHandler, RpcTransportEventHandlerShared, TradeFee, TradePreimageError, TradePreimageFut,
-            TradePreimageResult, Transaction, TransactionDetails, TransactionEnum, TransactionErr,
-            UnexpectedDerivationMethod, VerificationError, WithdrawError, WithdrawRequest};
+            RpcTransportEventHandler, TradeFee, TradePreimageError, TradePreimageFut, TradePreimageResult,
+            Transaction, TransactionDetails, TransactionEnum, TransactionErr, UnexpectedDerivationMethod,
+            VerificationError, WithdrawError, WithdrawRequest};
 use crate::coin_balance::{EnableCoinScanPolicy, EnabledCoinBalanceParams, HDAddressBalanceScanner};
 use crate::hd_wallet::{HDAccountOps, HDAccountsMutex, HDAddress, HDAddressId, HDWalletCoinOps, HDWalletOps,
                        InvalidBip44ChainError};
@@ -1320,10 +1320,6 @@ struct ElectrumProtoVerifier {
     on_event_tx: UnboundedSender<ElectrumProtoVerifierEvent>,
 }
 
-impl ElectrumProtoVerifier {
-    fn into_shared(self) -> RpcTransportEventHandlerShared { Arc::new(self) }
-}
-
 #[async_trait]
 impl RpcTransportEventHandler for ElectrumProtoVerifier {
     fn debug_info(&self) -> String { "ElectrumProtoVerifier".into() }
@@ -1332,7 +1328,7 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
 
     fn on_incoming_response(&self, _data: &[u8]) {}
 
-    fn on_connected(&self, address: String) -> Result<(), String> {
+    fn on_connected(&self, address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
         debug!("Connected to the electrum server: {}", address);
         try_s!(self
             .on_event_tx
@@ -1340,7 +1336,7 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
         Ok(())
     }
 
-    fn on_disconnected(&self, address: String) -> Result<(), String> {
+    fn on_disconnected(&self, address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
         debug!("Disconnected from the electrum server: {}", address);
         try_s!(self
             .on_event_tx

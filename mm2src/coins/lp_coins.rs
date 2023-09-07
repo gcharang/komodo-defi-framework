@@ -2850,9 +2850,9 @@ pub trait RpcTransportEventHandler {
 
     fn on_incoming_response(&self, data: &[u8]);
 
-    fn on_connected(&self, address: String) -> Result<(), String>;
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String>;
 
-    fn on_disconnected(&self, address: String) -> Result<(), String>;
+    fn on_disconnected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String>;
 }
 
 impl fmt::Debug for dyn RpcTransportEventHandler + Send + Sync {
@@ -2867,9 +2867,13 @@ impl RpcTransportEventHandler for RpcTransportEventHandlerShared {
 
     fn on_incoming_response(&self, data: &[u8]) { self.as_ref().on_incoming_response(data) }
 
-    fn on_connected(&self, address: String) -> Result<(), String> { self.as_ref().on_connected(address) }
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
+        self.as_ref().on_connected(address, conn_spawner)
+    }
 
-    fn on_disconnected(&self, address: String) -> Result<(), String> { self.as_ref().on_disconnected(address) }
+    fn on_disconnected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
+        self.as_ref().on_disconnected(address, conn_spawner)
+    }
 }
 
 #[async_trait]
@@ -2891,16 +2895,16 @@ impl<T: RpcTransportEventHandler> RpcTransportEventHandler for Vec<T> {
         }
     }
 
-    fn on_connected(&self, address: String) -> Result<(), String> {
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
         for handler in self {
-            try_s!(handler.on_connected(address.clone()))
+            try_s!(handler.on_connected(address.clone(), conn_spawner.clone()))
         }
         Ok(())
     }
 
-    fn on_disconnected(&self, address: String) -> Result<(), String> {
+    fn on_disconnected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
         for handler in self {
-            try_s!(handler.on_disconnected(address.clone()))
+            try_s!(handler.on_disconnected(address.clone(), conn_spawner.clone()))
         }
         Ok(())
     }
@@ -2962,13 +2966,13 @@ impl RpcTransportEventHandler for CoinTransportMetrics {
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());
     }
 
-    fn on_connected(&self, _address: String) -> Result<(), String> {
+    fn on_connected(&self, _address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
         // Handle a new connected endpoint if necessary.
         // Now just return the Ok
         Ok(())
     }
 
-    fn on_disconnected(&self, _address: String) -> Result<(), String> {
+    fn on_disconnected(&self, _address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
         // Handle disconnected endpoint if necessary.
         // Now just return the Ok
         Ok(())
