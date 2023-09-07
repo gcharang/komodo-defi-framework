@@ -24,9 +24,9 @@ use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPayment
             ValidateDexFeeError, ValidateDexFeeResult, ValidateDexFeeSpendPreimageError,
             ValidateDexFeeSpendPreimageResult, ValidateOtherPubKeyErr, ValidatePaymentFut, ValidatePaymentInput,
             VerificationError, VerificationResult, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
-            WatcherValidateTakerFeeInput, WithdrawFrom, WithdrawResult, WithdrawSenderAddress,
-            EARLY_CONFIRMATION_ERR_LOG, INVALID_RECEIVER_ERR_LOG, INVALID_REFUND_TX_ERR_LOG, INVALID_SCRIPT_ERR_LOG,
-            INVALID_SENDER_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
+            WatcherValidateTakerFeeInput, WithdrawResult, WithdrawSenderAddress, EARLY_CONFIRMATION_ERR_LOG,
+            INVALID_RECEIVER_ERR_LOG, INVALID_REFUND_TX_ERR_LOG, INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG,
+            OLD_TRANSACTION_ERR_LOG};
 use crate::{MmCoinEnum, WatcherReward, WatcherRewardError};
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
@@ -35,7 +35,7 @@ use chain::{OutPoint, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
 use common::log::{error, warn};
-use crypto::{Bip32DerPathOps, Bip44Chain, RpcDerivationPath, StandardHDPath, StandardHDPathError};
+use crypto::{Bip32DerPathOps, Bip44Chain, RpcDerivationPath};
 use futures::compat::Future01CompatExt;
 use futures::future::{FutureExt, TryFutureExt};
 use futures01::future::Either;
@@ -253,7 +253,6 @@ where
     XPubExtractor: HDXPubExtractor,
 {
     const INIT_ACCOUNT_ID: u32 = 0;
-    // Todo: what about scanning for accounts?
     let new_account_id = match account_id {
         Some(account_id) => account_id,
         None => {
@@ -2835,29 +2834,11 @@ where
         account_id,
         chain,
         address_id,
-    } = match req.from.clone().or_mm_err(|| WithdrawError::FromAddressNotFound)? {
-        WithdrawFrom::AddressId(id) => id,
-        WithdrawFrom::DerivationPath { derivation_path } => {
-            let derivation_path = StandardHDPath::from_str(&derivation_path)
-                .map_to_mm(StandardHDPathError::from)
-                .mm_err(|e| WithdrawError::UnexpectedFromAddress(e.to_string()))?;
-            let coin_type = derivation_path.coin_type();
-            let expected_coin_type = hd_wallet.coin_type();
-            if coin_type != expected_coin_type {
-                let error = format!(
-                    "Derivation path '{}' must has '{}' coin type",
-                    derivation_path, expected_coin_type
-                );
-                return MmError::err(WithdrawError::UnexpectedFromAddress(error));
-            }
-            HDAccountAddressId::from(derivation_path)
-        },
-        WithdrawFrom::HDWalletAddress(_) => {
-            return MmError::err(WithdrawError::UnsupportedError(
-                "`WithdrawFrom::HDWalletAddress` is not supported for `get_withdraw_hd_sender`".to_string(),
-            ))
-        },
-    };
+    } = req
+        .from
+        .clone()
+        .or_mm_err(|| WithdrawError::FromAddressNotFound)?
+        .to_address_path(hd_wallet.coin_type())?;
 
     let hd_account = hd_wallet
         .get_account(account_id)

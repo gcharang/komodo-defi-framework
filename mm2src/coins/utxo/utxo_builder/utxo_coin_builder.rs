@@ -180,12 +180,12 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
         let conf = UtxoConfBuilder::new(self.conf(), self.activation_params(), self.ticker()).build()?;
 
         let path_to_address = self.activation_params().path_to_address.clone();
-        let derivation_path = conf
+        let path_to_coin = conf
             .derivation_path
             .as_ref()
             .or_mm_err(|| UtxoConfError::DerivationPathIsNotSet)?;
         let secret = global_hd_ctx
-            .derive_secp256k1_secret(derivation_path, &path_to_address)
+            .derive_secp256k1_secret(&path_to_address.to_derivation_path(path_to_coin))
             .mm_err(|e| UtxoCoinBuildError::Internal(e.to_string()))?;
         let private = Private {
             prefix: conf.wif_prefix,
@@ -196,7 +196,7 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
         let activated_key_pair =
             KeyPair::from_private(private).map_to_mm(|e| UtxoCoinBuildError::Internal(e.to_string()))?;
         let priv_key_policy = PrivKeyPolicy::HDWallet {
-            derivation_path: derivation_path.clone(),
+            path_to_coin: path_to_coin.clone(),
             activated_key: activated_key_pair,
             bip39_secp_priv_key: global_hd_ctx.root_priv_key().clone(),
         };
@@ -205,16 +205,14 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
         let hd_wallet_rmd160 = *self.ctx().rmd160();
         let hd_wallet_storage =
             HDWalletCoinStorage::init_with_rmd160(self.ctx(), self.ticker().to_owned(), hd_wallet_rmd160).await?;
-        let accounts = self
-            .load_hd_wallet_accounts(&hd_wallet_storage, derivation_path)
-            .await?;
+        let accounts = self.load_hd_wallet_accounts(&hd_wallet_storage, path_to_coin).await?;
         // Todo: should I combine fn gap_limit with ones from trezor???
         let gap_limit = self.gap_limit();
         let hd_wallet = UtxoHDWallet {
             hd_wallet_rmd160,
             hd_wallet_storage,
             address_format,
-            derivation_path: derivation_path.clone(),
+            derivation_path: path_to_coin.clone(),
             accounts: HDAccountsMutex::new(accounts),
             enabled_address: Some(path_to_address),
             gap_limit,
@@ -226,9 +224,9 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
     async fn load_hd_wallet_accounts(
         &self,
         hd_wallet_storage: &HDWalletCoinStorage,
-        derivation_path: &StandardHDPathToCoin,
+        path_to_coin: &StandardHDPathToCoin,
     ) -> UtxoCoinBuildResult<HDAccountsMap<UtxoHDAccount>> {
-        utxo_common::load_hd_accounts_from_storage(hd_wallet_storage, derivation_path)
+        utxo_common::load_hd_accounts_from_storage(hd_wallet_storage, path_to_coin)
             .await
             .mm_err(UtxoCoinBuildError::from)
     }
@@ -311,22 +309,20 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
         let recently_spent_outpoints = AsyncMutex::new(RecentlySpentOutPoints::new(my_script_pubkey));
 
         let address_format = self.address_format()?;
-        let derivation_path = conf
+        let path_to_coin = conf
             .derivation_path
             .clone()
             .or_mm_err(|| UtxoConfError::DerivationPathIsNotSet)?;
 
         let hd_wallet_storage = HDWalletCoinStorage::init(self.ctx(), ticker).await?;
 
-        let accounts = self
-            .load_hd_wallet_accounts(&hd_wallet_storage, &derivation_path)
-            .await?;
+        let accounts = self.load_hd_wallet_accounts(&hd_wallet_storage, &path_to_coin).await?;
         let gap_limit = self.gap_limit();
         let hd_wallet = UtxoHDWallet {
             hd_wallet_rmd160,
             hd_wallet_storage,
             address_format,
-            derivation_path,
+            derivation_path: path_to_coin,
             accounts: HDAccountsMutex::new(accounts),
             enabled_address: None,
             gap_limit,
@@ -371,9 +367,9 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
     async fn load_hd_wallet_accounts(
         &self,
         hd_wallet_storage: &HDWalletCoinStorage,
-        derivation_path: &StandardHDPathToCoin,
+        path_to_coin: &StandardHDPathToCoin,
     ) -> UtxoCoinBuildResult<HDAccountsMap<UtxoHDAccount>> {
-        utxo_common::load_hd_accounts_from_storage(hd_wallet_storage, derivation_path)
+        utxo_common::load_hd_accounts_from_storage(hd_wallet_storage, path_to_coin)
             .await
             .mm_err(UtxoCoinBuildError::from)
     }

@@ -1,7 +1,6 @@
 use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
 use common::log::wasm_log::register_wasm_log;
-use crypto::StandardHDCoinAddress;
 use mm2_core::mm_ctx::MmArc;
 use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
@@ -86,8 +85,8 @@ async fn test_qrc20_tx_history() { test_qrc20_history_impl(Some(wasm_start)).awa
 async fn trade_base_rel_electrum(
     bob_priv_key_policy: Mm2InitPrivKeyPolicy,
     alice_priv_key_policy: Mm2InitPrivKeyPolicy,
-    bob_path_to_address: Option<StandardHDCoinAddress>,
-    alice_path_to_address: Option<StandardHDCoinAddress>,
+    bob_path_to_address: Option<HDAccountAddressId>,
+    alice_path_to_address: Option<HDAccountAddressId>,
     pairs: &[(&'static str, &'static str)],
     maker_price: f64,
     taker_price: f64,
@@ -186,7 +185,7 @@ async fn trade_base_rel_electrum(
 async fn trade_test_rick_and_morty() {
     let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
     let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
-    let alice_path_to_address = StandardHDCoinAddress {
+    let alice_path_to_address = HDAccountAddressId {
         account: 0,
         is_change: false,
         address_index: 0,

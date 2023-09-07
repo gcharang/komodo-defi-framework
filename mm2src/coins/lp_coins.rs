@@ -50,8 +50,8 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
 use common::log::{warn, LogOnError};
 use common::{calc_total_pages, now_sec, ten, HttpStatusCode};
 use crypto::{derive_secp256k1_secret, Bip32Error, CryptoCtx, CryptoCtxError, DerivationPath, GlobalHDAccountArc,
-             HwRpcError, KeyPairPolicy, Secp256k1ExtendedPublicKey, Secp256k1Secret, StandardHDCoinAddress,
-             StandardHDPathToCoin, WithHwRpcError};
+             HwRpcError, KeyPairPolicy, Secp256k1ExtendedPublicKey, Secp256k1Secret, StandardHDPath,
+             StandardHDPathError, StandardHDPathToCoin, WithHwRpcError};
 use derive_more::Display;
 use enum_from::{EnumFromStringify, EnumFromTrait};
 use ethereum_types::H256;
@@ -416,7 +416,7 @@ pub struct RawTransactionRes {
 pub struct MyAddressReq {
     coin: String,
     #[serde(default)]
-    path_to_address: StandardHDCoinAddress,
+    path_to_address: HDAccountAddressId,
 }
 
 #[derive(Debug, Serialize)]
@@ -1270,7 +1270,29 @@ pub enum WithdrawFrom {
     DerivationPath {
         derivation_path: String,
     },
-    HDWalletAddress(StandardHDCoinAddress),
+}
+
+impl WithdrawFrom {
+    #[allow(clippy::result_large_err)]
+    pub fn to_address_path(&self, expected_coin_type: u32) -> Result<HDAccountAddressId, MmError<WithdrawError>> {
+        match self {
+            WithdrawFrom::AddressId(address_id) => Ok(address_id.clone()),
+            WithdrawFrom::DerivationPath { derivation_path } => {
+                let derivation_path = StandardHDPath::from_str(derivation_path)
+                    .map_to_mm(StandardHDPathError::from)
+                    .mm_err(|e| WithdrawError::UnexpectedFromAddress(e.to_string()))?;
+                let coin_type = derivation_path.coin_type();
+                if coin_type != expected_coin_type {
+                    let error = format!(
+                        "Derivation path '{}' must has '{}' coin type",
+                        derivation_path, expected_coin_type
+                    );
+                    return MmError::err(WithdrawError::UnexpectedFromAddress(error));
+                }
+                Ok(HDAccountAddressId::from(derivation_path))
+            },
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -2878,11 +2900,11 @@ impl Default for PrivKeyActivationPolicy {
 pub enum PrivKeyPolicy<T> {
     Iguana(T),
     HDWallet {
-        /// Derivation path of the coin.
-        /// This derivation path consists of `purpose` and `coin_type` only
+        /// Derivation path up to coin.
+        /// This path consists of `purpose` and `coin_type` only
         /// where the full `BIP44` address has the following structure:
         /// `m/purpose'/coin_type'/account'/change/address_index`.
-        derivation_path: StandardHDPathToCoin,
+        path_to_coin: StandardHDPathToCoin,
         activated_key: T,
         bip39_secp_priv_key: ExtendedPrivateKey<secp256k1::SecretKey>,
     },
@@ -2946,17 +2968,20 @@ impl<T> PrivKeyPolicy<T> {
         })
     }
 
-    fn derivation_path(&self) -> Option<&StandardHDPathToCoin> {
+    fn path_to_coin(&self) -> Option<&StandardHDPathToCoin> {
         match self {
-            PrivKeyPolicy::HDWallet { derivation_path, .. } => Some(derivation_path),
+            PrivKeyPolicy::HDWallet {
+                path_to_coin: derivation_path,
+                ..
+            } => Some(derivation_path),
             PrivKeyPolicy::Iguana(_) | PrivKeyPolicy::Trezor => None,
             #[cfg(target_arch = "wasm32")]
             PrivKeyPolicy::Metamask(_) => None,
         }
     }
 
-    fn derivation_path_or_err(&self) -> Result<&StandardHDPathToCoin, MmError<PrivKeyPolicyNotAllowed>> {
-        self.derivation_path().or_mm_err(|| {
+    fn path_to_coin_or_err(&self) -> Result<&StandardHDPathToCoin, MmError<PrivKeyPolicyNotAllowed>> {
+        self.path_to_coin().or_mm_err(|| {
             PrivKeyPolicyNotAllowed::UnsupportedMethod(
                 "`derivation_path_or_err` is supported only for `PrivKeyPolicy::HDWallet`".to_string(),
             )
@@ -2965,29 +2990,11 @@ impl<T> PrivKeyPolicy<T> {
 
     fn hd_wallet_derived_priv_key_or_err(
         &self,
-        path_to_address: &StandardHDCoinAddress,
+        derivation_path: &DerivationPath,
     ) -> Result<Secp256k1Secret, MmError<PrivKeyPolicyNotAllowed>> {
         let bip39_secp_priv_key = self.bip39_secp_priv_key_or_err()?;
-        let derivation_path = self.derivation_path_or_err()?;
-        derive_secp256k1_secret(bip39_secp_priv_key.clone(), derivation_path, path_to_address)
+        derive_secp256k1_secret(bip39_secp_priv_key.clone(), derivation_path)
             .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
-    }
-
-    // Todo: this will be removed when all coins are migrated to using `DerivationPath` and hd_wallet_derived_priv_key_or_err will be used instead by using DerivationPath
-    fn hd_wallet_derived_priv_key_from_full_path_or_err(
-        &self,
-        derivation_path: DerivationPath,
-    ) -> Result<Secp256k1Secret, MmError<PrivKeyPolicyNotAllowed>> {
-        let mut priv_key = self.bip39_secp_priv_key_or_err()?.clone();
-        for child in derivation_path {
-            priv_key = priv_key
-                .derive_child(child)
-                .map_to_mm(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))?;
-        }
-        drop_mutability!(priv_key);
-
-        let secret = *priv_key.private_key().as_ref();
-        Ok(Secp256k1Secret::from(secret))
     }
 
     // Todo: move Secp256k1ExtendedPublicKey to a common place and make it generic

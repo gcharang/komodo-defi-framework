@@ -1,11 +1,11 @@
 use crate::hd_pubkey::HDXPubExtractor;
-use crate::hd_wallet::{HDAccountOps, HDAddressId, HDWalletCoinOps, HDWalletOps, NewAccountCreatingError,
-                       NewAddressDerivingError};
+use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddressId, HDWalletCoinOps, HDWalletOps,
+                       NewAccountCreatingError, NewAddressDerivingError};
 use crate::{BalanceError, BalanceResult, CoinBalance, CoinWithDerivationMethod, DerivationMethod, HDAddress,
             MarketCoinOps};
 use async_trait::async_trait;
 use common::log::{debug, info};
-use crypto::{Bip44Chain, RpcDerivationPath, StandardHDCoinAddress};
+use crypto::{Bip44Chain, RpcDerivationPath};
 use futures::compat::Future01CompatExt;
 use mm2_err_handle::prelude::*;
 use mm2_number::BigDecimal;
@@ -155,7 +155,7 @@ pub trait EnableCoinBalanceOps {
         &self,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
-        path_to_address: &StandardHDCoinAddress,
+        path_to_address: &HDAccountAddressId,
     ) -> MmResult<CoinBalanceReport, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor;
@@ -176,7 +176,7 @@ where
         &self,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
-        path_to_address: &StandardHDCoinAddress,
+        path_to_address: &HDAccountAddressId,
     ) -> MmResult<CoinBalanceReport, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor,
@@ -215,7 +215,7 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
         hd_wallet: &Self::HDWallet,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
-        path_to_address: &StandardHDCoinAddress,
+        path_to_address: &HDAccountAddressId,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor;
@@ -346,7 +346,6 @@ pub enum AddressBalanceStatus<Balance> {
 pub mod common_impl {
     use super::*;
     use crate::hd_wallet::{HDAccountOps, HDWalletOps};
-    use crypto::StandardHDCoinAddress;
 
     pub(crate) async fn enable_hd_account<Coin>(
         coin: &Coin,
@@ -391,7 +390,7 @@ pub mod common_impl {
         hd_wallet: &Coin::HDWallet,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
-        path_to_address: &StandardHDCoinAddress,
+        path_to_address: &HDAccountAddressId,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
@@ -405,7 +404,7 @@ pub mod common_impl {
             accounts: Vec::with_capacity(accounts.len() + 1),
         };
 
-        if accounts.get(&path_to_address.account).is_none() {
+        if accounts.get(&path_to_address.account_id).is_none() {
             // Is seems that we couldn't find any HD account from the HD wallet storage.
             drop(accounts);
             info!(
@@ -415,7 +414,7 @@ pub mod common_impl {
 
             // Create new HD account.
             let mut new_account = coin
-                .create_new_account(hd_wallet, xpub_extractor, Some(path_to_address.account))
+                .create_new_account(hd_wallet, xpub_extractor, Some(path_to_address.account_id))
                 .await?;
             let scan_new_addresses = matches!(
                 params.scan_policy,
@@ -428,7 +427,7 @@ pub mod common_impl {
                 &mut new_account,
                 &address_scanner,
                 scan_new_addresses,
-                params.min_addresses_number.max(Some(path_to_address.address_index + 1)),
+                params.min_addresses_number.max(Some(path_to_address.address_id + 1)),
             )
             .await?;
             // Todo: we should flag the enabled address in the response here and in other responses as well.
@@ -443,11 +442,11 @@ pub mod common_impl {
         );
         let scan_new_addresses = matches!(params.scan_policy, EnableCoinScanPolicy::Scan);
         for (account_id, hd_account) in accounts.iter_mut() {
-            let min_addresses_number = if *account_id == path_to_address.account {
+            let min_addresses_number = if *account_id == path_to_address.account_id {
                 // The account for the enabled address is already indexed.
                 // But in case the address index is larger than the number of derived addresses,
                 // we need to derive new addresses to make sure that the enabled address is indexed.
-                params.min_addresses_number.max(Some(path_to_address.address_index + 1))
+                params.min_addresses_number.max(Some(path_to_address.address_id + 1))
             } else {
                 params.min_addresses_number
             };

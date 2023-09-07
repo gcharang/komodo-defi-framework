@@ -23,8 +23,6 @@ use mm2_test_helpers::for_tests::{account_balance, btc_segwit_conf, btc_with_spv
                                   Mm2TestConfForSwap, RaiiDump, ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT,
                                   ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MORTY, RICK,
                                   RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS};
-
-use crypto::StandardHDCoinAddress;
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::*;
 use serde_json::{self as json, json, Value as Json};
@@ -731,8 +729,8 @@ fn test_rpc_password_from_json_no_userpass() {
 async fn trade_base_rel_electrum(
     bob_priv_key_policy: Mm2InitPrivKeyPolicy,
     alice_priv_key_policy: Mm2InitPrivKeyPolicy,
-    bob_path_to_address: Option<StandardHDCoinAddress>,
-    alice_path_to_address: Option<StandardHDCoinAddress>,
+    bob_path_to_address: Option<HDAccountAddressId>,
+    alice_path_to_address: Option<HDAccountAddressId>,
     pairs: &[(&'static str, &'static str)],
     maker_price: f64,
     taker_price: f64,
@@ -915,10 +913,10 @@ async fn trade_base_rel_electrum(
 fn trade_test_electrum_and_eth_coins() {
     let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
     let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
-    let alice_path_to_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 0,
+    let alice_path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 0,
     };
     let pairs = &[("ETH", "JST")];
     block_on(trade_base_rel_electrum(
@@ -955,17 +953,16 @@ fn trade_test_electrum_rick_zombie() {
 fn withdraw_and_send(
     mm: &MarketMakerIt,
     coin: &str,
-    from: Option<StandardHDCoinAddress>,
+    from: Option<HDAccountAddressId>,
     to: &str,
     enable_res: &HashMap<&'static str, CoinInitResponse>,
     expected_bal_change: &str,
     amount: f64,
 ) {
+    use coins::TxFeeDetails;
     use std::ops::Sub;
 
-    use coins::{TxFeeDetails, WithdrawFrom};
-
-    let from = from.map(WithdrawFrom::HDWalletAddress);
+    let from = from.map(WithdrawFrom::AddressId);
     let withdraw = block_on(mm.rpc(&json! ({
         "mmrpc": "2.0",
         "userpass": mm.userpass,
@@ -1200,10 +1197,10 @@ fn test_withdraw_and_send_hd() {
         &mm_hd,
         "ETH",
         ETH_DEV_NODES,
-        Some(StandardHDCoinAddress {
-            account: 0,
-            is_change: false,
-            address_index: 1,
+        Some(HDAccountAddressId {
+            account_id: 0,
+            chain: Bip44Chain::External,
+            address_id: 1,
         }),
     ));
     assert_eq!(eth.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
@@ -1211,10 +1208,10 @@ fn test_withdraw_and_send_hd() {
     eth_enable_res.insert("ETH", eth);
 
     // Withdraw from HD account 0, change address 0, index 1
-    let mut from_account_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 1,
+    let mut from_account_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 1,
     };
 
     withdraw_and_send(
@@ -1237,7 +1234,7 @@ fn test_withdraw_and_send_hd() {
         0.001,
     );
 
-    from_account_address.address_index = 0;
+    from_account_address.address_id = 0;
     withdraw_and_send(
         &mm_hd,
         "ETH",
@@ -7444,10 +7441,10 @@ fn test_enable_utxo_with_enable_hd() {
     let coins = json!([rick_conf(), btc_segwit_conf(),]);
 
     // Todo: this is for enabled account/address for swaps, we used to enable also 0'/0/1 and 77'/0/7, we should have a different test for enabled swap address
-    let path_to_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 0,
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 0,
     };
     let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
@@ -7514,10 +7511,10 @@ fn test_enable_coins_with_enable_hd() {
 
     let coins = json!([eth_testnet_conf(), eth_jst_testnet_conf(), tqrc20_conf(),]);
 
-    let path_to_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 0,
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 0,
     };
     let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
@@ -7543,10 +7540,10 @@ fn test_enable_coins_with_enable_hd() {
     // ));
     // assert_eq!(qrc20["address"].as_str(), Some("qRtCTiPHW9e6zH9NcRhjMVfq7sG37SvgrL"));
 
-    let path_to_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 1,
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 1,
     };
     let conf_1 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_1 = MarketMakerIt::start(conf_1.conf, conf_1.rpc_password, None).unwrap();
@@ -7572,10 +7569,10 @@ fn test_enable_coins_with_enable_hd() {
     // ));
     // assert_eq!(qrc20["address"].as_str(), Some("qY8FNq2ZDUh52BjNvaroFoeHdr3AAhqsxW"));
 
-    let path_to_address = StandardHDCoinAddress {
-        account: 77,
-        is_change: false,
-        address_index: 7,
+    let path_to_address = HDAccountAddressId {
+        account_id: 77,
+        chain: Bip44Chain::External,
+        address_id: 7,
     };
     let conf_1 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_1 = MarketMakerIt::start(conf_1.conf, conf_1.rpc_password, None).unwrap();

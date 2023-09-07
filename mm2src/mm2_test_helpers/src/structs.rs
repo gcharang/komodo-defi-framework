@@ -529,6 +529,16 @@ pub struct HDAccountAddressId {
     pub address_id: u32,
 }
 
+impl Default for HDAccountAddressId {
+    fn default() -> Self {
+        HDAccountAddressId {
+            account_id: 0,
+            chain: Bip44Chain::External,
+            address_id: 0,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, tag = "wallet_type")]
 pub enum EnableCoinBalance {
@@ -672,6 +682,14 @@ pub enum CreateNewAccountStatus {
     Error(Json),
     InProgress(Json),
     UserActionRequired(Json),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(untagged)]
+pub enum WithdrawFrom {
+    AddressId(HDAccountAddressId),
+    DerivationPath { derivation_path: String },
 }
 
 #[derive(Debug, Deserialize)]

@@ -34,7 +34,7 @@ use common::{get_utc_timestamp, now_sec, small_rng, DEX_FEE_ADDR_RAW_PUBKEY};
 #[cfg(target_arch = "wasm32")]
 use common::{now_ms, wait_until_ms};
 use crypto::privkey::key_pair_from_secret;
-use crypto::{CryptoCtx, CryptoCtxError, GlobalHDAccountArc, KeyPairPolicy, StandardHDCoinAddress};
+use crypto::{CryptoCtx, CryptoCtxError, GlobalHDAccountArc, KeyPairPolicy};
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use ethabi::{Contract, Function, Token};
@@ -110,7 +110,8 @@ use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
 
 mod nonce;
-use crate::{PrivKeyPolicy, TransactionResult, WithdrawFrom};
+use crate::hd_wallet::HDAccountAddressId;
+use crate::{PrivKeyPolicy, TransactionResult};
 use nonce::ParityNonce;
 
 /// https://github.com/artemii235/etomic-swap/blob/master/contracts/EtomicSwap.sol
@@ -709,20 +710,17 @@ async fn withdraw_impl(coin: EthCoin, req: WithdrawRequest) -> WithdrawResult {
         .address_from_str(&req.to)
         .map_to_mm(WithdrawError::InvalidAddress)?;
     let (my_balance, my_address, key_pair) = match req.from {
-        Some(WithdrawFrom::HDWalletAddress(ref path_to_address)) => {
+        Some(from) => {
+            let path_to_coin = coin.priv_key_policy.path_to_coin_or_err()?;
+            let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
             let raw_priv_key = coin
                 .priv_key_policy
-                .hd_wallet_derived_priv_key_or_err(path_to_address)?;
+                .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
             let key_pair = KeyPair::from_secret_slice(raw_priv_key.as_slice())
                 .map_to_mm(|e| WithdrawError::InternalError(e.to_string()))?;
             let address = key_pair.address();
             let balance = coin.address_balance(address).compat().await?;
             (balance, address, key_pair)
-        },
-        Some(WithdrawFrom::AddressId(_)) | Some(WithdrawFrom::DerivationPath { .. }) => {
-            return MmError::err(WithdrawError::UnexpectedFromAddress(
-                "Withdraw from 'AddressId' or 'DerivationPath' is not supported yet for EVM!".to_string(),
-            ))
         },
         None => (
             coin.my_balance().compat().await?,
@@ -5157,7 +5155,7 @@ pub async fn eth_coin_from_conf_and_request(
     }
     let contract_supports_watchers = req["contract_supports_watchers"].as_bool().unwrap_or_default();
 
-    let path_to_address = try_s!(json::from_value::<Option<StandardHDCoinAddress>>(
+    let path_to_address = try_s!(json::from_value::<Option<HDAccountAddressId>>(
         req["path_to_address"].clone()
     ))
     .unwrap_or_default();
@@ -5426,7 +5424,7 @@ pub async fn get_eth_address(
     ctx: &MmArc,
     conf: &Json,
     ticker: &str,
-    path_to_address: &StandardHDCoinAddress,
+    path_to_address: &HDAccountAddressId,
 ) -> MmResult<MyWalletAddress, GetEthAddressError> {
     let priv_key_policy = PrivKeyBuildPolicy::detect_priv_key_policy(ctx)?;
     // Convert `PrivKeyBuildPolicy` to `EthPrivKeyBuildPolicy` if it's possible.

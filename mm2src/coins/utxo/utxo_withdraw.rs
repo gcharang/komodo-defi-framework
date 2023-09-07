@@ -428,7 +428,7 @@ where
                 let secret = coin
                     .as_ref()
                     .priv_key_policy
-                    .hd_wallet_derived_priv_key_from_full_path_or_err(der_path)?;
+                    .hd_wallet_derived_priv_key_or_err(&der_path)?;
                 let private = Private {
                     prefix: coin.as_ref().conf.wif_prefix,
                     secret,

@@ -26,8 +26,8 @@ pub use hw_common::primitives::{Bip32Error, ChildNumber, DerivationPath, EcdsaCu
 pub use hw_ctx::{HardwareWalletArc, HardwareWalletCtx};
 pub use hw_error::{from_hw_error, HwError, HwResult, HwRpcError, WithHwRpcError};
 pub use keys::Secret as Secp256k1Secret;
-pub use standard_hd_path::{Bip44Chain, StandardHDCoinAddress, StandardHDPath, StandardHDPathError,
-                           StandardHDPathToAccount, StandardHDPathToCoin, UnknownChainError};
+pub use standard_hd_path::{Bip44Chain, StandardHDPath, StandardHDPathError, StandardHDPathToAccount,
+                           StandardHDPathToCoin, UnknownChainError};
 pub use trezor;
 pub use xpub::{XPubConverter, XpubError};
 

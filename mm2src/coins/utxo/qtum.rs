@@ -1114,7 +1114,7 @@ impl HDWalletBalanceOps for QtumCoin {
         hd_wallet: &Self::HDWallet,
         xpub_extractor: &XPubExtractor,
         params: EnabledCoinBalanceParams,
-        path_to_address: &StandardHDCoinAddress,
+        path_to_address: &HDAccountAddressId,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         XPubExtractor: HDXPubExtractor,

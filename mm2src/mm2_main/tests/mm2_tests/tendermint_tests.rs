@@ -1,12 +1,12 @@
 use common::block_on;
-use crypto::StandardHDCoinAddress;
 use mm2_number::BigDecimal;
 use mm2_test_helpers::for_tests::{atom_testnet_conf, disable_coin, disable_coin_err, enable_tendermint,
                                   enable_tendermint_token, enable_tendermint_without_balance,
                                   get_tendermint_my_tx_history, ibc_withdraw, iris_nimda_testnet_conf,
                                   iris_testnet_conf, my_balance, send_raw_transaction, withdraw_v1, MarketMakerIt,
                                   Mm2TestConf};
-use mm2_test_helpers::structs::{RpcV2Response, TendermintActivationResult, TransactionDetails};
+use mm2_test_helpers::structs::{Bip44Chain, HDAccountAddressId, RpcV2Response, TendermintActivationResult,
+                                TransactionDetails};
 use serde_json::{self as json, json};
 
 const ATOM_TEST_BALANCE_SEED: &str = "atom test seed";
@@ -182,10 +182,10 @@ fn test_tendermint_withdraw_hd() {
     println!("Activation with assets {}", json::to_string(&activation_res).unwrap());
 
     // We will withdraw from HD account 0 and change 0 and address_index 1
-    let path_to_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 1,
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 1,
     };
 
     // just call withdraw without sending to check response correctness
@@ -352,10 +352,10 @@ fn test_tendermint_ibc_withdraw_hd() {
     println!("Activation with assets {}", json::to_string(&activation_res).unwrap());
 
     // We will withdraw from HD account 0 and change 0 and address_index 1
-    let path_to_address = StandardHDCoinAddress {
-        account: 0,
-        is_change: false,
-        address_index: 1,
+    let path_to_address = HDAccountAddressId {
+        account_id: 0,
+        chain: Bip44Chain::External,
+        address_id: 1,
     };
 
     let tx_details = block_on(ibc_withdraw(

@@ -19,7 +19,7 @@ use crate::{big_decimal_from_sat_unsigned, utxo::sat_from_big_decimal, BalanceFu
             ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut,
             ValidatePaymentInput, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps,
             WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
-            WithdrawError, WithdrawFrom, WithdrawFut, WithdrawRequest};
+            WithdrawError, WithdrawFut, WithdrawRequest};
 use crate::{MmCoinEnum, PaymentInstructionArgs, WatcherReward, WatcherRewardError};
 use async_trait::async_trait;
 use bitcrypto::sha256;
@@ -112,19 +112,15 @@ impl TendermintToken {
                 AccountId::from_str(&req.to).map_to_mm(|e| WithdrawError::InvalidAddress(e.to_string()))?;
 
             let (account_id, priv_key) = match req.from {
-                Some(WithdrawFrom::HDWalletAddress(ref path_to_address)) => {
+                Some(from) => {
+                    let path_to_coin = platform.priv_key_policy.path_to_coin_or_err()?;
+                    let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = platform
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(path_to_address)?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &platform.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
-                },
-                Some(WithdrawFrom::AddressId(_)) | Some(WithdrawFrom::DerivationPath { .. }) => {
-                    return MmError::err(WithdrawError::UnexpectedFromAddress(
-                        "Withdraw from 'AddressId' or 'DerivationPath' is not supported yet for Tendermint!"
-                            .to_string(),
-                    ))
                 },
                 None => (
                     platform.account_id.clone(),
@@ -621,19 +617,15 @@ impl MmCoin for TendermintToken {
             }
 
             let (account_id, priv_key) = match req.from {
-                Some(WithdrawFrom::HDWalletAddress(ref path_to_address)) => {
+                Some(from) => {
+                    let path_to_coin = platform.priv_key_policy.path_to_coin_or_err()?;
+                    let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = platform
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(path_to_address)?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &platform.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
-                },
-                Some(WithdrawFrom::AddressId(_)) | Some(WithdrawFrom::DerivationPath { .. }) => {
-                    return MmError::err(WithdrawError::UnexpectedFromAddress(
-                        "Withdraw from 'AddressId' or 'DerivationPath' is not supported yet for Tendermint!"
-                            .to_string(),
-                    ))
                 },
                 None => (
                     platform.account_id.clone(),

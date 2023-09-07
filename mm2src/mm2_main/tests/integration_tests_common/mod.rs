@@ -2,14 +2,13 @@ use common::executor::Timer;
 use common::log::LogLevel;
 use common::{block_on, log, now_ms, wait_until_ms};
 use crypto::privkey::key_pair_from_seed;
-use crypto::StandardHDCoinAddress;
 use mm2_main::mm2::{lp_main, LpMainParams};
 use mm2_rpc::data::legacy::CoinInitResponse;
 use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
 use mm2_test_helpers::for_tests::{create_new_account_status, enable_native as enable_native_impl,
                                   init_create_new_account, init_z_coin_light, init_z_coin_status, MarketMakerIt};
-use mm2_test_helpers::structs::{CreateNewAccountStatus, HDAccountBalance, InitTaskResult, InitZcoinStatus,
-                                RpcV2Response, ZCoinActivationResult};
+use mm2_test_helpers::structs::{CreateNewAccountStatus, HDAccountAddressId, HDAccountBalance, InitTaskResult,
+                                InitZcoinStatus, RpcV2Response, ZCoinActivationResult};
 use serde_json::{self as json, Value as Json};
 use std::collections::HashMap;
 use std::env::var;
@@ -57,7 +56,7 @@ pub async fn enable_native(
     mm: &MarketMakerIt,
     coin: &str,
     urls: &[&str],
-    path_to_address: Option<StandardHDCoinAddress>,
+    path_to_address: Option<HDAccountAddressId>,
 ) -> CoinInitResponse {
     let value = enable_native_impl(mm, coin, urls, path_to_address).await;
     json::from_value(value).unwrap()

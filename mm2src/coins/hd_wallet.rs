@@ -3,8 +3,8 @@ use crate::hd_pubkey::HDXPubExtractor;
 use crate::hd_wallet_storage::HDWalletStorageError;
 use crate::{BalanceError, WithdrawError};
 use async_trait::async_trait;
-use crypto::{Bip32DerPathError, Bip32Error, Bip44Chain, ChildNumber, DerivationPath, HwError, StandardHDPath,
-             StandardHDPathError};
+use crypto::{Bip32DerPathError, Bip32DerPathOps, Bip32Error, Bip44Chain, ChildNumber, DerivationPath, HwError,
+             StandardHDPath, StandardHDPathError, StandardHDPathToCoin};
 use derive_more::Display;
 use itertools::Itertools;
 use mm2_err_handle::prelude::*;
@@ -218,6 +218,16 @@ pub struct HDAccountAddressId {
     pub address_id: u32,
 }
 
+impl Default for HDAccountAddressId {
+    fn default() -> Self {
+        HDAccountAddressId {
+            account_id: 0,
+            chain: Bip44Chain::External,
+            address_id: 0,
+        }
+    }
+}
+
 impl From<StandardHDPath> for HDAccountAddressId {
     fn from(der_path: StandardHDPath) -> Self {
         HDAccountAddressId {
@@ -225,6 +235,18 @@ impl From<StandardHDPath> for HDAccountAddressId {
             chain: der_path.chain(),
             address_id: der_path.address_id(),
         }
+    }
+}
+
+impl HDAccountAddressId {
+    pub fn to_derivation_path(&self, path_to_coin: &StandardHDPathToCoin) -> DerivationPath {
+        let mut account_der_path = path_to_coin.to_derivation_path();
+        account_der_path.push(ChildNumber::new(self.account_id, true).unwrap());
+        account_der_path.push(self.chain.to_child_number());
+        account_der_path.push(ChildNumber::new(self.address_id, false).unwrap());
+        drop_mutability!(account_der_path);
+
+        account_der_path
     }
 }
 

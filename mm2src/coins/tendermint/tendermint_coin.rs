@@ -6,6 +6,7 @@ use super::iris::htlc::{IrisHtlc, MsgClaimHtlc, MsgCreateHtlc, HTLC_STATE_COMPLE
 use super::iris::htlc_proto::{CreateHtlcProtoRep, QueryHtlcRequestProto, QueryHtlcResponseProto};
 use super::rpc::*;
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
+use crate::hd_wallet::HDAccountAddressId;
 use crate::rpc_command::tendermint::{IBCChainRegistriesResponse, IBCChainRegistriesResult, IBCChainsRequestError,
                                      IBCTransferChannel, IBCTransferChannelTag, IBCTransferChannelsRequest,
                                      IBCTransferChannelsRequestError, IBCTransferChannelsResponse,
@@ -27,8 +28,8 @@ use crate::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BigDecimal,
             ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr,
             ValidatePaymentFut, ValidatePaymentInput, VerificationError, VerificationResult, WaitForHTLCTxSpendArgs,
             WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawError, WithdrawFee, WithdrawFrom,
-            WithdrawFut, WithdrawRequest};
+            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawError, WithdrawFee, WithdrawFut,
+            WithdrawRequest};
 use async_std::prelude::FutureExt as AsyncStdFutureExt;
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
@@ -51,7 +52,7 @@ use cosmrs::tendermint::PublicKey;
 use cosmrs::tx::{self, Fee, Msg, Raw, SignDoc, SignerInfo};
 use cosmrs::{AccountId, Any, Coin, Denom, ErrorReport};
 use crypto::privkey::key_pair_from_secret;
-use crypto::{Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin};
+use crypto::{Secp256k1Secret, StandardHDPathToCoin};
 use derive_more::Display;
 use futures::future::try_join_all;
 use futures::lock::Mutex as AsyncMutex;
@@ -554,19 +555,15 @@ impl TendermintCoin {
                 AccountId::from_str(&req.to).map_to_mm(|e| WithdrawError::InvalidAddress(e.to_string()))?;
 
             let (account_id, priv_key) = match req.from {
-                Some(WithdrawFrom::HDWalletAddress(ref path_to_address)) => {
+                Some(from) => {
+                    let path_to_coin = coin.priv_key_policy.path_to_coin_or_err()?;
+                    let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = coin
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(path_to_address)?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &coin.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
-                },
-                Some(WithdrawFrom::AddressId(_)) | Some(WithdrawFrom::DerivationPath { .. }) => {
-                    return MmError::err(WithdrawError::UnexpectedFromAddress(
-                        "Withdraw from 'AddressId' or 'DerivationPath' is not supported yet for Tendermint!"
-                            .to_string(),
-                    ))
                 },
                 None => (coin.account_id.clone(), *coin.priv_key_policy.activated_key_or_err()?),
             };
@@ -1906,19 +1903,15 @@ impl MmCoin for TendermintCoin {
             }
 
             let (account_id, priv_key) = match req.from {
-                Some(WithdrawFrom::HDWalletAddress(ref path_to_address)) => {
+                Some(from) => {
+                    let path_to_coin = coin.priv_key_policy.path_to_coin_or_err()?;
+                    let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = coin
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(path_to_address)?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &coin.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
-                },
-                Some(WithdrawFrom::AddressId(_)) | Some(WithdrawFrom::DerivationPath { .. }) => {
-                    return MmError::err(WithdrawError::UnexpectedFromAddress(
-                        "Withdraw from 'AddressId' or 'DerivationPath' is not supported yet for Tendermint!"
-                            .to_string(),
-                    ))
                 },
                 None => (coin.account_id.clone(), *coin.priv_key_policy.activated_key_or_err()?),
             };
@@ -2772,24 +2765,24 @@ pub fn tendermint_priv_key_policy(
     conf: &TendermintConf,
     ticker: &str,
     priv_key_build_policy: PrivKeyBuildPolicy,
-    path_to_address: StandardHDCoinAddress,
+    path_to_address: HDAccountAddressId,
 ) -> MmResult<TendermintPrivKeyPolicy, TendermintInitError> {
     match priv_key_build_policy {
         PrivKeyBuildPolicy::IguanaPrivKey(iguana) => Ok(TendermintPrivKeyPolicy::Iguana(iguana)),
         PrivKeyBuildPolicy::GlobalHDAccount(global_hd) => {
-            let derivation_path = conf.derivation_path.as_ref().or_mm_err(|| TendermintInitError {
+            let path_to_coin = conf.derivation_path.as_ref().or_mm_err(|| TendermintInitError {
                 ticker: ticker.to_string(),
                 kind: TendermintInitErrorKind::DerivationPathIsNotSet,
             })?;
             let activated_priv_key = global_hd
-                .derive_secp256k1_secret(derivation_path, &path_to_address)
+                .derive_secp256k1_secret(&path_to_address.to_derivation_path(path_to_coin))
                 .mm_err(|e| TendermintInitError {
                     ticker: ticker.to_string(),
                     kind: TendermintInitErrorKind::InvalidPrivKey(e.to_string()),
                 })?;
             let bip39_secp_priv_key = global_hd.root_priv_key().clone();
             Ok(TendermintPrivKeyPolicy::HDWallet {
-                derivation_path: derivation_path.clone(),
+                path_to_coin: path_to_coin.clone(),
                 activated_key: activated_priv_key,
                 bip39_secp_priv_key,
             })

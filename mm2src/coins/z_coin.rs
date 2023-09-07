@@ -34,8 +34,8 @@ use common::executor::{AbortableSystem, AbortedError};
 use common::sha256_digest;
 use common::{log, one_thousand_u32};
 use crypto::privkey::{key_pair_from_secret, secp_privkey_from_hash};
+use crypto::StandardHDPathToCoin;
 use crypto::{Bip32DerPathOps, GlobalHDAccountArc};
-use crypto::{StandardHDCoinAddress, StandardHDPathToCoin};
 use futures::compat::Future01CompatExt;
 use futures::lock::Mutex as AsyncMutex;
 use futures::{FutureExt, TryFutureExt};
@@ -99,6 +99,7 @@ cfg_native!(
 );
 
 #[allow(unused)] mod z_coin_errors;
+use crate::hd_wallet::HDAccountAddressId;
 use crate::z_coin::storage::{BlockDbImpl, WalletDbShared};
 pub use z_coin_errors::*;
 
@@ -993,7 +994,7 @@ impl<'a> ZCoinBuilder<'a> {
             priv_key_policy: PrivKeyActivationPolicy::ContextPrivKey,
             check_utxo_maturity: None,
             // This is not used for Zcoin so we just provide a default value
-            path_to_address: StandardHDCoinAddress::default(),
+            path_to_address: HDAccountAddressId::default(),
         };
         ZCoinBuilder {
             ctx,

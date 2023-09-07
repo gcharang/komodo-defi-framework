@@ -52,7 +52,7 @@ use common::jsonrpc_client::JsonRpcError;
 use common::log::LogOnError;
 use common::{now_sec, now_sec_u32};
 use crypto::{Bip32DerPathOps, Bip32Error, Bip44Chain, ChildNumber, DerivationPath, Secp256k1ExtendedPublicKey,
-             StandardHDCoinAddress, StandardHDPathError, StandardHDPathToAccount, StandardHDPathToCoin};
+             StandardHDPathError, StandardHDPathToAccount, StandardHDPathToCoin};
 use derive_more::Display;
 #[cfg(not(target_arch = "wasm32"))] use dirs::home_dir;
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedSender};
@@ -106,8 +106,8 @@ use super::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BalanceResu
             TradePreimageResult, Transaction, TransactionDetails, TransactionEnum, TransactionErr,
             UnexpectedDerivationMethod, VerificationError, WithdrawError, WithdrawRequest};
 use crate::coin_balance::{EnableCoinScanPolicy, EnabledCoinBalanceParams, HDAddressBalanceScanner};
-use crate::hd_wallet::{HDAccountOps, HDAccountsMutex, HDAddress, HDAddressId, HDWalletCoinOps, HDWalletOps,
-                       InvalidBip44ChainError};
+use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAccountsMutex, HDAddress, HDAddressId, HDWalletCoinOps,
+                       HDWalletOps, InvalidBip44ChainError};
 use crate::hd_wallet_storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletStorageError, HDWalletStorageResult};
 use crate::utxo::tx_cache::UtxoVerboseCacheShared;
 
@@ -1371,10 +1371,8 @@ pub struct UtxoActivationParams {
     pub check_utxo_maturity: Option<bool>,
     /// This determines which Address of the HD account to be used for swaps for this UTXO coin.
     /// If not specified, the first non-change address for the first account is used.
-    // Todo: Do I still need this? Maybe we should use the same structs used in withdraw from.
-    // Todo: Clean up the electrum and enable methods after implementing HD wallet for all coins
     #[serde(default)]
-    pub path_to_address: StandardHDCoinAddress,
+    pub path_to_address: HDAccountAddressId,
 }
 
 #[derive(Debug, Display)]
@@ -1430,7 +1428,7 @@ impl UtxoActivationParams {
             .map_to_mm(UtxoFromLegacyReqErr::InvalidPrivKeyPolicy)?
             .unwrap_or(PrivKeyActivationPolicy::ContextPrivKey);
         // Todo: should this be removed? It's used in BCH v2 activation though but HD wallet shouldn't be supported for legacy methods after this PR
-        let path_to_address = json::from_value::<Option<StandardHDCoinAddress>>(req["path_to_address"].clone())
+        let path_to_address = json::from_value::<Option<HDAccountAddressId>>(req["path_to_address"].clone())
             .map_to_mm(UtxoFromLegacyReqErr::InvalidAddressIndex)?
             .unwrap_or_default();
 
@@ -1496,8 +1494,7 @@ pub struct UtxoHDWallet {
     /// For some wallet types, such as hardware wallets, this will be `None`
     /// until swap support is implemented for them. When set, this address
     /// is ready to facilitate swap transactions.
-    // Todo: should use the same structs used in withdraw from. E.g. use HDAccountAddressId here instead
-    pub enabled_address: Option<StandardHDCoinAddress>,
+    pub enabled_address: Option<HDAccountAddressId>,
     // The max number of empty addresses in a row.
     // If transactions were sent to an address outside the `gap_limit`, they will not be identified.
     pub gap_limit: u32,
@@ -1520,17 +1517,14 @@ impl HDWalletOps for UtxoHDWallet {
             None => return None,
         };
 
-        let account = match self.get_account(enabled_address.account).await {
+        let account = match self.get_account(enabled_address.account_id).await {
             Some(account) => account,
             None => return None,
         };
 
         let hd_address_id = HDAddressId {
-            chain: match enabled_address.is_change {
-                false => Bip44Chain::External,
-                true => Bip44Chain::Internal,
-            },
-            address_id: enabled_address.address_index,
+            chain: enabled_address.chain,
+            address_id: enabled_address.address_id,
         };
 
         let address = account
@@ -1915,7 +1909,7 @@ pub fn address_by_conf_and_pubkey_str(
         priv_key_policy: PrivKeyActivationPolicy::ContextPrivKey,
         check_utxo_maturity: None,
         // This will not be used since the pubkey from orderbook/etc.. will be used to generate the address
-        path_to_address: StandardHDCoinAddress::default(),
+        path_to_address: HDAccountAddressId::default(),
     };
     let conf_builder = UtxoConfBuilder::new(conf, &params, coin);
     let utxo_conf = try_s!(conf_builder.build());

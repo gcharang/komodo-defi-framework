@@ -15,12 +15,12 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
 
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
+use crate::hd_wallet::HDAccountAddressId;
 use crate::nft::nft_errors::ProtectFromSpamError;
 use crate::nft::nft_structs::{NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq, TransferMeta, TransferStatus,
                               UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
 use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
-use crypto::StandardHDCoinAddress;
 use ethereum_types::Address;
 use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
@@ -216,7 +216,7 @@ async fn get_moralis_nft_list(ctx: &MmArc, chain: &Chain, url: &Url) -> MmResult
     let mut res_list = Vec::new();
     let ticker = chain.to_ticker();
     let conf = coin_conf(ctx, &ticker);
-    let my_address = get_eth_address(ctx, &conf, &ticker, &StandardHDCoinAddress::default()).await?;
+    let my_address = get_eth_address(ctx, &conf, &ticker, &HDAccountAddressId::default()).await?;
 
     let mut uri_without_cursor = url.clone();
     uri_without_cursor.set_path(MORALIS_API_ENDPOINT);
@@ -270,7 +270,7 @@ async fn get_moralis_nft_transfers(
     let mut res_list = Vec::new();
     let ticker = chain.to_ticker();
     let conf = coin_conf(ctx, &ticker);
-    let my_address = get_eth_address(ctx, &conf, &ticker, &StandardHDCoinAddress::default()).await?;
+    let my_address = get_eth_address(ctx, &conf, &ticker, &HDAccountAddressId::default()).await?;
 
     let mut uri_without_cursor = url.clone();
     uri_without_cursor.set_path(MORALIS_API_ENDPOINT);
@@ -506,7 +506,7 @@ async fn update_nft_list<T: NftListStorageOps + NftTransferHistoryStorageOps>(
     let transfers = storage.get_transfers_from_block(chain, scan_from_block).await?;
     let req = MyAddressReq {
         coin: chain.to_ticker(),
-        path_to_address: StandardHDCoinAddress::default(),
+        path_to_address: HDAccountAddressId::default(),
     };
     let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
     for transfer in transfers.into_iter() {

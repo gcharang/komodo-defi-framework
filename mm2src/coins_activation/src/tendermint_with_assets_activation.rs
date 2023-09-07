@@ -4,6 +4,7 @@ use crate::platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPla
                                        TokenInitializer, TokenOf};
 use crate::prelude::*;
 use async_trait::async_trait;
+use coins::hd_wallet::HDAccountAddressId;
 use coins::my_tx_history_v2::TxHistoryStorage;
 use coins::tendermint::tendermint_tx_history_v2::tendermint_history_loop;
 use coins::tendermint::{tendermint_priv_key_policy, TendermintCoin, TendermintCommons, TendermintConf,
@@ -12,7 +13,6 @@ use coins::tendermint::{tendermint_priv_key_policy, TendermintCoin, TendermintCo
 use coins::{CoinBalance, CoinProtocol, MarketCoinOps, MmCoin, MmCoinEnum, PrivKeyBuildPolicy};
 use common::executor::{AbortSettings, SpawnAbortable};
 use common::{true_f, Future01CompatExt};
-use crypto::StandardHDCoinAddress;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::BigDecimal;
@@ -40,7 +40,7 @@ pub struct TendermintActivationParams {
     pub get_balances: bool,
     /// /account'/change/address_index`.
     #[serde(default)]
-    pub path_to_address: StandardHDCoinAddress,
+    pub path_to_address: HDAccountAddressId,
 }
 
 impl TxHistory for TendermintActivationParams {

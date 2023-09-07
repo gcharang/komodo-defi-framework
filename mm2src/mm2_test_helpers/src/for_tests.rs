@@ -7,7 +7,7 @@ use common::executor::Timer;
 use common::log::debug;
 use common::{cfg_native, now_float, now_ms, now_sec, repeatable, wait_until_ms, PagingOptionsEnum};
 use common::{get_utc_timestamp, log};
-use crypto::{CryptoCtx, StandardHDCoinAddress};
+use crypto::CryptoCtx;
 use gstuff::{try_s, ERR, ERRL};
 use http::{HeaderMap, StatusCode};
 use lazy_static::lazy_static;
@@ -1493,7 +1493,7 @@ pub async fn enable_qrc20(
     coin: &str,
     urls: &[&str],
     swap_contract_address: &str,
-    path_to_address: Option<StandardHDCoinAddress>,
+    path_to_address: Option<HDAccountAddressId>,
 ) -> Json {
     let servers: Vec<_> = urls.iter().map(|url| json!({ "url": url })).collect();
     let electrum = mm
@@ -1577,7 +1577,7 @@ pub async fn enable_native(
     mm: &MarketMakerIt,
     coin: &str,
     urls: &[&str],
-    path_to_address: Option<StandardHDCoinAddress>,
+    path_to_address: Option<HDAccountAddressId>,
 ) -> Json {
     let native = mm
         .rpc(&json!({
@@ -1703,7 +1703,7 @@ pub async fn enable_bch_with_tokens(
     tokens: &[&str],
     mode: UtxoRpcMode,
     tx_history: bool,
-    path_to_address: Option<StandardHDCoinAddress>,
+    path_to_address: Option<HDAccountAddressId>,
 ) -> Json {
     let slp_requests: Vec<_> = tokens.iter().map(|ticker| json!({ "ticker": ticker })).collect();
 
@@ -2213,7 +2213,7 @@ pub async fn withdraw_v1(
     coin: &str,
     to: &str,
     amount: &str,
-    from: Option<StandardHDCoinAddress>,
+    from: Option<HDAccountAddressId>,
 ) -> TransactionDetails {
     let request = mm
         .rpc(&json!({
@@ -2236,7 +2236,7 @@ pub async fn ibc_withdraw(
     coin: &str,
     to: &str,
     amount: &str,
-    from: Option<StandardHDCoinAddress>,
+    from: Option<HDAccountAddressId>,
 ) -> TransactionDetails {
     let request = mm
         .rpc(&json!({
@@ -2644,7 +2644,7 @@ pub async fn init_utxo_electrum(
     mm: &MarketMakerIt,
     coin: &str,
     servers: Vec<Json>,
-    path_to_address: Option<StandardHDCoinAddress>,
+    path_to_address: Option<HDAccountAddressId>,
 ) -> Json {
     let request = mm
         .rpc(&json!({
@@ -2700,7 +2700,7 @@ pub async fn enable_utxo_v2_electrum(
     mm: &MarketMakerIt,
     coin: &str,
     servers: Vec<Json>,
-    path_to_address: Option<StandardHDCoinAddress>,
+    path_to_address: Option<HDAccountAddressId>,
     timeout: u64,
 ) -> UtxoStandardActivationResult {
     let init = init_utxo_electrum(mm, coin, servers, path_to_address).await;

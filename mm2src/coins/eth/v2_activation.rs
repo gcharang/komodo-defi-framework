@@ -1,7 +1,8 @@
 use super::*;
+use crate::hd_wallet::HDAccountAddressId;
 #[cfg(target_arch = "wasm32")] use crate::EthMetamaskPolicy;
 use common::executor::AbortedError;
-use crypto::{CryptoCtxError, StandardHDCoinAddress};
+use crypto::CryptoCtxError;
 use enum_from::EnumFromTrait;
 use mm2_err_handle::common_errors::WithInternal;
 #[cfg(target_arch = "wasm32")]
@@ -100,7 +101,7 @@ pub struct EthActivationV2Request {
     #[serde(default)]
     pub priv_key_policy: EthPrivKeyActivationPolicy,
     #[serde(default)]
-    pub path_to_address: StandardHDCoinAddress,
+    pub path_to_address: HDAccountAddressId,
 }
 
 #[derive(Clone, Deserialize)]
@@ -334,7 +335,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
 pub(crate) async fn build_address_and_priv_key_policy(
     conf: &Json,
     priv_key_policy: EthPrivKeyBuildPolicy,
-    path_to_address: &StandardHDCoinAddress,
+    path_to_address: &HDAccountAddressId,
 ) -> MmResult<(Address, EthPrivKeyPolicy), EthActivationV2Error> {
     match priv_key_policy {
         EthPrivKeyBuildPolicy::IguanaPrivKey(iguana) => {
@@ -344,17 +345,17 @@ pub(crate) async fn build_address_and_priv_key_policy(
         },
         EthPrivKeyBuildPolicy::GlobalHDAccount(global_hd_ctx) => {
             // Consider storing `derivation_path` at `EthCoinImpl`.
-            let derivation_path = json::from_value(conf["derivation_path"].clone())
+            let path_to_coin = json::from_value(conf["derivation_path"].clone())
                 .map_to_mm(|e| EthActivationV2Error::ErrorDeserializingDerivationPath(e.to_string()))?;
             let raw_priv_key = global_hd_ctx
-                .derive_secp256k1_secret(&derivation_path, path_to_address)
+                .derive_secp256k1_secret(&path_to_address.to_derivation_path(&path_to_coin))
                 .mm_err(|e| EthActivationV2Error::InternalError(e.to_string()))?;
-            let activated_key_pair = KeyPair::from_secret_slice(raw_priv_key.as_slice())
+            let activated_key = KeyPair::from_secret_slice(raw_priv_key.as_slice())
                 .map_to_mm(|e| EthActivationV2Error::InternalError(e.to_string()))?;
             let bip39_secp_priv_key = global_hd_ctx.root_priv_key().clone();
-            Ok((activated_key_pair.address(), EthPrivKeyPolicy::HDWallet {
-                derivation_path,
-                activated_key: activated_key_pair,
+            Ok((activated_key.address(), EthPrivKeyPolicy::HDWallet {
+                path_to_coin,
+                activated_key,
                 bip39_secp_priv_key,
             }))
         },
