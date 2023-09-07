@@ -11,21 +11,18 @@ pub use walletdb::*;
 use walletdb::wallet_idb_storage::DataConnStmtCacheWasm;
 #[cfg(debug_assertions)]
 use zcash_client_backend::data_api::error::Error;
+use zcash_client_backend::data_api::PrunedBlock;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
+use zcash_client_backend::wallet::{AccountId, WalletTx};
+use zcash_client_backend::welding_rig::scan_block;
 #[cfg(not(target_arch = "wasm32"))]
 use zcash_client_sqlite::with_async::DataConnStmtCacheAsync;
+use zcash_extras::{WalletRead, WalletWrite};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
-
-cfg_native!(
-    use zcash_client_backend::data_api::PrunedBlock;
-    use zcash_client_backend::wallet::{AccountId, WalletTx};
-    use zcash_client_backend::welding_rig::scan_block;
-    use zcash_extras::{WalletRead, WalletWrite};
-    use zcash_primitives::merkle_tree::CommitmentTree;
-    use zcash_primitives::sapling::Nullifier;
-    use zcash_primitives::zip32::ExtendedFullViewingKey;
-);
+use zcash_primitives::merkle_tree::CommitmentTree;
+use zcash_primitives::sapling::Nullifier;
+use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 #[derive(Clone)]
 pub struct DataConnStmtCacheWrapper {
@@ -111,7 +108,6 @@ pub async fn validate_chain(
 /// Scanned blocks are required to be height-sequential. If a block is missing from the
 /// cache, an error will be returned with kind [`ChainInvalid::BlockHeightDiscontinuity`].
 ///
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn scan_cached_block(
     data: DataConnStmtCacheWrapper,
     params: &ZcoinConsensusParams,

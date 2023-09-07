@@ -1,5 +1,5 @@
-use crate::z_coin::storage::validate_chain;
-use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode, CompactBlockRow, ZcoinConsensusParams};
+use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow,
+                             ZcoinConsensusParams};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 
 use async_trait::async_trait;
@@ -201,8 +201,7 @@ impl BlockDbImpl {
         validate_from: Option<(BlockHeight, BlockHash)>,
         limit: Option<u32>,
     ) -> MmResult<(), ZcoinStorageError> {
-        // TODO: make from_height var mut after impl walletdb for wasm.
-        let from_height = match &mode {
+        let mut from_height = match &mode {
             BlockProcessingMode::Validate => validate_from
                 .map(|(height, _)| height)
                 .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1),
@@ -244,9 +243,8 @@ impl BlockDbImpl {
                 BlockProcessingMode::Validate => {
                     validate_chain(block, &mut prev_height, &mut prev_hash).await?;
                 },
-                BlockProcessingMode::Scan(_data) => {
-                    // TODO: uncomment after implementing walletdb for wasm.
-                    // scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                BlockProcessingMode::Scan(data) => {
+                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
                 },
             }
         }

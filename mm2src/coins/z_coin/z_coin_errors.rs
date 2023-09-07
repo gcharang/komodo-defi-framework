@@ -301,10 +301,14 @@ pub enum ValidateBlocksError {
     CorruptedData(String),
     InvalidMemo(String),
     BackendError(String),
+    ZcoinStorageError(String),
 }
 
 impl From<ValidateBlocksError> for ZcoinStorageError {
     fn from(value: ValidateBlocksError) -> Self { Self::ValidateBlocksError(value) }
+}
+impl From<MmError<ZcoinStorageError>> for ValidateBlocksError {
+    fn from(value: MmError<ZcoinStorageError>) -> Self { Self::ZcoinStorageError(value.to_string()) }
 }
 
 impl ValidateBlocksError {
@@ -387,6 +391,7 @@ pub enum ZcoinStorageError {
 
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
+use mm2_err_handle::mm_error::MmError;
 
 #[cfg(target_arch = "wasm32")]
 impl From<InitDbError> for ZcoinStorageError {

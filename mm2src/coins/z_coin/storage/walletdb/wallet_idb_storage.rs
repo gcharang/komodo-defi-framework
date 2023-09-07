@@ -50,12 +50,10 @@ impl<'a> WalletDbShared {
     pub async fn is_tx_imported(&self, _tx_id: TxId) -> bool { todo!() }
 }
 
-pub struct WalletDbInner {
-    pub inner: IndexedDb,
-}
+pub struct WalletDbInner(pub IndexedDb);
 
 impl WalletDbInner {
-    pub fn get_inner(&self) -> &IndexedDb { &self.inner }
+    pub fn get_inner(&self) -> &IndexedDb { &self.0 }
 }
 
 #[async_trait]
@@ -63,18 +61,18 @@ impl DbInstance for WalletDbInner {
     fn db_name() -> &'static str { DB_NAME }
 
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
-        let inner = IndexedDbBuilder::new(db_id)
-            .with_version(DB_VERSION)
-            .with_table::<WalletDbAccountsTable>()
-            .with_table::<WalletDbBlocksTable>()
-            .with_table::<WalletDbSaplingWitnessesTable>()
-            .with_table::<WalletDbSentNotesTable>()
-            .with_table::<WalletDbTransactionsTable>()
-            .with_table::<WalletDbReceivedNotesTable>()
-            .build()
-            .await?;
-
-        Ok(Self { inner })
+        Ok(Self(
+            IndexedDbBuilder::new(db_id)
+                .with_version(DB_VERSION)
+                .with_table::<WalletDbAccountsTable>()
+                .with_table::<WalletDbBlocksTable>()
+                .with_table::<WalletDbSaplingWitnessesTable>()
+                .with_table::<WalletDbSentNotesTable>()
+                .with_table::<WalletDbTransactionsTable>()
+                .with_table::<WalletDbReceivedNotesTable>()
+                .build()
+                .await?,
+        ))
     }
 }
 
@@ -241,7 +239,7 @@ impl WalletIndexedDb {
                 diversifier: note.diversifier,
                 value: note.value,
                 rcm: note.rcm,
-                nf: Some(nf.0.to_vec()),
+                nf: note.nf,
                 is_change: note.is_change,
                 memo: note.memo,
                 spent: Some(tx_ref.to_bigint().unwrap()),
@@ -731,7 +729,7 @@ impl WalletRead for WalletIndexedDb {
         let block_headers_db = db_transaction.table::<WalletDbTransactionsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
             .with_value(&ticker)?
-            .with_value(txid.to_string())?;
+            .with_value(txid.0.to_vec())?;
 
         Ok(block_headers_db
             .get_item_by_unique_multi_index(index_keys)
@@ -746,7 +744,7 @@ impl WalletRead for WalletIndexedDb {
         let block_headers_db = db_transaction.table::<WalletDbAccountsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0)?;
+            .with_value(account.0.to_bigint())?;
 
         let address = block_headers_db
             .get_item_by_unique_multi_index(index_keys)
@@ -777,7 +775,12 @@ impl WalletRead for WalletIndexedDb {
                 decode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), &account.extfvk)
                     .map_to_mm(|err| ZcoinStorageError::DecodingError(format!("{err:?} - ticker: {ticker}")))
                     .and_then(|k| k.ok_or_else(|| MmError::new(ZcoinStorageError::IncorrectHrpExtFvk)));
-            res_accounts.insert(AccountId(account.account), extfvk?);
+            let acc_id = account
+                .account
+                .to_u32()
+                .ok_or_else(|| ZcoinStorageError::GetFromStorageError("Invalid account id".to_string()))?;
+
+            res_accounts.insert(AccountId(acc_id), extfvk?);
         }
 
         Ok(res_accounts)
@@ -794,7 +797,7 @@ impl WalletRead for WalletIndexedDb {
         let accounts_table = db_transaction.table::<WalletDbAccountsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0)?;
+            .with_value(account.0.to_bigint())?;
 
         let account = accounts_table.get_item_by_unique_multi_index(index_keys).await?;
 
@@ -833,7 +836,7 @@ impl WalletRead for WalletIndexedDb {
         let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0)?;
+            .with_value(account.0.to_bigint())?;
         let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
 
         let mut value: i64 = 0;
@@ -861,21 +864,19 @@ impl WalletRead for WalletIndexedDb {
         let memo = match id_note {
             NoteId::SentNoteId(id_note) => {
                 let sent_notes_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
-                let index_keys = MultiIndex::new(WalletDbSentNotesTable::TICKER_ID_NOTE_INDEX)
-                    .with_value(&ticker)?
-                    .with_value(id_note)?;
-
-                let note = sent_notes_table.get_item_by_unique_multi_index(index_keys).await?;
-                note.map(|(_, n)| n.memo)
+                let notes = sent_notes_table.get_items("ticker", ticker).await?;
+                notes
+                    .into_iter()
+                    .find(|(id, _)| *id as i64 == id_note)
+                    .map(|(_, n)| n.memo)
             },
             NoteId::ReceivedNoteId(id_note) => {
                 let received_notes_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
-                let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ID_NOTE_INDEX)
-                    .with_value(&ticker)?
-                    .with_value(id_note)?;
-
-                let note = received_notes_table.get_item_by_unique_multi_index(index_keys).await?;
-                note.map(|(_, n)| n.memo)
+                let notes = received_notes_table.get_items("ticker", ticker).await?;
+                notes
+                    .into_iter()
+                    .find(|(id, _)| *id as i64 == id_note)
+                    .map(|(_, n)| n.memo)
             },
         };
 
@@ -995,7 +996,7 @@ impl WalletRead for WalletIndexedDb {
         let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0)?;
+            .with_value(account.0.to_bigint())?;
         let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
         let maybe_notes = maybe_notes.iter().filter(|(_, note)| note.spent.is_none());
 
@@ -1059,7 +1060,7 @@ impl WalletRead for WalletIndexedDb {
         let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0)?;
+            .with_value(account.0.to_bigint())?;
         let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
         let maybe_notes = maybe_notes
             .clone()
@@ -1250,9 +1251,7 @@ impl WalletWrite for WalletIndexedDb {
 }
 
 #[derive(Clone)]
-pub struct DataConnStmtCacheWasm {
-    pub inner: WalletIndexedDb,
-}
+pub struct DataConnStmtCacheWasm(pub WalletIndexedDb);
 
 #[async_trait]
 impl WalletRead for DataConnStmtCacheWasm {
@@ -1261,23 +1260,23 @@ impl WalletRead for DataConnStmtCacheWasm {
     type TxRef = i64;
 
     async fn block_height_extrema(&self) -> Result<Option<(BlockHeight, BlockHeight)>, Self::Error> {
-        self.inner.block_height_extrema().await
+        self.0.block_height_extrema().await
     }
 
     async fn get_block_hash(&self, block_height: BlockHeight) -> Result<Option<BlockHash>, Self::Error> {
-        self.inner.get_block_hash(block_height).await
+        self.0.get_block_hash(block_height).await
     }
 
     async fn get_tx_height(&self, txid: TxId) -> Result<Option<BlockHeight>, Self::Error> {
-        self.inner.get_tx_height(txid).await
+        self.0.get_tx_height(txid).await
     }
 
     async fn get_address(&self, account: AccountId) -> Result<Option<PaymentAddress>, Self::Error> {
-        self.inner.get_address(account).await
+        self.0.get_address(account).await
     }
 
     async fn get_extended_full_viewing_keys(&self) -> Result<HashMap<AccountId, ExtendedFullViewingKey>, Self::Error> {
-        self.inner.get_extended_full_viewing_keys().await
+        self.0.get_extended_full_viewing_keys().await
     }
 
     async fn is_valid_account_extfvk(
@@ -1285,39 +1284,37 @@ impl WalletRead for DataConnStmtCacheWasm {
         account: AccountId,
         extfvk: &ExtendedFullViewingKey,
     ) -> Result<bool, Self::Error> {
-        self.inner.is_valid_account_extfvk(account, extfvk).await
+        self.0.is_valid_account_extfvk(account, extfvk).await
     }
 
     async fn get_balance_at(&self, account: AccountId, anchor_height: BlockHeight) -> Result<Amount, Self::Error> {
-        self.inner.get_balance_at(account, anchor_height).await
+        self.0.get_balance_at(account, anchor_height).await
     }
 
-    async fn get_memo(&self, id_note: Self::NoteRef) -> Result<Memo, Self::Error> { self.inner.get_memo(id_note).await }
+    async fn get_memo(&self, id_note: Self::NoteRef) -> Result<Memo, Self::Error> { self.0.get_memo(id_note).await }
 
     async fn get_commitment_tree(
         &self,
         block_height: BlockHeight,
     ) -> Result<Option<CommitmentTree<Node>>, Self::Error> {
-        self.inner.get_commitment_tree(block_height).await
+        self.0.get_commitment_tree(block_height).await
     }
 
     async fn get_witnesses(
         &self,
         block_height: BlockHeight,
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
-        self.inner.get_witnesses(block_height).await
+        self.0.get_witnesses(block_height).await
     }
 
-    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> {
-        self.inner.get_nullifiers().await
-    }
+    async fn get_nullifiers(&self) -> Result<Vec<(AccountId, Nullifier)>, Self::Error> { self.0.get_nullifiers().await }
 
     async fn get_spendable_notes(
         &self,
         account: AccountId,
         anchor_height: BlockHeight,
     ) -> Result<Vec<SpendableNote>, Self::Error> {
-        self.inner.get_spendable_notes(account, anchor_height).await
+        self.0.get_spendable_notes(account, anchor_height).await
     }
 
     async fn select_spendable_notes(
@@ -1326,7 +1323,7 @@ impl WalletRead for DataConnStmtCacheWasm {
         target_value: Amount,
         anchor_height: BlockHeight,
     ) -> Result<Vec<SpendableNote>, Self::Error> {
-        self.inner
+        self.0
             .select_spendable_notes(account, target_value, anchor_height)
             .await
     }
@@ -1339,25 +1336,25 @@ impl WalletWrite for DataConnStmtCacheWasm {
         block: &PrunedBlock,
         updated_witnesses: &[(Self::NoteRef, IncrementalWitness<Node>)],
     ) -> Result<Vec<(Self::NoteRef, IncrementalWitness<Node>)>, Self::Error> {
-        self.inner.advance_by_block(block, updated_witnesses).await
+        self.0.advance_by_block(block, updated_witnesses).await
     }
 
     async fn store_received_tx(&mut self, received_tx: &ReceivedTransaction) -> Result<Self::TxRef, Self::Error> {
-        self.inner.store_received_tx(received_tx).await
+        self.0.store_received_tx(received_tx).await
     }
 
     async fn store_sent_tx(&mut self, sent_tx: &SentTransaction) -> Result<Self::TxRef, Self::Error> {
-        self.inner.store_sent_tx(sent_tx).await
+        self.0.store_sent_tx(sent_tx).await
     }
 
     async fn rewind_to_height(&mut self, block_height: BlockHeight) -> Result<(), Self::Error> {
-        self.inner.rewind_to_height(u32::from(block_height)).await
+        self.0.rewind_to_height(u32::from(block_height)).await
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbAccountsTable {
-    account: u32,
+    account: BigInt,
     extfvk: String,
     address: String,
     ticker: String,
@@ -1368,6 +1365,10 @@ impl WalletDbAccountsTable {
     /// * ticker
     /// * account
     pub const TICKER_ACCOUNT_INDEX: &str = "ticker_account_index";
+    /// A **unique** index that consists of the following properties:
+    /// * ticker
+    /// * account
+    /// * extfvk
     pub const TICKER_ACCOUNT_EXTFVK_INDEX: &str = "ticker_account_extfvk_index";
 }
 
@@ -1433,11 +1434,15 @@ pub struct WalletDbTransactionsTable {
 impl WalletDbTransactionsTable {
     /// A **unique** index that consists of the following properties:
     /// * ticker
-    /// * id_tx
     /// * txid
-    pub const TICKER_ID_TX_INDEX: &'static str = "ticker_id_tx_index";
     pub const TICKER_TXID_INDEX: &'static str = "ticker_txid_index";
+    /// A **unique** index that consists of the following properties:
+    /// * ticker
+    /// * block
     pub const TICKER_BLOCK_INDEX: &'static str = "ticker_block_index";
+    /// A **unique** index that consists of the following properties:
+    /// * ticker
+    /// * expiry_height
     pub const TICKER_EXP_HEIGHT_INDEX: &'static str = "ticker_expiry_height_index";
 }
 
@@ -1475,7 +1480,9 @@ pub struct WalletDbReceivedNotesTable {
 }
 
 impl WalletDbReceivedNotesTable {
-    pub const TICKER_ID_NOTE_INDEX: &'static str = "ticker_id_note_index";
+    /// A **unique** index that consists of the following properties:
+    /// * ticker
+    /// * account
     pub const TICKER_ACCOUNT_INDEX: &'static str = "ticker_account_index";
     /// A **unique** index that consists of the following properties:
     /// * ticker
@@ -1486,9 +1493,12 @@ impl WalletDbReceivedNotesTable {
     /// * ticker
     /// * tx
     /// * output_index
-    pub const TICKER_NOTES_TX_OUTPUT_INDEX: &'static str = "ticker_notes_tx_output_index";
-    pub const TICKER_NF_INDEX: &'static str = "ticker_nf_index";
     pub const TICKER_TX_OUTPUT_INDEX: &'static str = "ticker_tx_output_index";
+    /// A **unique** index that consists of the following properties:
+    /// * ticker
+    /// * tx
+    /// * output_index
+    pub const TICKER_NF_INDEX: &'static str = "ticker_nf_index";
 }
 
 impl TableSignature for WalletDbReceivedNotesTable {
@@ -1497,14 +1507,8 @@ impl TableSignature for WalletDbReceivedNotesTable {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
         if let (0, 1) = (old_version, new_version) {
             let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_ID_NOTE_INDEX, &["ticker", "id_note"], true)?;
-            table.create_multi_index(
-                Self::TICKER_NOTES_TX_OUTPUT_INDEX,
-                &["ticker", "tx", "output_index"],
-                true,
-            )?;
+            table.create_multi_index(Self::TICKER_NF_INDEX, &["ticker", "nf"], true)?;
             table.create_multi_index(Self::TICKER_ACCOUNT_INDEX, &["ticker", "account"], false)?;
-            table.create_multi_index(Self::TICKER_NF_INDEX, &["ticker", "nf"], false)?;
             table.create_multi_index(Self::TICKER_TX_OUTPUT_INDEX, &["ticker", "tx", "output_index"], false)?;
             table.create_index("ticker", false)?;
         }
@@ -1528,8 +1532,10 @@ impl WalletDbSaplingWitnessesTable {
     /// * ticker
     /// * note
     /// * block
-    pub const TICKER_NOTE_BLOCK_INDEX: &'static str = "ticker_note_block_index";
     pub const TICKER_BLOCK_INDEX: &'static str = "ticker_block_index";
+    /// A **unique** index that consists of the following properties:
+    /// * ticker
+    /// * witness
     pub const TICKER_ID_WITNESS_INDEX: &'static str = "ticker_witness_index";
 }
 
@@ -1539,7 +1545,6 @@ impl TableSignature for WalletDbSaplingWitnessesTable {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
         if let (0, 1) = (old_version, new_version) {
             let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_NOTE_BLOCK_INDEX, &["ticker", "note", "block"], true)?;
             table.create_multi_index(Self::TICKER_ID_WITNESS_INDEX, &["ticker", "id_witness"], true)?;
             table.create_multi_index(Self::TICKER_BLOCK_INDEX, &["ticker", "block"], false)?;
             table.create_index("ticker", false)?;
@@ -1567,7 +1572,6 @@ impl WalletDbSentNotesTable {
     /// * tx
     /// * output_index
     pub const TICKER_TX_OUTPUT_INDEX: &'static str = "ticker_tx_output_index";
-    pub const TICKER_ID_NOTE_INDEX: &'static str = "ticker_id_note_index";
 }
 
 impl TableSignature for WalletDbSentNotesTable {
@@ -1576,8 +1580,7 @@ impl TableSignature for WalletDbSentNotesTable {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
         if let (0, 1) = (old_version, new_version) {
             let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_TX_OUTPUT_INDEX, &["ticker", "tx", "output_index"], true)?;
-            table.create_multi_index(Self::TICKER_ID_NOTE_INDEX, &["ticker", "id_note"], true)?;
+            table.create_multi_index(Self::TICKER_TX_OUTPUT_INDEX, &["ticker", "tx", "output_index"], false)?;
             table.create_index("ticker", false)?;
         }
         Ok(())
