@@ -383,10 +383,21 @@ impl NftListStorageOps for IndexedDbNftStorage {
         token_address: String,
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
-        let nfts: Vec<Nft> = self.get_nfts_by_token_address(*chain, token_address.clone()).await?;
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
+
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&token_address)?;
+
+        let nfts: Result<Vec<Nft>, _> = table
+            .get_items_by_multi_index(index_keys)
+            .await?
+            .into_iter()
+            .map(|(_item_id, item)| nft_details_from_item(item))
+            .collect();
+        let nfts = nfts?;
 
         for mut nft in nfts {
             nft.common.possible_spam = possible_spam;
@@ -535,12 +546,23 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         chain: &Chain,
         transfer_meta: TransferMeta,
     ) -> MmResult<(), Self::Error> {
-        let transfers: Vec<NftTransferHistory> = self
-            .get_transfers_by_token_addr_id(*chain, transfer_meta.token_address, transfer_meta.token_id)
-            .await?;
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
+
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&transfer_meta.token_address)?
+            .with_value(transfer_meta.token_id.to_string())?;
+
+        let transfers: Result<Vec<NftTransferHistory>, _> = table
+            .get_items_by_multi_index(index_keys)
+            .await?
+            .into_iter()
+            .map(|(_item_id, item)| transfer_details_from_item(item))
+            .collect();
+        let transfers = transfers?;
+
         for mut transfer in transfers {
             transfer.token_uri = transfer_meta.token_uri.clone();
             transfer.token_domain = transfer_meta.token_domain.clone();
@@ -619,12 +641,21 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         token_address: String,
         possible_spam: bool,
     ) -> MmResult<(), Self::Error> {
-        let transfers: Vec<NftTransferHistory> = self
-            .get_transfers_by_token_address(*chain, token_address.clone())
-            .await?;
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
+
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_INDEX)
+            .with_value(chain.to_string())?
+            .with_value(&token_address)?;
+
+        let transfers: Result<Vec<NftTransferHistory>, _> = table
+            .get_items_by_multi_index(index_keys)
+            .await?
+            .into_iter()
+            .map(|(_item_id, item)| transfer_details_from_item(item))
+            .collect();
+        let transfers = transfers?;
 
         for mut transfer in transfers {
             transfer.common.possible_spam = possible_spam;

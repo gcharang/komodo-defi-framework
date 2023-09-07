@@ -9,7 +9,7 @@ pub(crate) mod storage;
 #[cfg(any(test, target_arch = "wasm32"))] mod nft_tests;
 
 use crate::{coin_conf, get_my_address, MyAddressReq, WithdrawError};
-use nft_errors::{GetInfoFromUriError, GetNftInfoError, UpdateNftError};
+use nft_errors::{GetNftInfoError, UpdateNftError};
 use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftList, NftListReq, NftMetadataReq,
                   NftTransferHistory, NftTransferHistoryFromMoralis, NftTransfersReq, NftsTransferHistoryList,
                   TransactionNftDetails, UpdateNftReq, WithdrawNftReq};
@@ -19,11 +19,11 @@ use crate::nft::nft_errors::{ProtectFromSpamError, UpdateSpamPhishingError};
 use crate::nft::nft_structs::{MnemonicHQRes, NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq,
                               SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
-use common::{parse_rfc3339_to_timestamp, APPLICATION_JSON};
+use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
 use ethereum_types::Address;
-use http::header::ACCEPT;
 use mm2_err_handle::map_to_mm::MapToMmResult;
+use mm2_net::transport::send_post_request_to_uri;
 use mm2_number::BigDecimal;
 use regex::Regex;
 use serde_json::Value as Json;
@@ -31,10 +31,10 @@ use std::cmp::Ordering;
 use std::str::FromStr;
 
 #[cfg(not(target_arch = "wasm32"))]
-use mm2_net::native_http::slurp_post_json;
+use mm2_net::native_http::send_request_to_uri;
 
 #[cfg(target_arch = "wasm32")]
-use mm2_net::wasm_http::slurp_post_json;
+use mm2_net::wasm_http::send_request_to_uri;
 
 const MORALIS_API_ENDPOINT: &str = "api/v2";
 /// query parameters for moralis request: The format of the token ID
@@ -572,68 +572,6 @@ pub async fn withdraw_nft(ctx: MmArc, req: WithdrawNftReq) -> WithdrawNftResult 
         WithdrawNftReq::WithdrawErc1155(erc1155_withdraw) => withdraw_erc1155(ctx, erc1155_withdraw).await,
         WithdrawNftReq::WithdrawErc721(erc721_withdraw) => withdraw_erc721(ctx, erc721_withdraw).await,
     }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
-    use http::header::HeaderValue;
-    use mm2_net::transport::slurp_req_body;
-
-    let request = http::Request::builder()
-        .method("GET")
-        .uri(uri)
-        .header(ACCEPT, HeaderValue::from_static(APPLICATION_JSON))
-        .body(hyper::Body::from(""))?;
-
-    let (status, _header, body) = slurp_req_body(request).await?;
-    if !status.is_success() {
-        return Err(MmError::new(GetInfoFromUriError::Transport(format!(
-            "Response !200 from {}: {}, {}",
-            uri, status, body
-        ))));
-    }
-    Ok(body)
-}
-
-async fn send_post_request_to_uri(uri: &str, body: String) -> MmResult<Vec<u8>, GetInfoFromUriError> {
-    let (status, _header, body) = slurp_post_json(uri, body).await?;
-    if !status.is_success() {
-        return Err(MmError::new(GetInfoFromUriError::Transport(format!(
-            "Response !200 from {}: {}",
-            uri, status,
-        ))));
-    }
-    Ok(body)
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
-    use mm2_net::wasm_http::FetchRequest;
-
-    macro_rules! try_or {
-        ($exp:expr, $errtype:ident) => {
-            match $exp {
-                Ok(x) => x,
-                Err(e) => return Err(MmError::new(GetInfoFromUriError::$errtype(ERRL!("{:?}", e)))),
-            }
-        };
-    }
-
-    let result = FetchRequest::get(uri)
-        .header(ACCEPT.as_str(), APPLICATION_JSON)
-        .request_str()
-        .await;
-    let (status_code, response_str) = try_or!(result, Transport);
-    if !status_code.is_success() {
-        return Err(MmError::new(GetInfoFromUriError::Transport(ERRL!(
-            "!200: {}, {}",
-            status_code,
-            response_str
-        ))));
-    }
-
-    let response: Json = try_or!(serde_json::from_str(&response_str), InvalidResponse);
-    Ok(response)
 }
 
 /// `check_moralis_ipfs_bafy` inspects a given token URI and modifies it if certain conditions are met.

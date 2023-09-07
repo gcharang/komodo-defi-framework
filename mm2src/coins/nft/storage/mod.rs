@@ -230,9 +230,8 @@ pub(crate) struct NftDetailsJson {
     pub(crate) block_number_minted: Option<u64>,
 }
 
-#[allow(dead_code)]
 /// `TransferDetailsJson` structure contains immutable parameters that are not needed for queries.
-/// /// This is what `details_json` string contains in db table.
+/// This is what `details_json` string contains in db table.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct TransferDetailsJson {
     pub(crate) block_hash: Option<String>,
