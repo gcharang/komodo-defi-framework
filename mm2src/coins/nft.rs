@@ -231,21 +231,23 @@ where
         return update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await;
     }
     let token_addresses = storage.get_token_addresses(chain).await?;
-    let addresses = token_addresses
-        .iter()
-        .map(eth_addr_to_hex)
-        .collect::<Vec<_>>()
-        .join(",");
-    let spam_res = send_spam_request(&chain, url_antispam, addresses).await?;
-    for (address, is_spam) in spam_res.result.into_iter() {
-        if is_spam {
-            let address_hex = eth_addr_to_hex(&address);
-            storage
-                .update_nft_spam_by_token_address(&chain, address_hex.clone(), is_spam)
-                .await?;
-            storage
-                .update_transfer_spam_by_token_address(&chain, address_hex, is_spam)
-                .await?;
+    if !token_addresses.is_empty() {
+        let addresses = token_addresses
+            .iter()
+            .map(eth_addr_to_hex)
+            .collect::<Vec<_>>()
+            .join(",");
+        let spam_res = send_spam_request(&chain, url_antispam, addresses).await?;
+        for (address, is_spam) in spam_res.result.into_iter() {
+            if is_spam {
+                let address_hex = eth_addr_to_hex(&address);
+                storage
+                    .update_nft_spam_by_token_address(&chain, address_hex.clone(), is_spam)
+                    .await?;
+                storage
+                    .update_transfer_spam_by_token_address(&chain, address_hex, is_spam)
+                    .await?;
+            }
         }
     }
     Ok(())
