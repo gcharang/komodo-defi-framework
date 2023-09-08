@@ -1642,7 +1642,6 @@ impl RpcTransportEventHandler for ElectrumClientImpl {
         debug!("electrum client level on connected to address: {}", address);
         debug!("Electrum client on connected, spawning service futures");
 
-        self.conn_mng.on_connected(address.clone());
         let weak_self = {
             self.weak_self
                 .lock()
@@ -1653,11 +1652,10 @@ impl RpcTransportEventHandler for ElectrumClientImpl {
         let client_name = self.client_name.clone();
 
         let fut = async move {
-            match check_electrum_server_version(weak_self.clone(), client_name, address.clone()).await {
+            match check_electrum_server_version(weak_self.clone(), client_name, address).await {
                 Ok(weak_client) => ping_loop(weak_client).await,
                 Err(_err) => {
-                    let sself = weak_self.upgrade().unwrap();
-                    let _ = sself.remove_server(&address).await; //TODO: demands attention
+                    let sself = weak_self.upgrade().expect("");
                     let _ = sself.connect().await;
                 },
             };
@@ -1815,12 +1813,6 @@ impl ElectrumClientImpl {
         self.conn_mng.remove_server(server_addr.to_string()).await
     }
 
-    /// Moves the Electrum servers that fail in a multi request to the end.
-    pub async fn rotate_servers(&self, no_of_rotations: usize) {
-        let mut connections = self.connections.lock().await;
-        connections.rotate_left(no_of_rotations);
-    }
-
     /// Check if one of the spawned connections is connected.
     pub async fn is_connected(&self) -> bool { self.conn_mng.is_connected().await }
 
@@ -1829,6 +1821,9 @@ impl ElectrumClientImpl {
 
     /// Check if the protocol version was checked for one of the spawned connections.
     pub async fn is_protocol_version_verified(&self) -> bool {
+        if !self.conn_mng.is_connected().await {
+            return false;
+        }
         let Some(conn_mut) = self.conn_mng.get_conn().await else {
             error!("Failed to check if protocol version is verified, no connection");
             return false;
@@ -2168,57 +2163,55 @@ async fn check_electrum_server_version(
         }
     }
 
-    if let Some(c) = weak_client.upgrade() {
-        let client = ElectrumClient(c);
-        let protocol_version = client.protocol_version();
-        debug!("Check version, supported protocols: {:?}", protocol_version);
-        let version = match client
-            .server_version(&electrum_addr, &client_name, protocol_version)
-            .compat()
-            .await
-        {
-            Ok(version) => version,
-            Err(e) => {
-                error!("Electrum {} server.version error: {:?}", electrum_addr, e);
-                if !e.error.is_transport() {
-                    remove_server(client, electrum_addr).await;
-                };
-                return Err(());
-            },
-        };
-
-        // check if the version is allowed
-        let actual_version = match version.protocol_version.parse::<f32>() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Error on parse protocol_version: {:?}", e);
+    let c = weak_client.upgrade().expect("failed to upgrade weak_client");
+    let client = ElectrumClient(c);
+    let protocol_version = client.protocol_version();
+    debug!("Check version, supported protocols: {:?}", protocol_version);
+    let version = match client
+        .server_version(&electrum_addr, &client_name, protocol_version)
+        .compat()
+        .await
+    {
+        Ok(version) => version,
+        Err(e) => {
+            error!("Electrum {} server.version error: {:?}", electrum_addr, e);
+            if !e.error.is_transport() {
                 remove_server(client, electrum_addr).await;
-                return Err(());
-            },
-        };
+            };
+            return Err(());
+        },
+    };
 
-        if !protocol_version.contains(&actual_version) {
-            error!(
-                "Received unsupported protocol version {:?} from {:?}. Remove the connection",
-                actual_version, electrum_addr
-            );
+    // check if the version is allowed
+    let actual_version = match version.protocol_version.parse::<f32>() {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Error on parse protocol_version: {:?}", e);
             remove_server(client, electrum_addr).await;
             return Err(());
-        }
+        },
+    };
 
-        match client.set_protocol_version(&electrum_addr, actual_version).await {
-            Ok(()) => info!(
-                "Use protocol version {:?} for Electrum {:?}",
-                actual_version, electrum_addr
-            ),
-            Err(e) => {
-                error!("Error on set protocol_version: {}", e);
-                return Err(());
-            },
-        };
-        return Ok((weak_client, electrum_addr));
+    if !protocol_version.contains(&actual_version) {
+        error!(
+            "Received unsupported protocol version {:?} from {:?}. Remove the connection",
+            actual_version, electrum_addr
+        );
+        remove_server(client, electrum_addr).await;
+        return Err(());
     }
-    Err(())
+
+    match client.set_protocol_version(&electrum_addr, actual_version).await {
+        Ok(()) => info!(
+            "Use protocol version {:?} for Electrum {:?}",
+            actual_version, electrum_addr
+        ),
+        Err(e) => {
+            error!("Error on set protocol_version: {}", e);
+            return Err(());
+        },
+    };
+    Ok((weak_client, electrum_addr))
 }
 
 async fn ping_loop((weak_client, address): (Weak<ElectrumClientImpl>, String)) {
@@ -2569,11 +2562,16 @@ trait ConnMngTrait: Debug {
 
 #[derive(Debug)]
 struct ConnMngImpl {
-    event_handlers: AsyncMutex<Vec<RpcTransportEventHandlerShared>>,
-    queue: AsyncMutex<ConnMngQueue>,
-    active: Arc<AsyncMutex<Option<String>>>,
-    conn_ctxs: AsyncMutex<BTreeMap<String, ElectrumConnCtx>>,
+    guarded: AsyncMutex<ConnMngImplGuarded>,
     abortable_system: AbortableQueue,
+}
+
+#[derive(Debug)]
+struct ConnMngImplGuarded {
+    event_handlers: Vec<RpcTransportEventHandlerShared>,
+    queue: ConnMngQueue,
+    active: Option<String>,
+    conn_ctxs: BTreeMap<String, ElectrumConnCtx>,
 }
 
 #[derive(Debug)]
@@ -2591,35 +2589,30 @@ impl ConnMng {
     async fn suspend_server(self, addr: String) {
         debug!("About to suspend connection to addr: {}, timeout: {}", addr, 20);
 
-        {
-            let _ = self.0.active.lock().await.take();
-        }
+        let mut guard = self.0.guarded.lock().await;
+        let _ = guard.active.take();
 
-        {
-            match { &self.0.conn_ctxs.lock().await.get(&addr).unwrap().conn_settings.priority } {
-                Priority::Primary => {
-                    self.0.queue.lock().await.primary.pop_front();
-                },
-                Priority::Secondary => {
-                    self.0.queue.lock().await.backup.pop_front();
-                },
-            };
+        match &guard.conn_ctxs.get(&addr).expect("TODO").conn_settings.priority {
+            Priority::Primary => {
+                guard.queue.primary.pop_front();
+            },
+            Priority::Secondary => {
+                guard.queue.backup.pop_front();
+            },
         };
 
-        {
-            let mut guard = self.0.conn_ctxs.lock().await;
-            let conn_ctx = guard.get_mut(&addr).unwrap();
-            let _ = conn_ctx.abortable_system.abort_all().map_err(|err| {
-                error!(
-                    "Failed to abort on electrum connection related spawner: {}, error: {:?}",
-                    addr, err
-                )
-            });
-            conn_ctx.abortable_system = self.0.abortable_system.create_subsystem().unwrap();
-        }
+        let mut conn_ctx = guard.conn_ctxs.get_mut(&addr).expect("TODO");
+        let _ = conn_ctx.abortable_system.abort_all().map_err(|err| {
+            error!(
+                "Failed to abort on electrum connection related spawner: {}, error: {:?}",
+                addr, err
+            )
+        });
+        conn_ctx.abortable_system = self.0.abortable_system.create_subsystem().unwrap();
+        drop(guard);
 
         self.0.abortable_system.weak_spawner().spawn(async move {
-            let suspend_timeout_sec = 40; //self.get_suspend_timeout(&addr).await.unwrap();
+            let suspend_timeout_sec = 120; //self.get_suspend_timeout(&addr).await.unwrap();
             tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
             self.restore_server(addr).await;
         });
@@ -2637,39 +2630,34 @@ impl ConnMng {
 
     async fn restore_server(self, addr: String) {
         debug!("Put back the connection to addr: {} after timeout: {}", addr, 5);
-
-        let mut ctx_guard = self.0.queue.lock().await;
-        match &self
-            .0
+        let mut guard = self.0.guarded.lock().await;
+        match guard
             .conn_ctxs
-            .lock()
-            .await
             .get(&addr)
             .as_ref()
-            .unwrap() // TODO: get rid of unwrap
+            .expect("TODO") // TODO: get rid of unwrap
             .conn_settings
             .priority
         {
-            Priority::Primary => ctx_guard.primary.push_back(addr),
-            Priority::Secondary => ctx_guard.backup.push_back(addr),
+            Priority::Primary => guard.queue.primary.push_back(addr),
+            Priority::Secondary => guard.queue.backup.push_back(addr),
         }
-        drop(ctx_guard);
-        let conn_guard = self.0.active.lock().await;
-        debug!("Connection locked");
-        let current_addr = conn_guard.as_ref().cloned();
-        drop(conn_guard);
-        debug!("Connection unlocked");
+
+        let current_addr = guard.active.clone();
+
         if let Some(current_addr) = current_addr {
             debug!(
                 "Electrum: {} - is currently active, may be it should be substituted with the primary one",
                 current_addr
             );
         } else {
+            drop(guard);
             let _ = self.connect().await;
         };
     }
 }
 
+#[derive(Debug)]
 struct ConnMngQueue {
     primary: LinkedList<String>,
     backup: LinkedList<String>,
@@ -2678,20 +2666,25 @@ struct ConnMngQueue {
 #[async_trait]
 impl ConnMngTrait for ConnMng {
     async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
-        if let Some(address) = self.0.active.lock().await.deref() {
-            let conn_ctxs_guard = self.0.conn_ctxs.lock().await;
-            return conn_ctxs_guard.get(address).unwrap().connection.clone();
+        let guard = self.0.guarded.lock().await;
+        if let Some(address) = guard.active.as_ref() {
+            return guard.conn_ctxs.get(address).expect("TODO").connection.clone();
         };
         None
     }
 
     async fn connect(&self) -> Result<(), String> {
-        let event_handlers = self.0.event_handlers.lock().await.clone();
+        let guard = self.0.guarded.lock().await;
+        let event_handlers = guard.event_handlers.clone();
+        debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
+        debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
+        drop(guard);
 
         debug!(
             "Trying to connect to the first priority address, event_handlers: {}",
             event_handlers.len()
         );
+
         while let Some((conn_settings, weak_spawner)) = self.0.get_settings_to_connect().await {
             debug!(
                 "Trying to connect to electrum server with settings: {:?}",
@@ -2722,15 +2715,19 @@ impl ConnMngTrait for ConnMng {
     async fn remove_server(&self, address: String) -> Result<(), String> { self.0.remove_server(address).await }
 
     async fn register(&self, handler: RpcTransportEventHandlerShared) {
-        self.0.event_handlers.lock().await.push(handler);
+        let mut guard = self.0.guarded.lock().await;
+        guard.event_handlers.push(handler)
     }
 
     fn on_connected(&self, address: String) {
         let self_clone = self.clone();
         self.0.abortable_system.weak_spawner().spawn(async move {
-            if let Some(active) = self_clone.0.active.lock().await.replace(address.clone()) {
-                warn!("Currently active address: {} - substituted with: {}", active, address);
-            }
+            // TODO: move to impl
+            // let mut guard = self_clone.0.guarded.lock().await;
+            // if let Some(active) = guard.active.replace(address.clone()) {
+            //     // backup substituted with primary
+            //     debug!("Currently active address: {} - substituted with: {}", active, address);
+            // }
         });
     }
 
@@ -2749,7 +2746,7 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
     async fn is_connected(&self) -> bool { self.deref().is_connected().await }
     async fn remove_server(&self, address: String) -> Result<(), String> { self.deref().remove_server(address).await }
-    async fn register(&self, handler: RpcTransportEventHandlerShared) { self.deref().register(handler).await }
+    async fn register(&self, handler: RpcTransportEventHandlerShared) { self.deref().register(handler).await; }
     fn on_connected(&self, address: String) { self.deref().on_connected(address) }
     fn on_disconnected(&self, address: String) { self.deref().on_disconnected(address) }
 }
@@ -2775,79 +2772,73 @@ impl ConnMngImpl {
                 suspend_timeout_sec: 0,
             });
         }
-        debug!("Primary electrum nodes to connect: {:?}", primary);
-        debug!("Backup electrum nodes to connect: {:?}", backup);
 
         ConnMngImpl {
-            event_handlers: AsyncMutex::new(event_handlers),
-            queue: AsyncMutex::new(ConnMngQueue { primary, backup }),
-            active: Arc::new(AsyncMutex::new(None)),
-            conn_ctxs: AsyncMutex::new(abortable_systems),
+            guarded: AsyncMutex::new(ConnMngImplGuarded {
+                event_handlers,
+                queue: ConnMngQueue { primary, backup },
+                active: None,
+                conn_ctxs: abortable_systems,
+            }),
             abortable_system,
         }
     }
 
     pub async fn get_settings_to_connect(&self) -> Option<(ElectrumConnSettings, WeakSpawner)> {
         debug!("Trying to lock con_mng ctx");
-        let guard = self.queue.lock().await;
-        let mut iter = guard.primary.iter().chain(guard.backup.iter());
+        let guard = self.guarded.lock().await;
+        let mut iter = guard.queue.primary.iter().chain(guard.queue.backup.iter());
         let addr = iter.next()?.clone();
-        drop(guard);
         debug!("conn_mnt ctx unlocked, conn_mng got address: {}", addr);
-        let guard = self.conn_ctxs.lock().await;
-        let Some(conn_ctx) = guard.get(&addr) else  {
-            error!("Failed to get conn settings and abortable system for addr: {} - out of {}", addr, guard.len());
-            return None;
-        };
+
+        let conn_ctx = guard.conn_ctxs.get(&addr).expect("TODO");
         Some((conn_ctx.conn_settings.clone(), conn_ctx.abortable_system.weak_spawner()))
     }
 
     async fn remove_server(&self, address: String) -> Result<(), String> {
         debug!("Remove server: {}", address);
-        let mut conn_ctxs_lock = self.conn_ctxs.lock().await;
-        debug!("remove server, conn_ctxs locked");
+        let mut guard = self.guarded.lock().await;
+        let conn_ctx = guard.conn_ctxs.remove(&address).expect("TODO");
 
-        let Some(conn_ctx) = conn_ctxs_lock.remove(&address) else {
-            return Err(format!(
-                "Failed to remove server, no entry has been found by address: {}",
-                address
-            ))
-        };
-        drop(conn_ctxs_lock);
-
-        let mut queue = self.queue.lock().await;
         match conn_ctx.conn_settings.priority {
-            Priority::Primary => queue.primary.pop_front(),
-            Priority::Secondary => queue.backup.pop_front(),
+            Priority::Primary => guard.queue.primary.pop_front(),
+            Priority::Secondary => guard.queue.backup.pop_front(),
         };
-        drop(queue);
-        let _ = self.active.lock().await.take();
-
-        debug!("remove server, conn_ctxs locked");
+        if let Some(active) = guard.active.as_ref() {
+            if active == address.as_str() {
+                guard.active.take();
+            }
+        }
         Ok(())
     }
 
     async fn set_conn(&self, conn: ElectrumConnection) {
-        let mut ctxs_bind = self.conn_ctxs.lock().await;
-        ctxs_bind
+        let mut guard = self.guarded.lock().await;
+        if guard.active.is_some() {
+            warn!("Connection exists, established connection dropped");
+            return;
+        }
+        let _ = guard.active.replace(conn.addr.clone());
+        guard
+            .conn_ctxs
             .get_mut(&conn.addr)
-            .unwrap()
+            .expect("TODO")
             .connection
             .replace(Arc::new(AsyncMutex::new(conn)));
     }
 
     async fn is_connected(&self) -> bool {
-        let address_guard = self.active.lock().await;
-        let Some(address) = address_guard.deref().clone() else {
+        let guard = self.guarded.lock().await;
+
+        let Some(address) = guard.active.as_ref() else {
             return false;
         };
-        drop(address_guard);
-        let ctxs_guard = self.conn_ctxs.lock().await;
-        let Some(conn_ctx) = ctxs_guard
-            .get(&address) else {
+
+        let Some(conn_ctx) = guard.conn_ctxs.get(address) else {
             panic!("Expected ctx is set for address: {}", address);
         };
-        let Some(ref connection) = conn_ctx.connection else {
+
+        let Some(connection) = conn_ctx.connection.as_ref() else {
             panic!("Expected connection actvie for address: {}", address);
         };
         let connected = connection.lock().await.is_connected().await;
@@ -3114,7 +3105,8 @@ async fn connect_loop(
     event_handlers: Vec<RpcTransportEventHandlerShared>,
     _spawner: WeakSpawner,
     notifier: Arc<Notify>,
-) -> Result<(), ()> {
+) /*-> Result<(), ()>*/
+{
     let delay = Arc::new(AtomicU64::new(0));
 
     loop {
@@ -3219,8 +3211,9 @@ async fn connect_loop(
                     .on_disconnected(addr.clone(), _spawner.clone())
                     .error_log();
                 *connection_tx.lock().await = None;
-                increase_delay(&delay);
-                continue;
+                break;
+                // increase_delay(&delay);
+                // continue;
             };
         }
 
@@ -3359,8 +3352,8 @@ fn electrum_connect(
         event_handlers,
         spawner.clone(),
         notifier.clone(),
-    )
-    .then(|_| futures::future::ready(()));
+    );
+    //.then(|_| futures::future::ready(()));
 
     spawner.spawn(fut);
     (
