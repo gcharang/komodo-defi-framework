@@ -24,12 +24,21 @@ const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
 const CHAIN_TOKEN_ADD_INDEX: &str = "chain_token_add_index";
 
+/// Provides methods for interacting with the IndexedDB storage specifically designed for NFT data.
+///
+/// This struct abstracts the intricacies of fetching and storing NFT data in the IndexedDB,
+/// ensuring optimal performance and data integrity.
 #[derive(Clone)]
 pub struct IndexedDbNftStorage {
+    /// The underlying shared database instance for caching NFT data.
     db: SharedDb<NftCacheIDB>,
 }
 
 impl IndexedDbNftStorage {
+    /// Construct a new `IndexedDbNftStorage` using the given MM context.
+    ///
+    /// This method ensures that a proper NFT context (`NftCtx`) exists within the MM context
+    /// and initializes the underlying storage as required.
     pub fn new(ctx: &MmArc) -> MmResult<Self, CreateNftStorageError> {
         let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(CreateNftStorageError::Internal)?;
         Ok(IndexedDbNftStorage {
@@ -37,6 +46,7 @@ impl IndexedDbNftStorage {
         })
     }
 
+    /// Lock the underlying database to ensure exclusive access, maintaining data consistency during operations.
     async fn lock_db(&self) -> WasmNftCacheResult<NftCacheIDBLocked<'_>> {
         self.db.get_or_initialize().await.mm_err(WasmNftCacheError::from)
     }

@@ -85,6 +85,7 @@ pub struct GuiAuthValidation {
     pub signature: String,
 }
 
+/// Errors encountered when making HTTP requests to fetch information from a URI.
 #[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize)]
 pub enum GetInfoFromUriError {
     #[display(fmt = "Invalid request: {}", _0)]

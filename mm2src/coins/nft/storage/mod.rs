@@ -17,23 +17,29 @@ pub(crate) mod db_test_helpers;
 #[cfg(not(target_arch = "wasm32"))] pub(crate) mod sql_storage;
 #[cfg(target_arch = "wasm32")] pub(crate) mod wasm;
 
+/// Represents the outcome of an attempt to remove an NFT.
 #[derive(Debug, PartialEq)]
 pub enum RemoveNftResult {
+    /// Indicates that the NFT was successfully removed.
     NftRemoved,
+    /// Indicates that the NFT did not exist in the storage.
     NftDidNotExist,
 }
 
+/// Defines the standard errors that can occur in NFT storage operations
 pub trait NftStorageError: std::fmt::Debug + NotMmError + NotEqual + Send {}
 
+/// Conversion trait from `NftStorageError` to `WithdrawError`.
 impl<T: NftStorageError> From<T> for WithdrawError {
     fn from(err: T) -> Self { WithdrawError::DbError(format!("{:?}", err)) }
 }
 
+/// Provides asynchronous operations for handling and querying NFT listings.
 #[async_trait]
 pub trait NftListStorageOps {
     type Error: NftStorageError;
 
-    /// Initializes tables in storage for the specified chain type.
+    /// Prepares the storage by initializing required tables for a specified chain type.
     async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error>;
 
     /// Whether tables are initialized for the specified chain.
@@ -101,11 +107,12 @@ pub trait NftListStorageOps {
     ) -> MmResult<(), Self::Error>;
 }
 
+/// Provides asynchronous operations related to the history of NFT transfers.
 #[async_trait]
 pub trait NftTransferHistoryStorageOps {
     type Error: NftStorageError;
 
-    /// Initializes tables in storage for the specified chain type.
+    /// Prepares the storage by initializing required tables for a specified chain type.
     async fn init(&self, chain: &Chain) -> MmResult<(), Self::Error>;
 
     /// Whether tables are initialized for the specified chain.
@@ -176,6 +183,7 @@ pub trait NftTransferHistoryStorageOps {
     async fn get_token_addresses(&self, chain: Chain) -> MmResult<HashSet<Address>, Self::Error>;
 }
 
+/// Represents potential errors that can occur when creating an NFT storage.
 #[derive(Debug, Deserialize, Display, Serialize)]
 pub enum CreateNftStorageError {
     Internal(String),
@@ -190,12 +198,13 @@ impl From<CreateNftStorageError> for WithdrawError {
 }
 
 /// `NftStorageBuilder` is used to create an instance that implements the [`NftListStorageOps`]
-/// and [`NftTransferHistoryStorageOps`] traits.Also has guard to lock write operations.
+/// and [`NftTransferHistoryStorageOps`] traits.
 pub struct NftStorageBuilder<'a> {
     ctx: &'a MmArc,
 }
 
 impl<'a> NftStorageBuilder<'a> {
+    /// Creates a new `NftStorageBuilder` instance with the provided context.
     #[inline]
     pub fn new(ctx: &MmArc) -> NftStorageBuilder<'_> { NftStorageBuilder { ctx } }
 

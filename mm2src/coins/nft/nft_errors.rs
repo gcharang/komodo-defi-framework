@@ -233,6 +233,10 @@ impl HttpStatusCode for UpdateNftError {
     }
 }
 
+/// Enumerates the errors that can occur during spam protection operations.
+///
+/// This includes issues such as regex failures during text validation and
+/// serialization/deserialization problems.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
 pub enum ProtectFromSpamError {
     #[from_stringify("regex::Error")]
@@ -241,6 +245,12 @@ pub enum ProtectFromSpamError {
     SerdeError(String),
 }
 
+/// An enumeration representing the potential errors encountered
+/// during the process of updating spam or phishing-related information.
+///
+/// This error set captures various failures, from request malformation
+/// to database interaction errors, providing a comprehensive view of
+/// possible issues during the spam/phishing update operations.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
 pub enum UpdateSpamPhishingError {
     #[display(fmt = "Invalid request: {}", _0)]
@@ -276,7 +286,9 @@ impl<T: NftStorageError> From<T> for UpdateSpamPhishingError {
     fn from(err: T) -> Self { UpdateSpamPhishingError::DbError(format!("{:?}", err)) }
 }
 
+/// Errors encountered when parsing a `Chain` from a string.
 #[derive(Debug, Display)]
 pub enum ParseChainTypeError {
+    /// The provided string does not correspond to any of the supported blockchain types.
     UnsupportedChainType,
 }

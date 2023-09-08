@@ -254,6 +254,7 @@ impl UriMeta {
 }
 
 /// [`NftCommon`] structure contains common fields from [`Nft`] and [`NftFromMoralis`]
+/// The `possible_spam` field indicates if any potential spam has been detected.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftCommon {
     pub(crate) token_address: Address,
@@ -275,7 +276,8 @@ pub struct NftCommon {
 }
 
 /// Represents an NFT with specific chain details, contract type, and other relevant attributes.
-/// This structure captures detailed information about an NFT.
+/// This structure captures detailed information about an NFT. The `possible_phishing`
+/// field indicates if any domains associated with the NFT have been marked as phishing.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Nft {
     #[serde(flatten)]
@@ -389,15 +391,26 @@ pub struct TransactionNftDetails {
     pub(crate) transaction_type: TransactionType,
 }
 
+/// Represents a request to fetch the transfer history of NFTs owned by the user across specified chains.
+///
+/// The request provides options such as pagination, limiting the number of results,
+/// and applying specific filters to the history.
 #[derive(Debug, Deserialize)]
 pub struct NftTransfersReq {
+    /// List of chains to fetch the NFT transfer history from.
     pub(crate) chains: Vec<Chain>,
+    /// Optional filters to apply when fetching the NFT transfer history.
     pub(crate) filters: Option<NftTransferHistoryFilters>,
+    /// Parameter indicating if the maximum number of transfer records should be fetched.
+    /// If true, then `limit` will be ignored.
     #[serde(default)]
     pub(crate) max: bool,
+    /// Limit to the number of transfer records returned in a single request.
     #[serde(default = "ten")]
     pub(crate) limit: usize,
+    /// Page number for pagination.
     pub(crate) page_number: Option<NonZeroUsize>,
+    /// Flag indicating if the returned transfer history should be protected from potential spam.
     #[serde(default)]
     pub(crate) protect_from_spam: bool,
 }
@@ -436,6 +449,7 @@ impl fmt::Display for TransferStatus {
 }
 
 /// [`NftTransferCommon`] structure contains common fields from [`NftTransferHistory`] and [`NftTransferHistoryFromMoralis`]
+/// The `possible_spam` field indicates if any potential spam has been detected.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftTransferCommon {
     pub(crate) block_hash: Option<String>,
@@ -456,6 +470,12 @@ pub struct NftTransferCommon {
     pub(crate) possible_spam: bool,
 }
 
+/// Represents the historical transfer details of an NFT.
+///
+/// Contains relevant information about the NFT transfer such as the chain, block details,
+/// and contract type. Additionally, fields like `collection_name`, `token_name`, and
+/// urls to metadata provide insight into the NFT's identity. The `possible_phishing`
+/// field indicates if any domains associated with the NFT have been marked as phishing.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftTransferHistory {
     #[serde(flatten)]
@@ -475,7 +495,9 @@ pub struct NftTransferHistory {
     pub(crate) possible_phishing: bool,
 }
 
-/// This structure is for deserializing moralis NFT transfer json to struct.
+/// Represents an NFT transfer structure specifically for deserialization from Moralis's JSON response.
+///
+/// This structure is adapted to the specific format provided by Moralis's API.
 #[derive(Debug, Deserialize)]
 pub(crate) struct NftTransferHistoryFromMoralis {
     #[serde(flatten)]
@@ -485,6 +507,9 @@ pub(crate) struct NftTransferHistoryFromMoralis {
     pub(crate) contract_type: Option<ContractType>,
 }
 
+/// Represents the detailed transfer history of NFTs, including the total number of transfers
+/// and the number of skipped transfers.
+/// It is used as a response of `get_nft_transfers` if it is successful.
 #[derive(Debug, Serialize)]
 pub struct NftsTransferHistoryList {
     pub(crate) transfer_history: Vec<NftTransferHistory>,
@@ -492,6 +517,10 @@ pub struct NftsTransferHistoryList {
     pub(crate) total: usize,
 }
 
+/// Filters that can be applied to the NFT transfer history.
+///
+/// Allows filtering based on transaction type (send/receive), date range,
+/// and whether to exclude spam or phishing-related transfers.
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub struct NftTransferHistoryFilters {
     #[serde(default)]
@@ -552,13 +581,23 @@ impl From<Nft> for TransferMeta {
     }
 }
 
+/// The primary context for NFT operations within the MM environment.
+///
+/// This struct provides an interface for interacting with the underlying data structures
+/// required for NFT operations, including guarding against concurrent accesses and
+/// dealing with platform-specific storage mechanisms.
 pub(crate) struct NftCtx {
+    /// An asynchronous mutex to guard against concurrent NFT operations, ensuring data consistency.
     pub(crate) guard: Arc<AsyncMutex<()>>,
     #[cfg(target_arch = "wasm32")]
+    /// Platform-specific database for caching NFT data.
     pub(crate) nft_cache_db: SharedDb<NftCacheIDB>,
 }
 
 impl NftCtx {
+    /// Create a new `NftCtx` from the given MM context.
+    ///
+    /// If an `NftCtx` instance doesn't already exist in the MM context, it gets created and cached for subsequent use.
     pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
         Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
             Ok(NftCtx {

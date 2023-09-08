@@ -54,7 +54,24 @@ const BLOCKLIST_SCAN: &str = "scan";
 /// of the generated transaction meant for transferring the NFT. On failure, it details the encountered error.
 pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError>>;
 
-/// `get_nft_list` function returns list of NFTs on requested chains owned by user.
+/// Fetches a list of user-owned NFTs across specified chains.
+///
+/// The function aggregates NFTs based on provided chains, supports pagination, and
+/// allows for result limits and filters. If the `protect_from_spam` flag is true,
+/// NFTs are checked and redacted for potential spam.
+///
+/// # Parameters
+///
+/// * `ctx`: Shared context with configurations/resources.
+/// * `req`: Request specifying chains, pagination, and filters.
+///
+/// # Returns
+///
+/// On success, returns a detailed `NftList` containing NFTs, total count, and skipped count.
+/// # Errors
+///
+/// Returns `GetNftInfoError` variants for issues like invalid requests, transport failures,
+/// database errors, and spam protection errors.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -90,7 +107,11 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 ///
 /// # Returns
 ///
-/// * `MmResult<Nft, GetNftInfoError>`: Result containing the desired NFT or an error.
+/// On success, returns the whole info about desired Nft.
+/// # Errors
+///
+/// Returns `GetNftInfoError` variants for issues like invalid requests, transport failures,
+/// database errors, and spam protection errors.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -113,7 +134,26 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
     Ok(nft)
 }
 
-/// `get_nft_transfers` function returns a transfer history of NFTs on requested chains owned by user.
+/// Fetches the transfer history of user-owned NFTs across specified chains.
+///
+/// The function aggregates NFT transfers based on provided chains, offers pagination,
+/// allows for result limits, and filters. If the `protect_from_spam` flag is true,
+/// the returned transfers are checked and redacted for potential spam.
+///
+/// # Parameters
+///
+/// * `ctx`: Shared context with configurations/resources.
+/// * `req`: Request detailing chains, pagination, and filters for the transfer history.
+///
+/// # Returns
+///
+/// On success, returns an `NftsTransferHistoryList` containing NFT transfer details,
+/// the total count, and skipped count.
+///
+/// # Errors
+///
+/// Returns `GetNftInfoError` variants for issues like invalid requests, transport failures,
+/// database errors, and spam protection errors.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
