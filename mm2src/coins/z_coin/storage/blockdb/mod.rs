@@ -25,6 +25,7 @@ pub struct BlockDbImpl {
 #[cfg(any(test, target_arch = "wasm32"))]
 mod block_db_storage_tests {
     use crate::z_coin::storage::BlockDbImpl;
+    use common::log::info;
 
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 
@@ -48,8 +49,11 @@ mod block_db_storage_tests {
     }
 
     pub(crate) async fn test_rewind_to_height_impl() {
+        info!("Running!");
         let ctx = mm_ctx_with_custom_db();
+        info!("RewDB inding to height started!");
         let db = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        info!("Rewinding to height started!");
         // insert block
         for header in HEADERS.iter() {
             db.insert_block(header.0, hex::decode(header.1).unwrap()).await.unwrap();
@@ -58,6 +62,7 @@ mod block_db_storage_tests {
         // rewind height to 1900000
         let rewind_result = db.rewind_to_height(1900000).await;
         assert!(rewind_result.is_ok());
+        info!("Rewinding to height ended!");
 
         // get last height - we expect it to be 1900000
         let last_height = db.get_latest_block().await.unwrap();

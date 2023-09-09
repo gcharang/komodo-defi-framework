@@ -3,6 +3,7 @@ use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, Blo
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 
 use async_trait::async_trait;
+use common::log::info;
 use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, InitDbResult,
                          MultiIndex, OnUpgradeResult, TableSignature};
@@ -99,13 +100,7 @@ impl BlockDbImpl {
             .next()
             .await?;
 
-        let maybe_height = maybe_height
-            .map(|(_, item)| {
-                item.height
-                    .to_u32()
-                    .ok_or_else(|| ZcoinStorageError::GetFromStorageError("height is too large".to_string()))
-            })
-            .transpose()?;
+        let maybe_height = maybe_height.map(|(_, item)| item.height);
 
         let Some(height) = maybe_height else {
             return MmError::err(ZcoinStorageError::GetFromStorageError(format!("{ticker} block height not found")));
@@ -136,21 +131,23 @@ impl BlockDbImpl {
     /// Asynchronously rewinds the storage to a specified block height, effectively
     /// removing data beyond the specified height from the storage.    
     pub async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let latest_height = self.get_latest_block().await?;
+
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
 
-        let get_latest_block = self.get_latest_block().await?;
         let height_to_remove_from = height + 1;
-        for i in height_to_remove_from..get_latest_block {
+        for i in height_to_remove_from..=latest_height {
             let index_keys = MultiIndex::new(BlockDbTable::TICKER_HEIGHT_INDEX)
-                .with_value(&self.ticker)?
-                .with_value(BeBigUint::from(i))?;
+                .with_value(&ticker)?
+                .with_value(i)?;
 
             block_db.delete_item_by_unique_multi_index(index_keys).await?;
         }
 
-        Ok((height_to_remove_from + get_latest_block) as usize)
+        Ok((height_to_remove_from + latest_height) as usize)
     }
 
     #[allow(unused)]
