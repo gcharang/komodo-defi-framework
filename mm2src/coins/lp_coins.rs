@@ -81,6 +81,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Notify;
 use utxo_signer::with_key_pair::UtxoSignWithKeyPairError;
 use zcash_primitives::transaction::Transaction as ZTransaction;
 
@@ -2843,6 +2844,7 @@ pub enum CoinProtocol {
 
 pub type RpcTransportEventHandlerShared = Arc<dyn RpcTransportEventHandler + Send + Sync + 'static>;
 
+#[async_trait]
 pub trait RpcTransportEventHandler {
     fn debug_info(&self) -> String;
 
@@ -2850,7 +2852,9 @@ pub trait RpcTransportEventHandler {
 
     fn on_incoming_response(&self, data: &[u8]);
 
-    fn on_connected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String>;
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String>;
+
+    fn on_connected_async(&self, address: String) -> Result<(), String> { Ok(()) }
 
     fn on_disconnected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String>;
 }
@@ -2867,8 +2871,8 @@ impl RpcTransportEventHandler for RpcTransportEventHandlerShared {
 
     fn on_incoming_response(&self, data: &[u8]) { self.as_ref().on_incoming_response(data) }
 
-    fn on_connected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
-        self.as_ref().on_connected(address, conn_spawner)
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
+        self.as_ref().on_connected(address, conn_spawner, verified)
     }
 
     fn on_disconnected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
@@ -2895,9 +2899,9 @@ impl<T: RpcTransportEventHandler> RpcTransportEventHandler for Vec<T> {
         }
     }
 
-    fn on_connected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String> {
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
         for handler in self {
-            try_s!(handler.on_connected(address.clone(), conn_spawner.clone()))
+            try_s!(handler.on_connected(address.clone(), conn_spawner.clone(), verified.clone()))
         }
         Ok(())
     }
@@ -2966,7 +2970,7 @@ impl RpcTransportEventHandler for CoinTransportMetrics {
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());
     }
 
-    fn on_connected(&self, _address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
         // Handle a new connected endpoint if necessary.
         // Now just return the Ok
         Ok(())

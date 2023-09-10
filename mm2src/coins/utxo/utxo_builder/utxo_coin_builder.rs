@@ -515,9 +515,9 @@ pub trait UtxoCoinBuilderCommonOps {
 
         // TODO: use connected and verified notify!!! At least try to make it better. Current uproach is not good )
         let mut attempts = 0i32;
-        while !client.is_connected().await || !client.is_protocol_version_verified().await {
+        while !client.is_connected().await {
             debug!("check if client is connected and version is negotiated");
-            if attempts >= 1000 {
+            if attempts >= 30 {
                 return MmError::err(UtxoCoinBuildError::FailedToConnectToElectrums {
                     electrum_servers: servers.clone(),
                     seconds: 5,

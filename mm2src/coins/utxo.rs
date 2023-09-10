@@ -89,6 +89,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex, Weak};
+use tokio::sync::Notify;
 use utxo_builder::UtxoConfBuilder;
 use utxo_common::{big_decimal_from_sat, UtxoTxBuilder};
 use utxo_signer::with_key_pair::sign_tx;
@@ -1328,7 +1329,7 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
 
     fn on_incoming_response(&self, _data: &[u8]) {}
 
-    fn on_connected(&self, address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
+    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
         debug!("Connected to the electrum server: {}", address);
         try_s!(self
             .on_event_tx
