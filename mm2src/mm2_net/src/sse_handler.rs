@@ -7,21 +7,6 @@ pub const SSE_ENDPOINT: &str = "/event-stream";
 
 /// Handles broadcasted messages from `mm2_event_stream` continuously.
 pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<Body>, Infallible> {
-    fn get_filtered_events(request: Request<Body>) -> Vec<String> {
-        let query = request.uri().query().unwrap_or("");
-        let events_param = query
-            .split('&')
-            .find(|param| param.starts_with("filter="))
-            .map(|param| param.trim_start_matches("filter="))
-            .unwrap_or("");
-
-        if events_param.is_empty() {
-            Vec::new()
-        } else {
-            events_param.split(',').map(|event| event.to_string()).collect()
-        }
-    }
-
     // This is only called once for per client on the initialization,
     // meaning this is not a resource intensive computation.
     let ctx = match MmArc::from_ffi_handle(ctx_h) {
@@ -39,10 +24,21 @@ pub async fn handle_sse(request: Request<Body>, ctx_h: u32) -> Result<Response<B
         },
     };
 
-    let filtered_events = get_filtered_events(request);
+    let filtered_events = request
+        .uri()
+        .query()
+        .and_then(|query| {
+            query
+                .split('&')
+                .find(|param| param.starts_with("filter="))
+                .map(|param| param.trim_start_matches("filter="))
+        })
+        .map_or(Vec::new(), |events_param| {
+            events_param.split(',').map(|event| event.to_string()).collect()
+        });
 
     let mut channel_controller = ctx.stream_channel_controller.clone();
-    let mut rx = channel_controller.create_channel(config.active_events.len());
+    let mut rx = channel_controller.create_channel(config.total_active_events());
     let body = Body::wrap_stream(async_stream::stream! {
         while let Some(event) = rx.recv().await {
             // If there are no filtered events, that means we want to
