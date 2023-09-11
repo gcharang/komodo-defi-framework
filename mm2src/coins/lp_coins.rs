@@ -2854,7 +2854,7 @@ pub trait RpcTransportEventHandler {
 
     fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String>;
 
-    fn on_connected_async(&self, address: String) -> Result<(), String> { Ok(()) }
+    fn on_connected_async(&self, _address: String) -> Result<(), String> { Ok(()) }
 
     fn on_disconnected(&self, address: String, conn_spawner: WeakSpawner) -> Result<(), String>;
 }
@@ -2970,7 +2970,7 @@ impl RpcTransportEventHandler for CoinTransportMetrics {
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());
     }
 
-    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
+    fn on_connected(&self, _address: String, _conn_spawner: WeakSpawner, _verified: Arc<Notify>) -> Result<(), String> {
         // Handle a new connected endpoint if necessary.
         // Now just return the Ok
         Ok(())

@@ -49,7 +49,7 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::num::NonZeroU64;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -77,7 +77,8 @@ cfg_native! {
 pub const NO_TX_ERROR_CODE: &str = "'code': -5";
 const RESPONSE_TOO_LARGE_CODE: i16 = -32600;
 const TX_NOT_FOUND_RETRIES: u8 = 10;
-const DEFAULT_CONN_TIMEOUT_SEC: u64 = 5;
+/// This timeout implies both connecting and verifying phases time
+const DEFAULT_CONN_TIMEOUT_SEC: u64 = 20;
 const SUSPEND_TIMEOUT_INIT_SEC: u64 = 30;
 
 pub type AddressesByLabelResult = HashMap<String, AddressPurpose>;
@@ -1544,11 +1545,11 @@ pub struct ElectrumConnection {
 }
 
 impl ElectrumConnection {
-    async fn is_connected(&self) -> bool { self.tx.lock().await.is_some() }
+    //    async fn is_connected(&self) -> bool { self.tx.lock().await.is_some() }
 
     async fn set_protocol_version(&self, version: f32) { self.protocol_version.lock().await.replace(version); }
 
-    async fn reset_protocol_version(&self) { *self.protocol_version.lock().await = None; }
+    //async fn reset_protocol_version(&self) { *self.protocol_version.lock().await = None; }
 
     async fn is_protocol_version_verified(&self) -> bool { self.protocol_version.lock().await.is_some() }
 }
@@ -1640,8 +1641,10 @@ impl RpcTransportEventHandler for ElectrumClientImpl {
     fn on_incoming_response(&self, _data: &[u8]) {}
 
     fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
-        debug!("electrum client level on connected to address: {}", address);
-        debug!("Electrum client on connected, spawning service futures");
+        debug!(
+            "electrum_client_impl on connected to address: {}. Spawning service futures",
+            address
+        );
 
         let weak_self = {
             self.weak_self
@@ -1658,8 +1661,12 @@ impl RpcTransportEventHandler for ElectrumClientImpl {
                 Ok((weak_client, address)) => {
                     // use channel to accelerate impl
                     verified.notify_one();
+                    ElectrumClientImpl::ping_loop(weak_client, address).await;
                 },
-                Err(_err) => {},
+                Err(_err) => {
+                    let sself = weak_self.upgrade().expect("");
+                    let _ = sself.connect().await;
+                },
             };
         };
         conn_spawner.spawn(fut);
@@ -1667,25 +1674,10 @@ impl RpcTransportEventHandler for ElectrumClientImpl {
         Ok(())
     }
 
-    fn on_connected_async(&self, address: String) -> Result<(), String> { Ok(()) }
+    fn on_connected_async(&self, _address: String) -> Result<(), String> { Ok(()) }
 
     fn on_disconnected(&self, address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
-        debug!("electrum client level on disconnected from address: {}", address);
         self.conn_mng.on_disconnected(address);
-
-        let weak_self = {
-            self.weak_self
-                .lock()
-                .as_ref()
-                .expect("Expected weak_self to be set")
-                .clone()
-        };
-
-        // let client = weak_self.upgrade().expect("Expected weak_self to be able to upgrate");
-        //
-        // self.abortable_system.weak_spawner().spawn(async move {
-        //     let _ = client.connect().await;
-        // });
         Ok(())
     }
 }
@@ -1875,10 +1867,10 @@ impl ElectrumClientImpl {
         }
     }
 
-    async fn on_verified(weak_client: Weak<ElectrumClientImpl>, address: String) {
-        let client = weak_client.upgrade().expect("TODO");
-        client.conn_mng.on_verified(address).await;
-    }
+    // async fn on_verified(weak_client: Weak<ElectrumClientImpl>, address: String) {
+    //     let client = weak_client.upgrade().expect("TODO");
+    //     client.conn_mng.on_verified(address).await;
+    // }
 }
 
 #[derive(Clone, Debug)]
@@ -2573,7 +2565,7 @@ struct ConnMngImpl {
 
 #[derive(Debug)]
 struct ConnMngState {
-    connecting: bool,
+    connecting: AtomicBool,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
     queue: ConnMngQueue,
     active: Option<String>,
@@ -2592,78 +2584,6 @@ struct ElectrumConnCtx {
 struct ConnMng(Arc<ConnMngImpl>);
 
 impl ConnMng {
-    async fn connect_loop(self) {
-        loop {
-            let (conn_settings, weak_spawner, event_handlers) = {
-                debug!("Try lock state: {:?}", self.0.guarded);
-                let Some(guard) = self.0.guarded.try_lock() else {
-                    debug!("guard is locked or active connection");
-                    tokio::time::sleep(Duration::from_millis(1000)).await;
-                    continue
-                };
-                if guard.active.is_some() {
-                    debug!("guard is locked or active connection");
-                    tokio::time::sleep(Duration::from_millis(1000)).await;
-                    continue;
-                };
-                debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
-                debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-                let settings = ConnMngImpl::get_settings_to_connect(&guard).await.iter().collect_vec();
-
-                let Some((conn_settings, weak_spawner)) =
-                    ConnMngImpl::get_settings_to_connect(&guard).await
-                    else {
-                        error!("failed to get conn settings");
-                        tokio::time::sleep(Duration::from_millis(1000)).await;
-                        continue;
-                        ;
-                    };
-                let event_handlers = guard.event_handlers.clone();
-                (conn_settings, weak_spawner, event_handlers)
-            };
-            debug!("conn_settings: {:?}", conn_settings);
-
-            let (conn, verified_notify) = match spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone()) {
-                Ok((conn, on_connected_notify)) => (conn, on_connected_notify),
-                Err(err) => {
-                    error!("spawn_electrum: {}", err);
-                    tokio::time::sleep(Duration::from_millis(1000)).await;
-                    continue;
-                },
-            };
-            {
-                debug!("lock");
-                self.0
-                    .guarded
-                    .lock()
-                    .await
-                    .conn_ctxs
-                    .get_mut(&conn.addr)
-                    .unwrap()
-                    .connection
-                    .replace(Arc::new(AsyncMutex::new(conn)));
-                debug!("unlock");
-            }
-            let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
-                    warn!("Failed to connect to: {}, timed out", conn_settings.url);
-                    if let Err(err) = self.clone().suspend_server(conn_settings.url.clone()).await {
-                        error!("Failed to suspend server: {}, error: {}", conn_settings.url, err);
-                    }
-                },
-                _ = verified_notify.notified() => {
-                    debug!("Verified: {}, guard: {:?}", conn_settings.url, self.0.guarded);
-                    let mut guard = self.0.guarded.lock().await;
-                    let conn_ctx = guard.conn_ctxs.get_mut(&conn_settings.url).unwrap();
-                    guard.active.replace(conn_settings.url);
-                    drop(guard);
-                    debug!("Unlock verified guard");
-                }
-            }
-        }
-    }
-
     async fn suspend_server(self, address: String) -> Result<(), String> {
         debug!(
             "About to suspend connection to addr: {}, timeout: {}, guard: {:?}",
@@ -2703,6 +2623,8 @@ impl ConnMng {
             tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
             self.restore_server(address).await;
         });
+
+        debug!("Suspend future spawned");
         Ok(())
     }
 
@@ -2783,7 +2705,6 @@ impl ConnMng {
             Priority::Secondary => guard.queue.backup.push_back(addr),
         }
 
-        let current_addr = guard.active.clone();
         if let Some(current_addr) = guard.active.as_ref() {
             debug!(
                 "Electrum: {} - is currently active, may be it should be substituted with the primary one",
@@ -2793,55 +2714,6 @@ impl ConnMng {
             drop(guard);
             let _ = self.connect().await;
         };
-    }
-
-    async fn connect_impl(guard: &mut MutexGuard<'_, ConnMngState>) -> Result<(), String> {
-        // if let Some(active) = guard.active.as_ref() {
-        //     return Err(ERRL!("Failed to connect, already connected: {}", active));
-        // }
-        //
-        // let event_handlers = guard.event_handlers.clone();
-        // debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
-        // debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-        //
-        // debug!(
-        //     "Trying to connect to the first priority address, event_handlers: {}",
-        //     event_handlers.len()
-        // );
-        //
-        // while let Some((conn_settings, weak_spawner)) = ConnMngImpl::get_settings_to_connect(&guard).await {
-        //     debug!(
-        //         "Trying to connect to electrum server with settings: {:?}",
-        //         conn_settings
-        //     );
-        //     let conn_ctx = guard.conn_ctxs.get_mut(&conn_settings.url).unwrap();
-        //     if conn_ctx.connection.is_some() {
-        //         return Err(ERRL!(
-        //             "Failed to connect to: {}, concurrent is in process",
-        //             conn_settings.url
-        //         ));
-        //     }
-        //     let (conn, on_connected_notify) =
-        //         spawn_electrum(&conn_settings, event_handlers.clone(), weak_spawner).unwrap();
-        //
-        //     let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
-        //     tokio::select! {
-        //         _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
-        //             warn!("Failed to connect to: {}, timed out", conn_settings.url);
-        //             if let Err(err) = self.clone().suspend_server(conn_settings.url.clone()).await {
-        //                 error!("Failed to suspend server: {}, error: {}", conn_settings.url, err);
-        //             }
-        //         },
-        //         _ = on_connected_notify.notified() => {
-        //             debug!("Notified, connected to: {}", conn_settings.url);
-        //             conn_ctx.connection.replace(Arc::new(AsyncMutex::new(conn)));
-        //             return Ok(());
-        //         }
-        //     }
-        // }
-        // warn!("Failed to connect to electrum server, no available conn settings");
-        // Err("No available conn settings".to_string())
-        todo!()
     }
 }
 
@@ -2857,23 +2729,101 @@ impl ConnMngTrait for ConnMng {
         debug!("Getting connection for address: {:?}", address);
         let guard = self.0.guarded.lock().await;
 
-        if let Some(address) = address {
-            return guard.conn_ctxs.get(address).expect("TODO").connection.clone();
-        } else {
-            let Some(address) = guard.active.as_ref() else {
-                return None;
-            };
-            return guard.conn_ctxs.get(address).expect("TODO").connection.clone();
-        };
-        None
+        let address: String = {
+            if address.is_some() {
+                address.map(|internal| internal.to_string())
+            } else {
+                guard.active.as_ref().cloned()
+            }
+        }?;
+
+        guard.conn_ctxs.get(&address).map(|ctx| ctx.connection.clone())?
     }
 
     async fn connect(&self) -> Result<(), String> {
         let weak_spawner = self.0.abortable_system.weak_spawner();
-        let self_clone = self.clone();
-        weak_spawner.spawn(async move {
-            self_clone.connect_loop().await;
-        });
+
+        struct ConnectingStateCtx(ConnMng, WeakSpawner);
+        impl Drop for ConnectingStateCtx {
+            fn drop(&mut self) {
+                let spawner = self.1.clone();
+                let conn_mng = self.0.clone();
+                spawner.spawn(async move {
+                    let state = conn_mng.0.guarded.lock().await;
+                    state.connecting.store(false, AtomicOrdering::Relaxed);
+                })
+            }
+        }
+
+        if self.0.guarded.lock().await.connecting.load(AtomicOrdering::Relaxed) {
+            debug!("Skip concurrent connecting, already is in process");
+            return Ok(());
+        }
+
+        let _connecting_state_ctx = ConnectingStateCtx(self.clone(), weak_spawner.clone());
+
+        let (conn_settings, weak_spawner, event_handlers) = {
+            debug!("Try lock state: {:?}", self.0.guarded);
+            let guard = self.0.guarded.lock().await;
+
+            if guard.active.is_some() {
+                return ERR!("Failed to connect, already connected");
+            }
+            debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
+            debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
+
+            let Some((conn_settings, weak_spawner)) =
+                ConnMngImpl::get_settings_to_connect(&guard).await
+                else {
+                    return ERR!("Failed to connect, no settings");
+                };
+            let event_handlers = guard.event_handlers.clone();
+            (conn_settings, weak_spawner, event_handlers)
+        };
+        debug!("conn_settings: {:?}", conn_settings);
+
+        let (conn, verified_notify) = match spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone()) {
+            Ok((conn, on_connected_notify)) => (conn, on_connected_notify),
+            Err(err) => {
+                return ERR!("spawn_electrum: {}", err);
+            },
+        };
+        {
+            debug!("lock");
+            self.0
+                .guarded
+                .lock()
+                .await
+                .conn_ctxs
+                .get_mut(&conn.addr)
+                .unwrap()
+                .connection
+                .replace(Arc::new(AsyncMutex::new(conn)));
+            debug!("unlock");
+        }
+        let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
+                warn!("Failed to connect to: {}, timed out", conn_settings.url);
+                if let Err(err) = self.clone().suspend_server(conn_settings.url.clone()).await {
+                    error!("Failed to suspend server: {}, error: {}", conn_settings.url, err);
+                }
+                if let Err(err) = self.clone().connect().await {
+                error!(
+                    "Failed to reconnect after addr connection failed: {}, error: {}",
+                    conn_settings.url, err
+                );
+            }
+            },
+            _ = verified_notify.notified() => {
+                debug!("Verified: {}, guard: {:?}", conn_settings.url, self.0.guarded);
+                let mut guard = self.0.guarded.lock().await;
+                guard.active.replace(conn_settings.url);
+                drop(guard);
+                debug!("Unlock verified guard");
+            }
+        }
+
         Ok(())
     }
 
@@ -2947,7 +2897,7 @@ impl ConnMngImpl {
 
         ConnMngImpl {
             guarded: AsyncMutex::new(ConnMngState {
-                connecting: false,
+                connecting: AtomicBool::new(false),
                 event_handlers,
                 queue: ConnMngQueue { primary, backup },
                 active: None,

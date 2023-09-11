@@ -1329,7 +1329,7 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
 
     fn on_incoming_response(&self, _data: &[u8]) {}
 
-    fn on_connected(&self, address: String, conn_spawner: WeakSpawner, verified: Arc<Notify>) -> Result<(), String> {
+    fn on_connected(&self, address: String, _conn_spawner: WeakSpawner, _verified: Arc<Notify>) -> Result<(), String> {
         debug!("Connected to the electrum server: {}", address);
         try_s!(self
             .on_event_tx
