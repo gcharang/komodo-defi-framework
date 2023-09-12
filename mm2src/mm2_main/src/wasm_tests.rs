@@ -186,11 +186,7 @@ async fn trade_base_rel_electrum(
 async fn trade_test_rick_and_morty() {
     let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
     let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
-    let alice_path_to_address = HDAccountAddressId {
-        account_id: 0,
-        chain: Bip44Chain::External,
-        address_id: 0,
-    };
+    let alice_path_to_address = HDAccountAddressId::default();
     let pairs: &[_] = &[("RICK", "MORTY")];
     trade_base_rel_electrum(
         bob_policy,

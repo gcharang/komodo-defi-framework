@@ -634,11 +634,7 @@ fn test_bch_and_slp_with_enable_hd() {
     let coins = json!([tbch_for_slp_conf(), tbch_usdf_conf()]);
 
     // HD account 0 and change 0 and address_index 0
-    let path_to_address = HDAccountAddressId {
-        account_id: 0,
-        chain: Bip44Chain::External,
-        address_id: 0,
-    };
+    let path_to_address = HDAccountAddressId::default();
     let conf_0 = Mm2TestConf::seednode_with_hd_account(BIP39_PASSPHRASE, &coins);
     let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
 

@@ -913,11 +913,7 @@ async fn trade_base_rel_electrum(
 fn trade_test_electrum_and_eth_coins() {
     let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
     let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
-    let alice_path_to_address = HDAccountAddressId {
-        account_id: 0,
-        chain: Bip44Chain::External,
-        address_id: 0,
-    };
+    let alice_path_to_address = HDAccountAddressId::default();
     let pairs = &[("ETH", "JST")];
     block_on(trade_base_rel_electrum(
         bob_policy,
@@ -7436,11 +7432,7 @@ fn test_enable_utxo_with_enable_hd() {
 
     let coins = json!([rick_conf(), btc_segwit_conf(),]);
 
-    let path_to_address = HDAccountAddressId {
-        account_id: 0,
-        chain: Bip44Chain::External,
-        address_id: 0,
-    };
+    let path_to_address = HDAccountAddressId::default();
     let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
     let (_dump_log, _dump_dashboard) = mm_hd_0.mm_dump();
@@ -7506,11 +7498,7 @@ fn test_enable_coins_with_enable_hd() {
 
     let coins = json!([eth_testnet_conf(), eth_jst_testnet_conf(), tqrc20_conf(),]);
 
-    let path_to_address = HDAccountAddressId {
-        account_id: 0,
-        chain: Bip44Chain::External,
-        address_id: 0,
-    };
+    let path_to_address = HDAccountAddressId::default();
     let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
     let (_dump_log, _dump_dashboard) = mm_hd_0.mm_dump();
@@ -7576,11 +7564,7 @@ fn test_enable_qrc20_with_enable_hd() {
 
     let coins = json!([eth_testnet_conf(), eth_jst_testnet_conf(), tqrc20_conf(),]);
 
-    let path_to_address = HDAccountAddressId {
-        account_id: 0,
-        chain: Bip44Chain::External,
-        address_id: 0,
-    };
+    let path_to_address = HDAccountAddressId::default();
     let conf_0 = Mm2TestConf::seednode_with_hd_account(PASSPHRASE, &coins);
     let mm_hd_0 = MarketMakerIt::start(conf_0.conf, conf_0.rpc_password, None).unwrap();
     let (_dump_log, _dump_dashboard) = mm_hd_0.mm_dump();
