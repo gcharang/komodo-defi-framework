@@ -2204,7 +2204,7 @@ impl From<EthGasDetailsErr> for WithdrawError {
 impl From<Bip32Error> for WithdrawError {
     fn from(e: Bip32Error) -> Self {
         let error = format!("Error deriving key: {}", e);
-        WithdrawError::InternalError(error)
+        WithdrawError::UnexpectedFromAddress(error)
     }
 }
 

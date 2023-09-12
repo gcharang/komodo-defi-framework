@@ -239,14 +239,17 @@ impl From<StandardHDPath> for HDAccountAddressId {
 }
 
 impl HDAccountAddressId {
-    pub fn to_derivation_path(&self, path_to_coin: &StandardHDPathToCoin) -> DerivationPath {
+    pub fn to_derivation_path(
+        &self,
+        path_to_coin: &StandardHDPathToCoin,
+    ) -> Result<DerivationPath, MmError<Bip32Error>> {
         let mut account_der_path = path_to_coin.to_derivation_path();
-        account_der_path.push(ChildNumber::new(self.account_id, true).unwrap());
+        account_der_path.push(ChildNumber::new(self.account_id, true)?);
         account_der_path.push(self.chain.to_child_number());
-        account_der_path.push(ChildNumber::new(self.address_id, false).unwrap());
+        account_der_path.push(ChildNumber::new(self.address_id, false)?);
         drop_mutability!(account_der_path);
 
-        account_der_path
+        Ok(account_der_path)
     }
 }
 

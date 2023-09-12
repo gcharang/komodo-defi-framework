@@ -117,7 +117,7 @@ impl TendermintToken {
                     let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = platform
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin)?)?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &platform.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
@@ -624,7 +624,7 @@ impl MmCoin for TendermintToken {
                     let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = platform
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin)?)?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &platform.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)

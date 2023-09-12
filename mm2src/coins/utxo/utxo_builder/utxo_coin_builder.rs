@@ -89,6 +89,7 @@ pub enum UtxoCoinBuildError {
     #[display(fmt = "SPV params verificaiton failed. Error: {_0}")]
     SPVError(SPVError),
     ErrorCalculatingStartingHeight(String),
+    InvalidPathToAddress(String),
 }
 
 impl From<UtxoConfError> for UtxoCoinBuildError {
@@ -185,7 +186,11 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
             .as_ref()
             .or_mm_err(|| UtxoConfError::DerivationPathIsNotSet)?;
         let secret = global_hd_ctx
-            .derive_secp256k1_secret(&path_to_address.to_derivation_path(path_to_coin))
+            .derive_secp256k1_secret(
+                &path_to_address
+                    .to_derivation_path(path_to_coin)
+                    .mm_err(|e| UtxoCoinBuildError::InvalidPathToAddress(e.to_string()))?,
+            )
             .mm_err(|e| UtxoCoinBuildError::Internal(e.to_string()))?;
         let private = Private {
             prefix: conf.wif_prefix,

@@ -14,6 +14,7 @@ pub enum EthActivationV2Error {
     InvalidPayload(String),
     InvalidSwapContractAddr(String),
     InvalidFallbackSwapContract(String),
+    InvalidPathToAddress(String),
     #[display(fmt = "Expected either 'chain_id' or 'rpc_chain_id' to be set")]
     #[cfg(target_arch = "wasm32")]
     ExpectedRpcChainId,
@@ -348,7 +349,11 @@ pub(crate) async fn build_address_and_priv_key_policy(
             let path_to_coin = json::from_value(conf["derivation_path"].clone())
                 .map_to_mm(|e| EthActivationV2Error::ErrorDeserializingDerivationPath(e.to_string()))?;
             let raw_priv_key = global_hd_ctx
-                .derive_secp256k1_secret(&path_to_address.to_derivation_path(&path_to_coin))
+                .derive_secp256k1_secret(
+                    &path_to_address
+                        .to_derivation_path(&path_to_coin)
+                        .mm_err(|e| EthActivationV2Error::InvalidPathToAddress(e.to_string()))?,
+                )
                 .mm_err(|e| EthActivationV2Error::InternalError(e.to_string()))?;
             let activated_key = KeyPair::from_secret_slice(raw_priv_key.as_slice())
                 .map_to_mm(|e| EthActivationV2Error::InternalError(e.to_string()))?;

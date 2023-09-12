@@ -264,6 +264,7 @@ pub enum TendermintInitErrorKind {
     RpcClientInitError(String),
     InvalidChainId(String),
     InvalidDenom(String),
+    InvalidPathToAddress(String),
     #[display(fmt = "'derivation_path' field is not found in config")]
     DerivationPathIsNotSet,
     #[display(fmt = "'account' field is not found in config")]
@@ -560,7 +561,7 @@ impl TendermintCoin {
                     let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = coin
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin)?)?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &coin.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
@@ -1908,7 +1909,7 @@ impl MmCoin for TendermintCoin {
                     let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                     let priv_key = coin
                         .priv_key_policy
-                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
+                        .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin)?)?;
                     let account_id = account_id_from_privkey(priv_key.as_slice(), &coin.account_prefix)
                         .map_err(|e| WithdrawError::InternalError(e.to_string()))?;
                     (account_id, priv_key)
@@ -2777,7 +2778,12 @@ pub fn tendermint_priv_key_policy(
                 kind: TendermintInitErrorKind::DerivationPathIsNotSet,
             })?;
             let activated_priv_key = global_hd
-                .derive_secp256k1_secret(&path_to_address.to_derivation_path(path_to_coin))
+                .derive_secp256k1_secret(&path_to_address.to_derivation_path(path_to_coin).mm_err(|e| {
+                    TendermintInitError {
+                        ticker: ticker.to_string(),
+                        kind: TendermintInitErrorKind::InvalidPathToAddress(e.to_string()),
+                    }
+                })?)
                 .mm_err(|e| TendermintInitError {
                     ticker: ticker.to_string(),
                     kind: TendermintInitErrorKind::InvalidPrivKey(e.to_string()),

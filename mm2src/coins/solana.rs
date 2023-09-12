@@ -190,7 +190,8 @@ pub async fn solana_coin_with_policy(
         PrivKeyBuildPolicy::IguanaPrivKey(priv_key) => priv_key,
         PrivKeyBuildPolicy::GlobalHDAccount(global_hd) => {
             let path_to_coin: StandardHDPathToCoin = try_s!(json::from_value(conf["derivation_path"].clone()));
-            try_s!(global_hd.derive_secp256k1_secret(&params.path_to_address.to_derivation_path(&path_to_coin)))
+            let derivation_path = try_s!(params.path_to_address.to_derivation_path(&path_to_coin));
+            try_s!(global_hd.derive_secp256k1_secret(&derivation_path))
         },
         PrivKeyBuildPolicy::Trezor => return ERR!("{}", PrivKeyPolicyNotAllowed::HardwareWalletNotSupported),
     };

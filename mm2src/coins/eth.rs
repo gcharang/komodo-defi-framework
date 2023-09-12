@@ -715,7 +715,7 @@ async fn withdraw_impl(coin: EthCoin, req: WithdrawRequest) -> WithdrawResult {
             let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
             let raw_priv_key = coin
                 .priv_key_policy
-                .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin))?;
+                .hd_wallet_derived_priv_key_or_err(&path_to_address.to_derivation_path(path_to_coin)?)?;
             let key_pair = KeyPair::from_secret_slice(raw_priv_key.as_slice())
                 .map_to_mm(|e| WithdrawError::InternalError(e.to_string()))?;
             let address = key_pair.address();
