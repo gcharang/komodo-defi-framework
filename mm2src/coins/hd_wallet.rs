@@ -410,13 +410,13 @@ pub trait HDWalletOps: Send + Sync {
         }
     }
 
-    /// Retrieves the address that might be enabled for swap operations.
+    /// Retrieves the address that might be enabled for operations that require a single enabled address, e.g. swaps.
     ///
     /// # Returns
     ///
     /// An `Option` wrapping a value of the associated `Address` type.
     /// Returns `Some(Address)` if the address is available and enabled,
-    /// or `None` if there's no address enabled for swap operations at the moment.
+    /// or `None` if there's no address enabled for single address operations at the moment.
     async fn get_enabled_address(&self) -> Option<Self::Address>;
 }
 
