@@ -1605,6 +1605,12 @@ impl MmCoin for SlpToken {
     fn withdraw(&self, req: WithdrawRequest) -> WithdrawFut {
         let coin = self.clone();
         let fut = async move {
+            if req.from.is_some() {
+                return MmError::err(WithdrawError::UnsupportedError(
+                    "Withdraw from a specific address is not supported for slp yet".to_owned(),
+                ));
+            }
+
             let my_address = coin
                 .platform_coin
                 .as_ref()
