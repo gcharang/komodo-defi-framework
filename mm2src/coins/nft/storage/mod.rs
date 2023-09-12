@@ -29,7 +29,6 @@ pub enum RemoveNftResult {
 /// Defines the standard errors that can occur in NFT storage operations
 pub trait NftStorageError: std::fmt::Debug + NotMmError + NotEqual + Send {}
 
-/// Conversion trait from `NftStorageError` to `WithdrawError`.
 impl<T: NftStorageError> From<T> for WithdrawError {
     fn from(err: T) -> Self { WithdrawError::DbError(format!("{:?}", err)) }
 }
