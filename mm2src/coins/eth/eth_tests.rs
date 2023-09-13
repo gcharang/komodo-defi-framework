@@ -60,7 +60,7 @@ pub fn jst_distributor() -> EthCoin {
         "urls": ETH_DEV_NODES,
         "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
     });
-    let seed = get_passphrase!(".env.client", "BOB_PASSPHRASE").unwrap();
+    let seed = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
     let keypair = key_pair_from_seed(&seed).unwrap();
     let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(keypair.private().secret);
     block_on(eth_coin_from_conf_and_request(
@@ -380,10 +380,7 @@ fn send_and_refund_erc20_payment() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let refund = coin
-        .send_maker_refunds_payment(maker_refunds_payment_args)
-        .wait()
-        .unwrap();
+    let refund = block_on(coin.send_maker_refunds_payment(maker_refunds_payment_args)).unwrap();
     log!("{:?}", refund);
 
     let status = block_on(
@@ -470,10 +467,7 @@ fn send_and_refund_eth_payment() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let refund = coin
-        .send_maker_refunds_payment(maker_refunds_payment_args)
-        .wait()
-        .unwrap();
+    let refund = block_on(coin.send_maker_refunds_payment(maker_refunds_payment_args)).unwrap();
 
     log!("{:?}", refund);
 
