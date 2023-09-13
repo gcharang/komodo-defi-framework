@@ -158,7 +158,9 @@ impl Cli {
             Command::Wallet(WalletCommands::SendRawTransaction(args)) => {
                 proc.send_raw_transaction(args.into(), args.bare_output).await?
             },
-            Command::Wallet(WalletCommands::Withdraw(args)) => proc.withdraw(args.into(), args.bare_output).await?,
+            Command::Wallet(WalletCommands::Withdraw(args)) => {
+                proc.withdraw(args.try_into()?, args.bare_output).await?
+            },
             Command::Wallet(WalletCommands::GetRawTransaction(args)) => {
                 proc.get_raw_transaction(args.into(), args.bare_output).await?
             },

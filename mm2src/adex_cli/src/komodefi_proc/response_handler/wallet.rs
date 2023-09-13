@@ -8,9 +8,8 @@ use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io, PagingOptionsEnum};
 use mm2_rpc::data::version2::{GetPublicKeyHashResponse, GetPublicKeyResponse, GetRawTransactionResponse};
 
-use super::formatters::{format_bytes, format_datetime_msec, format_datetime_sec, format_ratio, term_table_blank,
-                        write_field_option, write_sequence, writeln_field, COMMON_INDENT, COMMON_PRECISION,
-                        ZERO_INDENT};
+use super::formatters::{format_bytes, format_datetime_sec, format_ratio, term_table_blank, write_field_option,
+                        write_sequence, writeln_field, COMMON_INDENT, COMMON_PRECISION, ZERO_INDENT};
 use crate::error_anyhow;
 use crate::rpc_data::wallet::{ConvertAddressResponse, ConvertUtxoAddressResponse, KmdRewardsInfoResponse,
                               MyTxHistoryDetails, MyTxHistoryResponse, MyTxHistoryResponseV2, ShowPrivateKeyResponse,
@@ -42,7 +41,7 @@ pub(super) fn on_withdraw(writer: &mut dyn Write, response: WithdrawResponse, ba
     writeln_field(
         writer,
         "timestamp",
-        format_datetime_msec(response.timestamp)?,
+        format_datetime_sec(response.timestamp)?,
         ZERO_INDENT,
     );
     write_field_option(writer, "fee_details", response.fee_details, ZERO_INDENT);

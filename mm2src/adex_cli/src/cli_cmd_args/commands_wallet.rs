@@ -138,7 +138,7 @@ pub(crate) struct WithdrawArgs {
     )]
     fee: Option<WithdrawFeeArg>,
     #[command(flatten)]
-    from: WithdrawFromArgs,
+    from: Option<WithdrawFromArgs>,
     #[arg(
         long,
         short,
@@ -287,16 +287,23 @@ fn parse_withdraw_fee(value: &str) -> Result<WithdrawFeeArg> {
     }
 }
 
-impl From<&mut WithdrawArgs> for WithdrawRequest {
-    fn from(value: &mut WithdrawArgs) -> Self {
-        WithdrawRequest {
+impl TryFrom<&mut WithdrawArgs> for WithdrawRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &mut WithdrawArgs) -> std::result::Result<Self, Self::Error> {
+        let from = if let Some(from) = value.from.as_mut() {
+            Some(WithdrawFrom::try_from(from)?)
+        } else {
+            None
+        };
+        Ok(WithdrawRequest {
             coin: take(&mut value.coin),
-            from: None,
+            from,
             to: take(&mut value.to),
             amount: value.amount.amount.take().unwrap_or_default(),
             max: value.amount.max,
             fee: value.fee.as_mut().map(WithdrawFee::from),
-        }
+        })
     }
 }
 
