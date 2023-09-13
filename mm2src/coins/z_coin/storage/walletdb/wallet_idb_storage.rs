@@ -142,7 +142,10 @@ impl<'a> WalletIndexedDb {
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
     }
 
-    pub async fn init_accounts_table(&self, extfvks: &[ExtendedFullViewingKey]) -> MmResult<(), ZcoinStorageError> {
+    pub(crate) async fn init_accounts_table(
+        &self,
+        extfvks: &[ExtendedFullViewingKey],
+    ) -> MmResult<(), ZcoinStorageError> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -189,7 +192,7 @@ impl<'a> WalletIndexedDb {
         Ok(())
     }
 
-    async fn init_blocks_table(
+    pub(crate) async fn init_blocks_table(
         &self,
         height: BlockHeight,
         hash: BlockHash,
@@ -199,14 +202,14 @@ impl<'a> WalletIndexedDb {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
-        let walletdb_account_table = db_transaction.table::<WalletDbAccountsTable>().await?;
+        let walletdb_account_table = db_transaction.table::<WalletDbBlocksTable>().await?;
 
         // check if account exists
         let maybe_min_account = walletdb_account_table
             .cursor_builder()
             .only("ticker", &ticker)?
             .bound("height", 0u32, u32::MAX)
-            .open_cursor(WalletDbTransactionsTable::TICKER_BLOCK_INDEX)
+            .open_cursor(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
             .await?
             .next()
             .await?;
@@ -267,6 +270,42 @@ impl WalletIndexedDb {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn get_balance(&self, account: AccountId) -> MmResult<Amount, ZcoinStorageError> {
+        let ticker = self.ticker.clone();
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let rec_note_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
+
+        let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
+            .with_value(&ticker)?
+            .with_value(account.0.to_bigint())?;
+        let maybe_notes = rec_note_table.get_items_by_multi_index(index_keys).await?;
+
+        let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
+        let txs = tx_table.get_items("ticker", &ticker).await?;
+
+        let mut balance: i64 = 0;
+        for (note_id, note) in &maybe_notes {
+            let spent = &note.spent;
+            let value = &note.value;
+
+            for (tx_id, tx) in &txs {
+                if *tx_id == note.tx && note.spent.is_none() && tx.block.is_some() {
+                    let value_i64 = note.value.to_i64().expect("BigInt is too large to fit in an i64");
+                    info!("VALUE {}", value_i64);
+                    balance += value_i64;
+                }
+            }
+        }
+
+        match Amount::from_i64(balance) {
+            Ok(amount) if !amount.is_negative() => Ok(amount),
+            _ => MmError::err(ZcoinStorageError::CorruptedData(
+                "Sum of values in received_notes is out of range".to_string(),
+            )),
+        }
     }
 
     pub async fn put_tx_data(&self, tx: &Transaction, created_at: Option<String>) -> MmResult<i64, ZcoinStorageError> {

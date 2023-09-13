@@ -38,11 +38,13 @@ mod wallet_db_storage_tests {
     use super::*;
     use crate::ZcoinProtocolInfo;
     use common::log::info;
+    use common::log::wasm_log::register_wasm_log;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use wasm_bindgen_test::*;
     use zcash_client_backend::wallet::AccountId;
     use zcash_extras::WalletRead;
-    // use zcash_primitives::transaction::components::Amount;
+    use zcash_primitives::block::BlockHash;
+    use zcash_primitives::transaction::components::Amount;
     use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -80,23 +82,72 @@ mod wallet_db_storage_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn test_intialize_wallet_db_impl() {
+    async fn test_empty_database_has_no_balance() {
         let db = wallet_db_from_zcoin_builder_for_test(TICKER).await;
 
         // Add an account to the wallet
         let extsk = ExtendedSpendingKey::master(&[]);
         let extfvks = [ExtendedFullViewingKey::from(&extsk)];
-        db.init_accounts_table(&extfvks).await.unwrap();
+        assert!(db.init_accounts_table(&extfvks).await.is_ok());
 
         // The account should be empty
-        // assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+        assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
 
         // We can't get an anchor height, as we have not scanned any blocks.
         assert_eq!(db.get_target_and_anchor_heights().await.unwrap(), None);
 
         // An invalid account has zero balance
         assert!(db.get_address(AccountId(1)).await.is_err());
-        info!("ADD {:?}", db.get_address(AccountId(1)).await);
-        // assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+        assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_init_accounts_table_only_works_once() {
+        let db = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+
+        // We can call the function as many times as we want with no data
+        assert!(db.init_accounts_table(&[]).await.is_ok());
+        assert!(db.init_accounts_table(&[]).await.is_ok());
+
+        // First call with data should initialise the accounts table.
+        let extfvks = [ExtendedFullViewingKey::from(&ExtendedSpendingKey::master(&[]))];
+        assert!(db.init_accounts_table(&extfvks).await.is_ok());
+
+        // Subsequent calls should return an error
+        assert!(db.init_accounts_table(&extfvks).await.is_ok());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_init_blocks_table_only_works_once() {
+        let db = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+
+        // First call with data should initialise the blocks table
+        assert!(db
+            .init_blocks_table(BlockHeight::from(1), BlockHash([1; 32]), 1, &[])
+            .await
+            .is_ok());
+
+        // Subsequent calls should return an error
+        assert!(db
+            .init_blocks_table(BlockHeight::from(2), BlockHash([2; 32]), 2, &[])
+            .await
+            .is_err());
+    }
+
+    #[wasm_bindgen_test]
+    async fn init_accounts_table_stores_correct_address() {
+        let db = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+
+        register_wasm_log();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvks = [ExtendedFullViewingKey::from(&extsk)];
+        assert!(db.init_accounts_table(&extfvks).await.is_ok());
+
+        // The account's address should be in the data DB.
+        let pa = db.get_address(AccountId(0)).await.unwrap();
+        info!("address: {pa:?}");
+        assert_eq!(pa.unwrap(), extsk.default_address().unwrap().1);
     }
 }
