@@ -38,8 +38,15 @@ pub(crate) struct WithdrawRequest {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub(crate) enum WithdrawFrom {
-    AddressId(HDAccountAddressId),
     DerivationPath { derivation_path: String },
+    HDWalletAddress(StandardHDCoinAddress),
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct StandardHDCoinAddress {
+    pub account: u32,
+    pub is_change: bool,
+    pub address_index: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

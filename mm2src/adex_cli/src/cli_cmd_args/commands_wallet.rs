@@ -16,9 +16,8 @@ use mm2_rpc::data::version2::GetRawTransactionRequest;
 use crate::rpc_data::wallet::{CashAddressNetwork as RpcCashAddressNetwork,
                               ConvertAddressFormat as RpcConvertAddressFormat, ConvertAddressRequest,
                               ConvertUtxoAddressRequest, MyTxHistoryRequest, MyTxHistoryRequestV2,
-                              ShowPrivateKeyRequest, ValidateAddressRequest};
-use crate::rpc_data::{Bip44Chain, HDAccountAddressId, SendRawTransactionRequest, WithdrawFee, WithdrawFrom,
-                      WithdrawRequest};
+                              ShowPrivateKeyRequest, StandardHDCoinAddress, ValidateAddressRequest};
+use crate::rpc_data::{SendRawTransactionRequest, WithdrawFee, WithdrawFrom, WithdrawRequest};
 use crate::{error_anyhow, error_bail};
 
 #[derive(Subcommand)]
@@ -157,19 +156,12 @@ struct WithdrawFromArgs {
         help = "Derivation path to determine the source of the derived value in more detail"
     )]
     derivation_path: Option<String>,
-    #[arg(
-        long,
-        help = "AddressId hd_account_id to determine the source of the derived value in more detail"
-    )]
+    #[arg(long, help = "Account index of the same crypto currency")]
     hd_account_id: Option<u32>,
-    #[arg(
-        long,
-        value_enum,
-        help = "AddressId chain to determine the source of the derived value in more detail"
-    )]
-    hd_account_chain: Option<Bip44ChainArg>,
-    #[arg(long, help = "AddressId to determine the source of the derived value in more detail")]
-    hd_account_address_id: Option<u32>,
+    #[arg(long, value_enum, help = "Is change")]
+    hd_is_change: Option<bool>,
+    #[arg(long, help = "An incremental address index for the account")]
+    hd_address_index: Option<u32>,
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -336,23 +328,19 @@ impl TryFrom<&mut WithdrawFromArgs> for WithdrawFrom {
             return Ok(WithdrawFrom::DerivationPath { derivation_path });
         };
         let account_id = value.hd_account_id.take();
-        let chain = value.hd_account_chain.take();
-        let address_id = value.hd_account_address_id.take();
-        if let (Some(account_id), Some(chain), Some(address_id)) = (account_id, chain.clone(), address_id) {
-            let chain = match chain {
-                Bip44ChainArg::Internal => Bip44Chain::Internal,
-                Bip44ChainArg::External => Bip44Chain::External,
-            };
-            return Ok(WithdrawFrom::AddressId(HDAccountAddressId {
-                account_id,
-                chain,
-                address_id,
+        let is_change = value.hd_is_change.take();
+        let address_id = value.hd_address_index.take();
+        if let (Some(account), Some(is_change), Some(address_index)) = (account_id, is_change.clone(), address_id) {
+            return Ok(WithdrawFrom::HDWalletAddress(StandardHDCoinAddress {
+                account,
+                is_change,
+                address_index,
             }));
         };
         error_bail!(
             "Failed to get withdraw_from due to params incompatibility: account_id: {:?}, chain: {:?}, address_id: {:?}",
             account_id,
-            chain,
+            is_change,
             address_id
         )
     }
