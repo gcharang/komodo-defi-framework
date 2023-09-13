@@ -397,8 +397,9 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
 
+        let chain_str = chain.to_string();
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_INDEX)
-            .with_value(chain.to_string())?
+            .with_value(&chain_str)?
             .with_value(&token_address)?;
 
         let nfts: Result<Vec<Nft>, _> = table
@@ -414,7 +415,7 @@ impl NftListStorageOps for IndexedDbNftStorage {
             drop_mutability!(nft);
 
             let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-                .with_value(chain.to_string())?
+                .with_value(&chain_str)?
                 .with_value(eth_addr_to_hex(&nft.common.token_address))?
                 .with_value(nft.common.token_id.to_string())?;
 
@@ -560,8 +561,9 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
 
+        let chain_str = chain.to_string();
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-            .with_value(chain.to_string())?
+            .with_value(&chain_str)?
             .with_value(&transfer_meta.token_address)?
             .with_value(transfer_meta.token_id.to_string())?;
 
@@ -583,7 +585,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
             drop_mutability!(transfer);
 
             let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
-                .with_value(chain.to_string())?
+                .with_value(&chain_str)?
                 .with_value(&transfer.common.transaction_hash)?
                 .with_value(transfer.common.log_index)?;
 
@@ -655,8 +657,9 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
 
+        let chain_str = chain.to_string();
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_INDEX)
-            .with_value(chain.to_string())?
+            .with_value(&chain_str)?
             .with_value(&token_address)?;
 
         let transfers: Result<Vec<NftTransferHistory>, _> = table
@@ -672,7 +675,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
             drop_mutability!(transfer);
 
             let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
-                .with_value(chain.to_string())?
+                .with_value(&chain_str)?
                 .with_value(&transfer.common.transaction_hash)?
                 .with_value(transfer.common.log_index)?;
 
