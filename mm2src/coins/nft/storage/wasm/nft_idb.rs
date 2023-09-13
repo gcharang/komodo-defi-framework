@@ -12,6 +12,8 @@ const DB_VERSION: u32 = 1;
 /// no other operations can interfere, maintaining data integrity.
 pub type NftCacheIDBLocked<'a> = DbLocked<'a, NftCacheIDB>;
 
+pub struct LockedIndexedDbNftStorage<'a>(pub NftCacheIDBLocked<'a>);
+
 /// Represents the IndexedDB instance specifically designed for caching NFT data.
 ///
 /// This struct provides an abstraction over the raw IndexedDB, offering methods

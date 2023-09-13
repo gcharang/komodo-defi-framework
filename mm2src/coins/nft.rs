@@ -156,8 +156,14 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
 /// database errors, and spam protection errors.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
+    let _lock_guard = nft_ctx.guard.lock().await;
+    // todo impl lock_db for wasm and not wasm targets where lock result implements
+    // NftListStorageOps and NftTransferHistoryStorageOps traits.
+    // something like this
+    // let storage = nft_ctx.nft_cache_db.lock_db().await?;
 
+    // todo remove this line let storage = NftStorageBuilder::new(&ctx).build()?;
+    // as we are going to call StorageOps from locked storage above.
     let storage = NftStorageBuilder::new(&ctx).build()?;
     for chain in req.chains.iter() {
         if !NftTransferHistoryStorageOps::is_initialized(&storage, chain).await? {

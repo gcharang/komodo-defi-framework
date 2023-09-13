@@ -1,7 +1,7 @@
 use crate::eth::eth_addr_to_hex;
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCtx, NftList, NftListFilters, NftTransferHistory,
                               NftsTransferHistoryList, TransferMeta, TransferStatus};
-use crate::nft::storage::wasm::nft_idb::{NftCacheIDB, NftCacheIDBLocked};
+use crate::nft::storage::wasm::nft_idb::{LockedIndexedDbNftStorage, NftCacheIDB, NftCacheIDBLocked};
 use crate::nft::storage::wasm::{WasmNftCacheError, WasmNftCacheResult};
 use crate::nft::storage::{get_offset_limit, CreateNftStorageError, NftListStorageOps, NftTokenAddrId,
                           NftTransferHistoryFilters, NftTransferHistoryStorageOps, RemoveNftResult};
@@ -891,4 +891,192 @@ fn nft_details_from_item(item: NftListTable) -> WasmNftCacheResult<Nft> {
 
 fn transfer_details_from_item(item: NftTransferHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
     json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
+}
+
+#[async_trait]
+impl NftListStorageOps for LockedIndexedDbNftStorage<'_> {
+    type Error = WasmNftCacheError;
+
+    async fn init(&self, _chain: &Chain) -> MmResult<(), Self::Error> { Ok(()) }
+
+    async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { Ok(true) }
+
+    async fn get_nft_list(
+        &self,
+        _chains: Vec<Chain>,
+        _max: bool,
+        _limit: usize,
+        _page_number: Option<NonZeroUsize>,
+        _filters: Option<NftListFilters>,
+    ) -> MmResult<NftList, Self::Error> {
+        todo!()
+    }
+
+    async fn add_nfts_to_list<I>(&self, chain: Chain, nfts: I, last_scanned_block: u64) -> MmResult<(), Self::Error>
+    where
+        I: IntoIterator<Item = Nft> + Send + 'static,
+        I::IntoIter: Send,
+    {
+        let db_transaction = self.0.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+        for nft in nfts {
+            let nft_item = NftListTable::from_nft(&nft)?;
+            nft_table.add_item(&nft_item).await?;
+        }
+        let last_scanned_block = LastScannedBlockTable {
+            chain: chain.to_string(),
+            last_scanned_block: BeBigUint::from(last_scanned_block),
+        };
+        last_scanned_block_table
+            .replace_item_by_unique_index("chain", chain.to_string(), &last_scanned_block)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_nft(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<Option<Nft>, Self::Error> {
+        todo!()
+    }
+
+    async fn remove_nft_from_list(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+        _scanned_block: u64,
+    ) -> MmResult<RemoveNftResult, Self::Error> {
+        todo!()
+    }
+
+    async fn get_nft_amount(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<Option<String>, Self::Error> {
+        todo!()
+    }
+
+    async fn refresh_nft_metadata(&self, _chain: &Chain, _nft: Nft) -> MmResult<(), Self::Error> { todo!() }
+
+    async fn get_last_block_number(&self, _chain: &Chain) -> MmResult<Option<u64>, Self::Error> { todo!() }
+
+    async fn get_last_scanned_block(&self, _chain: &Chain) -> MmResult<Option<u64>, Self::Error> { todo!() }
+
+    async fn update_nft_amount(&self, _chain: &Chain, _nft: Nft, _scanned_block: u64) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+
+    async fn update_nft_amount_and_block_number(&self, _chain: &Chain, _nft: Nft) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+
+    async fn get_nfts_by_token_address(
+        &self,
+        _chain: Chain,
+        _token_address: String,
+    ) -> MmResult<Vec<Nft>, Self::Error> {
+        todo!()
+    }
+
+    async fn update_nft_spam_by_token_address(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _possible_spam: bool,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl NftTransferHistoryStorageOps for LockedIndexedDbNftStorage<'_> {
+    type Error = WasmNftCacheError;
+
+    async fn init(&self, _chain: &Chain) -> MmResult<(), Self::Error> { todo!() }
+
+    async fn is_initialized(&self, _chain: &Chain) -> MmResult<bool, Self::Error> { todo!() }
+
+    async fn get_transfer_history(
+        &self,
+        _chains: Vec<Chain>,
+        _max: bool,
+        _limit: usize,
+        _page_number: Option<NonZeroUsize>,
+        _filters: Option<NftTransferHistoryFilters>,
+    ) -> MmResult<NftsTransferHistoryList, Self::Error> {
+        todo!()
+    }
+
+    async fn add_transfers_to_history<I>(&self, _chain: Chain, _transfers: I) -> MmResult<(), Self::Error>
+    where
+        I: IntoIterator<Item = NftTransferHistory> + Send + 'static,
+        I::IntoIter: Send,
+    {
+        todo!()
+    }
+
+    async fn get_last_block_number(&self, _chain: &Chain) -> MmResult<Option<u64>, Self::Error> { todo!() }
+
+    async fn get_transfers_from_block(
+        &self,
+        _chain: Chain,
+        _from_block: u64,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_transfers_by_token_addr_id(
+        &self,
+        _chain: Chain,
+        _token_address: String,
+        _token_id: BigDecimal,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_transfer_by_tx_hash_and_log_index(
+        &self,
+        _chain: &Chain,
+        _transaction_hash: String,
+        _log_index: u32,
+    ) -> MmResult<Option<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn update_transfers_meta_by_token_addr_id(
+        &self,
+        _chain: &Chain,
+        _transfer_meta: TransferMeta,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+
+    async fn get_transfers_with_empty_meta(&self, _chain: Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_transfers_by_token_address(
+        &self,
+        _chain: Chain,
+        _token_address: String,
+    ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
+        todo!()
+    }
+
+    async fn update_transfer_spam_by_token_address(
+        &self,
+        _chain: &Chain,
+        _token_address: String,
+        _possible_spam: bool,
+    ) -> MmResult<(), Self::Error> {
+        todo!()
+    }
+
+    async fn get_token_addresses(&self, _chain: Chain) -> MmResult<HashSet<Address>, Self::Error> { todo!() }
 }

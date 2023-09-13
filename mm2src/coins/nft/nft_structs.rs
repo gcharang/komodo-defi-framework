@@ -1,9 +1,11 @@
 use crate::nft::eth_addr_to_hex;
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
+#[cfg(not(target_arch = "wasm32"))] use common::async_blocking;
 use common::ten;
 use ethereum_types::Address;
 use futures::lock::Mutex as AsyncMutex;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
+use mm2_err_handle::mm_error::MmResult;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::de::{self, Deserializer};
@@ -16,12 +18,26 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 
+#[cfg(target_arch = "wasm32")]
+use mm2_err_handle::map_mm_error::MapMmError;
+
 use crate::nft::nft_errors::ParseChainTypeError;
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::nft::storage::sql_storage::{LockedSqliteNftStorage, SqliteNftStorage};
+
+#[cfg(not(target_arch = "wasm32"))]
+use db_common::sqlite::rusqlite::Error as SqlError;
+
+use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
 
 #[cfg(target_arch = "wasm32")]
-use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
+use crate::nft::storage::wasm::nft_idb::{LockedIndexedDbNftStorage, NftCacheIDB};
+
+#[cfg(target_arch = "wasm32")]
+use crate::nft::storage::wasm::WasmNftCacheError;
 
 /// Represents a request to list NFTs owned by the user across specified chains.
 ///
@@ -586,27 +602,76 @@ impl From<Nft> for TransferMeta {
 /// This struct provides an interface for interacting with the underlying data structures
 /// required for NFT operations, including guarding against concurrent accesses and
 /// dealing with platform-specific storage mechanisms.
+#[allow(dead_code)]
 pub(crate) struct NftCtx {
     /// An asynchronous mutex to guard against concurrent NFT operations, ensuring data consistency.
     pub(crate) guard: Arc<AsyncMutex<()>>,
     #[cfg(target_arch = "wasm32")]
     /// Platform-specific database for caching NFT data.
     pub(crate) nft_cache_db: SharedDb<NftCacheIDB>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) nft_cache_db: SqliteNftStorage,
 }
 
 impl NftCtx {
     /// Create a new `NftCtx` from the given MM context.
     ///
     /// If an `NftCtx` instance doesn't already exist in the MM context, it gets created and cached for subsequent use.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
+        Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
+            let sqlite_connection = ctx
+                .sqlite_connection
+                .ok_or("sqlite_connection is not initialized".to_owned())?;
+            Ok(NftCtx {
+                guard: Arc::new(AsyncMutex::new(())),
+                nft_cache_db: SqliteNftStorage::new_construct(sqlite_connection.clone()),
+            })
+        })))
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
         Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
             Ok(NftCtx {
                 guard: Arc::new(AsyncMutex::new(())),
-                #[cfg(target_arch = "wasm32")]
                 nft_cache_db: ConstructibleDb::new(ctx).into_shared(),
             })
         })))
     }
+
+    #[allow(dead_code)]
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn lock_db(&self) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
+        async_blocking(move || {
+            let locked_conn = self.nft_cache_db.0.lock().unwrap();
+            Ok(LockedSqliteNftStorage(locked_conn))
+        })
+        .await
+    }
+
+    #[allow(dead_code)]
+    #[cfg(target_arch = "wasm32")]
+    async fn lock_db(&self) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
+        let locked_db = self
+            .nft_cache_db
+            .get_or_initialize()
+            .await
+            .mm_err(WasmNftCacheError::from)?;
+        Ok(LockedIndexedDbNftStorage(locked_db))
+    }
+}
+
+pub enum LockDBError {
+    #[cfg(target_arch = "wasm32")]
+    WasmNftCacheError(WasmNftCacheError),
+    #[cfg(not(target_arch = "wasm32"))]
+    SqlError(SqlError),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<WasmNftCacheError> for LockDBError {
+    fn from(e: WasmNftCacheError) -> Self { LockDBError::WasmNftCacheError(e) }
 }
 
 #[derive(Debug, Serialize)]
