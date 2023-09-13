@@ -7,11 +7,8 @@ cfg_native!(
 
 #[cfg(target_arch = "wasm32")] pub mod wallet_idb_storage;
 
-use crate::z_coin::{extended_spending_key_from_protocol_info_and_policy, CheckPointBlockInfo, ZCoinBuilder,
-                    ZcoinClientInitError};
-use mm2_core::mm_ctx::MmArc;
+use crate::z_coin::{CheckPointBlockInfo, ZcoinClientInitError};
 use mm2_err_handle::prelude::MmError;
-use std::path::PathBuf;
 #[cfg(target_arch = "wasm32")]
 use wallet_idb_storage::WalletIndexedDb;
 use zcash_primitives::consensus::BlockHeight;
@@ -36,12 +33,25 @@ async fn is_init_height_modified(
     Ok((init_block_height != min_sync_height, init_block_height))
 }
 
-use crate::z_coin::{ZcoinActivationParams, ZcoinProtocolInfo};
-use crate::PrivKeyBuildPolicy;
-
 #[cfg(target_arch = "wasm32")]
-async fn wallet_db_from_zcoin_builder_for_test<'a>(ctx: &'a MmArc, ticker: &'a str) -> WalletDbShared {
-    let protocol_info = serde_json::from_value::<ZcoinProtocolInfo>(json!({
+mod wallet_db_storage_tests {
+    use super::*;
+    use crate::ZcoinProtocolInfo;
+    use common::log::info;
+    use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
+    use wasm_bindgen_test::*;
+    use zcash_client_backend::wallet::AccountId;
+    use zcash_extras::WalletRead;
+    // use zcash_primitives::transaction::components::Amount;
+    use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    const TICKER: &str = "ARRR";
+
+    async fn wallet_db_from_zcoin_builder_for_test<'a>(ticker: &'a str) -> WalletIndexedDb {
+        let ctx = mm_ctx_with_custom_db();
+        let protocol_info = serde_json::from_value::<ZcoinProtocolInfo>(json!({
             "consensus_params": {
               "overwinter_activation_height": 152855,
               "sapling_activation_height": 152855,
@@ -60,52 +70,18 @@ async fn wallet_db_from_zcoin_builder_for_test<'a>(ctx: &'a MmArc, ticker: &'a s
                 28,
                 189
               ]
-            },
-            "check_point_block": {
-              "height": 1900000,
-              "time": 1652512363,
-              "hash": "44797f3bb78323a7717007f1e289a3689e0b5b3433385dbd8e6f6a1700000000",
-              "sapling_tree": "01e40c26f4a28071535b95ae637d30a209531e92a33de0a649e51183771025fd0f016cdc51442fcb328d047a709dc0f41e0173953404711045b3ef3036d7fd4151271501d6c94c5ce6787826af809aaee83768c4b7d4f02c8dc2d24cf60ed5f127a5d730018a752ea9d9efb3e1ac0e6e705ac9f7f9863cfa8f612ad43802175338d8d7cc6000000001fc3542434eff03075ea5f0a64f1dfb2f042d281b1a057e9f6c765b533ce51219013ad9484b1e901e62b93e7538f913dcb27695380c3bc579e79f5cc900f28e596e0001431da5f01fe11d58300134caf5ac76e0b1b7486fd02425dd8871bca4afa94d4b01bb39de1c1d10a25ce0cc775bc74b6b0f056c28639e7c5b7651bb8460060085530000000001732ddf661e68c9e335599bb0b18b048d2f1c06b20eabd18239ad2f3cc45fa910014496bab5eedab205b5f2a206bd1db30c5bc8bc0c1914a102f87010f3431be21a0000010b5fd8e7610754075f936463780e85841f3ab8ca2978f9afdf7c2c250f16a75f01db56bc66eb1cd54ec6861e5cf24af2f4a17991556a52ca781007569e95b9842401c03877ecdd98378b321250640a1885604d675aaa50380e49da8cfa6ff7deaf15"
             }
-        })).unwrap();
+        }))
+        .unwrap();
 
-    let z_spending_key =
-        extended_spending_key_from_protocol_info_and_policy(&protocol_info.clone(), &PrivKeyBuildPolicy::Trezor, 0)
-            .unwrap();
-
-    WalletDbShared::new(
-        ctx,
-        ticker,
-        None,
-        &z_spending_key,
-        protocol_info.consensus_params,
-        PathBuf::new(),
-    )
-    .await
-    .unwrap()
-}
-
-#[cfg(target_arch = "wasm32")]
-mod wallet_db_storage_tests {
-    use crate::z_coin::storage::walletdb::wallet_db_from_zcoin_builder_for_test;
-    use common::log::info;
-    use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
-    use wasm_bindgen_test::*;
-    use zcash_client_backend::wallet::AccountId;
-    use zcash_extras::WalletRead;
-    use zcash_primitives::transaction::components::Amount;
-    use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-
-    wasm_bindgen_test_configure!(run_in_browser);
-
-    const TICKER: &str = "ARRR";
+        WalletIndexedDb::new(&ctx, ticker, protocol_info.consensus_params)
+            .await
+            .unwrap()
+    }
 
     #[wasm_bindgen_test]
-    async fn test_intialize_db_impl() {
-        let ctx = mm_ctx_with_custom_db();
-        info!("ENTER");
-        let walletdb = wallet_db_from_zcoin_builder_for_test(&ctx, TICKER).await;
-        let db = walletdb.db;
+    async fn test_intialize_wallet_db_impl() {
+        let db = wallet_db_from_zcoin_builder_for_test(TICKER).await;
 
         // Add an account to the wallet
         let extsk = ExtendedSpendingKey::master(&[]);
@@ -120,6 +96,7 @@ mod wallet_db_storage_tests {
 
         // An invalid account has zero balance
         assert!(db.get_address(AccountId(1)).await.is_err());
-        //        assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+        info!("ADD {:?}", db.get_address(AccountId(1)).await);
+        // assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
     }
 }

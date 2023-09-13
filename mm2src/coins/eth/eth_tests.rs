@@ -89,6 +89,7 @@ fn eth_coin_for_test(
     eth_coin_from_keypair(coin_type, urls, fallback_swap_contract, key_pair)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn random_eth_coin_for_test(
     coin_type: EthCoinType,
     urls: &[&str],
@@ -809,6 +810,7 @@ fn test_search_for_swap_tx_spend_was_refunded() {
     assert_eq!(refund_tx, found_tx);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_withdraw_impl_manual_fee() {
     let (_ctx, coin) = eth_coin_for_test(EthCoinType::Eth, &["http://dummy.dummy"], None);
@@ -846,6 +848,8 @@ fn test_withdraw_impl_manual_fee() {
     assert_eq!(expected, tx_details.fee_details);
 }
 
+
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_withdraw_impl_fee_details() {
     let (_ctx, coin) = eth_coin_for_test(

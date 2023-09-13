@@ -1,12 +1,15 @@
 use super::*;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::rpc_clients::UnspentInfo;
 use crate::{TxFeeDetails, WaitForHTLCTxSpendArgs};
+#[cfg(not(target_arch = "wasm32"))]
 use chain::OutPoint;
 use common::{block_on, wait_until_sec, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::Secp256k1Secret;
 use itertools::Itertools;
 use mm2_core::mm_ctx::MmCtxBuilder;
 use mm2_number::bigdecimal::Zero;
+#[cfg(not(target_arch = "wasm32"))]
 use mocktopus::mocking::{MockResult, Mockable};
 use rpc::v1::types::ToTxHash;
 use std::convert::TryFrom;
@@ -57,6 +60,7 @@ fn check_tx_fee(coin: &Qrc20Coin, expected_tx_fee: ActualTxFee) {
     assert_eq!(actual_tx_fee, expected_tx_fee);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_withdraw_to_p2sh_address_should_fail() {
     let priv_key = [
@@ -88,6 +92,7 @@ fn test_withdraw_to_p2sh_address_should_fail() {
     assert_eq!(err, expect);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_withdraw_impl_fee_details() {
     Qrc20Coin::get_unspent_ordered_list.mock_safe(|coin, _| {

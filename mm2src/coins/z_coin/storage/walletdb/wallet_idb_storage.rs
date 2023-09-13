@@ -16,7 +16,6 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Deref;
-use std::path::PathBuf;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address,
@@ -41,22 +40,42 @@ pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
 
 impl<'a> WalletDbShared {
     pub async fn new(
-        ctx: &MmArc,
-        ticker: &str,
+        builder: ZCoinBuilder<'a>,
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
-        consensus_params: ZcoinConsensusParams,
-        db_dir_path: PathBuf,
     ) -> MmResult<Self, ZcoinStorageError> {
-        let db = WalletIndexedDb::new(
-            ctx,
-            ticker,
-            checkpoint_block,
-            z_spending_key,
-            consensus_params,
-            db_dir_path,
-        )
-        .await?;
+        let ticker = builder.ticker;
+        let consensus_params = builder.protocol_info.consensus_params.clone();
+        let db = WalletIndexedDb::new(builder.ctx, ticker, consensus_params).await?;
+        let evk = ExtendedFullViewingKey::from(z_spending_key);
+        let extrema = db.block_height_extrema().await?;
+
+        let (is_init_height_modified, init_height) =
+            is_init_height_modified(extrema, &checkpoint_block)
+                .await
+                .mm_err(|e| ZcoinStorageError::InitDbError {
+                    ticker: ticker.to_owned(),
+                    err: e.to_string(),
+                })?;
+        let get_evk = db.get_extended_full_viewing_keys().await?;
+
+        if get_evk.is_empty() || !is_init_height_modified {
+            info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_height:?}");
+            db.rewind_to_height(u32::MIN).await?;
+            if let Some(block) = checkpoint_block {
+                db.init_blocks_table(
+                    BlockHeight::from_u32(block.height),
+                    BlockHash(block.hash.0),
+                    block.time,
+                    &block.sapling_tree.0,
+                )
+                .await?;
+            }
+        }
+
+        if get_evk.is_empty() {
+            db.init_accounts_table(&[evk]).await?;
+        };
 
         Ok(Self {
             db,
@@ -104,44 +123,12 @@ impl<'a> WalletIndexedDb {
     pub async fn new(
         ctx: &MmArc,
         ticker: &str,
-        checkpoint_block: Option<CheckPointBlockInfo>,
-        z_spending_key: &ExtendedSpendingKey,
         consensus_params: ZcoinConsensusParams,
-        _db_dir_path: PathBuf,
     ) -> MmResult<Self, ZcoinStorageError> {
-        let evk = ExtendedFullViewingKey::from(z_spending_key);
         let db = Self {
             db: ConstructibleDb::new(ctx).into_shared(),
             ticker: ticker.to_string(),
             params: consensus_params,
-        };
-
-        let extrema = db.block_height_extrema().await?;
-        let (is_init_height_modified, init_height) =
-            is_init_height_modified(extrema, &checkpoint_block)
-                .await
-                .mm_err(|e| ZcoinStorageError::InitDbError {
-                    ticker: ticker.to_owned(),
-                    err: e.to_string(),
-                })?;
-        let get_evk = db.get_extended_full_viewing_keys().await?;
-
-        if get_evk.is_empty() || !is_init_height_modified {
-            info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_height:?}");
-            db.rewind_to_height(u32::MIN).await?;
-            if let Some(block) = checkpoint_block {
-                db.init_blocks_table(
-                    BlockHeight::from_u32(block.height),
-                    BlockHash(block.hash.0),
-                    block.time,
-                    &block.sapling_tree.0,
-                )
-                .await?;
-            }
-        }
-
-        if get_evk.is_empty() {
-            db.init_accounts_table(&[evk]).await?;
         };
 
         Ok(db)
@@ -190,9 +177,10 @@ impl<'a> WalletIndexedDb {
                 ticker: ticker.clone(),
             };
 
-            let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
+            let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
                 .with_value(&ticker)?
                 .with_value(account_int)?;
+
             walletdb_account_table
                 .replace_item_by_unique_multi_index(index_keys, &account)
                 .await?;
@@ -887,22 +875,19 @@ impl WalletRead for WalletIndexedDb {
         let block_headers_db = db_transaction.table::<WalletDbAccountsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0.to_bigint())?;
+            .with_value(account.0.to_bigint().expect("account value can't fit into a bigint."))?;
 
         let address = block_headers_db
             .get_item_by_unique_multi_index(index_keys)
             .await?
-            .map(|(_, account)| account.address);
+            .map(|(_, account)| account.address)
+            .ok_or_else(|| ZcoinStorageError::GetFromStorageError("Invalid account/not found".to_string()))?;
 
-        if let Some(addr) = address {
-            return decode_payment_address(self.params.hrp_sapling_payment_address(), &addr).map_to_mm(|err| {
-                ZcoinStorageError::DecodingError(format!(
-                    "Error occurred while decoding account address: {err:?} - ticker: {ticker}"
-                ))
-            });
-        }
-
-        Ok(None)
+        decode_payment_address(self.params.hrp_sapling_payment_address(), &address).map_to_mm(|err| {
+            ZcoinStorageError::DecodingError(format!(
+                "Error occurred while decoding account address: {err:?} - ticker: {ticker}"
+            ))
+        })
     }
 
     async fn get_extended_full_viewing_keys(&self) -> Result<HashMap<AccountId, ExtendedFullViewingKey>, Self::Error> {
@@ -1522,7 +1507,11 @@ impl TableSignature for WalletDbAccountsTable {
         if let (0, 1) = (old_version, new_version) {
             let table = upgrader.create_table(Self::TABLE_NAME)?;
             table.create_multi_index(Self::TICKER_ACCOUNT_INDEX, &["ticker", "account"], true)?;
-            table.create_multi_index(Self::TICKER_ACCOUNT_INDEX, &["ticker", "account", "extfvk"], false)?;
+            table.create_multi_index(
+                Self::TICKER_ACCOUNT_EXTFVK_INDEX,
+                &["ticker", "account", "extfvk"],
+                false,
+            )?;
             table.create_index("ticker", false)?;
         }
         Ok(())

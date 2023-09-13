@@ -422,16 +422,9 @@ pub(super) async fn init_light_client<'a>(
         .checkpoint_block_from_height(sync_height.max(sapling_activation_height))
         .await?;
 
-    let wallet_db = WalletDbShared::new(
-        builder.ctx,
-        builder.ticker,
-        maybe_checkpoint_block,
-        z_spending_key,
-        builder.protocol_info.consensus_params.clone(),
-        builder.db_dir_path,
-    )
-    .await
-    .mm_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+    let wallet_db = WalletDbShared::new(builder, maybe_checkpoint_block, z_spending_key)
+        .await
+        .mm_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 
     // Get min_height in blocks_db and rewind blocks_db to 0 if sync_height != min_height
     let min_height = blocks_db.get_earliest_block().await?;

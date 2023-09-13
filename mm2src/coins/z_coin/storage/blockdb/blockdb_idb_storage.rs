@@ -3,13 +3,11 @@ use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, Blo
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 
 use async_trait::async_trait;
-use common::log::info;
 use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, InitDbResult,
                          MultiIndex, OnUpgradeResult, TableSignature};
 use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
 use mm2_err_handle::prelude::*;
-use num_traits::ToPrimitive;
 use protobuf::Message;
 use std::path::Path;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
