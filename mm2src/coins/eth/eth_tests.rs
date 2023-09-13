@@ -848,7 +848,6 @@ fn test_withdraw_impl_manual_fee() {
     assert_eq!(expected, tx_details.fee_details);
 }
 
-
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_withdraw_impl_fee_details() {

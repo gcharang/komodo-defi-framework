@@ -2,8 +2,7 @@ use super::*;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::rpc_clients::UnspentInfo;
 use crate::{TxFeeDetails, WaitForHTLCTxSpendArgs};
-#[cfg(not(target_arch = "wasm32"))]
-use chain::OutPoint;
+#[cfg(not(target_arch = "wasm32"))] use chain::OutPoint;
 use common::{block_on, wait_until_sec, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::Secp256k1Secret;
 use itertools::Itertools;
