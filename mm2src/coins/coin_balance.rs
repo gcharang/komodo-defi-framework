@@ -120,13 +120,8 @@ pub trait CoinBalanceReportOps {
 #[async_trait]
 impl<Coin> CoinBalanceReportOps for Coin
 where
-    Coin: CoinWithDerivationMethod<
-            Address = <Coin as HDWalletCoinOps>::Address,
-            HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
-        > + HDWalletBalanceOps
-        + MarketCoinOps
-        + Sync,
-    <Coin as CoinWithDerivationMethod>::Address: fmt::Display + Sync,
+    Coin: CoinWithDerivationMethod + HDWalletBalanceOps + MarketCoinOps + Sync,
+    <Coin as HDWalletCoinOps>::Address: fmt::Display + Sync,
 {
     async fn coin_balance_report(&self) -> BalanceResult<CoinBalanceReport> {
         match self.derivation_method() {
@@ -164,13 +159,8 @@ pub trait EnableCoinBalanceOps {
 #[async_trait]
 impl<Coin> EnableCoinBalanceOps for Coin
 where
-    Coin: CoinWithDerivationMethod<
-            Address = <Coin as HDWalletCoinOps>::Address,
-            HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
-        > + HDWalletBalanceOps
-        + MarketCoinOps
-        + Sync,
-    <Coin as CoinWithDerivationMethod>::Address: fmt::Display + Sync,
+    Coin: CoinWithDerivationMethod + HDWalletBalanceOps + MarketCoinOps + Sync,
+    <Coin as HDWalletCoinOps>::Address: fmt::Display + Sync,
 {
     async fn enable_coin_balance<XPubExtractor>(
         &self,

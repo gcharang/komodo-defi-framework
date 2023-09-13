@@ -2800,9 +2800,7 @@ pub async fn get_withdraw_from_address<T>(
     req: &WithdrawRequest,
 ) -> MmResult<WithdrawSenderAddress<Address, Public>, WithdrawError>
 where
-    T: CoinWithDerivationMethod<Address = Address, HDWallet = <T as HDWalletCoinOps>::HDWallet>
-        + HDWalletCoinOps<Address = Address, Pubkey = Public>
-        + UtxoCommonOps,
+    T: CoinWithDerivationMethod + HDWalletCoinOps<Address = Address, Pubkey = Public> + UtxoCommonOps,
 {
     match coin.derivation_method() {
         DerivationMethod::SingleAddress(my_address) => get_withdraw_iguana_sender(coin, req, my_address),

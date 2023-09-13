@@ -36,12 +36,7 @@ pub async fn get_tx_history_filters<Coin>(
     target: MyTxHistoryTarget,
 ) -> MmResult<GetTxHistoryFilters, MyTxHistoryErrorV2>
 where
-    Coin: CoinWithDerivationMethod<
-            Address = <Coin as HDWalletCoinOps>::Address,
-            HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
-        > + HDWalletCoinOps
-        + MarketCoinOps
-        + Sync,
+    Coin: CoinWithDerivationMethod + MarketCoinOps + Sync,
     <Coin as HDWalletCoinOps>::Address: DisplayAddress,
 {
     match (coin.derivation_method(), target) {

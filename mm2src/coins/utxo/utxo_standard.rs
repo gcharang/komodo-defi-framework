@@ -843,9 +843,6 @@ impl UtxoSignerOps for UtxoStandardCoin {
 }
 
 impl CoinWithDerivationMethod for UtxoStandardCoin {
-    type Address = Address;
-    type HDWallet = UtxoHDWallet;
-
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet> {
         utxo_common::derivation_method(self.as_ref())
     }

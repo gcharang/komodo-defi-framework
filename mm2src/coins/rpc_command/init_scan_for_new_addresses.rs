@@ -139,11 +139,7 @@ pub mod common_impl {
         params: ScanAddressesParams,
     ) -> MmResult<ScanAddressesResponse, HDAccountBalanceRpcError>
     where
-        Coin: CoinWithDerivationMethod<
-                Address = <Coin as HDWalletCoinOps>::Address,
-                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
-            > + HDWalletBalanceOps
-            + Sync,
+        Coin: CoinWithDerivationMethod + HDWalletBalanceOps + Sync,
         <Coin as HDWalletCoinOps>::Address: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;

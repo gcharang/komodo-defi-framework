@@ -9,7 +9,7 @@ use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, enab
                                   wait_for_swaps_finish_and_check_status, MarketMakerIt, Mm2InitPrivKeyPolicy,
                                   Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK};
 use mm2_test_helpers::get_passphrase;
-use mm2_test_helpers::structs::{Bip44Chain, HDAccountAddressId};
+use mm2_test_helpers::structs::HDAccountAddressId;
 use serde_json::json;
 use wasm_bindgen_test::wasm_bindgen_test;
 

@@ -291,7 +291,7 @@ pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 
 pub mod z_coin;
-use crate::hd_wallet::HDWalletOps;
+use crate::hd_wallet::{HDWalletCoinOps, HDWalletOps};
 use z_coin::{ZCoin, ZcoinProtocolInfo};
 
 pub type TransactionFut = Box<dyn Future<Item = TransactionEnum, Error = TransactionErr> + Send>;
@@ -3070,10 +3070,7 @@ where
 }
 
 #[async_trait]
-pub trait CoinWithDerivationMethod {
-    type Address;
-    type HDWallet: HDWalletOps<Address = Self::Address>;
-
+pub trait CoinWithDerivationMethod: HDWalletCoinOps {
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet>;
 
     fn has_hd_wallet_derivation_method(&self) -> bool {

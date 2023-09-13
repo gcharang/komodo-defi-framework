@@ -1025,9 +1025,6 @@ impl UtxoSignerOps for QtumCoin {
 }
 
 impl CoinWithDerivationMethod for QtumCoin {
-    type Address = Address;
-    type HDWallet = UtxoHDWallet;
-
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet> {
         utxo_common::derivation_method(self.as_ref())
     }

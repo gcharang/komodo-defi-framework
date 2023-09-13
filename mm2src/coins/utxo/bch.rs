@@ -1334,9 +1334,6 @@ impl GetWithdrawSenderAddress for BchCoin {
 }
 
 impl CoinWithDerivationMethod for BchCoin {
-    type Address = Address;
-    type HDWallet = UtxoHDWallet;
-
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet> {
         utxo_common::derivation_method(self.as_ref())
     }

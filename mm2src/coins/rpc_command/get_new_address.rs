@@ -390,12 +390,7 @@ pub(crate) mod common_impl {
         params: GetNewAddressParams,
     ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
     where
-        Coin: HDWalletBalanceOps
-            + CoinWithDerivationMethod<
-                Address = <Coin as HDWalletCoinOps>::Address,
-                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
-            > + Sync
-            + Send,
+        Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Sync + Send,
         <Coin as HDWalletCoinOps>::Address: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
@@ -438,12 +433,7 @@ pub(crate) mod common_impl {
     ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
     where
         ConfirmAddress: HDConfirmAddress,
-        Coin: HDWalletBalanceOps
-            + CoinWithDerivationMethod<
-                Address = <Coin as HDWalletCoinOps>::Address,
-                HDWallet = <Coin as HDWalletCoinOps>::HDWallet,
-            > + Send
-            + Sync,
+        Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Send + Sync,
         <Coin as HDWalletCoinOps>::Address: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
