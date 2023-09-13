@@ -354,7 +354,7 @@ pub(crate) struct GetRawTransactionArgs {
         long,
         value_parser=parse_bytes,
         visible_alias = "hash",
-        short = 'h',
+        short = 'H',
         help = "Hash of the transaction"
     )]
     pub(crate) tx_hash: BytesJson,
