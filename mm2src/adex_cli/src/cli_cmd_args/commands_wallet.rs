@@ -394,14 +394,14 @@ pub(crate) struct TxHistoryArgs {
 struct FromIdGroup {
     #[arg(
         long,
-        short,
+        short = 'H',
         value_parser = parse_bytes,
         help = "Skips records until it reaches this ID, skipping the from_id as well"
     )]
     from_tx_hash: Option<BytesJson>,
     #[arg(
         long,
-        short,
+        short = 'i',
         help = "For zcoin compatibility, skips records until it reaches this ID, skipping the from_id as well"
     )]
     from_tx_id: Option<i64>,
