@@ -287,13 +287,13 @@ impl WalletIndexedDb {
         let txs = tx_table.get_items("ticker", &ticker).await?;
 
         let mut balance: i64 = 0;
-        for (note_id, note) in &maybe_notes {
+        for (_, note) in &maybe_notes {
             let spent = &note.spent;
             let value = &note.value;
 
             for (tx_id, tx) in &txs {
-                if *tx_id == note.tx && note.spent.is_none() && tx.block.is_some() {
-                    let value_i64 = note.value.to_i64().expect("BigInt is too large to fit in an i64");
+                if *tx_id == note.tx && spent.is_none() && tx.block.is_some() {
+                    let value_i64 = value.to_i64().expect("BigInt is too large to fit in an i64");
                     info!("VALUE {}", value_i64);
                     balance += value_i64;
                 }

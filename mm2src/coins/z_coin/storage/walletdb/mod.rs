@@ -36,6 +36,8 @@ async fn is_init_height_modified(
 #[cfg(target_arch = "wasm32")]
 mod wallet_db_storage_tests {
     use super::*;
+    use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode};
+    use crate::z_coin::ZcoinConsensusParams;
     use crate::ZcoinProtocolInfo;
     use common::log::info;
     use common::log::wasm_log::register_wasm_log;
@@ -51,8 +53,7 @@ mod wallet_db_storage_tests {
 
     const TICKER: &str = "ARRR";
 
-    async fn wallet_db_from_zcoin_builder_for_test<'a>(ticker: &'a str) -> WalletIndexedDb {
-        let ctx = mm_ctx_with_custom_db();
+    fn consensus_params() -> ZcoinConsensusParams {
         let protocol_info = serde_json::from_value::<ZcoinProtocolInfo>(json!({
             "consensus_params": {
               "overwinter_activation_height": 152855,
@@ -76,9 +77,14 @@ mod wallet_db_storage_tests {
         }))
         .unwrap();
 
-        WalletIndexedDb::new(&ctx, ticker, protocol_info.consensus_params)
-            .await
-            .unwrap()
+        protocol_info.consensus_params
+    }
+
+    async fn wallet_db_from_zcoin_builder_for_test<'a>(ticker: &'a str) -> WalletIndexedDb {
+        let ctx = mm_ctx_with_custom_db();
+        let consensus_params = consensus_params();
+
+        WalletIndexedDb::new(&ctx, ticker, consensus_params).await.unwrap()
     }
 
     #[wasm_bindgen_test]
@@ -138,8 +144,6 @@ mod wallet_db_storage_tests {
     async fn init_accounts_table_stores_correct_address() {
         let db = wallet_db_from_zcoin_builder_for_test(TICKER).await;
 
-        register_wasm_log();
-
         // Add an account to the wallet
         let extsk = ExtendedSpendingKey::master(&[]);
         let extfvks = [ExtendedFullViewingKey::from(&extsk)];
@@ -149,5 +153,56 @@ mod wallet_db_storage_tests {
         let pa = db.get_address(AccountId(0)).await.unwrap();
         info!("address: {pa:?}");
         assert_eq!(pa.unwrap(), extsk.default_address().unwrap().1);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_valid_chain_state() {
+        register_wasm_log();
+
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvks = [ExtendedFullViewingKey::from(&extsk)];
+        assert!(walletdb.init_accounts_table(&extfvks).await.is_ok());
+
+        // Empty chain should be valid
+        let consensus_params = consensus_params();
+        let process_validate = blockdb
+            .process_blocks_with_mode(
+                consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                walletdb.get_max_height_hash().await.unwrap(),
+                None,
+            )
+            .await;
+        info!("{process_validate:?}");
+
+        // create a fake compactBlock sending value to the address
+        // let (cb, _)= fake_compact_block()
+        // blockdb.insert_block(0, &[0; 32]).await?;
+        // let process_validate = blockdb
+        //     .process_blocks_with_mode(
+        //         consensus_params.clone(),
+        //         BlockProcessingMode::Validate,
+        //         walletdb.get_max_height_hash().await.unwrap(),
+        //         None,
+        //     )
+        //     .await;
+        // info!("{process_validate:?}");
+
+        // // scan the cache
+        // let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb));
+        // let process_scan = blockdb
+        //     .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+        //     .await;
+        // info!("{process_blocks_with_mode:?}");
+
+        // continue from here.
     }
 }
