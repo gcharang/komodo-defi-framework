@@ -6,6 +6,7 @@ use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinConsensusParams};
 use async_trait::async_trait;
 use common::log::info;
 use ff::PrimeField;
+use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
                          InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::prelude::*;
@@ -15,6 +16,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Deref;
+use std::path::PathBuf;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address,
@@ -39,12 +41,23 @@ pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
 
 impl<'a> WalletDbShared {
     pub async fn new(
-        zcoin_builder: &ZCoinBuilder<'a>,
+        ctx: &MmArc,
+        ticker: &str,
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
+        consensus_params: ZcoinConsensusParams,
+        db_dir_path: PathBuf,
     ) -> MmResult<Self, ZcoinStorageError> {
-        let ticker = zcoin_builder.ticker;
-        let db = WalletIndexedDb::new(zcoin_builder, checkpoint_block, z_spending_key).await?;
+        let db = WalletIndexedDb::new(
+            ctx,
+            ticker,
+            checkpoint_block,
+            z_spending_key,
+            consensus_params,
+            db_dir_path,
+        )
+        .await?;
+
         Ok(Self {
             db,
             ticker: ticker.to_string(),
@@ -89,15 +102,18 @@ pub struct WalletIndexedDb {
 
 impl<'a> WalletIndexedDb {
     pub async fn new(
-        zcoin_builder: &ZCoinBuilder<'a>,
+        ctx: &MmArc,
+        ticker: &str,
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
+        consensus_params: ZcoinConsensusParams,
+        _db_dir_path: PathBuf,
     ) -> MmResult<Self, ZcoinStorageError> {
         let evk = ExtendedFullViewingKey::from(z_spending_key);
         let db = Self {
-            db: ConstructibleDb::new(zcoin_builder.ctx).into_shared(),
-            ticker: zcoin_builder.ticker.to_string(),
-            params: zcoin_builder.protocol_info.consensus_params.clone(),
+            db: ConstructibleDb::new(ctx).into_shared(),
+            ticker: ticker.to_string(),
+            params: consensus_params,
         };
 
         let extrema = db.block_height_extrema().await?;
@@ -105,7 +121,7 @@ impl<'a> WalletIndexedDb {
             is_init_height_modified(extrema, &checkpoint_block)
                 .await
                 .mm_err(|e| ZcoinStorageError::InitDbError {
-                    ticker: zcoin_builder.ticker.to_owned(),
+                    ticker: ticker.to_owned(),
                     err: e.to_string(),
                 })?;
         let get_evk = db.get_extended_full_viewing_keys().await?;

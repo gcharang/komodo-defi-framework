@@ -41,35 +41,7 @@ use crate::PrivKeyBuildPolicy;
 
 #[cfg(target_arch = "wasm32")]
 async fn wallet_db_from_zcoin_builder_for_test<'a>(ctx: &'a MmArc, ticker: &'a str) -> WalletDbShared {
-    let activation_params = serde_json::from_value::<ZcoinActivationParams>(json!({"mode": {
-        "rpc": "Light",
-        "rpc_data": {
-            "electrum_servers": [
-                {
-                    "url": "zombie.dragonhound.info:10033"
-                }
-            ],
-            "light_wallet_d_servers": [
-                "https://pirate.spyglass.quest:9447"
-            ],
-            "sync_params": {
-                "height": 2563000
-            }
-        }
-    }}))
-    .unwrap();
-    let conf = json!({
-        "coin": "ARRR",
-        "asset": "PIRATE",
-        "fname": "Pirate",
-        "txversion": 4,
-        "overwintered": 1,
-        "mm2": 1,
-        "avg_blocktime": 60
-    });
-    let protocol_info = serde_json::from_value::<ZcoinProtocolInfo>(json!({"protocol": {
-          "type": "ZHTLC",
-          "protocol_data": {
+    let protocol_info = serde_json::from_value::<ZcoinProtocolInfo>(json!({
             "consensus_params": {
               "overwinter_activation_height": 152855,
               "sapling_activation_height": 152855,
@@ -95,30 +67,22 @@ async fn wallet_db_from_zcoin_builder_for_test<'a>(ctx: &'a MmArc, ticker: &'a s
               "hash": "44797f3bb78323a7717007f1e289a3689e0b5b3433385dbd8e6f6a1700000000",
               "sapling_tree": "01e40c26f4a28071535b95ae637d30a209531e92a33de0a649e51183771025fd0f016cdc51442fcb328d047a709dc0f41e0173953404711045b3ef3036d7fd4151271501d6c94c5ce6787826af809aaee83768c4b7d4f02c8dc2d24cf60ed5f127a5d730018a752ea9d9efb3e1ac0e6e705ac9f7f9863cfa8f612ad43802175338d8d7cc6000000001fc3542434eff03075ea5f0a64f1dfb2f042d281b1a057e9f6c765b533ce51219013ad9484b1e901e62b93e7538f913dcb27695380c3bc579e79f5cc900f28e596e0001431da5f01fe11d58300134caf5ac76e0b1b7486fd02425dd8871bca4afa94d4b01bb39de1c1d10a25ce0cc775bc74b6b0f056c28639e7c5b7651bb8460060085530000000001732ddf661e68c9e335599bb0b18b048d2f1c06b20eabd18239ad2f3cc45fa910014496bab5eedab205b5f2a206bd1db30c5bc8bc0c1914a102f87010f3431be21a0000010b5fd8e7610754075f936463780e85841f3ab8ca2978f9afdf7c2c250f16a75f01db56bc66eb1cd54ec6861e5cf24af2f4a17991556a52ca781007569e95b9842401c03877ecdd98378b321250640a1885604d675aaa50380e49da8cfa6ff7deaf15"
             }
-        }}})).unwrap();
+        })).unwrap();
 
-    let builder = ZCoinBuilder::new(
-        &ctx,
+    let z_spending_key =
+        extended_spending_key_from_protocol_info_and_policy(&protocol_info.clone(), &PrivKeyBuildPolicy::Trezor, 0)
+            .unwrap();
+
+    WalletDbShared::new(
+        ctx,
         ticker,
-        &conf,
-        &activation_params,
-        PrivKeyBuildPolicy::detect_priv_key_policy(&ctx).unwrap(),
-        PathBuf::new(),
         None,
-        protocol_info,
-    );
-
-    let z_spending_key = match builder.z_spending_key {
-        Some(ref z_spending_key) => z_spending_key.clone(),
-        None => extended_spending_key_from_protocol_info_and_policy(
-            &builder.protocol_info,
-            &builder.priv_key_policy,
-            builder.z_coin_params.account,
-        )
-        .unwrap(),
-    };
-
-    WalletDbShared::new(&builder, None, &z_spending_key).await.unwrap()
+        &z_spending_key,
+        protocol_info.consensus_params,
+        PathBuf::new(),
+    )
+    .await
+    .unwrap()
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -149,7 +113,7 @@ mod wallet_db_storage_tests {
         db.init_accounts_table(&extfvks).await.unwrap();
 
         // The account should be empty
-        //        assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+        // assert_eq!(db.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
 
         // We can't get an anchor height, as we have not scanned any blocks.
         assert_eq!(db.get_target_and_anchor_heights().await.unwrap(), None);

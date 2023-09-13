@@ -4,6 +4,7 @@ use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinClientInitError, Zco
 use common::async_blocking;
 use common::log::info;
 use db_common::sqlite::{query_single_row, run_optimization_pragmas};
+use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use std::path::PathBuf;
 use zcash_client_sqlite::with_async::init::{init_accounts_table, init_blocks_table, init_wallet_db};
@@ -70,14 +71,16 @@ pub async fn create_wallet_db(
 
 impl<'a> WalletDbShared {
     pub async fn new(
-        zcoin_builder: &ZCoinBuilder<'a>,
+        _ctx: &MmArc,
+        ticker: &str,
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
+        consensus_params: ZcoinConsensusParams,
+        db_dir_path: PathBuf,
     ) -> MmResult<Self, ZcoinStorageError> {
-        let ticker = zcoin_builder.ticker;
         let wallet_db = create_wallet_db(
-            zcoin_builder.db_dir_path.join(format!("{ticker}_wallet.db")),
-            zcoin_builder.protocol_info.consensus_params.clone(),
+            db_dir_path.join(format!("{ticker}_wallet.db")),
+            consensus_params,
             checkpoint_block,
             ExtendedFullViewingKey::from(z_spending_key),
         )
