@@ -385,7 +385,12 @@ pub(crate) struct TxHistoryArgs {
     limit: TxHistoryLimitGroup,
     #[command(flatten)]
     from_id: FromIdGroup,
-    #[arg(long, short = 'n', help = "The name of the coin for the history request")]
+    #[arg(
+        long,
+        visible_alias = "page",
+        short = 'p',
+        help = "The name of the coin for the history request"
+    )]
     page_number: Option<usize>,
 }
 
@@ -396,7 +401,7 @@ struct FromIdGroup {
         long,
         short = 'H',
         value_parser = parse_bytes,
-        help = "Skips records until it reaches this ID, skipping the from_id as well"
+        help = "Skips records until it reaches this hash, skipping the from_id as well"
     )]
     from_tx_hash: Option<BytesJson>,
     #[arg(
