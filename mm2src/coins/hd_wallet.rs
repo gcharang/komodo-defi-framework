@@ -259,14 +259,28 @@ pub struct HDAddressId {
     pub address_id: u32,
 }
 
+/// `HDWalletCoinOps` defines operations that coins should support to have HD wallet functionalities.
+/// This trait outlines fundamental operations like address derivation, account creation, and more.
 #[async_trait]
 pub trait HDWalletCoinOps {
+    /// The type representing an address in the coin's context.
     type Address: Clone + Send + Sync;
+    /// The type representing a public key.
     type Pubkey: Send;
+    /// The type representing the HD Wallet operations associated with this coin.
     type HDWallet: HDWalletOps<Address = Self::Address, HDAccount = Self::HDAccount>;
+    /// The type representing an HD account for this coin.
     type HDAccount: HDAccountOps;
 
-    /// Derives an address from the given info.
+    /// Derives a single HD address for a given account, chain, and address identifier.
+    ///
+    /// # Parameters
+    /// - `hd_account`: The HD account from which the address will be derived.
+    /// - `chain`: The Bip44 chain identifier.
+    /// - `address_id`: The unique address identifier.
+    ///
+    /// # Returns
+    /// A result containing the derived `HDAddress<Self::Address, Self::Pubkey>` instance or an error.
     async fn derive_address(
         &self,
         hd_account: &Self::HDAccount,
@@ -282,7 +296,14 @@ pub trait HDWalletCoinOps {
             .map_err(|e| MmError::new(AddressDerivingError::Internal(e.to_string())))
     }
 
-    /// Derives HD addresses from the given info.
+    /// Derives a set of HD addresses for a coin using the specified HD account and address identifiers.
+    ///
+    /// # Parameters
+    /// - `hd_account`: The HD account associated with the addresses.
+    /// - `address_ids`: An iterator of `HDAddressId` items specifying which addresses to derive.
+    ///
+    /// # Returns
+    /// A result containing a vector of derived `HDAddress<Self::Address, Self::Pubkey>` instances or an error.
     async fn derive_addresses<Ids>(
         &self,
         hd_account: &Self::HDAccount,
@@ -291,6 +312,15 @@ pub trait HDWalletCoinOps {
     where
         Ids: Iterator<Item = HDAddressId> + Send;
 
+    /// Derives known HD addresses for a specific account and chain.
+    /// Essentially, this retrieves addresses that have been interacted with in the past.
+    ///
+    /// # Parameters
+    /// - `hd_account`: The HD account from which to derive known addresses.
+    /// - `chain`: The Bip44 chain identifier.
+    ///
+    /// # Returns
+    /// A result containing a vector of previously generated `HDAddress<Self::Address, Self::Pubkey>` instances or an error.
     async fn derive_known_addresses(
         &self,
         hd_account: &Self::HDAccount,
@@ -303,7 +333,15 @@ pub trait HDWalletCoinOps {
         self.derive_addresses(hd_account, address_ids).await
     }
 
-    /// Generates a new address and updates the corresponding number of used `hd_account` addresses.
+    /// Generates a new address for a coin and updates the corresponding number of used `hd_account` addresses.
+    ///
+    /// # Parameters
+    /// - `hd_wallet`: The specified HD wallet from which the address will be derived.
+    /// - `hd_account`: The mutable HD account.
+    /// - `chain`: The Bip44 chain identifier.
+    ///
+    /// # Returns
+    /// A result containing the generated `HDAddress<Self::Address, Self::Pubkey>` instance or an error.
     async fn generate_new_address(
         &self,
         hd_wallet: &Self::HDWallet,
@@ -320,8 +358,19 @@ pub trait HDWalletCoinOps {
         Ok(address)
     }
 
-    /// Generates a new address, requests the user to confirm if it's the same as on the HW device,
-    /// and then updates the corresponding number of used `hd_account` addresses.
+    /// Generates a new address with an added confirmation step.
+    /// This method prompts the user to verify if the derived address matches
+    /// the hardware wallet display, ensuring security and accuracy when
+    /// dealing with hardware wallets.
+    ///
+    /// # Parameters
+    /// - `hd_wallet`: The specified HD wallet.
+    /// - `hd_account`: The mutable HD account.
+    /// - `chain`: The Bip44 chain identifier.
+    /// - `confirm_address`: Address confirmation method.
+    ///
+    /// # Returns
+    /// A result containing the confirmed `HDAddress<Self::Address, Self::Pubkey>` instance or an error.
     async fn generate_and_confirm_new_address<ConfirmAddress>(
         &self,
         hd_wallet: &Self::HDWallet,
@@ -332,8 +381,18 @@ pub trait HDWalletCoinOps {
     where
         ConfirmAddress: HDConfirmAddress;
 
-    /// Creates a new HD account, registers it within the given `hd_wallet`
-    /// and returns a mutable reference to the registered account.
+    /// Creates and registers a new HD account for a specific wallet.
+    ///
+    /// # Parameters
+    /// - `hd_wallet`: The specified HD wallet.
+    /// - `xpub_extractor`: Optional method for extracting the extended public key.
+    ///   This is especially useful when dealing with hardware wallets. It can
+    ///   allow for the extraction of the extended public key directly from the
+    ///   wallet when needed.
+    /// - `account_id`: Optional account identifier.
+    ///
+    /// # Returns
+    /// A result containing a mutable reference to the created `Self::HDAccount` or an error.
     async fn create_new_account<'a, XPubExtractor>(
         &self,
         hd_wallet: &'a Self::HDWallet,
@@ -343,6 +402,17 @@ pub trait HDWalletCoinOps {
     where
         XPubExtractor: HDXPubExtractor + Send;
 
+    /// Updates the count of known addresses for a specified HD account and chain.
+    /// This is useful for tracking the number of created addresses.
+    ///
+    /// # Parameters
+    /// - `hd_wallet`: The specified HD wallet.
+    /// - `hd_account`: The mutable HD account to be updated.
+    /// - `chain`: The Bip44 chain identifier.
+    /// - `new_known_addresses_number`: The new count of known addresses.
+    ///
+    /// # Returns
+    /// A result indicating success or an error.
     async fn set_known_addresses_number(
         &self,
         hd_wallet: &Self::HDWallet,
