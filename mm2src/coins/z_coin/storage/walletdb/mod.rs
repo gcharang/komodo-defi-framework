@@ -184,17 +184,17 @@ mod wallet_db_storage_tests {
         info!("{process_validate:?}");
 
         // create a fake compactBlock sending value to the address
-        // let (cb, _)= fake_compact_block()
-        // blockdb.insert_block(0, &[0; 32]).await?;
-        // let process_validate = blockdb
-        //     .process_blocks_with_mode(
-        //         consensus_params.clone(),
-        //         BlockProcessingMode::Validate,
-        //         walletdb.get_max_height_hash().await.unwrap(),
-        //         None,
-        //     )
-        //     .await;
-        // info!("{process_validate:?}");
+        let (cb, _) = fake_compat_block();
+        blockdb.insert_block(0, vec![]).await.unwrap();
+        let process_validate = blockdb
+            .process_blocks_with_mode(
+                consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                walletdb.get_max_height_hash().await.unwrap(),
+                None,
+            )
+            .await;
+        info!("{process_validate:?}");
 
         // // scan the cache
         // let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb));
