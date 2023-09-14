@@ -1,6 +1,6 @@
 const MORALIS_API_ENDPOINT_TEST: &str = "https://moralis-proxy.komodo.earth/api/v2";
 const TEST_WALLET_ADDR_EVM: &str = "0x394d86994f954ed931b86791b62fe64f4c5dac37";
-const BLOCKLIST_API_ENDPOINT: &str = "https://nft.antispam.dragonhound.info/api/blocklist";
+const BLOCKLIST_API_ENDPOINT: &str = "https://nft.antispam.dragonhound.info";
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod native_tests {
@@ -107,7 +107,7 @@ mod native_tests {
     #[test]
     fn test_antispam_api_requests() {
         let uri_mnemonichq = format!(
-            "{}/wallet/eth/0x3eb4b12127EdC81A4d2fD49658db07005bcAd065",
+            "{}/api/blocklist/wallet/eth/0x3eb4b12127EdC81A4d2fD49658db07005bcAd065",
             BLOCKLIST_API_ENDPOINT
         );
         let mnemonichq_value = block_on(send_request_to_uri(uri_mnemonichq.as_str())).unwrap();
@@ -123,7 +123,7 @@ mod native_tests {
                 .to_string(),
         };
         let req_json = serde_json::to_string(&req_spam).unwrap();
-        let uri_contract = format!("{}/contract/scan", BLOCKLIST_API_ENDPOINT);
+        let uri_contract = format!("{}/api/blocklist/contract/scan", BLOCKLIST_API_ENDPOINT);
         let contract_scan_res = block_on(send_post_request_to_uri(uri_contract.as_str(), req_json)).unwrap();
         let spam_res: SpamContractRes = serde_json::from_slice(&contract_scan_res).unwrap();
         assert!(spam_res
@@ -138,11 +138,23 @@ mod native_tests {
         let req_phishing = PhishingDomainReq {
             domains: "disposal-account-case-1f677.web.app,defi8090.vip".to_string(),
         };
-        let uri_domain = format!("{}/domain/scan", BLOCKLIST_API_ENDPOINT);
+        let uri_domain = format!("{}/api/blocklist/domain/scan", BLOCKLIST_API_ENDPOINT);
         let req_json = serde_json::to_string(&req_phishing).unwrap();
         let domain_scan_res = block_on(send_post_request_to_uri(uri_domain.as_str(), req_json)).unwrap();
         let phishing_res: PhishingDomainRes = serde_json::from_slice(&domain_scan_res).unwrap();
         assert!(phishing_res.result.get("disposal-account-case-1f677.web.app").unwrap());
+    }
+
+    #[test]
+    fn test_camo() {
+        let hex_token_uri = hex::encode("https://tikimetadata.s3.amazonaws.com/tiki_box.json");
+        let uri_decode = format!("{}/url/decode/{}", BLOCKLIST_API_ENDPOINT, hex_token_uri);
+        let decode_res = block_on(send_request_to_uri(&uri_decode)).unwrap();
+        let uri_meta: UriMeta = serde_json::from_value(decode_res).unwrap();
+        assert_eq!(
+            uri_meta.raw_image_url.unwrap(),
+            "https://tikimetadata.s3.amazonaws.com/tiki_box.png"
+        );
     }
 
     #[test]
@@ -198,7 +210,7 @@ mod native_tests {
 mod wasm_tests {
     use crate::eth::eth_addr_to_hex;
     use crate::nft::nft_structs::{Chain, MnemonicHQRes, NftFromMoralis, NftTransferHistoryFromMoralis,
-                                  PhishingDomainReq, PhishingDomainRes, SpamContractReq, SpamContractRes};
+                                  PhishingDomainReq, PhishingDomainRes, SpamContractReq, SpamContractRes, UriMeta};
     use crate::nft::nft_tests::{BLOCKLIST_API_ENDPOINT, MORALIS_API_ENDPOINT_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
     use ethereum_types::Address;
@@ -249,7 +261,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn test_antispam_wallet_endpoint() {
         let uri_mnemonichq = format!(
-            "{}/wallet/eth/0x3eb4b12127EdC81A4d2fD49658db07005bcAd065",
+            "{}/api/blocklist/wallet/eth/0x3eb4b12127EdC81A4d2fD49658db07005bcAd065",
             BLOCKLIST_API_ENDPOINT
         );
         let res_value = send_request_to_uri(uri_mnemonichq.as_str()).await.unwrap();
@@ -267,7 +279,7 @@ mod wasm_tests {
             addresses: "0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c,0x8d1355b65da254f2cc4611453adfa8b7a13f60ee"
                 .to_string(),
         };
-        let uri_contract = format!("{}/contract/scan", BLOCKLIST_API_ENDPOINT);
+        let uri_contract = format!("{}/api/blocklist/contract/scan", BLOCKLIST_API_ENDPOINT);
         let req_json = serde_json::to_string(&req_spam).unwrap();
         let contract_scan_res = send_post_request_to_uri(uri_contract.as_str(), req_json).await.unwrap();
         let spam_res: SpamContractRes = serde_json::from_slice(&contract_scan_res).unwrap();
@@ -284,10 +296,22 @@ mod wasm_tests {
             domains: "disposal-account-case-1f677.web.app,defi8090.vip".to_string(),
         };
         let req_json = serde_json::to_string(&req_phishing).unwrap();
-        let uri_domain = format!("{}/domain/scan", BLOCKLIST_API_ENDPOINT);
+        let uri_domain = format!("{}/api/blocklist/domain/scan", BLOCKLIST_API_ENDPOINT);
         let domain_scan_res = send_post_request_to_uri(uri_domain.as_str(), req_json).await.unwrap();
         let phishing_res: PhishingDomainRes = serde_json::from_slice(&domain_scan_res).unwrap();
         assert!(phishing_res.result.get("disposal-account-case-1f677.web.app").unwrap());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_camo() {
+        let hex_token_uri = hex::encode("https://tikimetadata.s3.amazonaws.com/tiki_box.json");
+        let uri_decode = format!("{}/url/decode/{}", BLOCKLIST_API_ENDPOINT, hex_token_uri);
+        let decode_res = send_request_to_uri(&uri_decode).await.unwrap();
+        let uri_meta: UriMeta = serde_json::from_value(decode_res).unwrap();
+        assert_eq!(
+            uri_meta.raw_image_url.unwrap(),
+            "https://tikimetadata.s3.amazonaws.com/tiki_box.png"
+        );
     }
 
     #[wasm_bindgen_test]
