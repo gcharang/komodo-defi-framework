@@ -1476,26 +1476,36 @@ impl Default for ElectrumBuilderArgs {
     }
 }
 
+/// Represents a Hierarchical Deterministic (HD) wallet for UTXO coins.
+/// This struct encapsulates all the necessary data for HD wallet operations
+/// and is initialized whenever a utxo coin is activated in HD wallet mode.
 #[derive(Debug)]
 pub struct UtxoHDWallet {
+    /// A unique identifier for the HD wallet derived from the master public key.
+    /// Specifically, it's the RIPEMD160 hash of the SHA256 hash of the master pubkey.
+    /// This property aids in storing database items uniquely for each HD wallet.
     pub hd_wallet_rmd160: H160,
+    /// Provides a means to access database operations for a specific user, HD wallet, and coin.
+    /// The storage wrapper associates with the `coin` and `hd_wallet_rmd160` to provide unique storage access.
     pub hd_wallet_storage: HDWalletCoinStorage,
+    /// Specifies the global format for all addresses in the wallet.
     pub address_format: UtxoAddressFormat,
     /// Derivation path of the coin.
     /// This derivation path consists of `purpose` and `coin_type` only
     /// where the full `BIP44` address has the following structure:
     /// `m/purpose'/coin_type'/account'/change/address_index`.
     pub derivation_path: StandardHDPathToCoin,
-    /// User accounts.
+    /// Contains information about the accounts enabled for this HD wallet.
     pub accounts: HDAccountsMutex<UtxoHDAccount>,
-    /// The address that's specifically enabled for swap operations.
+    /// The address that's specifically enabled for certain operations, e.g. swaps.
     ///
     /// For some wallet types, such as hardware wallets, this will be `None`
-    /// until swap support is implemented for them. When set, this address
-    /// is ready to facilitate swap transactions.
+    /// until these operations are supported for them. When set, this address
+    /// is ready to facilitate swap transactions and other specific operations.
     pub enabled_address: Option<HDAccountAddressId>,
-    // The max number of empty addresses in a row.
-    // If transactions were sent to an address outside the `gap_limit`, they will not be identified.
+    /// Defines the maximum number of consecutive addresses that can be generated
+    /// without any associated transactions. If an address outside this limit
+    /// receives transactions, they won't be identified.
     pub gap_limit: u32,
 }
 
