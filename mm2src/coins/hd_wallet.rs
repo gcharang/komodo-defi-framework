@@ -422,34 +422,85 @@ pub trait HDWalletCoinOps {
     ) -> MmResult<(), AccountUpdatingError>;
 }
 
+/// `HDWalletOps`: Operations that should be implemented for Structs that represent HD wallets.
 #[async_trait]
 pub trait HDWalletOps: Send + Sync {
-    /// Represents the specific type of address that is used by this wallet.
+    /// The specific address type used by this wallet.
     type Address;
+    /// The HD account operations associated with this wallet.
     type HDAccount: HDAccountOps + Clone + Send;
 
+    /// Returns the coin type associated with this HD Wallet.
+    ///
+    /// This method can be implemented to fetch the coin type as specified in the wallet's BIP44 derivation path.
+    /// For example, in the derivation path `m/44'/0'/0'/0`, the coin type would be `0` (representing Bitcoin).
+    ///
+    /// # Returns
+    ///
+    /// A `u32` value representing the coin type from the wallet's derivation path.
     fn coin_type(&self) -> u32;
 
+    /// Fetches the gap limit associated with this HD Wallet.
+    ///
+    /// # Returns
+    ///
+    /// A `u32` value that specifies the gap limit.
     fn gap_limit(&self) -> u32;
 
-    /// Returns limit on the number of addresses.
+    /// Provides the limit on the number of addresses that can be added to an account.
+    ///
+    /// # Returns
+    ///
+    /// A `u32` value indicating the maximum number of addresses.
+    /// The default is given by `DEFAULT_ADDRESS_LIMIT`.
     fn address_limit(&self) -> u32 { DEFAULT_ADDRESS_LIMIT }
 
-    /// Returns limit on the number of accounts.
+    /// Specifies the limit on the number of accounts that can be added to the wallet.
+    ///
+    /// # Returns
+    ///
+    /// A `u32` value indicating the maximum number of accounts.
+    /// The default is set by `DEFAULT_ACCOUNT_LIMIT`.
     fn account_limit(&self) -> u32 { DEFAULT_ACCOUNT_LIMIT }
 
-    /// Returns a BIP44 chain that is considered as default for receiver addresses.
+    /// Specifies the default BIP44 chain for receiver addresses.
+    ///
+    /// # Returns
+    ///
+    /// A `Bip44Chain` value.
+    /// The default is set by `DEFAULT_RECEIVER_CHAIN`.
     fn default_receiver_chain(&self) -> Bip44Chain { DEFAULT_RECEIVER_CHAIN }
 
+    /// Provides a mutex that guards the HD accounts.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the accounts mutex.
     fn get_accounts_mutex(&self) -> &HDAccountsMutex<Self::HDAccount>;
 
-    /// Returns a copy of an account by the given `account_id` if it's activated.
+    /// Fetches an account based on its ID. This method will return `None` if the account is not activated.
+    ///
+    /// # Parameters
+    ///
+    /// - `account_id`: The ID of the desired account.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<Self::HDAccount>` which contains the account if found.
     async fn get_account(&self, account_id: u32) -> Option<Self::HDAccount> {
         let accounts = self.get_accounts_mutex().lock().await;
         accounts.get(&account_id).cloned()
     }
 
-    /// Returns a mutable reference to an account by the given `account_id` if it's activated.
+    /// Similar to `get_account`, but provides a mutable reference.
+    ///
+    /// # Parameters
+    ///
+    /// - `account_id`: The ID of the desired account.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing a mutable reference to the account if found.
     async fn get_account_mut(&self, account_id: u32) -> Option<HDAccountMut<'_, Self::HDAccount>> {
         let accounts = self.get_accounts_mutex().lock().await;
         if !accounts.contains_key(&account_id) {
@@ -463,12 +514,29 @@ pub trait HDWalletOps: Send + Sync {
         }))
     }
 
-    /// Returns copies of all activated accounts.
+    /// Gathers all the activated accounts.
+    ///
+    /// # Returns
+    ///
+    /// A map containing all the currently activated HD accounts.
     async fn get_accounts(&self) -> HDAccountsMap<Self::HDAccount> { self.get_accounts_mutex().lock().await.clone() }
 
-    /// Returns a mutable reference to all activated accounts.
+    /// Similar to `get_accounts`, but provides a mutable reference to the accounts.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the map of all activated HD accounts.
     async fn get_accounts_mut(&self) -> HDAccountsMut<'_, Self::HDAccount> { self.get_accounts_mutex().lock().await }
 
+    /// Attempts to remove an account only if it's the last in the set.
+    ///
+    /// # Parameters
+    ///
+    /// - `account_id`: The ID of the account to be considered for removal.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the removed HD account if it was indeed the last one, otherwise `None`.
     async fn remove_account_if_last(&self, account_id: u32) -> Option<Self::HDAccount> {
         let mut x = self.get_accounts_mutex().lock().await;
         // `BTreeMap::last_entry` is still unstable.
@@ -480,13 +548,11 @@ pub trait HDWalletOps: Send + Sync {
         }
     }
 
-    /// Retrieves the address that might be enabled for operations that require a single enabled address, e.g. swaps.
+    /// Returns an address that's currently enabled for single-address operations, such as swaps.
     ///
     /// # Returns
     ///
-    /// An `Option` wrapping a value of the associated `Address` type.
-    /// Returns `Some(Address)` if the address is available and enabled,
-    /// or `None` if there's no address enabled for single address operations at the moment.
+    /// An `Option` containing the enabled address if available.
     async fn get_enabled_address(&self) -> Option<Self::Address>;
 }
 
