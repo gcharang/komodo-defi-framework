@@ -2898,19 +2898,45 @@ impl Default for PrivKeyActivationPolicy {
     fn default() -> Self { PrivKeyActivationPolicy::ContextPrivKey }
 }
 
+/// Enum representing various private key management policies.
+///
+/// This enum defines the various ways in which private keys can be managed
+/// or sourced within the system, whether it's from a local software-based HD Wallet,
+/// a hardware device like Trezor, or even external sources like Metamask.
 #[derive(Clone, Debug)]
 pub enum PrivKeyPolicy<T> {
+    /// The legacy private key policy.
+    ///
+    /// This policy corresponds to a one-to-one mapping of private keys to addresses.
+    /// In this scheme, only a single key and corresponding address is activated per coin,
+    /// without any hierarchical deterministic derivation.
     Iguana(T),
+    /// The HD Wallet private key policy.
+    ///
+    /// This variant uses a BIP44 derivation path up to the coin level
+    /// and contains the necessary information to manage and derive
+    /// keys using an HD Wallet scheme.
     HDWallet {
         /// Derivation path up to coin.
-        /// This path consists of `purpose` and `coin_type` only
-        /// where the full `BIP44` address has the following structure:
+        ///
+        /// Represents the first two segments of the BIP44 derivation path: `purpose` and `coin_type`.
+        /// A full BIP44 address is structured as:
         /// `m/purpose'/coin_type'/account'/change/address_index`.
         path_to_coin: StandardHDPathToCoin,
+        /// The key that's currently activated and in use for this HD Wallet policy.
         activated_key: T,
+        /// Extended private key based on the secp256k1 elliptic curve cryptography scheme.
         bip39_secp_priv_key: ExtendedPrivateKey<secp256k1::SecretKey>,
     },
+    /// The Trezor hardware wallet private key policy.
+    ///
+    /// Details about how the keys are managed with the Trezor device
+    /// are abstracted away and are not directly managed by this policy.
     Trezor,
+    /// The Metamask private key policy, specific to the WASM target architecture.
+    ///
+    /// This variant encapsulates details about how keys are managed when interfacing
+    /// with the Metamask extension, especially within web-based contexts.
     #[cfg(target_arch = "wasm32")]
     Metamask(EthMetamaskPolicy),
 }
