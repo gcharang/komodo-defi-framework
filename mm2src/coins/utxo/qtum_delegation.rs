@@ -289,7 +289,9 @@ impl QtumCoin {
                 DelegationError::from_generate_tx_error(gen_tx_error, self.ticker().to_string(), utxo.decimals)
             })?;
 
-        let prev_script = self.script_for_address(my_address);
+        let prev_script = self
+            .script_for_address(my_address)
+            .map_err(|e| DelegationError::InternalError(e.to_string()))?;
         let signed = sign_tx(
             unsigned,
             key_pair,

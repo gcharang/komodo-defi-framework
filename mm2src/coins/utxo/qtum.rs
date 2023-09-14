@@ -419,7 +419,7 @@ impl UtxoCommonOps for QtumCoin {
         utxo_common::checked_address_from_str(self, address)
     }
 
-    fn script_for_address(&self, address: &Address) -> Script {
+    fn script_for_address(&self, address: &Address) -> MmResult<Script, UnsupportedAddr> {
         utxo_common::get_script_for_address(self.as_ref(), address)
     }
 

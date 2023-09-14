@@ -963,7 +963,7 @@ pub trait UtxoCommonOps:
     fn address_from_str(&self, address: &str) -> MmResult<Address, AddrFromStrError>;
 
     /// For an address create corresponding utxo output script
-    fn script_for_address(&self, address: &Address) -> Script;
+    fn script_for_address(&self, address: &Address) -> MmResult<Script, UnsupportedAddr>;
 
     async fn get_current_mtp(&self) -> UtxoRpcResult<u32>;
 
@@ -1871,7 +1871,8 @@ where
         _ => coin.as_ref().conf.signature_version,
     };
 
-    let prev_script = utxo_common::get_script_for_address(coin.as_ref(), my_address);
+    let prev_script = utxo_common::get_script_for_address(coin.as_ref(), my_address)
+        .map_err(|e| TransactionErr::Plain(ERRL!("{}", e)))?;
     let signed = try_tx_s!(sign_tx(
         unsigned,
         key_pair,
