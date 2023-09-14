@@ -2180,28 +2180,18 @@ impl MarketCoinOps for EthCoin {
     }
 
     /// Stub for sign eth tx
-    #[inline(always)]
     async fn sign_eth_tx(&self, args: &SignEthTransactionRequest) -> SignEthTransactionResult {
         let ctx = MmArc::from_weak(&self.ctx)
             .ok_or("!ctx")
             .map_to_mm(|err| RawTransactionError::TransactionError(err.to_string()))?;
         let coin = self.clone();
-        let value = if let Some(value) = args.value {
-            value
-        } else {
-            U256::from(0)
-        };
-
+        let value = args.value.unwrap_or_else(|| U256::from(0));
         let action = if let Some(to) = &args.to {
-            Action::Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
+            Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
         } else {
-            Action::Create
+            Create
         };
-        let data = if let Some(data) = &args.data {
-            data.clone()
-        } else {
-            vec![]
-        };
+        let data = args.data.clone().unwrap_or_default();
         let gas_limit = args.gas_limit;
         match coin.priv_key_policy {
             // TODO: use zeroise for privkey
