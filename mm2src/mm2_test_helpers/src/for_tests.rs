@@ -1,5 +1,7 @@
 //! Helpers used in the unit and integration tests.
 
+#![allow(missing_docs)]
+
 use crate::electrums::qtum_electrums;
 use crate::structs::*;
 use common::custom_futures::repeatable::{Ready, Retry};
