@@ -22,19 +22,19 @@ struct Channel<M> {
 }
 
 /// guard to trace channels disconnection
-pub struct ChannelGuard<M> {
+pub struct ChannelGuard<M: Send + Sync> {
     channel_id: ChannelId,
     controller: Controller<M>,
 }
 
 /// Receiver to cleanup resources on `Drop`
-pub struct GuardedReceiver<M> {
+pub struct GuardedReceiver<M: Send + Sync> {
     rx: Receiver<Arc<M>>,
     #[allow(dead_code)]
     guard: ChannelGuard<M>,
 }
 
-impl<M> Controller<M> {
+impl<M: Send + Sync> Controller<M> {
     /// Creates a new channels controller
     pub fn new() -> Self { Default::default() }
 
@@ -83,15 +83,19 @@ impl<M> Default for Controller<M> {
     }
 }
 
-impl<M> ChannelGuard<M> {
+impl<M: Send + Sync> ChannelGuard<M> {
     fn new(channel_id: ChannelId, controller: Controller<M>) -> Self { Self { channel_id, controller } }
 }
 
-impl<M> Drop for ChannelGuard<M> {
-    fn drop(&mut self) { self.controller.remove_channel(&self.channel_id); }
+impl<M: Send + Sync> Drop for ChannelGuard<M> {
+    fn drop(&mut self) {
+        common::log::debug!("Dropping event channel with id: {}", self.channel_id);
+
+        self.controller.remove_channel(&self.channel_id);
+    }
 }
 
-impl<M> GuardedReceiver<M> {
+impl<M: Send + Sync> GuardedReceiver<M> {
     /// Receives the next event from the channel
     pub async fn recv(&mut self) -> Option<Arc<M>> { self.rx.recv().await }
 }
@@ -99,10 +103,25 @@ impl<M> GuardedReceiver<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
 
-    #[tokio::test]
-    async fn test_create_channel_and_broadcast() {
+    common::cfg_wasm32! {
+        use wasm_bindgen_test::*;
+        wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+    }
+
+    macro_rules! cross_test {
+        ($test_name:ident, $test_code:block) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            #[tokio::test(flavor = "multi_thread")]
+            async fn $test_name() { $test_code }
+
+            #[cfg(target_arch = "wasm32")]
+            #[wasm_bindgen_test]
+            async fn $test_name() { $test_code }
+        };
+    }
+
+    cross_test!(test_create_channel_and_broadcast, {
         let mut controller = Controller::new();
         let mut guard_receiver = controller.create_channel(1);
 
@@ -110,10 +129,9 @@ mod tests {
 
         let received_msg = guard_receiver.recv().await.unwrap();
         assert_eq!(*received_msg, "Message".to_string());
-    }
+    });
 
-    #[tokio::test]
-    async fn test_multiple_channels_and_broadcast() {
+    cross_test!(test_multiple_channels_and_broadcast, {
         let mut controller = Controller::new();
 
         let mut receivers = Vec::new();
@@ -127,10 +145,9 @@ mod tests {
             let received_msg = receiver.recv().await.unwrap();
             assert_eq!(*received_msg, "Message".to_string());
         }
-    }
+    });
 
-    #[tokio::test]
-    async fn test_channel_cleanup_on_drop() {
+    cross_test!(test_channel_cleanup_on_drop, {
         let mut controller: Controller<()> = Controller::new();
         let guard_receiver = controller.create_channel(1);
 
@@ -138,13 +155,12 @@ mod tests {
 
         drop(guard_receiver);
 
-        sleep(Duration::from_millis(10)).await; // Give time for the drop to execute
+        common::executor::Timer::sleep(0.1).await; // Give time for the drop to execute
 
         assert_eq!(controller.num_connections(), 0);
-    }
+    });
 
-    #[tokio::test]
-    async fn test_broadcast_across_channels() {
+    cross_test!(test_broadcast_across_channels, {
         let mut controller = Controller::new();
 
         let mut receivers = Vec::new();
@@ -158,10 +174,9 @@ mod tests {
             let received_msg = receiver.recv().await.unwrap();
             assert_eq!(*received_msg, "Message".to_string());
         }
-    }
+    });
 
-    #[tokio::test]
-    async fn test_multiple_messages_and_drop() {
+    cross_test!(test_multiple_messages_and_drop, {
         let mut controller = Controller::new();
         let mut guard_receiver = controller.create_channel(6);
 
@@ -188,9 +203,8 @@ mod tests {
         // Consume the GuardedReceiver to trigger drop and channel cleanup
         drop(guard_receiver);
 
-        // Sleep for a short time to allow cleanup to complete
-        sleep(Duration::from_millis(10)).await;
+        common::executor::Timer::sleep(0.1).await; // Give time for the drop to execute
 
         assert_eq!(controller.num_connections(), 0);
-    }
+    });
 }
