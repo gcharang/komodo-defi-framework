@@ -3050,12 +3050,23 @@ impl PrivKeyBuildPolicy {
     }
 }
 
+/// Enum representing methods for deriving cryptographic addresses.
+///
+/// This enum distinguishes between two primary strategies for address generation:
+/// 1. A static, single address approach.
+/// 2. A hierarchical deterministic (HD) wallet that can derive multiple addresses.
 #[derive(Debug)]
 pub enum DerivationMethod<Address, HDWallet>
 where
     HDWallet: HDWalletOps<Address = Address>,
 {
+    /// Represents the use of a single, static address for transactions and operations.
     SingleAddress(Address),
+    /// Represents the use of an HD wallet for deriving multiple addresses.
+    ///
+    /// The encapsulated HD wallet should be capable of operations like
+    /// getting the globally enabled address, and more, as defined by the
+    /// [`HDWalletOps`] trait.
     HDWallet(HDWallet),
 }
 
