@@ -3106,10 +3106,37 @@ where
     pub async fn unwrap_single_addr(&self) -> Address { self.single_addr_or_err().await.unwrap() }
 }
 
+/// A trait representing coins with specific address derivation methods.
+///
+/// This trait is designed for coins that have a defined mechanism for address derivation,
+/// be it a single address approach or a hierarchical deterministic (HD) wallet strategy.
+/// Coins implementing this trait should be clear about their chosen derivation method and
+/// offer utility functions to interact with that method.
+///
+/// Implementors of this trait will typically be coins or tokens that are either used within
+/// a traditional single address scheme or leverage the power and flexibility of HD wallets.
+///
+/// # Associated Types
+///
+/// - `Self::Address`: Represents the type used for addresses in the implementing coin.
+/// - `Self::HDWallet`: The HD wallet type associated with the coin, which should provide operations
+///   for address derivation, account creation, etc.
 #[async_trait]
 pub trait CoinWithDerivationMethod: HDWalletCoinOps {
+    /// Returns the address derivation method associated with the coin.
+    ///
+    /// Implementors should return the specific `DerivationMethod` that the coin utilizes,
+    /// either `SingleAddress` for a static address approach or `HDWallet` for an HD wallet strategy.
     fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet>;
-
+    /// Checks if the coin uses the HD wallet strategy for address derivation.
+    ///
+    /// This is a utility function that returns `true` if the coin's derivation method is `HDWallet` and
+    /// `false` otherwise.
+    ///
+    /// # Returns
+    ///
+    /// - `true` if the coin uses an HD wallet for address derivation.
+    /// - `false` if it uses any other method.
     fn has_hd_wallet_derivation_method(&self) -> bool {
         matches!(self.derivation_method(), DerivationMethod::HDWallet(_))
     }
