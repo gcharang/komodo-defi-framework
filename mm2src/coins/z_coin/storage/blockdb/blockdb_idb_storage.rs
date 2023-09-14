@@ -180,8 +180,8 @@ impl BlockDbImpl {
         let mut maybe_blocks = block_db
             .cursor_builder()
             .only("ticker", &self.ticker)?
-            .bound("block", u32::from(from_height), limit.unwrap_or(u32::MAX))
-            .open_cursor("ticker")
+            .bound("height", u32::from(from_height + 1), limit.unwrap_or(u32::MAX))
+            .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
             .await?;
 
         let mut blocks_to_scan = vec![];
@@ -260,6 +260,7 @@ impl BlockDbImpl {
                 },
             }
         }
+
         Ok(())
     }
 }

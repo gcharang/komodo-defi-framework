@@ -124,7 +124,6 @@ pub async fn scan_cached_block(
         .get_commitment_tree(*last_height)
         .await
         .map(|t| t.unwrap_or_else(CommitmentTree::empty))?;
-
     // Get most recent incremental witnesses for the notes we are tracking
     let mut witnesses = data_guard.get_witnesses(*last_height).await?;
 

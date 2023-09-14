@@ -36,10 +36,8 @@ async fn is_init_height_modified(
 #[cfg(target_arch = "wasm32")]
 mod wallet_db_storage_tests {
     use super::*;
-    use crate::z_coin::storage::DataConnStmtCacheWasm;
-    use crate::z_coin::storage::DataConnStmtCacheWrapper;
-    use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode};
-    use crate::z_coin::ZcoinConsensusParams;
+    use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode, DataConnStmtCacheWasm, DataConnStmtCacheWrapper};
+    use crate::z_coin::{ValidateBlocksError, ZcoinConsensusParams, ZcoinStorageError};
     use crate::ZcoinProtocolInfo;
     use common::log::info;
     use common::log::wasm_log::register_wasm_log;
@@ -48,6 +46,7 @@ mod wallet_db_storage_tests {
     use wasm_bindgen_test::*;
     use zcash_client_backend::wallet::AccountId;
     use zcash_extras::fake_compact_block;
+    use zcash_extras::fake_compact_block_spending;
     use zcash_extras::WalletRead;
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
@@ -62,7 +61,7 @@ mod wallet_db_storage_tests {
         let protocol_info = serde_json::from_value::<ZcoinProtocolInfo>(json!({
             "consensus_params": {
               "overwinter_activation_height": 152855,
-              "sapling_activation_height": 152855,
+              "sapling_activation_height": u32::from(sapling_activation_height()),
               "blossom_activation_height": null,
               "heartwood_activation_height": null,
               "canopy_activation_height": null,
@@ -182,7 +181,7 @@ mod wallet_db_storage_tests {
 
         // Empty chain should be valid
         let consensus_params = consensus_params();
-        let process_validate = blockdb
+        blockdb
             .process_blocks_with_mode(
                 consensus_params.clone(),
                 BlockProcessingMode::Validate,
@@ -191,7 +190,6 @@ mod wallet_db_storage_tests {
             )
             .await
             .unwrap();
-        info!("{process_validate:?}");
 
         // create a fake compactBlock sending value to the address
         let (cb, _) = fake_compact_block(
@@ -222,11 +220,13 @@ mod wallet_db_storage_tests {
             .unwrap();
 
         // Data-only chain should be valid
+        let max_height_hash = walletdb.get_max_height_hash().await.unwrap();
+        info!("HASH HEIGHT : {max_height_hash:?}");
         blockdb
             .process_blocks_with_mode(
                 consensus_params.clone(),
                 BlockProcessingMode::Validate,
-                walletdb.get_max_height_hash().await.unwrap(),
+                max_height_hash,
                 None,
             )
             .await
@@ -240,7 +240,7 @@ mod wallet_db_storage_tests {
             Amount::from_u64(7).unwrap(),
         );
         let cb_bytes = cb2.write_to_bytes().unwrap();
-        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+        blockdb.insert_block(cb2.height as u32, cb_bytes).await.unwrap();
 
         // Data+cache chain should be valid
         blockdb
@@ -270,5 +270,424 @@ mod wallet_db_storage_tests {
             )
             .await
             .unwrap();
+    }
+
+    #[wasm_bindgen_test]
+    async fn invalid_chain_cache_disconnected() {
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let consensus_params = consensus_params();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvk = ExtendedFullViewingKey::from(&extsk);
+        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+
+        // Create some fake compactBlocks
+        let (cb, _) = fake_compact_block(
+            sapling_activation_height(),
+            BlockHash([0; 32]),
+            extfvk.clone(),
+            Amount::from_u64(5).unwrap(),
+        );
+        let (cb2, _) = fake_compact_block(
+            sapling_activation_height() + 1,
+            cb.hash(),
+            extfvk.clone(),
+            Amount::from_u64(7).unwrap(),
+        );
+        let cb_bytes = cb.write_to_bytes().unwrap();
+        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+        let cb2_bytes = cb2.write_to_bytes().unwrap();
+        blockdb.insert_block(cb2.height as u32, cb2_bytes).await.unwrap();
+
+        // Scan the cache again
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .unwrap();
+
+        // Data-only chain should be valid
+        blockdb
+            .process_blocks_with_mode(
+                consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                walletdb.get_max_height_hash().await.unwrap(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Create more fake CompactBlocks that don't connect to the scanned ones
+        let (cb3, _) = fake_compact_block(
+            sapling_activation_height() + 2,
+            BlockHash([1; 32]),
+            extfvk.clone(),
+            Amount::from_u64(8).unwrap(),
+        );
+        let (cb4, _) = fake_compact_block(
+            sapling_activation_height() + 3,
+            cb3.hash(),
+            extfvk,
+            Amount::from_u64(3).unwrap(),
+        );
+        let cb3_bytes = cb3.write_to_bytes().unwrap();
+        blockdb.insert_block(cb3.height as u32, cb3_bytes).await.unwrap();
+        let cb4_bytes = cb4.write_to_bytes().unwrap();
+        blockdb.insert_block(cb4.height as u32, cb4_bytes).await.unwrap();
+
+        // Data+cache chain should be invalid at the data/cache boundary
+        let validate_chain = blockdb
+            .process_blocks_with_mode(
+                consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                walletdb.get_max_height_hash().await.unwrap(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        match validate_chain.get_inner() {
+            ZcoinStorageError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
+                assert_eq!(*height, sapling_activation_height() + 2)
+            },
+            _ => panic!(),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_invalid_chain_reorg() {
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let consensus_params = consensus_params();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvk = ExtendedFullViewingKey::from(&extsk);
+        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+
+        // Create some fake compactBlocks
+        let (cb, _) = fake_compact_block(
+            sapling_activation_height(),
+            BlockHash([0; 32]),
+            extfvk.clone(),
+            Amount::from_u64(5).unwrap(),
+        );
+        let (cb2, _) = fake_compact_block(
+            sapling_activation_height() + 1,
+            cb.hash(),
+            extfvk.clone(),
+            Amount::from_u64(7).unwrap(),
+        );
+        let cb_bytes = cb.write_to_bytes().unwrap();
+        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+        let cb2_bytes = cb2.write_to_bytes().unwrap();
+        blockdb.insert_block(cb2.height as u32, cb2_bytes).await.unwrap();
+
+        // Scan the cache again
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .unwrap();
+
+        // Data-only chain should be valid
+        blockdb
+            .process_blocks_with_mode(
+                consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                walletdb.get_max_height_hash().await.unwrap(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Create more fake CompactBlocks that that contains a reorg
+        let (cb3, _) = fake_compact_block(
+            sapling_activation_height() + 2,
+            cb2.hash(),
+            extfvk.clone(),
+            Amount::from_u64(8).unwrap(),
+        );
+        let (cb4, _) = fake_compact_block(
+            sapling_activation_height() + 3,
+            BlockHash([1; 32]),
+            extfvk,
+            Amount::from_u64(3).unwrap(),
+        );
+        let cb3_bytes = cb3.write_to_bytes().unwrap();
+        blockdb.insert_block(cb3.height as u32, cb3_bytes).await.unwrap();
+        let cb4_bytes = cb4.write_to_bytes().unwrap();
+        blockdb.insert_block(cb4.height as u32, cb4_bytes).await.unwrap();
+
+        // Data+cache chain should be invalid at the data/cache boundary
+        let validate_chain = blockdb
+            .process_blocks_with_mode(
+                consensus_params.clone(),
+                BlockProcessingMode::Validate,
+                walletdb.get_max_height_hash().await.unwrap(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        match validate_chain.get_inner() {
+            ZcoinStorageError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
+                assert_eq!(*height, sapling_activation_height() + 3)
+            },
+            _ => panic!(),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_data_db_rewinding() {
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let consensus_params = consensus_params();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvk = ExtendedFullViewingKey::from(&extsk);
+        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+
+        // Account balance should be zero
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+
+        // Create some fake compactBlocks sending value to the address
+        let value = Amount::from_u64(5).unwrap();
+        let value2 = Amount::from_u64(7).unwrap();
+        let (cb, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk.clone(), value);
+        let (cb2, _) = fake_compact_block(sapling_activation_height() + 1, cb.hash(), extfvk, value2);
+        let cb_bytes = cb.write_to_bytes().unwrap();
+        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+        let cb2_bytes = cb2.write_to_bytes().unwrap();
+        blockdb.insert_block(cb2.height as u32, cb2_bytes).await.unwrap();
+
+        // Scan the cache
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .unwrap();
+
+        // Account balance should reflect both received notes
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value2);
+
+        // Rewind to height of last scanned block
+        walletdb
+            .rewind_to_height(sapling_activation_height() + 1)
+            .await
+            .unwrap();
+
+        // Account balance should should be unaltered
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value2);
+
+        // Rewind so one block is dropped.
+        walletdb.rewind_to_height(sapling_activation_height()).await.unwrap();
+
+        // Account balance should only contain the first received note
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
+
+        // Scan the cache again
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .unwrap();
+
+        // Account balance should again reflect both received notes
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value2);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_scan_cached_blocks_requires_sequential_blocks() {
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let consensus_params = consensus_params();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvk = ExtendedFullViewingKey::from(&extsk);
+        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+
+        // Create a block with height SAPLING_ACTIVATION_HEIGHT
+        let value = Amount::from_u64(50000).unwrap();
+        let (cb1, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk.clone(), value);
+        let cb1_bytes = cb1.write_to_bytes().unwrap();
+        blockdb.insert_block(cb1.height as u32, cb1_bytes).await.unwrap();
+
+        // Scan cache
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .unwrap();
+
+        // We cannot scan a block of height SAPLING_ACTIVATION_HEIGHT + 2 next
+        let (cb2, _) = fake_compact_block(sapling_activation_height() + 1, cb1.hash(), extfvk.clone(), value);
+        let cb2_bytes = cb2.write_to_bytes().unwrap();
+        let (cb3, _) = fake_compact_block(sapling_activation_height() + 2, cb2.hash(), extfvk.clone(), value);
+        let cb3_bytes = cb3.write_to_bytes().unwrap();
+        blockdb.insert_block(cb3.height as u32, cb3_bytes).await.unwrap();
+        // Scan the cache again
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        let scan = blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .unwrap_err();
+        match scan.get_inner() {
+            ZcoinStorageError::ValidateBlocksError(err) => {
+                let actual = err.to_string();
+                let expected = ValidateBlocksError::block_height_discontinuity(
+                    sapling_activation_height() + 1,
+                    sapling_activation_height() + 2,
+                );
+                assert_eq!(expected.to_string(), actual)
+            },
+            _ => panic!("Should have failed"),
+        }
+
+        // if we add a block of height SPALING_ACTIVATION_HEIGHT +!, we can now scan both;
+        blockdb.insert_block(cb2.height as u32, cb2_bytes).await.unwrap();
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        assert!(blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .is_ok());
+
+        assert_eq!(
+            walletdb.get_balance(AccountId(0)).await.unwrap(),
+            Amount::from_u64(150_000).unwrap()
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_scan_cached_blokcs_finds_received_notes() {
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let consensus_params = consensus_params();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvk = ExtendedFullViewingKey::from(&extsk);
+        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+
+        // Account balance should be zero
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+
+        // Create a fake compactblock sending value to the address
+        let value = Amount::from_u64(5).unwrap();
+        let (cb1, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk.clone(), value);
+        let cb1_bytes = cb1.write_to_bytes().unwrap();
+        blockdb.insert_block(cb1.height as u32, cb1_bytes).await.unwrap();
+
+        // Scan the cache
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        assert!(blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .is_ok());
+
+        // Account balance should reflect the received note
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
+
+        // Create a second fake Compactblock sending more value to the address
+        let value2 = Amount::from_u64(7).unwrap();
+        let (cb2, _) = fake_compact_block(sapling_activation_height() + 1, cb1.hash(), extfvk.clone(), value2);
+        let cb2_bytes = cb2.write_to_bytes().unwrap();
+        blockdb.insert_block(cb2.height as u32, cb2_bytes).await.unwrap();
+
+        // Scan the cache again
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        assert!(blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .is_ok());
+
+        // Account balance should reflect the received note
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value2);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_scan_cached_blocks_finds_change_notes() {
+        register_wasm_log();
+
+        // init blocks_db
+        let ctx = mm_ctx_with_custom_db();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+
+        // init walletdb.
+        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let consensus_params = consensus_params();
+
+        // Add an account to the wallet
+        let extsk = ExtendedSpendingKey::master(&[]);
+        let extfvk = ExtendedFullViewingKey::from(&extsk);
+        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+
+        // Account balance should be zero
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+
+        // Create a fake compactblock sending value to the address
+        let value = Amount::from_u64(5).unwrap();
+        let (cb1, nf) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk.clone(), value);
+        let cb1_bytes = cb1.write_to_bytes().unwrap();
+        blockdb.insert_block(cb1.height as u32, cb1_bytes).await.unwrap();
+
+        // Scan the cache
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        assert!(blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await
+            .is_ok());
+
+        // Account balance should reflect the received note
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
+
+        // Create a second fake Compactblock spending value from the address
+        let extsk2 = ExtendedSpendingKey::master(&[0]);
+        let to2 = extsk2.default_address().unwrap().1;
+        let value2 = Amount::from_u64(2).unwrap();
+        let cb2 = fake_compact_block_spending(
+            sapling_activation_height() + 1,
+            cb1.hash(),
+            (nf, value),
+            extfvk,
+            to2,
+            value2,
+        );
+        let cb2_bytes = cb2.write_to_bytes().unwrap();
+        blockdb.insert_block(cb2.height as u32, cb2_bytes).await.unwrap();
+
+        // Scan the cache again
+        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+        let scan = blockdb
+            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+            .await;
+        info!("SCAN: {scan:?}");
+        assert!(scan.is_ok());
+
+        info!("extrema {:?}", walletdb.block_height_extrema().await.unwrap());
+        // Account balance should equal the change
+        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value - value2);
     }
 }
