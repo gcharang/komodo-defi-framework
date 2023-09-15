@@ -1,6 +1,7 @@
 #[path = "commands_swap/cmd_trade_preimage.rs"]
 mod cmd_trade_preimage;
 
+use chrono::{DateTime, Utc};
 pub(crate) use cmd_trade_preimage::TradePreimageArgs;
 
 use clap::{Args, Subcommand};
@@ -85,6 +86,7 @@ pub(crate) struct MyRecentSwapsArgs {
     pub(crate) from_uuid: Option<Uuid>,
     #[arg(
         long,
+        visible_alias = "page",
         short = 'p',
         help = "Return limit swaps from the selected page; This param will be ignored if from_uuid is set"
     )]
@@ -109,14 +111,14 @@ pub(crate) struct MyRecentSwapsArgs {
         value_parser = parse_datetime,
         help = "Return only swaps that match the swap.started_at >= request.from_timestamp condition. Datetime fmt: \"%y-%m-%dT%H:%M:%S\""
     )]
-    pub(crate) from_timestamp: Option<u64>,
+    pub(crate) from_timestamp: Option<DateTime<Utc>>,
     #[arg(
         long,
         short = 'T',
         value_parser = parse_datetime,
         help = "Return only swaps that match the swap.started_at < request.to_timestamp condition. Datetime fmt: \"%y-%m-%dT%H:%M:%S\""
     )]
-    pub(crate) to_timestamp: Option<u64>,
+    pub(crate) to_timestamp: Option<DateTime<Utc>>,
 }
 
 impl From<&mut MyRecentSwapsArgs> for MyRecentSwapsRequest {
@@ -128,8 +130,8 @@ impl From<&mut MyRecentSwapsArgs> for MyRecentSwapsRequest {
             filter: MySwapsFilter {
                 my_coin: value.my_coin.take(),
                 other_coin: value.other_coin.take(),
-                from_timestamp: value.from_timestamp.take(),
-                to_timestamp: value.to_timestamp.take(),
+                from_timestamp: value.from_timestamp.map(|dt| dt.timestamp() as u64),
+                to_timestamp: value.to_timestamp.map(|dt| dt.timestamp() as u64),
             },
         }
     }

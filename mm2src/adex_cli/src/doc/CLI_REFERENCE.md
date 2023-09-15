@@ -19,9 +19,9 @@ Initialize a predefined coin set and configuration to start mm2 instance with
 Usage: komodefi-cli init [OPTIONS]  
   
 Options:  
-     --mm-coins-path <MM_COINS_PATH>  Coin set file path [default: coins] [aliases: coins]  
-     --mm-conf-path <MM_CONF_PATH>    mm2 configuration file path [default: MM2.json] [aliases: conf]  
- -h, --help                           Print help
+     --mm-coins-path <MM_COINS_PATH>  Coin set file path [default: coins] [aliases: coins]  
+     --mm-conf-path <MM_CONF_PATH>    mm2 configuration file path [default: MM2.json] [aliases: conf]  
+ -h, --help                           Print help
 ```
 
 **Example**:
@@ -35,9 +35,9 @@ RUST_LOG=error komodefi-cli init
 > What is dbdir None  
 > What is rpcip: None  
 > What is the rpcport: None  
-> What is rpc_local_only:    
-> What is i_am_a_seed:    
-? What is the next seednode: Tap enter to skip    
+> What is rpc_local_only:    
+> What is i_am_a_seed:    
+? What is the next seednode: Tap enter to skip    
 [Optional. If operating on a test or private netID, the IP address of at least one seed node is required (on the main network, these are already hardcoded)]
 ...
 ```
@@ -65,10 +65,10 @@ Start mm2 instance
 Usage: komodefi-cli mm2 start [OPTIONS]  
   
 Options:  
-     --mm-conf-path <MM_CONF_PATH>    mm2 configuration file path [aliases: conf]  
-     --mm-coins-path <MM_COINS_PATH>  Coin set file path [aliases: coins]  
-     --mm-log <MM_LOG>                Log file path [aliases: log]  
- -h, --help                           Print help
+     --mm-conf-path <MM_CONF_PATH>    mm2 configuration file path [aliases: conf]  
+     --mm-coins-path <MM_COINS_PATH>  Coin set file path [aliases: coins]  
+     --mm-log <MM_LOG>                Log file path [aliases: log]  
+ -h, --help                           Print help
 ```
 
 **Example**:
@@ -89,18 +89,18 @@ Check if mm2 is running
 Usage: komodefi-cli mm2 status  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example**:
 
 ```sh
-komodefi-cli mm2 status    
+komodefi-cli mm2 status    
 Found mm2 is running, pid: 459264
 ```
 
 ```sh
-komodefi-cli mm2 status    
+komodefi-cli mm2 status    
 Process not found: mm2
 ```
 ### mm2 version
@@ -114,7 +114,7 @@ Get version of intermediary mm2 service
 Usage: komodefi-cli mm2 version  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example**:
@@ -136,13 +136,13 @@ Stop mm2 using API
 Usage: komodefi-cli mm2 stop  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example**:
 
 ```sh
-komodefi-cli mm2 stop    
+komodefi-cli mm2 stop    
 Sending stop command  
 Service stopped: Success
 ```
@@ -158,13 +158,13 @@ Kill mm2 process
 Usage: komodefi-cli mm2 kill  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
 
 ```sh
-komodefi-cli mm2 kill    
+komodefi-cli mm2 kill    
 Process killed: mm2:505606
 ```
 
@@ -179,9 +179,9 @@ Set komodo komodefi cli configuration
 Usage: komodefi-cli config set <--password|--uri <URI>>  
   
 Options:  
- -p, --password   Set if you are going to set up a password  
- -u, --uri <URI>  KomoDeFi RPC API Uri. http://localhost:7783 [aliases: url]  
- -h, --help       Print help
+ -p, --password   Set if you are going to set up a password  
+ -u, --uri <URI>  KomoDeFi RPC API Uri. http://localhost:7783 [aliases: url]  
+ -h, --help       Print help
 ```
 
 **Examples:**
@@ -197,17 +197,17 @@ komodefi-cli config set -u https://localhost:7783 -p
 resulting `komodefi_cfg.json`:
 
 ```
-cat ~/.config/komodefi-cli/komodefi_cfg.json    
+cat ~/.config/komodefi-cli/komodefi_cfg.json    
 {  
- "rpc_password": "D6~$jETp",  
- "rpc_uri": "https://localhost:7783"  
+ "rpc_password": "D6~$jETp",  
+ "rpc_uri": "https://localhost:7783"  
 }
 ```
 
 Getting configuration:
 
 ```sh
-release/komodefi-cli config get    
+release/komodefi-cli config get    
 mm2 RPC URL: https://localhost:7783  
 mm2 RPC password: *************
 ```
@@ -223,16 +223,16 @@ Coin commands: enable, disable etc.
 Usage: komodefi-cli coin <COMMAND>  
   
 Commands:  
- enable               Put a coin to the trading index  
- disable              Deactivates enabled coin and also cancels all active orders that use the selected coin.  
- get-enabled          List activated coins [aliases: enabled]  
- set-required-conf    Set the number of confirmations to wait for the selected coin [aliases: set-conf]  
- set-required-nota    Whether to wait for a dPoW notarization of the given atomic swap transactions [aliases: set-nota]  
- coins-to-kick-start  Return the coins that should be activated to continue the interrupted swaps [aliases: to-kick]  
- help                 Print this message or the help of the given subcommand(s)  
+ enable               Put a coin to the trading index  
+ disable              Deactivates enabled coin and also cancels all active orders that use the selected coin.  
+ get-enabled          List activated coins [aliases: enabled]  
+ set-required-conf    Set the number of confirmations to wait for the selected coin [aliases: set-conf]  
+ set-required-nota    Whether to wait for a dPoW notarization of the given atomic swap transactions [aliases: set-nota]  
+ coins-to-kick-start  Return the coins that should be activated to continue the interrupted swaps [aliases: to-kick]  
+ help                 Print this message or the help of the given subcommand(s)  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 ### coin enable
 
@@ -245,12 +245,12 @@ Put a coin to the trading index
 Usage: komodefi-cli coin enable [OPTIONS] <COIN>  
   
 Arguments:  
- <COIN>  Coin to be included into the trading index  
+ <COIN>  Coin to be included into the trading index  
   
 Options:  
- -k, --keep-progress <KEEP_PROGRESS>  Whether to keep progress on task based commands [default: 0] [aliases: track, keep, progress]  
- -H, --tx-history                     Whether to save tx history for the coin [aliases: history]  
- -h, --help                           Print help
+ -k, --keep-progress <KEEP_PROGRESS>  Whether to keep progress on task based commands [default: 0] [aliases: track, keep, progress]  
+ -H, --tx-history                     Whether to save tx history for the coin [aliases: history]  
+ -h, --help                           Print help
 ```
 
 *Notice: To override required conf and nota `set-required-conf` and `set-required-nota` commands could be used*
@@ -277,15 +277,15 @@ Enabling `tBCH` ([v2.0 method](https://developers.komodoplatform.com/basic-docs/
 komodefi-cli coin enable tBCH  
 Enabling coin: tBCH  
 current_block: 1570304  
-bch_addresses_infos:    
-│ address, pubkey                                   │ method │ balance(sp,unsp) │ tickers │  
-│ bchtest:qzvnf6l254ktt97fx657mqszmrvh5znsqvs26sxf6t│ Iguana │ 0.05:0           │ none    │  
-│ 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d...│        │                  │         │  
+bch_addresses_infos:    
+│ address, pubkey                                   │ method │ balance(sp,unsp) │ tickers │  
+│ bchtest:qzvnf6l254ktt97fx657mqszmrvh5znsqvs26sxf6t│ Iguana │ 0.05:0           │ none    │  
+│ 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d...│        │                  │         │  
   
-slp_addresses_infos:    
-│ address, pubkey                                   │ method │ balance(sp,unsp) │ tickers │  
-│ slptest:qzvnf6l254ktt97fx657mqszmrvh5znsqvt7atu7gk│ Iguana │ {}               │ none    │  
-│ 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d...│        │                  │         │
+slp_addresses_infos:    
+│ address, pubkey                                   │ method │ balance(sp,unsp) │ tickers │  
+│ slptest:qzvnf6l254ktt97fx657mqszmrvh5znsqvt7atu7gk│ Iguana │ {}               │ none    │  
+│ 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d...│        │                  │         │
 ```
 
 Enable ZHTLC `ZOMBIE` COIN ([`task_enable_z_coin_init` method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-20-dev/zhtlc_coins.html#task-enable-z-coin-init))
@@ -308,9 +308,9 @@ In progress: Building wallet db, current_scanned_block: 73397, latest_block: 771
 status: OK  
 current_block: 77154  
 ticker: ZOMBIE  
-iguana wallet:    
-            address: zs1r0fzx9unydgfty74z5d4qkvjyaky0n73ms4cvhttj4234s6rf0hfju5faf6a5nzlwv5qgrr0pen  
-            balance: 50.77:0
+iguana wallet:    
+            address: zs1r0fzx9unydgfty74z5d4qkvjyaky0n73ms4cvhttj4234s6rf0hfju5faf6a5nzlwv5qgrr0pen  
+            balance: 50.77:0
 ```
 
 ```sh
@@ -323,9 +323,9 @@ Getting enable zcoin task status
 status: OK  
 current_block: 77154  
 ticker: ZOMBIE  
-iguana wallet:    
-            address: zs1r0fzx9unydgfty74z5d4qkvjyaky0n73ms4cvhttj4234s6rf0hfju5faf6a5nzlwv5qgrr0pen  
-            balance: 50.77:0
+iguana wallet:    
+            address: zs1r0fzx9unydgfty74z5d4qkvjyaky0n73ms4cvhttj4234s6rf0hfju5faf6a5nzlwv5qgrr0pen  
+            balance: 50.77:0
 ```
 ### coin disable
 
@@ -338,10 +338,10 @@ Deactivates enabled coin and also cancels all active orders that use the selecte
 Usage: komodefi-cli coin disable <COIN>  
   
 Arguments:  
- <COIN>  Coin to disable  
+ <COIN>  Coin to disable  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -363,7 +363,7 @@ List activated coins
 Usage: komodefi-cli coin get-enabled  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example**:
@@ -371,11 +371,11 @@ Options:
 ```
 komodefi-cli coin enabled  
 Getting list of enabled coins ...  
-Ticker   Address  
-ZOMBIE   zs1r0fzx9unydgfty74z5d4qkvjyaky0n73ms4cvhttj4234s6rf0hfju5faf6a5nzlwv5qgrr0pen  
-tBCH     bchtest:qzvnf6l254ktt97fx657mqszmrvh5znsqvs26sxf6t  
-MARTY    RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM  
-DOC      RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
+Ticker   Address  
+ZOMBIE   zs1r0fzx9unydgfty74z5d4qkvjyaky0n73ms4cvhttj4234s6rf0hfju5faf6a5nzlwv5qgrr0pen  
+tBCH     bchtest:qzvnf6l254ktt97fx657mqszmrvh5znsqvs26sxf6t  
+MARTY    RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM  
+DOC      RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM
 ```
 ### coin coins-to-kick-start (to-kick)
 
@@ -388,13 +388,13 @@ Return the coins that should be activated to continue the interrupted swaps
 Usage: komodefi-cli coin coins-to-kick-start  
   
 Options:  
- -h, --help  Print help
- ```
+ -h, --help  Print help
+ ```
 
 **Example:**
 
 ```sh
-komodefi-cli coin to-kick    
+komodefi-cli coin to-kick    
 Getting coins needed for kickstart  
 coins: RICK, MORTY
 ```
@@ -409,11 +409,11 @@ Set the number of confirmations to wait for the selected coin
 Usage: komodefi-cli coin set-required-conf <COIN> <CONFIRMATIONS>  
   
 Arguments:  
- <COIN>           Ticker of the selected coin  
- <CONFIRMATIONS>  Number of confirmations to require [aliases: conf]  
+ <COIN>           Ticker of the selected coin  
+ <CONFIRMATIONS>  Number of confirmations to require [aliases: conf]  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -436,11 +436,11 @@ Whether to wait for a dPoW notarization of the given atomic swap transactions
 Usage: komodefi-cli coin set-required-nota [OPTIONS] <COIN>  
   
 Arguments:  
- <COIN>  Ticker of the selected coin  
+ <COIN>  Ticker of the selected coin  
   
 Options:  
- -n, --requires-notarization  Whether the node should wait for dPoW notarization of atomic swap transactions [aliases: requires-nota]  
- -h, --help                   Print help
+ -n, --requires-notarization  Whether the node should wait for dPoW notarization of atomic swap transactions [aliases: requires-nota]  
+ -h, --help                   Print help
 ```
 
 **Examples:**
@@ -474,20 +474,20 @@ Wallet commands: balance, withdraw etc.
 Usage: komodefi-cli wallet <COMMAND>  
   
 Commands:  
- my-balance            Get coin balance [aliases: balance]  
- withdraw              Generates, signs, and returns a transaction that transfers the amount of coin to the address indicated in the to argument  
- send-raw-transaction  Broadcasts the transaction to the network of selected coin [aliases: send-raw, send]  
- get-raw-transaction   Returns the full signed raw transaction hex for any transaction that is confirmed or within the mempool [aliases: get-raw, raw-tx, get]  
- tx-history            Returns the blockchain transactions involving the Komodo DeFi Framework node's coin address [aliases: history]  
- show-priv-key         Returns the private key of the specified coin in a format compatible with coin wallets [aliases: private, private-key]  
- validate-address      Checks if an input string is a valid address of the specified coin [aliases: validate]  
- kmd-rewards-info      Informs about the active user rewards that can be claimed by an address's unspent outputs [aliases: rewards]  
- convert-address       Converts an input address to a specified address format [aliases: convert]  
- convert-utxo-address  Takes a UTXO address as input, and returns the equivalent address for another UTXO coin (e.g. from BTC address to RVN address) [aliases: convert-utxo]  
- help                  Print this message or the help of the given subcommand(s)  
+ my-balance            Get coin balance [aliases: balance]  
+ withdraw              Generates, signs, and returns a transaction that transfers the amount of coin to the address indicated in the to argument  
+ send-raw-transaction  Broadcasts the transaction to the network of selected coin [aliases: send-raw, send]  
+ get-raw-transaction   Returns the full signed raw transaction hex for any transaction that is confirmed or within the mempool [aliases: get-raw, raw-tx, get]  
+ tx-history            Returns the blockchain transactions involving the Komodo DeFi Framework node's coin address [aliases: history]  
+ show-priv-key         Returns the private key of the specified coin in a format compatible with coin wallets [aliases: private, private-key]  
+ validate-address      Checks if an input string is a valid address of the specified coin [aliases: validate]  
+ kmd-rewards-info      Informs about the active user rewards that can be claimed by an address's unspent outputs [aliases: rewards]  
+ convert-address       Converts an input address to a specified address format [aliases: convert]  
+ convert-utxo-address  Takes a UTXO address as input, and returns the equivalent address for another UTXO coin (e.g. from BTC address to RVN address) [aliases: convert-utxo]  
+ help                  Print this message or the help of the given subcommand(s)  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 ### wallet my-balance (balace)
@@ -501,10 +501,10 @@ Get coin balance
 Usage: komodefi-cli wallet my-balance <COIN>  
   
 Arguments:  
- <COIN>  Coin to get balance  
+ <COIN>  Coin to get balance  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Examples:**
@@ -529,28 +529,28 @@ Generates, signs, and returns a transaction that transfers the amount of coin to
 Usage: komodefi-cli wallet withdraw [OPTIONS] <COIN> <TO>  
   
 Arguments:  
- <COIN>  Coin the user desires to withdraw  
- <TO>    Address the user desires to withdraw to  
+ <COIN>  Coin the user desires to withdraw  
+ <TO>    Address the user desires to withdraw to  
   
 Options:  
- -M, --max  
-         Withdraw the maximum available amount  
- -a, --amount <AMOUNT>  
-         Amount the user desires to withdraw  
- -f, --fee <FEE>  
-         Transaction fee [possible-values: <utxo-fixed:amount|utxo-per-kbyte:amount|eth:gas_price:gas|qrc:gas_limit:gas_price|cosmos:gas_limit:gas_price>]  
-     --derivation-path <DERIVATION_PATH>  
-         Derivation path to determine the source of the derived value in more detail  
-     --hd-account-id <HD_ACCOUNT_ID>  
-         Account index of the same crypto currency  
-     --hd-is-change <HD_IS_CHANGE>  
-         Is change [possible values: true, false]  
-     --hd-address-index <HD_ADDRESS_INDEX>  
-         An incremental address index for the account  
- -b, --bare-output  
-         Whether to output only tx_hex [aliases: bare]  
- -h, --help  
-         Print help
+ -M, --max  
+         Withdraw the maximum available amount  
+ -a, --amount <AMOUNT>  
+         Amount the user desires to withdraw  
+ -f, --fee <FEE>  
+         Transaction fee [possible-values: <utxo-fixed:amount|utxo-per-kbyte:amount|eth:gas_price:gas|qrc:gas_limit:gas_price|cosmos:gas_limit:gas_price>]  
+     --derivation-path <DERIVATION_PATH>  
+         Derivation path to determine the source of the derived value in more detail  
+     --hd-account-id <HD_ACCOUNT_ID>  
+         Account index of the same crypto currency  
+     --hd-is-change <HD_IS_CHANGE>  
+         Is change [possible values: true, false]  
+     --hd-address-index <HD_ADDRESS_INDEX>  
+         An incremental address index for the account  
+ -b, --bare-output  
+         Whether to output only tx_hex [aliases: bare]  
+ -h, --help  
+         Print help
 ```
 
 **Example**:
@@ -568,7 +568,7 @@ my_balance_change: -1.00001
 block_height: 0  
 timestamp: 23-09-13 14:32:29  
 fee_details: {"type":"Utxo","coin":"DOC","amount":"0.00001"}  
-internal_id:    
+internal_id:    
 transaction_type: "StandardTransfer"  
 tx_hash: 04bfc0470a07ab1390dffb98164543e368d100101020a4f9b20bf3f8193c2ea0  
 tx_hex: 0400008085202f8901d4a7ffce25cdc0ca0cbfa23363e1159195a3fafd742bf8bfc6ba0f50a51b7160010000006a4730440220590868b953be9c655ebd97cf750fbd669171006848900c5ea9d0e151a1dfb28b02203b6ca6955d2f558c4b5fdbf5cc1a149cbe6a57685be34d9f7594b140ad  
@@ -579,7 +579,7 @@ tx_hex: 0400008085202f8901d4a7ffce25cdc0ca0cbfa23363e1159195a3fafd742bf8bfc6ba0f
 Bare output:
 
 ```sh
-RUST_LOG=error komodefi-cli wallet withdraw --amount 1 --fee utxo-fixed:0.01  DOC RQvvz29iHpn4iuHeN7qFXnLbc1eh31nRKY -b  
+RUST_LOG=error komodefi-cli wallet withdraw --amount 1 --fee utxo-fixed:0.01  DOC RQvvz29iHpn4iuHeN7qFXnLbc1eh31nRKY -b  
 0400008085202f8901d4a7ffce25cdc0ca0cbfa23363e1159195a3fafd742bf8bfc6ba0f50a51b7160010000006b483045022100a9bb524d413fea1a417a5d9ac1465c8995eadd642704c003ab5a2be22b533546022044d3f33582773254930f5054afa89d9ce085369a1b3c2c47302ab5dbf17cfa13  
 012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff0200e1f505000000001976a914abad17c49173537a07e39d2c94dcfe64645b1ad488ac3af025f6625600001976a9149934ebeaa56cb597c936a9ed8202d8d97a0a700388ac7c850165000000000000  
 000000000000000000
@@ -596,10 +596,10 @@ Broadcasts the transaction to the network of selected coin
 Usage: komodefi-cli wallet send-raw-transaction [OPTIONS] --coin <COIN> --tx-hex <TX_HEX>  
   
 Options:  
- -c, --coin <COIN>      Name of the coin network on which to broadcast the transaction  
- -t, --tx-hex <TX_HEX>  Transaction bytes in hexadecimal format;  
- -b, --bare-output      Whether to output only tx_hash [aliases: bare]  
- -h, --help             Print help
+ -c, --coin <COIN>      Name of the coin network on which to broadcast the transaction  
+ -t, --tx-hex <TX_HEX>  Transaction bytes in hexadecimal format;  
+ -b, --bare-output      Whether to output only tx_hash [aliases: bare]  
+ -h, --help             Print help
 ```
 
 **Example:**
@@ -615,7 +615,7 @@ tx_hash: 58aca0e311513974e467187026b873621c68a4ddedb16175c558d3886dbc3dc4
 Calling methods sequentially:
 
 ```sh
-komodefi-cli wallet send -b --coin DOC --tx-hex  $(RUST_LOG=error komodefi-cli wallet withdraw DOC RQvvz29iHpn4iuHeN7qFXnLbc1eh31nRKY --amount 1 -b)
+komodefi-cli wallet send -b --coin DOC --tx-hex  $(RUST_LOG=error komodefi-cli wallet withdraw DOC RQvvz29iHpn4iuHeN7qFXnLbc1eh31nRKY --amount 1 -b)
 Sending raw transaction  
 26f4f904c60d5d0a410fa6e00fb540e19e983f52045b2d29f97d046c58e9ecd0
 ```
@@ -632,10 +632,10 @@ Returns the full signed raw transaction hex for any transaction that is confirme
 Usage: komodefi-cli wallet get-raw-transaction [OPTIONS] --coin <COIN> --tx-hash <TX_HASH>  
   
 Options:  
- -c, --coin <COIN>        Coin the user desires to request for the transaction  
- -H, --tx-hash <TX_HASH>  Hash of the transaction [aliases: hash]  
- -b, --bare-output        Whether to output only tx_hex [aliases: bare]  
- -h, --help               Print help
+ -c, --coin <COIN>        Coin the user desires to request for the transaction  
+ -H, --tx-hash <TX_HASH>  Hash of the transaction [aliases: hash]  
+ -b, --bare-output        Whether to output only tx_hex [aliases: bare]  
+ -h, --help               Print help
 ```
 
 **Example:**
@@ -660,21 +660,21 @@ Returns the blockchain transactions involving the Komodo DeFi Framework node's c
 Usage: komodefi-cli wallet tx-history [OPTIONS] <--limit <LIMIT>|--max> <COIN>  
   
 Arguments:  
- <COIN>  The name of the coin for the history request  
+ <COIN>  The name of the coin for the history request  
   
 Options:  
- -l, --limit <LIMIT>                Limits the number of returned transactions  
- -m, --max                          Whether to return all available records  
- -H, --from-tx-hash <FROM_TX_HASH>  Skips records until it reaches this ID, skipping the from_id as well  
- -i, --from-tx-id <FROM_TX_ID>      For zcoin compatibility, skips records until it reaches this ID, skipping the from_id as well  
- -p, --page-number <PAGE_NUMBER>    The name of the coin for the history request  
- -h, --help                         Print help
+ -l, --limit <LIMIT>                Limits the number of returned transactions  
+ -m, --max                          Whether to return all available records  
+ -H, --from-tx-hash <FROM_TX_HASH>  Skips records until it reaches this ID, skipping the from_id as well  
+ -i, --from-tx-id <FROM_TX_ID>      For zcoin compatibility, skips records until it reaches this ID, skipping the from_id as well  
+ -p, --page-number <PAGE_NUMBER>    The name of the coin for the history request  
+ -h, --help                         Print help
 ```
 
 **Example:**
 
 ```sh
-komodefi-cli wallet tx-history DOC --limit 5 --page 3     
+komodefi-cli wallet tx-history DOC --limit 5 --page 3     
 Getting tx history, coin: DOC  
 limit: 5  
 skipped: 10  
@@ -683,29 +683,29 @@ page_number: 3
 total_pages: 4  
 current_block: 208242  
 sync_status: NotEnabled  
-transactions:    
-│ time: 23-07-24 16:54:29                                                                                                                              │  
-│ coin: DOC                                                                                                                                            │  
-│ block: 132256                                                                                                                                        │  
-│ confirmations: 75987                                                                                                                                 │  
-│ transaction_type: StandardTransfer                                                                                                                   │  
-│ total_amount: 949836.47                                                                                                                              │  
-│ spent_by_me: 949836.47                                                                                                                               │  
-│ received_by_me: 949835.47                                                                                                                            │  
-│ my_balance_change: -1.00                                                                                                                             │  
-│ fee_details: {"type":"Utxo","coin":"DOC","amount":"0.00001"}                                                                                         │  
-│ tx_hash: 671aaee83b6d870f168c4e0be93e2d2087c8eae324e105c1dcad240cfea73c03                                                                            │  
-│ from: RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM                                                                                                             │  
-│ to: RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM, RQvvz29iHpn4iuHeN7qFXnLbc1eh31nRKY                                                                           │  
-│ internal_id: 671aaee83b6d870f168c4e0be93e2d2087c8eae324e105c1dcad240cfea73c03                                                                        │  
+transactions:    
+│ time: 23-07-24 16:54:29                                                                                                                              │  
+│ coin: DOC                                                                                                                                            │  
+│ block: 132256                                                                                                                                        │  
+│ confirmations: 75987                                                                                                                                 │  
+│ transaction_type: StandardTransfer                                                                                                                   │  
+│ total_amount: 949836.47                                                                                                                              │  
+│ spent_by_me: 949836.47                                                                                                                               │  
+│ received_by_me: 949835.47                                                                                                                            │  
+│ my_balance_change: -1.00                                                                                                                             │  
+│ fee_details: {"type":"Utxo","coin":"DOC","amount":"0.00001"}                                                                                         │  
+│ tx_hash: 671aaee83b6d870f168c4e0be93e2d2087c8eae324e105c1dcad240cfea73c03                                                                            │  
+│ from: RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM                                                                                                             │  
+│ to: RPFGrvJWjSYN4qYvcXsECW1HoHbvQjowZM, RQvvz29iHpn4iuHeN7qFXnLbc1eh31nRKY                                                                           │  
+│ internal_id: 671aaee83b6d870f168c4e0be93e2d2087c8eae324e105c1dcad240cfea73c03                                                                        │  
 │ tx_hex: 0400008085202f8901afdad3b683400c1ff4331514afdcbd1703647edcd1abaa3d93b1aecd6daaa3e0010000006a473044022022d692771b413f4b197c2dba61453b97a4df99 │  
 │ 4986fafbd8e8950fcc77e1519d022012c990b48e11ee568907184236e1d5e2f03a5a18132fb322fe7522e33ddc6f39012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f7 │  
 │ 93061fa5f38b2b4dffffffff0200e1f505000000001976a914abad17c49173537a07e39d2c94dcfe64645b1ad488ac54729d14635600001976a9149934ebeaa56cb597c936a9ed8202d8 │  
-│ d97a0a700388acb0acbe64000000000000000000000000000000                                                                                                 │  
-│                                                                                                                                                      │  
+│ d97a0a700388acb0acbe64000000000000000000000000000000                                                                                                 │  
+│                                                                                                                                                      │  
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-│ time: 23-07-24 16:44:09                                                                                                                              │  
-│ coin: DOC                                                                                                                                            │
+│ time: 23-07-24 16:44:09                                                                                                                              │  
+│ coin: DOC                                                                                                                                            │
 ...
 ```
 
@@ -720,10 +720,10 @@ Returns the private key of the specified coin in a format compatible with coin w
 Usage: komodefi-cli wallet show-priv-key <COIN>  
   
 Arguments:  
- <COIN>  The name of the coin of the private key to show  
+ <COIN>  The name of the coin of the private key to show  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -746,11 +746,11 @@ Checks if an input string is a valid address of the specified coin
 Usage: komodefi-cli wallet validate-address <COIN> <ADDRESS>  
   
 Arguments:  
- <COIN>     The coin to validate address for  
- <ADDRESS>  The input string to validate  
+ <COIN>     The coin to validate address for  
+ <ADDRESS>  The input string to validate  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -772,15 +772,15 @@ Informs about the active user rewards that can be claimed by an address's unspen
 Usage: komodefi-cli wallet kmd-rewards-info  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
 
 ```sh
-komodefi-cli wallet rewards    
+komodefi-cli wallet rewards    
 Getting kmd rewards info  
-rewards_info:    
+rewards_info:    
 tx_hash: 498e23e1e0a3322192c4c4d7f531a562c12f44f86544013344397c3fc217963a  
 height: 3515481  
 output_index: 1  
@@ -803,16 +803,16 @@ Converts an input address to a specified address format
 Usage: komodefi-cli wallet convert-address [OPTIONS] --coin <COIN> --from <FROM> --format <FORMAT>  
   
 Options:  
- -c, --coin <COIN>  
-         The name of the coin address context  
- -f, --from <FROM>  
-         Input address  
- -F, --format <FORMAT>  
-         Address format to which the input address should be converted [possible values: mixed-case, cash-address, standard]  
- -C, --cash-address-network <CASH_ADDRESS_NETWORK>  
-         Network prefix for cashaddress format [possible values: bitcoin-cash, bch-test, bch-reg]  
- -h, --help  
-         Print help
+ -c, --coin <COIN>  
+         The name of the coin address context  
+ -f, --from <FROM>  
+         Input address  
+ -F, --format <FORMAT>  
+         Address format to which the input address should be converted [possible values: mixed-case, cash-address, standard]  
+ -C, --cash-address-network <CASH_ADDRESS_NETWORK>  
+         Network prefix for cashaddress format [possible values: bitcoin-cash, bch-test, bch-reg]  
+ -h, --help  
+         Print help
 ```
 
 **Examples:**
@@ -849,11 +849,11 @@ The `convert-utxo` command is similar to convert-address but is aimed to convert
 komodefi-cli wallet convert-utxo-address <ADDRESS> <TO_COIN>  
   
 Arguments:  
- <ADDRESS>  Input UTXO address  
- <TO_COIN>  Input address to convert from  
+ <ADDRESS>  Input UTXO address  
+ <TO_COIN>  Input address to convert from  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -876,16 +876,16 @@ Order listing commands: book, history, depth etc.
 Usage: komodefi-cli order <COMMAND>  
   
 Commands:  
- orderbook        Get orderbook [aliases: book]  
- orderbook-depth  Get orderbook depth [aliases: depth]  
- order-status     Return the data of the order with the selected uuid created by the current node [aliases: status]  
- best-orders      Return the best priced trades available on the orderbook [aliases: best]  
- my-orders        Get my orders [aliases: my, mine]  
- orders-history   Return all orders whether active or inactive that match the selected filters [aliases: history, filter]  
- help             Print this message or the help of the given subcommand(s)  
+ orderbook        Get orderbook [aliases: book]  
+ orderbook-depth  Get orderbook depth [aliases: depth]  
+ order-status     Return the data of the order with the selected uuid created by the current node [aliases: status]  
+ best-orders      Return the best priced trades available on the orderbook [aliases: best]  
+ my-orders        Get my orders [aliases: my, mine]  
+ orders-history   Return all orders whether active or inactive that match the selected filters [aliases: history, filter]  
+ help             Print this message or the help of the given subcommand(s)  
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 ### orders orderbook (book)
 
@@ -898,20 +898,20 @@ Get orderbook
 Usage: komodefi-cli order orderbook [OPTIONS] <BASE> <REL>  
   
 Arguments:  
- <BASE>  Base currency of a pair  
- <REL>   Related currency, also can be called "quote currency" according to exchange terms  
+ <BASE>  Base currency of a pair  
+ <REL>   Related currency, also can be called "quote currency" according to exchange terms  
   
 Options:  
- -u, --uuids                    Enable `uuid` column  
- -m, --min-volume               Enable `min_volume` column [aliases: min]  
- -M, --max-volume               Enable `max_volume` column [aliases: max]  
- -p, --publics                  Enable `public` column  
- -a, --address                  Enable `address` column  
- -A, --age                      Enable `age` column  
- -c, --conf-settings            Enable order confirmation settings column  
-     --asks-limit <ASKS_LIMIT>  Orderbook asks count limitation [default: 20]  
-     --bids-limit <BIDS_LIMIT>  Orderbook bids count limitation [default: 20]  
- -h, --help                     Print help
+ -u, --uuids                    Enable `uuid` column  
+ -m, --min-volume               Enable `min_volume` column [aliases: min]  
+ -M, --max-volume               Enable `max_volume` column [aliases: max]  
+ -p, --publics                  Enable `public` column  
+ -a, --address                  Enable `address` column  
+ -A, --age                      Enable `age` column  
+ -c, --conf-settings            Enable order confirmation settings column  
+     --asks-limit <ASKS_LIMIT>  Orderbook asks count limitation [default: 20]  
+     --bids-limit <BIDS_LIMIT>  Orderbook bids count limitation [default: 20]  
+ -h, --help                     Print help
 ```
 
 
@@ -920,13 +920,13 @@ Options:
 ```sh
 komodefi-cli orders book DOC MARTY --uuids --asks-limit 5 --bids-limit 5  
 Getting orderbook, base: DOC, rel: MARTY  
-     Volume: DOC Price: MARTY     Uuid                                    
-*           1.00 3.00000000       4d7c187b-d61f-4349-b608-a6abe0b3f0ea    
-            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
-     94974264.87 1.00000000       9406010e-54fd-404c-b252-1af473bf77e6    
-- --------------- ---------------- ------------------------------------    
-     94898462.11 1.00000000       5a14a592-feea-4eca-92d8-af79c0670a39    
-            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086
+     Volume: DOC Price: MARTY     Uuid                                    
+*           1.00 3.00000000       4d7c187b-d61f-4349-b608-a6abe0b3f0ea    
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
+     94974264.87 1.00000000       9406010e-54fd-404c-b252-1af473bf77e6    
+- --------------- ---------------- ------------------------------------    
+     94898462.11 1.00000000       5a14a592-feea-4eca-92d8-af79c0670a39    
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086
 ```
 
 ### sell
@@ -934,29 +934,29 @@ Getting orderbook, base: DOC, rel: MARTY
 The `sell` command sells a base coin for a rel one in a given volume and at a given price in rel using the [`sell` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/sell.html). That is possible to limit  a new order with the `--min-volume`.  If `--uuid` or `--public` options were set matching procedure would be restricted according to the given values. `--base-confs`, `--base-nota`, `--rel-confs`, `--rel-nota` are to override preset confirmation and notarization rules.
 
 ```sh
-komodefi-cli sell  --help  
+komodefi-cli sell  --help  
 Put a selling request  
   
 Usage: komodefi-cli sell [OPTIONS] <BASE> <REL> <VOLUME> <PRICE>  
   
 Arguments:  
- <BASE>    Base currency of a pair  
- <REL>     Related currency of a pair  
- <VOLUME>  Amount of coins the user is willing to sell/buy of the base coin  
- <PRICE>   Price in rel the user is willing to receive/pay per one unit of the base coin  
+ <BASE>    Base currency of a pair  
+ <REL>     Related currency of a pair  
+ <VOLUME>  Amount of coins the user is willing to sell/buy of the base coin  
+ <PRICE>   Price in rel the user is willing to receive/pay per one unit of the base coin  
   
 Options:  
- -t, --order-type <ORDER_TYPE>  The GoodTillCancelled order is automatically converted to a maker order if not matched in 30 seconds, and this maker order stays in the orderbook until explicitly cancelled. On the other hand, a FillOrKi  
+ -t, --order-type <ORDER_TYPE>  The GoodTillCancelled order is automatically converted to a maker order if not matched in 30 seconds, and this maker order stays in the orderbook until explicitly cancelled. On the other hand, a FillOrKi  
 ll is cancelled if not matched within 30 seconds [default: good-till-cancelled] [aliases: type] [possible values: fill-or-kill, good-till-cancelled]  
- -m, --min-volume <MIN_VOLUME>  Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker  
- -u, --uuid <MATCH_UUIDS>       The created order is matched using a set of uuid  
- -p, --public <MATCH_PUBLICS>   The created order is matched using a set of publics to select specific nodes  
-     --base-confs <BASE_CONFS>  Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
-     --base-nota <BASE_NOTA>    Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
-     --rel-confs <REL_CONFS>    Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
-     --rel-nota <REL_NOTA>      Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
- -s, --save-in-history          If true, each order's short record history is stored else the only order status will be temporarily stored while in progress [aliases: save]  
- -h, --help                     Print help
+ -m, --min-volume <MIN_VOLUME>  Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker  
+ -u, --uuid <MATCH_UUIDS>       The created order is matched using a set of uuid  
+ -p, --public <MATCH_PUBLICS>   The created order is matched using a set of publics to select specific nodes  
+     --base-confs <BASE_CONFS>  Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
+     --base-nota <BASE_NOTA>    Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
+     --rel-confs <REL_CONFS>    Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
+     --rel-nota <REL_NOTA>      Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
+ -s, --save-in-history          If true, each order's short record history is stored else the only order status will be temporarily stored while in progress [aliases: save]  
+ -h, --help                     Print help
 ```
 
 **Example**:
@@ -977,21 +977,21 @@ Place an order on the orderbook. The setprice order is always considered a sell
 Usage: komodefi-cli set-price [OPTIONS] <--max|--volume <VOLUME>> <BASE> <REL> <PRICE>  
   
 Arguments:  
- <BASE>   The name of the coin the user desires to sell  
- <REL>    The name of the coin the user desires to receive  
- <PRICE>  The price in rel the user is willing to receive per one unit of the base coin  
+ <BASE>   The name of the coin the user desires to sell  
+ <REL>    The name of the coin the user desires to receive  
+ <PRICE>  The price in rel the user is willing to receive per one unit of the base coin  
   
 Options:  
- -M, --max                      Use the entire coin balance for the order, taking 0.001 coins into reserve to account for fees  
- -v, --volume <VOLUME>          The maximum amount of base coin available for the order, ignored if max is true; the following values must be greater than or equal to the min_trading_vol of the corresponding coin  
- -m, --min-volume <MIN_VOLUME>  The minimum amount of base coin available for the order; it must be less or equal than volume param; the following values must be greater than or equal to the min_trading_vol of the corresponding coin  
- -c, --cancel-prev              Cancel all existing orders for the selected pair [aliases: cancel]  
-     --base-confs <BASE_CONFS>  Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
-     --base-nota <BASE_NOTA>    Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
-     --rel-confs <REL_CONFS>    Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
-     --rel-nota <REL_NOTA>      Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
- -s, --save-in-history          If true, each order's short record history is stored in a local SQLite database table, and when the order is cancelled or fully matched, it's history will be saved as a json file [aliases: save]  
- -h, --help                     Print help
+ -M, --max                      Use the entire coin balance for the order, taking 0.001 coins into reserve to account for fees  
+ -v, --volume <VOLUME>          The maximum amount of base coin available for the order, ignored if max is true; the following values must be greater than or equal to the min_trading_vol of the corresponding coin  
+ -m, --min-volume <MIN_VOLUME>  The minimum amount of base coin available for the order; it must be less or equal than volume param; the following values must be greater than or equal to the min_trading_vol of the corresponding coin  
+ -c, --cancel-prev              Cancel all existing orders for the selected pair [aliases: cancel]  
+     --base-confs <BASE_CONFS>  Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
+     --base-nota <BASE_NOTA>    Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
+     --rel-confs <REL_CONFS>    Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
+     --rel-nota <REL_NOTA>      Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
+ -s, --save-in-history          If true, each order's short record history is stored in a local SQLite database table, and when the order is cancelled or fully matched, it's history will be saved as a json file [aliases: save]  
+ -h, --help                     Print help
 ```
 
 **Example:**
@@ -999,27 +999,27 @@ Options:
 ```sh
 komodefi-cli set-price DOC MARTY 3 --volume 1 -c  
 Setting price for pair: DOC MARTY  
-Maker order:    
-               base: DOC  
-                rel: MARTY  
-              price: 3.00  
-               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
-         created at: 23-09-15 13:40:28  
-         updated at: 23-09-15 13:40:28  
-       max_base_vol: 1.00  
-       min_base_vol: 0.000100  
-              swaps: empty  
-      conf_settings: 1,false:1,false
+Maker order:    
+               base: DOC  
+                rel: MARTY  
+              price: 3.00  
+               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+         created at: 23-09-15 13:40:28  
+         updated at: 23-09-15 13:40:28  
+       max_base_vol: 1.00  
+       min_base_vol: 0.000100  
+              swaps: empty  
+      conf_settings: 1,false:1,false
 
 komodefi-cli orders book DOC MARTY --uuids
 Getting orderbook, base: DOC, rel: MARTY  
-     Volume: DOC Price: MARTY     Uuid                                    
-*           1.00 3.00000000       077b68d9-0e71-4a35-9b3f-c3cfe5b57310    
-            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
-     94974264.87 1.00000000       a29748d0-fa6a-4a7f-a402-c569c96ea92a    
-- -------------- ---------------- ------------------------------------    
-     94898462.11 1.00000000       41b0a9cb-8416-4748-af4d-2064dd8ae617    
-            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086
+     Volume: DOC Price: MARTY     Uuid                                    
+*           1.00 3.00000000       077b68d9-0e71-4a35-9b3f-c3cfe5b57310    
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
+     94974264.87 1.00000000       a29748d0-fa6a-4a7f-a402-c569c96ea92a    
+- -------------- ---------------- ------------------------------------    
+     94898462.11 1.00000000       41b0a9cb-8416-4748-af4d-2064dd8ae617    
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086
 ...
 ```
 
@@ -1034,44 +1034,44 @@ Update order on the orderbook
 Usage: komodefi-cli update-maker-order [OPTIONS] --uuid <UUID>  
   
 Options:  
- -u, --uuid <UUID>                  Uuid of the order the user desires to update  
- -p, --price <PRICE>                Price in rel the user is willing to receive per one unit of the base coin  
- -M, --max-volume                   Whether to use the entire coin balance for the order, taking 0.001 coins into reserve to account for fees  
- -d, --volume-delta <VOLUME_DELTA>  Volume added to or subtracted from the max_base_vol of the order to be updated, resulting in the new volume which is the maximum amount of base coin available for the order, ignored if max is true  
- -m, --min-volume <MIN_VOLUME>      Minimum amount of base coin available for the order; it must be less or equal than the new volume; the following values must be greater than or equal to the min_trading_vol of the corresponding coin  
-     --base-confs <BASE_CONFS>      Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
-     --base-nota <BASE_NOTA>        Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
-     --rel-confs <REL_CONFS>        Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
-     --rel-nota <REL_NOTA>          Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
- -h, --help                         Print help
+ -u, --uuid <UUID>                  Uuid of the order the user desires to update  
+ -p, --price <PRICE>                Price in rel the user is willing to receive per one unit of the base coin  
+ -M, --max-volume                   Whether to use the entire coin balance for the order, taking 0.001 coins into reserve to account for fees  
+ -d, --volume-delta <VOLUME_DELTA>  Volume added to or subtracted from the max_base_vol of the order to be updated, resulting in the new volume which is the maximum amount of base coin available for the order, ignored if max is true  
+ -m, --min-volume <MIN_VOLUME>      Minimum amount of base coin available for the order; it must be less or equal than the new volume; the following values must be greater than or equal to the min_trading_vol of the corresponding coin  
+     --base-confs <BASE_CONFS>      Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
+     --base-nota <BASE_NOTA>        Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
+     --rel-confs <REL_CONFS>        Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
+     --rel-nota <REL_NOTA>          Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
+ -h, --help                         Print help
 ```
 
 **Example:**
 
 ```sh
-komodefi-cli update-maker-order --uuid 077b68d9-0e71-4a35-9b3f-c3cfe5b57310 -p 10 -d=10 --base-nota false --bc 2 --rn false --rc 2 -m 4    
+komodefi-cli update-maker-order --uuid 077b68d9-0e71-4a35-9b3f-c3cfe5b57310 -p 10 -d=10 --base-nota false --bc 2 --rn false --rc 2 -m 4    
 Updating maker order  
-Maker order:    
-               base: DOC  
-                rel: MARTY  
-              price: 10.00  
-               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
-         created at: 23-09-15 13:40:28  
-         updated at: 23-09-15 13:43:31  
-       max_base_vol: 21.00  
-       min_base_vol: 4.00  
-              swaps: empty  
-      conf_settings: 2,false:2,false
-      
+Maker order:    
+               base: DOC  
+                rel: MARTY  
+              price: 10.00  
+               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+         created at: 23-09-15 13:40:28  
+         updated at: 23-09-15 13:43:31  
+       max_base_vol: 21.00  
+       min_base_vol: 4.00  
+              swaps: empty  
+      conf_settings: 2,false:2,false
+      
 komodefi-cli orders book DOC MARTY --uuids -c  
 Getting orderbook, base: DOC, rel: MARTY  
-     Volume: DOC Price: MARTY     Uuid                                 Order conf (bc,bn:rc,rn)    
-*           21.00 10.00000000      077b68d9-0e71-4a35-9b3f-c3cfe5b57310 1,false:1,false             
-            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2 1,false:1,false             
-     94974264.87 1.00000000       c4a469c7-fa69-4002-a1be-2578d329d681 1,false:1,false             
-- --------------- ---------------- ------------------------------------ ------------------------    
-     94898462.11 1.00000000       9734d9e5-36f5-4f9f-81b9-deb79390f82b 1,false:1,false             
-            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086 1,false:1,false
+     Volume: DOC Price: MARTY     Uuid                                 Order conf (bc,bn:rc,rn)    
+*           21.00 10.00000000      077b68d9-0e71-4a35-9b3f-c3cfe5b57310 1,false:1,false             
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2 1,false:1,false             
+     94974264.87 1.00000000       c4a469c7-fa69-4002-a1be-2578d329d681 1,false:1,false             
+- --------------- ---------------- ------------------------------------ ------------------------    
+     94898462.11 1.00000000       9734d9e5-36f5-4f9f-81b9-deb79390f82b 1,false:1,false             
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086 1,false:1,false
 ...
 ```
 
@@ -1087,39 +1087,39 @@ Put a buying request
 Usage: komodefi-cli buy [OPTIONS] <BASE> <REL> <VOLUME> <PRICE>  
   
 Arguments:  
- <BASE>    Base currency of a pair  
- <REL>     Related currency of a pair  
- <VOLUME>  Amount of coins the user is willing to sell/buy of the base coin  
- <PRICE>   Price in rel the user is willing to receive/pay per one unit of the base coin  
+ <BASE>    Base currency of a pair  
+ <REL>     Related currency of a pair  
+ <VOLUME>  Amount of coins the user is willing to sell/buy of the base coin  
+ <PRICE>   Price in rel the user is willing to receive/pay per one unit of the base coin  
   
 Options:  
- -t, --order-type <ORDER_TYPE>  The GoodTillCancelled order is automatically converted to a maker order if not matched in 30 seconds, and this maker order stays in the orderbook until explicitly cancelled. On the other hand, a FillOrKi  
+ -t, --order-type <ORDER_TYPE>  The GoodTillCancelled order is automatically converted to a maker order if not matched in 30 seconds, and this maker order stays in the orderbook until explicitly cancelled. On the other hand, a FillOrKi  
 ll is cancelled if not matched within 30 seconds [default: good-till-cancelled] [aliases: type] [possible values: fill-or-kill, good-till-cancelled]  
- -m, --min-volume <MIN_VOLUME>  Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker  
- -u, --uuid <MATCH_UUIDS>       The created order is matched using a set of uuid  
- -p, --public <MATCH_PUBLICS>   The created order is matched using a set of publics to select specific nodes  
-     --base-confs <BASE_CONFS>  Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
-     --base-nota <BASE_NOTA>    Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
-     --rel-confs <REL_CONFS>    Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
-     --rel-nota <REL_NOTA>      Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
- -s, --save-in-history          If true, each order's short record history is stored else the only order status will be temporarily stored while in progress [aliases: save]  
- -h, --help                     Print help
+ -m, --min-volume <MIN_VOLUME>  Amount of base coin that will be used as min_volume of GoodTillCancelled order after conversion to maker  
+ -u, --uuid <MATCH_UUIDS>       The created order is matched using a set of uuid  
+ -p, --public <MATCH_PUBLICS>   The created order is matched using a set of publics to select specific nodes  
+     --base-confs <BASE_CONFS>  Number of required blockchain confirmations for base coin atomic swap transaction [aliases: bc]  
+     --base-nota <BASE_NOTA>    Whether dPoW notarization is required for base coin atomic swap transaction [aliases: bn] [possible values: true, false]  
+     --rel-confs <REL_CONFS>    Number of required blockchain confirmations for rel coin atomic swap transaction [aliases: rc]  
+     --rel-nota <REL_NOTA>      Whether dPoW notarization is required for rel coin atomic swap transaction [aliases: rn] [possible values: true, false]  
+ -s, --save-in-history          If true, each order's short record history is stored else the only order status will be temporarily stored while in progress [aliases: save]  
+ -h, --help                     Print help
 ```
 
 **Example**
 
 ```sh
-komodefi-cli buy DOC MARTY 1 0.1    
+komodefi-cli buy DOC MARTY 1 0.1    
 Buying: 1 DOC with: 0.1 MARTY at the price of 0.1 MARTY per DOC
 2e791413-65ba-4a2a-a010-e1ef521f1f73
 
 komodefi-cli orders book DOC MARTY --uuids --asks-limit 5 --bids-limit 5  
 Getting orderbook, base: DOC, rel: MARTY  
-     Volume: DOC Price: MARTY     Uuid                                    
+     Volume: DOC Price: MARTY     Uuid                                    
 ...
-- --------------- ---------------- ------------------------------------    
+- --------------- ---------------- ------------------------------------    
 ...
-*           1.00 0.10000000       2e791413-65ba-4a2a-a010-e1ef521f1f73
+*           1.00 0.10000000       2e791413-65ba-4a2a-a010-e1ef521f1f73
 ```
 
 ### order order-status (status)
@@ -1133,10 +1133,10 @@ Return the data of the order with the selected uuid created by the current node
 Usage: komodefi-cli order order-status <UUID>  
   
 Arguments:  
- <UUID>     
+ <UUID>     
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -1144,18 +1144,18 @@ Options:
 ```sh
 komodefi-cli order status 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
 Getting order status: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
-               base: DOC  
-                rel: MARTY  
-              price: 10.00  
-               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
-         created at: 23-09-15 13:40:28  
-         updated at: 23-09-15 13:43:31  
-       max_base_vol: 21.00  
-       min_base_vol: 4.00  
-              swaps: empty  
-      conf_settings: 2,false:2,false  
-        cancellable: true  
-   available_amount: 21.00
+               base: DOC  
+                rel: MARTY  
+              price: 10.00  
+               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+         created at: 23-09-15 13:40:28  
+         updated at: 23-09-15 13:43:31  
+       max_base_vol: 21.00  
+       min_base_vol: 4.00  
+              swaps: empty  
+      conf_settings: 2,false:2,false  
+        cancellable: true  
+   available_amount: 21.00
 ```
 
 ### orders orderbook-depth (depth)
@@ -1169,10 +1169,10 @@ Get orderbook depth
 Usage: komodefi-cli order orderbook-depth <BASE/REL>...  
   
 Arguments:  
- <BASE/REL>...     
+ <BASE/REL>...     
   
 Options:  
- -h, --help  Print help
+ -h, --help  Print help
 ```
 
 **Example:**
@@ -1180,10 +1180,10 @@ Options:
 ```sh
 komodefi-cli orders depth DOC/MARTY BTC/KMD ETH/BTC  
 Getting orderbook depth for pairs: DOC/MARTY, BTC/KMD, ETH/BTC  
-           Bids Asks    
-DOC/MARTY: 3    3       
-  BTC/KMD: 8    5       
-  ETH/BTC: 2    0
+           Bids Asks    
+DOC/MARTY: 3    3       
+  BTC/KMD: 8    5       
+  ETH/BTC: 2    0
 ```
 ### orders best-orders (best)
 
@@ -1196,15 +1196,15 @@ Return the best priced trades available on the orderbook
 Usage: komodefi-cli order best-orders [OPTIONS] <--volume <VOLUME>|--number <NUMBER>> <COIN> <ACTION>  
   
 Arguments:  
- <COIN>    The coin to get best orders  
- <ACTION>  Whether to buy or sell the selected coin [possible values: buy, sell]  
+ <COIN>    The coin to get best orders  
+ <ACTION>  Whether to buy or sell the selected coin [possible values: buy, sell]  
   
 Options:  
- -v, --volume <VOLUME>    The returned results will show the best prices for trades that can fill the requested volume  
- -n, --number <NUMBER>    The returned results will show a list of the best prices  
- -o, --show-orig-tickets  Whether to show the original tickers if they are configured for the queried coin [aliases: show-origin, original-tickers, origin]  
- -e, --exclude-mine       Exclude orders that is mine  
- -h, --help               Print help
+ -v, --volume <VOLUME>    The returned results will show the best prices for trades that can fill the requested volume  
+ -n, --number <NUMBER>    The returned results will show a list of the best prices  
+ -o, --show-orig-tickets  Whether to show the original tickers if they are configured for the queried coin [aliases: show-origin, original-tickers, origin]  
+ -e, --exclude-mine       Exclude orders that is mine  
+ -h, --help               Print help
 ```
 
 **Example:**
@@ -1212,14 +1212,14 @@ Options:
 ```sh
 komodefi-cli orders best-orders --volume 1 BTC sell  
 Getting best orders: Sell BTC  
-│  │ Price       │ Uuid                                 │ Base vol(min:max) │ Rel vol(min:max)  │ Address                                                │ Confirmation     │  
-│ ARRR                                                                                                                                                                      │  
-│  │ 129058.90   │ 2157dcfe-a352-4f72-b4b2-327b3021a013 │ 0.0080:0.0085     │ 1034.68:1104.35   │ Shielded                                               │ 1,false:2,true   │  
-│  │ 144073.53   │ a56072bf-8a69-423b-a351-ed582cd43209 │ 0.0081:0.14       │ 1175.57:20787.01  │ Shielded                                               │ 1,false:2,true   │  
-│ BAND-BEP20                                                                                                                                                                │  
-│  │ 25589.58    │ e88c6f78-46ea-462e-ad0d-ebd9b49323e7 │ 0.0081:0.01       │ 208.53:493.22     │ 0xadb681c3a1ec9bbc4105b8e8eb5fc7178125b450             │ 1,false:3,false  │  
-│ BCH                                                                                                                                                                       │  
-│  │ 118.06      │ 1dda5e08-e73a-4f8a-a37e-6201e84dbf74 │ 0.0081:0.0099     │ 0.96:1.17         │ bitcoincash:qp42lwm4xvgg2sjhy7nc49qwjv60dqdnu5u2h2zaya │ 1,false:1,false  │
+│  │ Price       │ Uuid                                 │ Base vol(min:max) │ Rel vol(min:max)  │ Address                                                │ Confirmation     │  
+│ ARRR                                                                                                                                                                      │  
+│  │ 129058.90   │ 2157dcfe-a352-4f72-b4b2-327b3021a013 │ 0.0080:0.0085     │ 1034.68:1104.35   │ Shielded                                               │ 1,false:2,true   │  
+│  │ 144073.53   │ a56072bf-8a69-423b-a351-ed582cd43209 │ 0.0081:0.14       │ 1175.57:20787.01  │ Shielded                                               │ 1,false:2,true   │  
+│ BAND-BEP20                                                                                                                                                                │  
+│  │ 25589.58    │ e88c6f78-46ea-462e-ad0d-ebd9b49323e7 │ 0.0081:0.01       │ 208.53:493.22     │ 0xadb681c3a1ec9bbc4105b8e8eb5fc7178125b450             │ 1,false:3,false  │  
+│ BCH                                                                                                                                                                       │  
+│  │ 118.06      │ 1dda5e08-e73a-4f8a-a37e-6201e84dbf74 │ 0.0081:0.0099     │ 0.96:1.17         │ bitcoincash:qp42lwm4xvgg2sjhy7nc49qwjv60dqdnu5u2h2zaya │ 1,false:1,false  │
 ...
 ```
 
@@ -1232,17 +1232,17 @@ The `my-orders` command requests information about orders created by the current
 ```sh
 komodefi-cli orders mine  
 Getting my orders  
-       Taker orders:
-│ action                │ uuid, sender, dest │ type,created_at   │ match_by │ base,rel     │ | base(vol),rel(vol)    │                    │ confirmation      │          │ ticker       │ 
-│ Sell                  │ 797c0456-7d99-.... │ GoodTillCancelled │ Any      │ none         │ │ MARTY(1.00),DOC(3.00) │ 264fcd9401d797c5...│ 23-09-14 16:11:44 │          │ none         │ 
+       Taker orders:
+│ action                │ uuid, sender, dest │ type,created_at   │ match_by │ base,rel     │ | base(vol),rel(vol)    │                    │ confirmation      │          │ ticker       │ 
+│ Sell                  │ 797c0456-7d99-.... │ GoodTillCancelled │ Any      │ none         │ │ MARTY(1.00),DOC(3.00) │ 264fcd9401d797c5...│ 23-09-14 16:11:44 │          │ none         │ 
 
-       Maker orders:    
-│ base,rel   │ price │ uuid   │ created at,        │ min base vol, │ cancellable │ ...
-│            │       │        │ updated at         │ max base vol  │             │ 
-│ RICK,MORTY │ 2.00  │ 1fc0d..│ 23-05-08 12:07:18, │ 0.000100,     │ true        │   
-│            │       │        │ 23-05-08 12:07:18  │ 0.50          │             │
-│ DOC,MARTY  │ 10.00 │ f398f..│ 23-09-14 13:59:27, │ 4.00,         │ true        │ 
-│            │       │        | 23-09-14 14:33:17  │ 9.00          │             │ ...
+       Maker orders:    
+│ base,rel   │ price │ uuid   │ created at,        │ min base vol, │ cancellable │ ...
+│            │       │        │ updated at         │ max base vol  │             │ 
+│ RICK,MORTY │ 2.00  │ 1fc0d..│ 23-05-08 12:07:18, │ 0.000100,     │ true        │   
+│            │       │        │ 23-05-08 12:07:18  │ 0.50          │             │
+│ DOC,MARTY  │ 10.00 │ f398f..│ 23-09-14 13:59:27, │ 4.00,         │ true        │ 
+│            │       │        | 23-09-14 14:33:17  │ 9.00          │             │ ...
 ```
 
 ### orders orders-history (history)
@@ -1256,23 +1256,23 @@ Return all orders whether active or inactive that match the selected filters
 Usage: komodefi-cli order orders-history [OPTIONS] <--takers|--makers|--warnings|--all>  
   
 Options:  
- -t, --takers                     Whether to show taker orders detailed history  
- -m, --makers                     Whether to show maker orders detailed history  
- -w, --warnings                   Whether to show warnings  
- -a, --all                        Whether to show common history data  
-     --type <ORDER_TYPE>          Return only orders that match the type [possible values: taker, maker]  
-     --action <INITIAL_ACTION>    Return only orders that match the initial action. Note that maker order initial_action is considered "Sell" [possible values: sell, buy]  
-     --base <BASE>                Return only orders that match the order.base  
-     --rel <REL>                  Return only orders that match the order.rel  
-     --from-price <FROM_PRICE>    Return only orders whose price is more or equal the from_price  
-     --to-price <TO_PRICE>        Return only orders whose price is less or equal the to_price  
-     --from-volume <FROM_VOLUME>  Return only orders whose volume is more or equal the from_volume  
-     --to-volume <TO_VOLUME>      Return only orders whose volume is less or equal the to_volume  
-     --from-dt <FROM_DT>          Return only orders that match the order.created_at >= from_dt. Datetime fmt: "%y-%m-%dT%H:%M:%S"  
-     --to-dt <TO_DT>              Return only orders that match the order.created_at <= to_dt. Datetime fmt: "%y-%m-%dT%H:%M:%S"  
-     --was-taker                  Return only GoodTillCancelled orders that got converted from taker to maker  
-     --status <STATUS>            Return only orders that match the status [possible values: created, updated, fulfilled, insuficcient-balance, cancelled, timed-out]  
- -h, --help                       Print help
+ -t, --takers                     Whether to show taker orders detailed history  
+ -m, --makers                     Whether to show maker orders detailed history  
+ -w, --warnings                   Whether to show warnings  
+ -a, --all                        Whether to show common history data  
+     --type <ORDER_TYPE>          Return only orders that match the type [possible values: taker, maker]  
+     --action <INITIAL_ACTION>    Return only orders that match the initial action. Note that maker order initial_action is considered "Sell" [possible values: sell, buy]  
+     --base <BASE>                Return only orders that match the order.base  
+     --rel <REL>                  Return only orders that match the order.rel  
+     --from-price <FROM_PRICE>    Return only orders whose price is more or equal the from_price  
+     --to-price <TO_PRICE>        Return only orders whose price is less or equal the to_price  
+     --from-volume <FROM_VOLUME>  Return only orders whose volume is more or equal the from_volume  
+     --to-volume <TO_VOLUME>      Return only orders whose volume is less or equal the to_volume  
+     --from-dt <FROM_DT>          Return only orders that match the order.created_at >= from_dt. Datetime fmt: "%y-%m-%dT%H:%M:%S"  
+     --to-dt <TO_DT>              Return only orders that match the order.created_at <= to_dt. Datetime fmt: "%y-%m-%dT%H:%M:%S"  
+     --was-taker                  Return only GoodTillCancelled orders that got converted from taker to maker  
+     --status <STATUS>            Return only orders that match the status [possible values: created, updated, fulfilled, insuficcient-balance, cancelled, timed-out]  
+ -h, --help                       Print help
 ```
 
 **Example:**
@@ -1283,47 +1283,47 @@ Requesting all DOC based orders
 komodefi-cli orders history --base DOC --all  
 Getting order history  
 Orders history:  
-│uuid  │Type │Action│Base│Rel  │Volume│Price│Status   │Created │Updated │Was taker│  
-│f398..│Maker│Sell  │DOC │MARTY│9.00  │10.00│Updated  │23-09...│23-09-..│false    │  
-│96b1..│Maker│Sell  │DOC │MARTY│1.00  │3.00 │Cancelled│23-09-..│23-09-..│false    │
+│uuid  │Type │Action│Base│Rel  │Volume│Price│Status   │Created │Updated │Was taker│  
+│f398..│Maker│Sell  │DOC │MARTY│9.00  │10.00│Updated  │23-09...│23-09-..│false    │  
+│96b1..│Maker│Sell  │DOC │MARTY│1.00  │3.00 │Cancelled│23-09-..│23-09-..│false    │
 ```
 
 Requesting detailed makers
 
 ```sh
-komodefi-cli orders history --base RICK --makers     
+komodefi-cli orders history --base RICK --makers     
 Getting order history  
 Maker orders history detailed:  
-│ base,rel      │ price         │ uuid                                 │ created at,        │ min base vol, │ swaps                                 │ conf_settings   │ history changes │ orderbook ticker │                │  
-│               │               │                                      │ updated at         │ max base vol  │                                       │                 │                 │ base, rel        │                │  
-│               │               │                                      │                    │               │                                       │                 │                 │                  │                │  
-│ RICK,MORTY    │ 0.50          │ e2db79f4-376e-4917-be37-f383c5516e28 │ 23-07-18 16:50:31, │ 0.000100,     │ empty                                 │ 10,true:10,true │ none            │ none             │                │  
-│               │               │                                      │ 23-07-18 16:58:10  │ 0.10          │                                       │                 │                 │ none             │                │  
-│ RICK,MORTY    │ 0.90          │ 1c739304-dd83-466e-8df4-ef99dc40afb9 │ 23-07-18 09:11:48, │ 0.00011,      │ empty                                 │ 10,true:10,true │ none            │ none             │                │  
-│               │               │                                      │ 23-07-18 09:12:50  │ 0.10          │                                       │                 │                 │ none             │                │  
-│ RICK,MORTY    │ 0.95          │ f1bf7c76-806e-40cb-a489-a52056ec42e6 │ 23-06-30 09:05:34, │ 0.00010,      │ fe6099a2-e29a-441b-be4f-21dd3666efad, │ 1,false:1,false │ none            │ none             │                │  
-│               │               │                                      │ 23-06-30 09:05:34  │ 1.00          │ e07bcf02-788f-407c-a182-63c506280ca4, │                 │                 │ none             │                │  
-│               │               │                                      │                    │               │ dec7fe39-16be-42cc-b3ba-2078ed5019b5, │                 │                 │                  │                │  
-│               │               │                                      │                    │               │ c63bc058-72e7-4b1b-8866-e1e5d2a2253b, │                 │                 │                  │                │  
-│               │               │                                      │                    │               │ 824fa32e-865f-49f1-b499-ba90b7141c2b  │                 │                 │                  │                │  
-│ matches                                                                                                                                                                                                                   │  
-│                       uuid: dec7fe39-16be-42cc-b3ba-2078ed5019b5                                                                                                                                                          │  
-│                   req.uuid: dec7fe39-16be-42cc-b3ba-2078ed5019b5                                                                                                                                                          │  
-│             req.(base,rel): MORTY(0.0100), RICK(0.01)                                                                                                                                                                     │  
-│               req.match_by: Any                                                                                                                                                                                           │  
-│                 req.action: Sell                                                                                                                                                                                          │  
-│          req.conf_settings: 1,false:1,false                                                                                                                                                                               │  
-│         req.(sender, dest): 144ee16a5960c50a930c26c0e01133de603eb41ce2e2e61e744fcfa76d4ffade,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
-│        reserved.(base,rel): RICK(0.01), MORTY(0.0100)                                                                                                                                                                     │  
-│    reserved.(taker, maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
-│    reserved.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,144ee16a5960c50a930c26c0e01133de603eb41ce2e2e61e744fcfa76d4ffade                                                             │  
-│     reserved.conf_settings: 1,false:1,false                                                                                                                                                                               │  
-│    connected.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
-│   connected.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
-│      connect.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
-│     connect.(sender, dest): 0000000000000000000000000000000000000000000000000000000000000000,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
-│               last_updated: 23-06-30 09:54:13                                                                                                                                                                             │  
-│                                                                                                                                                                                                                           │
+│ base,rel      │ price         │ uuid                                 │ created at,        │ min base vol, │ swaps                                 │ conf_settings   │ history changes │ orderbook ticker │                │  
+│               │               │                                      │ updated at         │ max base vol  │                                       │                 │                 │ base, rel        │                │  
+│               │               │                                      │                    │               │                                       │                 │                 │                  │                │  
+│ RICK,MORTY    │ 0.50          │ e2db79f4-376e-4917-be37-f383c5516e28 │ 23-07-18 16:50:31, │ 0.000100,     │ empty                                 │ 10,true:10,true │ none            │ none             │                │  
+│               │               │                                      │ 23-07-18 16:58:10  │ 0.10          │                                       │                 │                 │ none             │                │  
+│ RICK,MORTY    │ 0.90          │ 1c739304-dd83-466e-8df4-ef99dc40afb9 │ 23-07-18 09:11:48, │ 0.00011,      │ empty                                 │ 10,true:10,true │ none            │ none             │                │  
+│               │               │                                      │ 23-07-18 09:12:50  │ 0.10          │                                       │                 │                 │ none             │                │  
+│ RICK,MORTY    │ 0.95          │ f1bf7c76-806e-40cb-a489-a52056ec42e6 │ 23-06-30 09:05:34, │ 0.00010,      │ fe6099a2-e29a-441b-be4f-21dd3666efad, │ 1,false:1,false │ none            │ none             │                │  
+│               │               │                                      │ 23-06-30 09:05:34  │ 1.00          │ e07bcf02-788f-407c-a182-63c506280ca4, │                 │                 │ none             │                │  
+│               │               │                                      │                    │               │ dec7fe39-16be-42cc-b3ba-2078ed5019b5, │                 │                 │                  │                │  
+│               │               │                                      │                    │               │ c63bc058-72e7-4b1b-8866-e1e5d2a2253b, │                 │                 │                  │                │  
+│               │               │                                      │                    │               │ 824fa32e-865f-49f1-b499-ba90b7141c2b  │                 │                 │                  │                │  
+│ matches                                                                                                                                                                                                                   │  
+│                       uuid: dec7fe39-16be-42cc-b3ba-2078ed5019b5                                                                                                                                                          │  
+│                   req.uuid: dec7fe39-16be-42cc-b3ba-2078ed5019b5                                                                                                                                                          │  
+│             req.(base,rel): MORTY(0.0100), RICK(0.01)                                                                                                                                                                     │  
+│               req.match_by: Any                                                                                                                                                                                           │  
+│                 req.action: Sell                                                                                                                                                                                          │  
+│          req.conf_settings: 1,false:1,false                                                                                                                                                                               │  
+│         req.(sender, dest): 144ee16a5960c50a930c26c0e01133de603eb41ce2e2e61e744fcfa76d4ffade,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
+│        reserved.(base,rel): RICK(0.01), MORTY(0.0100)                                                                                                                                                                     │  
+│    reserved.(taker, maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
+│    reserved.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,144ee16a5960c50a930c26c0e01133de603eb41ce2e2e61e744fcfa76d4ffade                                                             │  
+│     reserved.conf_settings: 1,false:1,false                                                                                                                                                                               │  
+│    connected.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
+│   connected.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
+│      connect.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
+│     connect.(sender, dest): 0000000000000000000000000000000000000000000000000000000000000000,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
+│               last_updated: 23-06-30 09:54:13                                                                                                                                                                             │  
+│                                                                                                                                                                                                                           │
 ...
 ```
 
@@ -1331,6 +1331,25 @@ Maker orders history detailed:
 
 Once an order is created and matched with another order, it is no longer part of the order book, the swap is created and execution begins
 
+```sh
+komodefi-cli swaps  
+Swap related commands  
+  
+Usage: komodefi-cli swaps <COMMAND>  
+  
+Commands:  
+ active-swaps, -a           Get all the swaps that are currently running [aliases: active]  
+ my-swap-status, -s         Return the data of an atomic swap [aliases: status]  
+ my-recent-swaps, -r        Return the data of the most recent atomic swaps by filter [aliases: recent]  
+ recover-funds-of-swap, -R  Reclaim the user funds from the swap-payment address, if possible [aliases: recover, recover-funds, refund]  
+ min-trading-vol            Return the minimum required volume for buy/sell/setprice methods for the selected coin  
+ max-taker-vol              Return the maximum available volume for buy/sell methods for selected coin. The result should be used as is for sell method or divided by price for buy method.  
+ trade-preimage             Return the approximate fee amounts that are paid per the whole swap [aliases: preimage]  
+ help                       Print this message or the help of the given subcommand(s)  
+  
+Options:  
+ -h, --help  Print help
+```
 ###  swaps active-swaps (active)
 
 The `active-swaps` command requests a list of swaps using the [`active_swaps` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/active_swaps.html). The output includes information about completed and active stages, hashes, and related transaction data. If detailed information was not requested using the `--include-status` option, only the uuids of active swaps would be listed.
@@ -1342,17 +1361,17 @@ Get all the swaps that are currently running
 Usage: komodefi-cli swaps {active-swaps|-a} [OPTIONS]  
   
 Options:  
- -s, --include-status  Whether to include swap statuses in response; defaults to false  
- -h, --help            Print help
+ -s, --include-status  Whether to include swap statuses in response; defaults to false  
+ -h, --help            Print help
 ```
 
 **Example:**
 Getting only uuids:
 
 ```sh
-komodefi-cli swap active    
+komodefi-cli swap active    
 Getting active swaps  
-uuids:    
+uuids:    
 64fced3d-a0c2-423e-9fa5-f6c470448983
 ```
 
@@ -1371,80 +1390,79 @@ taker_coin_usd_price: 0.22
 maker_coin: BCH  
 maker_amount: 0.0010  
 maker_coin_usd_price: 213.30  
-events:    
-│ Started                           │ uuid: 64fced3d-a0c2-423e-9fa5-f6c470448983                                                                             │  
-│ 23-09-15 12:20:00                 │ started_at: 23-09-15 12:20:00                                                                                          │  
-│                                   │ taker_coin: KMD                                                                                                        │  
-│                                   │ maker_coin: BCH                                                                                                        │  
-│                                   │ maker: 15d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                                                │  
-│                                   │ my_persistent_pub: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                                  │  
-│                                   │ lock_duration: 31200                                                                                                   │  
-│                                   │ maker_amount: 0.0010                                                                                                   │  
-│                                   │ taker_amount: 1.00                                                                                                     │  
-│                                   │ maker_payment_confirmations: 3                                                                                         │  
-│                                   │ maker_payment_requires_nota: false                                                                                     │  
-│                                   │ taker_payment_confirmations: 2                                                                                         │  
-│                                   │ taker_payment_requires_nota: false                                                                                     │  
-│                                   │ tacker_payment_lock: 23-09-15 21:00:00                                                                                 │  
-│                                   │ maker_payment_wait: 23-09-15 15:48:00                                                                                  │  
-│                                   │ maker_coin_start_block: 810794                                                                                         │  
-│                                   │ taker_coin_start_block: 3590943                                                                                        │  
-│                                   │ fee_to_send_taker_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                        │  
-│                                   │ taker_payment_trade_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                      │  
-│                                   │ maker_payment_spend_trade_fee: coin: BCH, amount: 0.00001, paid_from_trading_vol: true                                 │  
-│                                   │ maker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
-│                                   │ taker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
-│                                   │                                                                                                                        │  
-│ Negotiated                        │ maker_payment_locktime: 23-09-16 05:39:59                                                                              │  
-│ 23-09-15 12:20:15                 │ maker_pubkey: 000000000000000000000000000000000000000000000000000000000000000000                                       │  
-│                                   │ secret_hash: 2846d8eb4f442286158888a2231e577f0373b750                                                                  │  
-│                                   │ maker_coin_htlc_pubkey: 0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                             │  
-│                                   │ taker_coin_htlc_pubkey: 0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                             │  
-│                                   │                                                                                                                        │  
-│ TakerFeeSent                      │ tx_hex: 0400008085202f89013a9617c23f7c394433014465f8442fc162a531f5d7c4c4922132a3e0e1238e49010000006a4730440220552879ed │  
-│ 23-09-15 12:20:15                 │ 2fae025920c0d3993a1e48955f5de1a999dcb43141ec569fca3ecaf602205f176776affed034b88bd3807300ff90d09e7d05edcb9a4b2189238dab │  
-│                                   │ e0f436012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff0276c40100000000001976a914ca1e0474 │  
-│                                   │ 5e8ca0c60d8c5881531d51bec470743f88ac7082e33a250000001976a9149934ebeaa56cb597c936a9ed8202d8d97a0a700388ac744a0465000000 │  
-│                                   │ 000000000000000000000000                                                                                               │  
-│                                   │ tx_hash: 2d2b4745ed039a897bf78f45d83c939b508ff8f0436281d202eb1ccf402e2e37                                              │  
-│                                   │                                                                                                                        │  
-│ TakerPaymentInstructionsReceived  │ none                                                                                                                   │  
-│ 23-09-15 12:20:16                 │                                                                                                                        │  
-│                                   │                                                                                                                        │  
-│ MakerPaymentReceived              │ tx_hex: 0100000001e91a267e855f865dbf741a34cc4509b233c62b9ec10d53afdea29238b9412812000000006a47304402202f82ea70d750dcc7 │  
-│ 23-09-15 12:20:16                 │ eb003699fc052fcef4b216ef7904a5aedf90d88f1d7b0e6e02202e3b711fd950c48f5e6f8380aa0b47dd542ddd6970d997bbc21e510b2cf6d49941 │  
-│                                   │ 210315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732ffffffff030e9201000000000017a9146a16cb1d0da650d083 │  
-│                                   │ cf17d34fe2c01e2f4ede18870000000000000000166a142846d8eb4f442286158888a2231e577f0373b750c3530100000000001976a9141462c3dd │  
-│                                   │ 3f936d595c9af55978003b27c250441f88ac004c0465                                                                           │  
-│                                   │ tx_hash: 4cc4a5c89df668ac4aca619f10de74863b89374b57b18586ae113e7fe8c63e4a                                              │  
-│                                   │                                                                                                                        │  
-│ MakerPaymentWaitConfirmStarted    │                                                                                                                        │  
-│ 23-09-15 12:20:16                 │                                                                                                                        │  
-│                                   │                                                                                                                        │  
-│ MakerPaymentValidatedAndConfirmed │                                                                                                                        │  
-│ 23-09-15 12:59:34                 │                                                                                                                        │  
-│                                   │                                                                                                                        │  
-│ TakerPaymentSent                  │ tx_hex: 0400008085202f8901372e2e40cf1ceb02d2816243f0f88f509b933cd8458ff77b899a03ed45472b2d010000006b483045022100afc98d │  
-│ 23-09-15 12:59:34                 │ 939ce43081eda416e8b5e63e2d36de3314f715e4555bf36c61d8654d9302207f8c33ef39be5cf93ffcb40e7ec64691f8205b5bf2b9caa1cf454051 │  
-│                                   │ f69b89ad012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff0300e1f5050000000017a9145a2ba5f8 │  
-│                                   │ dd563ab9dcbb74a5fe6b5a683af94520870000000000000000166a142846d8eb4f442286158888a2231e577f0373b750889ded34250000001976a9 │  
-│                                   │ 149934ebeaa56cb597c936a9ed8202d8d97a0a700388ac384d0465000000000000000000000000000000                                   │  
-│                                   │ tx_hash: 90d73c9311ff72ca4bc79b844e3db6ec3a13c37c4996e399361b9711dad81e0a                                              │  
-│                                   │                                                                                                                        │  
-│ TakerPaymentSpent                 │ tx_hex: 0400008085202f89010a1ed8da11971b3699e396497cc3133aecb63d4e849bc74bca72ff11933cd79000000000d7473044022041e02ad7 │  
-│ 23-09-15 13:02:16                 │ b050ef5a3fa90f7811b810c5c15b9fa52218768bed486131f44d0c450220037b2d5883dd3d56d4fa690a733aa1906e9156f926c5b6f6f9fda745be │  
-│                                   │ 9ec4bb0120f849998cb9a3211fca8d6ba961b9aac27b4c1385597a62727e230ccfb086bae7004c6b6304d0c50465b1752102264fcd9401d797c50f │  
-│                                   │ e2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dac6782012088a9142846d8eb4f442286158888a2231e577f0373b75088210315d9c51c65 │  
-│                                   │ 7ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732ac68ffffffff0118ddf505000000001976a9141462c3dd3f936d595c9af55978 │  
-│                                   │ 003b27c250441f88acd0c50465000000000000000000000000000000                                                               │  
-│                                   │ tx_hash: 8c3db71bafdc3bc251b3b735e7b66c4eeec6e7081d751d7e1a35fe410d532f1a                                              │  
-│                                   │ secret: f849998cb9a3211fca8d6ba961b9aac27b4c1385597a62727e230ccfb086bae7                                               │
-"
+events:    
+│ Started                           │ uuid: 64fced3d-a0c2-423e-9fa5-f6c470448983                                                                             │  
+│ 23-09-15 12:20:00                 │ started_at: 23-09-15 12:20:00                                                                                          │  
+│                                   │ taker_coin: KMD                                                                                                        │  
+│                                   │ maker_coin: BCH                                                                                                        │  
+│                                   │ maker: 15d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                                                │  
+│                                   │ my_persistent_pub: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                                  │  
+│                                   │ lock_duration: 31200                                                                                                   │  
+│                                   │ maker_amount: 0.0010                                                                                                   │  
+│                                   │ taker_amount: 1.00                                                                                                     │  
+│                                   │ maker_payment_confirmations: 3                                                                                         │  
+│                                   │ maker_payment_requires_nota: false                                                                                     │  
+│                                   │ taker_payment_confirmations: 2                                                                                         │  
+│                                   │ taker_payment_requires_nota: false                                                                                     │  
+│                                   │ tacker_payment_lock: 23-09-15 21:00:00                                                                                 │  
+│                                   │ maker_payment_wait: 23-09-15 15:48:00                                                                                  │  
+│                                   │ maker_coin_start_block: 810794                                                                                         │  
+│                                   │ taker_coin_start_block: 3590943                                                                                        │  
+│                                   │ fee_to_send_taker_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                        │  
+│                                   │ taker_payment_trade_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                      │  
+│                                   │ maker_payment_spend_trade_fee: coin: BCH, amount: 0.00001, paid_from_trading_vol: true                                 │  
+│                                   │ maker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
+│                                   │ taker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
+│                                   │                                                                                                                        │  
+│ Negotiated                        │ maker_payment_locktime: 23-09-16 05:39:59                                                                              │  
+│ 23-09-15 12:20:15                 │ maker_pubkey: 000000000000000000000000000000000000000000000000000000000000000000                                       │  
+│                                   │ secret_hash: 2846d8eb4f442286158888a2231e577f0373b750                                                                  │  
+│                                   │ maker_coin_htlc_pubkey: 0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                             │  
+│                                   │ taker_coin_htlc_pubkey: 0315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                             │  
+│                                   │                                                                                                                        │  
+│ TakerFeeSent                      │ tx_hex: 0400008085202f89013a9617c23f7c394433014465f8442fc162a531f5d7c4c4922132a3e0e1238e49010000006a4730440220552879ed │  
+│ 23-09-15 12:20:15                 │ 2fae025920c0d3993a1e48955f5de1a999dcb43141ec569fca3ecaf602205f176776affed034b88bd3807300ff90d09e7d05edcb9a4b2189238dab │  
+│                                   │ e0f436012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff0276c40100000000001976a914ca1e0474 │  
+│                                   │ 5e8ca0c60d8c5881531d51bec470743f88ac7082e33a250000001976a9149934ebeaa56cb597c936a9ed8202d8d97a0a700388ac744a0465000000 │  
+│                                   │ 000000000000000000000000                                                                                               │  
+│                                   │ tx_hash: 2d2b4745ed039a897bf78f45d83c939b508ff8f0436281d202eb1ccf402e2e37                                              │  
+│                                   │                                                                                                                        │  
+│ TakerPaymentInstructionsReceived  │ none                                                                                                                   │  
+│ 23-09-15 12:20:16                 │                                                                                                                        │  
+│                                   │                                                                                                                        │  
+│ MakerPaymentReceived              │ tx_hex: 0100000001e91a267e855f865dbf741a34cc4509b233c62b9ec10d53afdea29238b9412812000000006a47304402202f82ea70d750dcc7 │  
+│ 23-09-15 12:20:16                 │ eb003699fc052fcef4b216ef7904a5aedf90d88f1d7b0e6e02202e3b711fd950c48f5e6f8380aa0b47dd542ddd6970d997bbc21e510b2cf6d49941 │  
+│                                   │ 210315d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732ffffffff030e9201000000000017a9146a16cb1d0da650d083 │  
+│                                   │ cf17d34fe2c01e2f4ede18870000000000000000166a142846d8eb4f442286158888a2231e577f0373b750c3530100000000001976a9141462c3dd │  
+│                                   │ 3f936d595c9af55978003b27c250441f88ac004c0465                                                                           │  
+│                                   │ tx_hash: 4cc4a5c89df668ac4aca619f10de74863b89374b57b18586ae113e7fe8c63e4a                                              │  
+│                                   │                                                                                                                        │  
+│ MakerPaymentWaitConfirmStarted    │                                                                                                                        │  
+│ 23-09-15 12:20:16                 │                                                                                                                        │  
+│                                   │                                                                                                                        │  
+│ MakerPaymentValidatedAndConfirmed │                                                                                                                        │  
+│ 23-09-15 12:59:34                 │                                                                                                                        │  
+│                                   │                                                                                                                        │  
+│ TakerPaymentSent                  │ tx_hex: 0400008085202f8901372e2e40cf1ceb02d2816243f0f88f509b933cd8458ff77b899a03ed45472b2d010000006b483045022100afc98d │  
+│ 23-09-15 12:59:34                 │ 939ce43081eda416e8b5e63e2d36de3314f715e4555bf36c61d8654d9302207f8c33ef39be5cf93ffcb40e7ec64691f8205b5bf2b9caa1cf454051 │  
+│                                   │ f69b89ad012102264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dffffffff0300e1f5050000000017a9145a2ba5f8 │  
+│                                   │ dd563ab9dcbb74a5fe6b5a683af94520870000000000000000166a142846d8eb4f442286158888a2231e577f0373b750889ded34250000001976a9 │  
+│                                   │ 149934ebeaa56cb597c936a9ed8202d8d97a0a700388ac384d0465000000000000000000000000000000                                   │  
+│                                   │ tx_hash: 90d73c9311ff72ca4bc79b844e3db6ec3a13c37c4996e399361b9711dad81e0a                                              │  
+│                                   │                                                                                                                        │  
+│ TakerPaymentSpent                 │ tx_hex: 0400008085202f89010a1ed8da11971b3699e396497cc3133aecb63d4e849bc74bca72ff11933cd79000000000d7473044022041e02ad7 │  
+│ 23-09-15 13:02:16                 │ b050ef5a3fa90f7811b810c5c15b9fa52218768bed486131f44d0c450220037b2d5883dd3d56d4fa690a733aa1906e9156f926c5b6f6f9fda745be │  
+│                                   │ 9ec4bb0120f849998cb9a3211fca8d6ba961b9aac27b4c1385597a62727e230ccfb086bae7004c6b6304d0c50465b1752102264fcd9401d797c50f │  
+│                                   │ e2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dac6782012088a9142846d8eb4f442286158888a2231e577f0373b75088210315d9c51c65 │  
+│                                   │ 7ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732ac68ffffffff0118ddf505000000001976a9141462c3dd3f936d595c9af55978 │  
+│                                   │ 003b27c250441f88acd0c50465000000000000000000000000000000                                                               │  
+│                                   │ tx_hash: 8c3db71bafdc3bc251b3b735e7b66c4eeec6e7081d751d7e1a35fe410d532f1a                                              │  
+│                                   │ secret: f849998cb9a3211fca8d6ba961b9aac27b4c1385597a62727e230ccfb086bae7                                               │
 ```
 
 ### swaps my-swap-status (status)
 
-The `my-swap-status` command requests the detailed information about completed and active stages, hashes and related transaction data using the [`my_swap_status` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/my_swap_status.html). Details provided by the `my-swap-status` has the same format as wich provided by the `active-swaps`.
+The `my-swap-status` command requests the detailed information about completed and active stages, hashes and related transaction data using the [`my_swap_status` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/my_swap_status.html). The details provided by `my-swap-status` have the same format as the details provided by `active-swaps` command. *Alias: `status`*
 
 **Example:**
 
@@ -1467,30 +1485,191 @@ taker_coin_usd_price: 0.22
 maker_coin: BCH  
 maker_amount: 0.0010  
 maker_coin_usd_price: 213.30  
-events:    
-│ Started                           │ uuid: 64fced3d-a0c2-423e-9fa5-f6c470448983                                                                             │  
-│ 23-09-15 12:20:00                 │ started_at: 23-09-15 12:20:00                                                                                          │  
-│                                   │ taker_coin: KMD                                                                                                        │  
-│                                   │ maker_coin: BCH                                                                                                        │  
-│                                   │ maker: 15d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                                                │  
-│                                   │ my_persistent_pub: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                                  │  
-│                                   │ lock_duration: 31200                                                                                                   │  
-│                                   │ maker_amount: 0.0010                                                                                                   │  
-│                                   │ taker_amount: 1.00                                                                                                     │  
-│                                   │ maker_payment_confirmations: 3                                                                                         │  
-│                                   │ maker_payment_requires_nota: false                                                                                     │  
-│                                   │ taker_payment_confirmations: 2                                                                                         │  
-│                                   │ taker_payment_requires_nota: false                                                                                     │  
-│                                   │ tacker_payment_lock: 23-09-15 21:00:00                                                                                 │  
-│                                   │ maker_payment_wait: 23-09-15 15:48:00                                                                                  │  
-│                                   │ maker_coin_start_block: 810794                                                                                         │  
-│                                   │ taker_coin_start_block: 3590943                                                                                        │  
-│                                   │ fee_to_send_taker_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                        │  
-│                                   │ taker_payment_trade_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                      │  
-│                                   │ maker_payment_spend_trade_fee: coin: BCH, amount: 0.00001, paid_from_trading_vol: true                                 │  
-│                                   │ maker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
-│                                   │ taker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
-│                                   │                                                                                                                        │
+events:    
+│ Started                           │ uuid: 64fced3d-a0c2-423e-9fa5-f6c470448983                                                                             │  
+│ 23-09-15 12:20:00                 │ started_at: 23-09-15 12:20:00                                                                                          │  
+│                                   │ taker_coin: KMD                                                                                                        │  
+│                                   │ maker_coin: BCH                                                                                                        │  
+│                                   │ maker: 15d9c51c657ab1be4ae9d3ab6e76a619d3bccfe830d5363fa168424c0d044732                                                │  
+│                                   │ my_persistent_pub: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                                  │  
+│                                   │ lock_duration: 31200                                                                                                   │  
+│                                   │ maker_amount: 0.0010                                                                                                   │  
+│                                   │ taker_amount: 1.00                                                                                                     │  
+│                                   │ maker_payment_confirmations: 3                                                                                         │  
+│                                   │ maker_payment_requires_nota: false                                                                                     │  
+│                                   │ taker_payment_confirmations: 2                                                                                         │  
+│                                   │ taker_payment_requires_nota: false                                                                                     │  
+│                                   │ tacker_payment_lock: 23-09-15 21:00:00                                                                                 │  
+│                                   │ maker_payment_wait: 23-09-15 15:48:00                                                                                  │  
+│                                   │ maker_coin_start_block: 810794                                                                                         │  
+│                                   │ taker_coin_start_block: 3590943                                                                                        │  
+│                                   │ fee_to_send_taker_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                        │  
+│                                   │ taker_payment_trade_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false                                      │  
+│                                   │ maker_payment_spend_trade_fee: coin: BCH, amount: 0.00001, paid_from_trading_vol: true                                 │  
+│                                   │ maker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
+│                                   │ taker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │  
+│                                   │                                                                                                                        │
 ...
 ```
+
+### swaps my-recent-swaps (recent)
+
+The `my-recent-swaps` command requests the swap history selecte by the query of the following options: `--from-uuid`, `--my-coin`, `--other-coin`, `--from-timestamp`, `--to-timestamp`. The requesting swaps are organized into pages, there is the `--page-number` (`--page`) options that allows to select the certain one.
+
+```sh
+komodefi-cli swaps  recent --help  
+Return the data of the most recent atomic swaps by filter  
+  
+Usage: komodefi-cli swaps {my-recent-swaps|-r} [OPTIONS]  
+  
+Options:  
+ -l, --limit <LIMIT>  
+         Limits the number of returned swaps [default: 10]  
+ -u, --from-uuid <FROM_UUID>  
+         Skip records until this uuid, skipping the from_uuid as well  
+ -p, --page-number <PAGE_NUMBER>  
+         Return limit swaps from the selected page; This param will be ignored if from_uuid is set  
+ -m, --my-coin <MY_COIN>  
+         Return only swaps that match the swap.my_coin = request.my_coin condition [aliases: mine]  
+ -o, --other-coin <OTHER_COIN>  
+         Return only swaps that match the swap.other_coin = request.other_coin condition [aliases: other]  
+ -t, --from-timestamp <FROM_TIMESTAMP>  
+         Return only swaps that match the swap.started_at >= request.from_timestamp condition. Datetime fmt: "%y-%m-%dT%H:%M:%S"  
+ -T, --to-timestamp <TO_TIMESTAMP>  
+         Return only swaps that match the swap.started_at < request.to_timestamp condition. Datetime fmt: "%y-%m-%dT%H:%M:%S"  
+ -h, --help  
+         Print help
+```
+
+**Example:**
+
+Requesting forth page of swaps happened before 2023/07/02 12:21:01 by 2 swaps per page
+
+```sh
+komodefi-cli swaps  recent --to-timestamp 23-07-01T12:21:01 --limit 2 --page 4  
+Getting recent swaps  
+skipped: 6  
+limit: 2  
+total: 104  
+page_number: 4  
+total_pages: 52  
+found_records: 2  
+  
+TakerSwap: f3237905-43e5-42a7-8285-98e0c122b625  
+my_order_uuid: f3237905-43e5-42a7-8285-98e0c122b625
+...
+```
+
+### swap recover-funds-of-swap (refund)
+
+The `recover-funds-of-swap` requests the refund of funds that stuck on the blockchain due to the interrupted swap using the [` recover_funds_of_swap` RPC API method].  The given swap should be recoverable. *Aliases: `recover`, `recover-funds`, `refund`*
+
+```sh
+komodefi-cli swaps refund --help  
+Reclaim the user funds from the swap-payment address, if possible  
+  
+Usage: komodefi-cli swaps {recover-funds-of-swap|-R} <UUID>  
+  
+Arguments:  
+ <UUID>  Uuid of the swap to recover the funds  
+  
+Options:  
+ -h, --help  Print help
+```
+
+### swaps min-trading-vol
+
+The `min-trading-vol` command  provides the minimum required volume to trade the given coin using the [`min_trading_vol` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/min_trading_vol.html). This command allows the user to have a picture of what the trading volume might be for a given coin.
+
+```sh
+komodefi-cli swaps min-trading-vol --help  
+Return the minimum required volume for buy/sell/setprice methods for the selected coin  
+  
+Usage: komodefi-cli swaps min-trading-vol <COIN>  
+  
+Arguments:  
+ <COIN>     
+  
+Options:  
+ -h, --help  Print help
+```
+
+**Example:**
+
+```sh
+komodefi-cli swaps min-trading-vol BTC  
+Getting min trading vol: BTC  
+coin: BTC  
+volume: 0.0077
+```
+
+### swaps max-taker-vol
+
+The `max-taker-vol` command provides the maximum volume of the given coin possible to trade. This command is implemented by  requesting the [`max_taker_vol` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/max_taker_vol.html).
+
+```sh
+komodefi-cli swaps max-taker-vol --help  
+Return the maximum available volume for buy/sell methods for selected coin. The result should be used as is for sell method or divided by price for buy method.  
+  
+Usage: komodefi-cli swaps max-taker-vol <COIN>  
+  
+Arguments:  
+ <COIN>     
+  
+Options:  
+ -h, --help  Print help
+```
+
+**Example:**
+
+```sh
+komodefi-cli swaps max-taker-vol KMD  
+Getting max taker vol, KMD  
+coin: KMD  
+result: 1596.16
+```
+
+```sh
+komodefi-cli swaps max-taker-vol BTC  
+Getting max taker vol, BTC  
+coin: BTC  
+result: 0
+```
+
+### swaps trade-preimage (preimage)
+
+The `trade-preimage` command provides a way to estimate the fee for trading a given pair of coins at a given price and volume that could presumably take place. This command is implemented by requesting the [`trade_preimage` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/trade_preimage.html). *Alias: `preimage`*
+
+```sh
+komodefi-cli swap trade-preimage --help  
+Return the approximate fee amounts that are paid per the whole swap  
+  
+Usage: komodefi-cli swaps trade-preimage <--volume <VOLUME>|--max> <BASE> <REL> <METHOD> <PRICE>  
+  
+Arguments:  
+ <BASE>    Base currency of the request  
+ <REL>     Rel currency of the request  
+ <METHOD>  Price in rel the user is willing to pay per one unit of the base coin [possible values: set-price, buy, sell]  
+ <PRICE>   Price in rel the user is willing to pay per one unit of the base coin  
+  
+Options:  
+ -v, --volume <VOLUME>  Amount the user is willing to trade; ignored if max = true and swap_method = setprice, otherwise, it must be set  
+ -m, --max              Whether to return the maximum available volume for setprice method; must not be set or false if swap_method is buy or sell  
+ -h, --help             Print help
+```
+
+**Example:**
+
+```sh
+komodefi-cli swap trade-preimage --volume 1590 KMD BTC sell 0.00000859  
+Getting trade preimage  
+base_coin_fee: coin: KMD, amount: 0.00001, paid_from_trading_vol: false  
+rel_coin_fee: coin: BTC, amount: 0.000050, paid_from_trading_vol: true  
+total_fee:    
+│ coin │ amount   │ required_balance │  
+│ BTC  │ 0.000050 │ 0                │  
+│ KMD  │ 1.84     │ 1.84             │
+```
+
+## Cancelling orders
 
