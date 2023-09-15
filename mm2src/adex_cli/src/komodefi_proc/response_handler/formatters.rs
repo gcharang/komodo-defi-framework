@@ -126,7 +126,7 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
         format!("{},{}", req.sender_pubkey, req.dest_pub_key),
         NESTED_INDENT,
     );
-    write_maker_reserved_for_rpc(writer, reserved);
+    write_maker_reserved_for_rpc(writer, reserved)?;
     if let Some(ref connected) = connected {
         write_connected!(writer, connected, NESTED_INDENT);
     }
@@ -142,7 +142,7 @@ pub(super) fn write_maker_match(writer: &mut dyn Write, uuid: &Uuid, m: &MakerMa
     Ok(())
 }
 
-fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) {
+fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReservedForRpc) -> Result<()> {
     write_base_rel!(writer, reserved, NESTED_INDENT);
     writeln_field(
         writer,
@@ -157,6 +157,7 @@ fn write_maker_reserved_for_rpc(writer: &mut dyn Write, reserved: &MakerReserved
         NESTED_INDENT,
     );
     write_confirmation_settings!(writer, reserved, NESTED_INDENT);
+    Ok(())
 }
 
 pub(super) fn taker_order_header_row() -> Row<'static> {
@@ -233,7 +234,7 @@ pub(super) fn get_matches_rows<M, F: Fn(&mut dyn Write, &Uuid, &M) -> Result<()>
 pub(super) fn write_taker_match(writer: &mut dyn Write, uuid: &Uuid, m: &TakerMatchForRpc) -> Result<()> {
     let (reserved, connect, connected) = (&m.reserved, &m.connect, &m.connected);
     writeln_field(writer, "uuid", uuid, NESTED_INDENT);
-    write_maker_reserved_for_rpc(writer, reserved);
+    write_maker_reserved_for_rpc(writer, reserved)?;
     let last_updated = if m.last_updated.is_zero() {
         "none".to_string()
     } else {

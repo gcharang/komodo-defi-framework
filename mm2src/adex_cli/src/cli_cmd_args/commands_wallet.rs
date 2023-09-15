@@ -581,7 +581,7 @@ impl TryFrom<&mut ConvertAddressArgs> for ConvertAddressRequest {
 pub(crate) struct ConvertUtxoArgs {
     #[arg(help = "Input UTXO address")]
     address: String,
-    #[arg(help = "Input address to convert from")]
+    #[arg(help = "Coin to convert input given address to")]
     to_coin: String,
 }
 

@@ -1,15 +1,18 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::io::Write;
 use uuid::Uuid;
 
+use common::log::error;
 use common::{write_safe::io::WriteSafeIO, write_safe_io, writeln_safe_io};
+
 use mm2_rpc::data::legacy::{MakerOrderForMyOrdersRpc, OrderStatusResponse, TakerMatchForRpc, TakerOrderForRpc};
 
 use super::formatters::{format_confirmation_settings, format_datetime_msec, format_match_by, format_ratio,
                         write_field_option, write_maker_matches, write_maker_order, write_taker_match, writeln_field,
                         COMMON_INDENT, COMMON_PRECISION};
 use super::macros::{write_base_rel, write_confirmation_settings};
+use crate::error_anyhow;
 
 pub(super) fn on_order_status(writer: &mut dyn Write, response: OrderStatusResponse) -> Result<()> {
     match response {

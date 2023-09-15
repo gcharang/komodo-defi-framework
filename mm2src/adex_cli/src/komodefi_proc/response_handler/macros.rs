@@ -16,7 +16,12 @@ macro_rules! write_base_rel {
             concat!(stringify!($host), ".(base,rel)"),
             format!(
                 "{}({}), {}({})",
-                $host.base, $host.base_amount, $host.rel, $host.rel_amount
+                $host.base,
+                format_ratio(&$host.base_amount, COMMON_PRECISION)
+                    .map_err(|error| error_anyhow!("Failed to format base_amount: {error}"))?,
+                $host.rel,
+                format_ratio(&$host.rel_amount, COMMON_PRECISION)
+                    .map_err(|error| error_anyhow!("Failed to format rel_amount: {error}"))?,
             ),
             $width,
         );

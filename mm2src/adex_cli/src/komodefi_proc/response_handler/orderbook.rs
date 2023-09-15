@@ -228,8 +228,8 @@ impl Display for AskBidRow<'_> {
         write_ask_bid_row!(self.volume, 15, ">");
         write_ask_bid_row!(self.price, 16, "<");
         write_ask_bid_row!(self.settings.uuids, self.uuid, 36, "<");
-        write_ask_bid_row!(self.settings.min_volume, self.min_volume, 10, "<");
-        write_ask_bid_row!(self.settings.max_volume, self.max_volume, 10, "<");
+        write_ask_bid_row!(self.settings.min_volume, self.min_volume, 12, "<");
+        write_ask_bid_row!(self.settings.max_volume, self.max_volume, 12, "<");
         write_ask_bid_row!(self.settings.age, self.age, 10, "<");
         write_ask_bid_row!(self.settings.publics, self.public, 66, "<");
         write_ask_bid_row!(self.settings.address, self.address, 34, "<");
