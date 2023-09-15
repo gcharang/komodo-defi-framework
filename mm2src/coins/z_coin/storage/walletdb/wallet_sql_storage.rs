@@ -35,7 +35,9 @@ pub async fn create_wallet_db(
         .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 
     run_optimization_pragmas_helper(&db)?;
-    init_wallet_db(&db).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+    init_wallet_db(db.clone())
+        .await
+        .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 
     // Check if the initial block height is less than the previous synchronization height and
     // Rewind walletdb to the minimum possible height.
@@ -57,12 +59,13 @@ pub async fn create_wallet_db(
                 BlockHash(block.hash.0),
                 block.time,
                 &block.sapling_tree.0,
-            )?;
+            )
+            .await?;
         }
     }
 
     if get_evk.is_empty() {
-        init_accounts_table(&db, &[evk])?;
+        init_accounts_table(&db, &[evk]).await?;
     }
 
     Ok(db)
