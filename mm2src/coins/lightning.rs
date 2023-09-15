@@ -1114,14 +1114,6 @@ impl MarketCoinOps for LightningCoin {
         })
     }
 
-    /// Stub for sign eth tx
-    #[inline(always)]
-    async fn sign_eth_tx(&self, _args: &SignEthTransactionRequest) -> SignEthTransactionResult {
-        MmError::err(RawTransactionError::NotImplemented {
-            coin: self.ticker().to_string(),
-        })
-    }
-
     // Todo: Add waiting for confirmations logic for the case of if the channel is closed and the htlc can be claimed on-chain
     // Todo: The above is postponed and might not be needed after this issue is resolved https://github.com/lightningdevkit/rust-lightning/issues/2017
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {

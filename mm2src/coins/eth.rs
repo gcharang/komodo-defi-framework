@@ -2179,44 +2179,6 @@ impl MarketCoinOps for EthCoin {
         })
     }
 
-    /// Stub for sign eth tx
-    async fn sign_eth_tx(&self, args: &SignEthTransactionRequest) -> SignEthTransactionResult {
-        let ctx = MmArc::from_weak(&self.ctx)
-            .ok_or("!ctx")
-            .map_to_mm(|err| RawTransactionError::TransactionError(err.to_string()))?;
-        let coin = self.clone();
-        let value = args.value.unwrap_or_else(|| U256::from(0));
-        let action = if let Some(to) = &args.to {
-            Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
-        } else {
-            Create
-        };
-        let data = args.data.clone().unwrap_or_default();
-        let gas_limit = args.gas_limit;
-        match coin.priv_key_policy {
-            // TODO: use zeroise for privkey
-            EthPrivKeyPolicy::Iguana(ref key_pair)
-            | EthPrivKeyPolicy::HDWallet {
-                activated_key: ref key_pair,
-                ..
-            } => {
-                return sign_transaction_with_keypair(ctx, &coin, key_pair, value, action, data, gas_limit)
-                    .await
-                    .map(|(signed_tx, _)| SignEthTransactionResponse {
-                        tx_hex: signed_tx.tx_hex().into(),
-                    })
-                    .map_to_mm(|err| RawTransactionError::TransactionError(err.get_plain_text_format()));
-            },
-            #[cfg(target_arch = "wasm32")]
-            EthPrivKeyPolicy::Metamask(_) => MmError::err(RawTransactionError::InvalidParam(
-                "sign raw eth tx not implemented for Metamask".into(),
-            )),
-            EthPrivKeyPolicy::Trezor => MmError::err(RawTransactionError::InvalidParam(
-                "sign raw eth tx not implemented for Trezor".into(),
-            )),
-        }
-    }
-
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
         macro_rules! update_status_with_error {
             ($status: ident, $error: ident) => {
@@ -2570,6 +2532,44 @@ async fn sign_and_send_transaction_with_metamask(
             "Waited too long until the transaction {:?} appear on the RPC node",
             tx_hash
         ),
+    }
+}
+
+/// Sign eth transaction
+pub async fn sign_eth_tx(coin: &EthCoin, args: &SignEthTransactionRequest) -> SignEthTransactionResult {
+    let ctx = MmArc::from_weak(&coin.ctx)
+        .ok_or("!ctx")
+        .map_to_mm(|err| RawTransactionError::TransactionError(err.to_string()))?;
+    //let coin = self.clone();
+    let value = args.value.unwrap_or_else(|| U256::from(0));
+    let action = if let Some(to) = &args.to {
+        Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
+    } else {
+        Create
+    };
+    let data = args.data.clone().unwrap_or_default();
+    let gas_limit = args.gas_limit;
+    match coin.priv_key_policy {
+        // TODO: use zeroise for privkey
+        EthPrivKeyPolicy::Iguana(ref key_pair)
+        | EthPrivKeyPolicy::HDWallet {
+            activated_key: ref key_pair,
+            ..
+        } => {
+            return sign_transaction_with_keypair(ctx, coin, key_pair, value, action, data, gas_limit)
+                .await
+                .map(|(signed_tx, _)| SignEthTransactionResponse {
+                    tx_hex: signed_tx.tx_hex().into(),
+                })
+                .map_to_mm(|err| RawTransactionError::TransactionError(err.get_plain_text_format()));
+        },
+        #[cfg(target_arch = "wasm32")]
+        EthPrivKeyPolicy::Metamask(_) => MmError::err(RawTransactionError::InvalidParam(
+            "sign raw eth tx not implemented for Metamask".into(),
+        )),
+        EthPrivKeyPolicy::Trezor => MmError::err(RawTransactionError::InvalidParam(
+            "sign raw eth tx not implemented for Trezor".into(),
+        )),
     }
 }
 

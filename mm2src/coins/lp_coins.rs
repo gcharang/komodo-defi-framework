@@ -214,9 +214,9 @@ use coin_errors::{MyAddressError, ValidatePaymentError, ValidatePaymentFut};
 pub mod coins_tests;
 
 pub mod eth;
-use eth::GetValidEthWithdrawAddError;
 use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetailsErr, EthTxFeeDetails,
           GetEthAddressError, SignedEthTx};
+use eth::{sign_eth_tx, GetValidEthWithdrawAddError};
 use ethereum_types::U256;
 
 pub mod hd_confirm_address;
@@ -1523,9 +1523,6 @@ pub trait MarketCoinOps {
 
     /// Signs raw utxo transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
     async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult;
-
-    /// Signs ethereum transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
-    async fn sign_eth_tx(&self, args: &SignEthTransactionRequest) -> SignEthTransactionResult;
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send>;
 
@@ -3967,7 +3964,14 @@ pub async fn sign_raw_transaction(ctx: MmArc, req: SignRawTransactionRequest) ->
 
 pub async fn sign_eth_transaction(ctx: MmArc, req: SignEthTransactionRequest) -> SignEthTransactionResult {
     let coin = lp_coinfind_or_err(&ctx, &req.coin).await?;
-    coin.sign_eth_tx(&req).await
+    match coin {
+        MmCoinEnum::EthCoin(eth_coin) => sign_eth_tx(&eth_coin, &req).await,
+        _ => {
+            return MmError::err(RawTransactionError::NotImplemented {
+                coin: coin.ticker().to_string(),
+            })
+        },
+    }
 }
 
 pub async fn remove_delegation(ctx: MmArc, req: RemoveDelegateRequest) -> DelegationResult {
