@@ -1280,12 +1280,19 @@ Options:
 Requesting all DOC based orders
 
 ```sh
-komodefi-cli orders history --base DOC --all  
+komodefi-cli orders history --base DOC --all    
 Getting order history  
 Orders history:  
-│uuid  │Type │Action│Base│Rel  │Volume│Price│Status   │Created │Updated │Was taker│  
-│f398..│Maker│Sell  │DOC │MARTY│9.00  │10.00│Updated  │23-09...│23-09-..│false    │  
-│96b1..│Maker│Sell  │DOC │MARTY│1.00  │3.00 │Cancelled│23-09-..│23-09-..│false    │
+│uuid                                │Type │Action│Base│Rel  │Volume│Price │Status   │Created          │Updated          │Was taker│  
+│                                    │     │      │    │     │      │      │         │                 │                 │         │  
+│22532835-8d93-4484-bb6b-e01be0acbde0│Maker│Sell  │DOC │MARTY│1.00  │3.00  │Cancelled│23-09-15 15:42:06│23-09-15 15:42:31│false    │  
+│009b9b1c-4582-4ec7-aef9-2d6729e8cde2│Maker│Sell  │DOC │KMD  │1.00  │100.00│Created  │23-09-15 15:35:48│23-09-15 15:35:48│false    │  
+│72ad0098-a684-4ac1-925b-9b7155faa22a│Maker│Sell  │DOC │MARTY│1.00  │3.00  │Cancelled│23-09-15 15:34:29│23-09-15 15:36:30│false    │  
+│077b68d9-0e71-4a35-9b3f-c3cfe5b57310│Maker│Sell  │DOC │MARTY│21.00 │10.00 │Cancelled│23-09-15 13:40:28│23-09-15 15:18:18│false    │  
+│0fc8996a-caec-4323-8218-93882c317f88│Maker│Sell  │DOC │MARTY│1.00  │3.00  │Cancelled│23-09-15 13:39:38│23-09-15 13:40:28│false    │  
+│26a51d94-6957-4c76-b6e6-d31f3cf5e4a6│Maker│Sell  │DOC │MARTY│1.00  │0.90  │Cancelled│23-09-15 08:57:45│23-09-15 13:40:28│false    │  
+│f398ffe2-9c74-4340-8702-68eca1d167e8│Maker│Sell  │DOC │MARTY│9.00  │10.00 │Cancelled│23-09-14 13:59:27│23-09-15 08:57:45│false    │  
+│96b193bf-ac34-48f4-8dc8-c59c82149753│Maker│Sell  │DOC │MARTY│1.00  │3.00  │Cancelled│23-09-14 13:45:17│23-09-14 13:59:27│false    │
 ```
 
 Requesting detailed makers
