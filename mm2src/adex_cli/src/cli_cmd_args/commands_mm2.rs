@@ -16,7 +16,7 @@ pub(crate) enum Mm2Commands {
     #[command(about = "Kill mm2 process")]
     Kill,
     #[command(about = "Check if mm2 is running")]
-    Check,
+    Status,
     #[command(about = "Get version of intermediary mm2 service")]
     Version,
 }

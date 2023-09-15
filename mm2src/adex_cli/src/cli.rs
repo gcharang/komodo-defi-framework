@@ -90,7 +90,7 @@ impl Cli {
             }) => start_process(mm2_cfg_file, coins_file, log_file),
             Command::Mm2(Mm2Commands::Version) => proc.get_version().await?,
             Command::Mm2(Mm2Commands::Kill) => stop_process(),
-            Command::Mm2(Mm2Commands::Check) => get_status(),
+            Command::Mm2(Mm2Commands::Status) => get_status(),
             Command::Mm2(Mm2Commands::Stop) => proc.send_stop().await?,
             Command::Config(ConfigSubcommand::Set(SetConfigArgs { password, uri })) => {
                 set_config(*password, uri.take())?
