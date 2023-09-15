@@ -6,7 +6,7 @@ use mm2_rpc::data::legacy::{CancelAllOrdersRequest, CancelBy, CancelOrderRequest
 
 #[derive(Subcommand)]
 pub(crate) enum CancelSubcommand {
-    #[command(short_flag = 'o', about = "Cancels certain order by uuid")]
+    #[command(short_flag = 'o', about = "Cancels given order by uuid")]
     Order(CancelOrderArgs),
     #[command(short_flag = 'a', about = "Cancels all orders of current node")]
     All,

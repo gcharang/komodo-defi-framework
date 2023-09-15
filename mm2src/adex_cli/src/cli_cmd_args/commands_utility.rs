@@ -12,7 +12,7 @@ use crate::rpc_data::UnbanPubkeysRequest;
 pub(crate) enum UtilityCommands {
     #[command(
         visible_alias = "ban",
-        about = "Bans the selected pubkey ignoring its order matching messages and preventing its \
+        about = "Bans the given pubkey ignoring its order matching messages and preventing its \
                      orders from displaying in the orderbook. \
                      Use the secp256k1 pubkey without prefix for this method input"
     )]

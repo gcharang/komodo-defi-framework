@@ -10,7 +10,7 @@ use crate::cli_cmd_args::parse_mm_number;
 pub(crate) struct BestOrderArgs {
     #[arg(value_enum, help = "The coin to get best orders")]
     coin: String,
-    #[arg(help = "Whether to buy or sell the selected coin")]
+    #[arg(help = "Whether to buy or sell the given coin")]
     action: OrderActionArg,
     #[command(flatten)]
     delegate: BestOrdersByArg,

@@ -41,7 +41,7 @@ pub(crate) enum SwapCommands {
     #[command(about = "Return the minimum required volume for buy/sell/setprice methods for the selected coin")]
     MinTradingVol { coin: String },
     #[command(
-        about = "Return the maximum available volume for buy/sell methods for selected coin. \
+        about = "Returns the maximum available volume for buy/sell methods for the given coin. \
                  The result should be used as is for sell method or divided by price for buy method."
     )]
     MaxTakerVol { coin: String },
@@ -88,7 +88,7 @@ pub(crate) struct MyRecentSwapsArgs {
         long,
         visible_alias = "page",
         short = 'p',
-        help = "Return limit swaps from the selected page; This param will be ignored if from_uuid is set"
+        help = "Return swaps from the given page; This param will be ignored if from_uuid is set"
     )]
     pub(crate) page_number: Option<usize>,
     #[arg(

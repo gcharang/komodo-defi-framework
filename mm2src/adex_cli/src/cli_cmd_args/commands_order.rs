@@ -25,7 +25,7 @@ pub(crate) enum OrderCommands {
     OrderbookDepth(OrderbookDepthArgs),
     #[command(
         visible_alias = "status",
-        about = "Return the data of the order with the selected uuid created by the current node"
+        about = "Return the data of the order with the given uuid created by the current node"
     )]
     OrderStatus(OrderStatusArgs),
     #[command(
@@ -37,7 +37,7 @@ pub(crate) enum OrderCommands {
     MyOrders,
     #[command(
         visible_aliases = ["history", "filter"],
-        about = "Return all orders whether active or inactive that match the selected filters"
+        about = "Return all orders whether active or inactive that match the given filters"
     )]
     OrdersHistory(OrdersHistoryArgs),
 }

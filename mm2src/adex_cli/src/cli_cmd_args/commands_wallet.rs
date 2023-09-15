@@ -31,7 +31,7 @@ pub(crate) enum WalletCommands {
     Withdraw(WithdrawArgs),
     #[command(
         visible_aliases = ["send-raw", "send"],
-        about = "Broadcasts the transaction to the network of selected coin"
+        about = "Broadcasts the transaction to the network of the given coin"
     )]
     SendRawTransaction(SendRawTransactionArgs),
     #[command(

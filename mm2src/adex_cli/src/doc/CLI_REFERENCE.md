@@ -1673,3 +1673,154 @@ total_fee:
 
 ## Cancelling orders
 
+Each of the following commands is designed to cancel one or more orders
+
+```sh
+komodefi-cli cancel  
+Cancel one or many orders  
+  
+Usage: komodefi-cli cancel <COMMAND>  
+  
+Commands:  
+ order, -o    Cancels certain order by uuid  
+ all, -a      Cancels all orders of current node  
+ by-pair, -p  Cancels all orders of specific pair [aliases: pair]  
+ by-coin, -c  Cancels all orders using the coin ticker as base or rel [aliases: coin]  
+ help         Print this message or the help of the given subcommand(s)  
+  
+Options:  
+ -h, --help  Print help
+```
+
+### cancel order
+
+The `cancel order` command cancels the given order using the [`cancel_order` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/cancel_order.html).
+
+```sh
+komodefi-cli cancel order --help  
+Cancels certain order by uuid  
+  
+Usage: komodefi-cli cancel {order|-o} <UUID>  
+  
+Arguments:  
+ <UUID>  Order identifier  
+  
+Options:  
+ -h, --help  Print help
+```
+
+**Example:**
+
+```sh
+komodefi-cli orders book DOC MARTY --uuids  
+Getting orderbook, base: DOC, rel: MARTY  
+     Volume: DOC Price: MARTY     Uuid                                    
+*          21.00 10.00000000      077b68d9-0e71-4a35-9b3f-c3cfe5b57310    
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
+     94974264.87 1.00000000       6e0b356e-abbf-46e3-8a0c-4a19e6a88199    
+- -------------- ---------------- ------------------------------------    
+     94898462.11 1.00000000       390c85a5-7709-4c1f-a1bc-690412832bf6    
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086    
+*           3.00 0.33333333       797c0456-7d99-4295-8ee6-055e784b04cf
+
+komodefi-cli cancel order 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+Cancelling order: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+Order cancelled: Success
+```
+
+### cancel all
+
+The `cancel all` command cancels all order created by the running `mm2` instance orders the [`cancel_all` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/cancel_all_orders.html).
+
+```sh
+komodefi-cli cancel all --help  
+Cancels all orders of current node  
+  
+Usage: komodefi-cli cancel {all|-a}  
+  
+Options:  
+ -h, --help  Print help
+```
+
+**Example:**
+
+```sh
+komodefi-cli cancel all  
+Cancelling all orders  
+Cancelled: d550c9d5-eedb-4069-ba0a-524d9346acda, 797c0456-7d99-4295-8ee6-055e784b04cf, 1fc0df20-9c21-461a-ad78-a4b37d4ab336
+```
+
+### cancel by-pair (pair)
+
+The `cancel by-pair` command cancels all orders that matches by the given BASE and REL using the  [`cancel_all` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/cancel_all_orders.html). Sell operation is meant. *Alias: `pair`*
+
+```sh
+komodefi-cli cancel pair --help  
+Cancels all orders of specific pair  
+  
+Usage: komodefi-cli cancel {by-pair|-p} <BASE> <REL>  
+  
+Arguments:  
+ <BASE>  Base coin of the pair  
+ <REL>   Rel coin of the pair  
+  
+Options:  
+ -h, --help  Print help
+```
+
+**Example:**
+
+```sh
+komodefi-cli orders book DOC MARTY --uuids  
+Getting orderbook, base: DOC, rel: MARTY  
+     Volume: DOC Price: MARTY     Uuid                                    
+*           1.00 3.00000000       72ad0098-a684-4ac1-925b-9b7155faa22a    
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
+     94974264.87 1.00000000       36c3456d-7f69-4818-940a-72d5465217bd    
+- -------------- ---------------- ------------------------------------    
+     94898462.11 1.00000000       205fb457-f693-421b-ae16-48f63b996ad5    
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086    
+*           3.00 0.33333333       2018ece4-0210-4f07-8cff-eed811f17ded
+
+komodefi-cli cancel pair DOC MARTY  
+Cancelling by pair, base: DOC, rel: MARTY  
+Cancelled: 72ad0098-a684-4ac1-925b-9b7155faa22a
+```
+
+### cancel by-coin (coin)
+
+The `cancel by-coin` command cancels all orders corresponding to a given COIN in which this coin is set as a base or relative coin. This command is implemented by requesting the  [`cancel_all` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/cancel_all_orders.html) *Alias: `coin`*
+
+```sh
+komodefi-cli cancel coin --help  
+Cancels all orders using the coin ticker as base or rel  
+  
+Usage: komodefi-cli cancel {by-coin|-c} <TICKER>  
+  
+Arguments:  
+ <TICKER>  Order is cancelled if it uses ticker as base or rel  
+  
+Options:  
+ -h, --help  Print help
+```
+
+
+**Example:**
+
+```sh
+komodefi-cli orders book DOC MARTY --uuids  
+Getting orderbook, base: DOC, rel: MARTY  
+     Volume: DOC Price: MARTY     Uuid                                    
+*           1.00 3.00000000       22532835-8d93-4484-bb6b-e01be0acbde0    
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
+     94974264.87 1.00000000       36c3456d-7f69-4818-940a-72d5465217bd    
+- -------------- ---------------- ------------------------------------    
+     94898462.11 1.00000000       205fb457-f693-421b-ae16-48f63b996ad5    
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086    
+*           3.00 0.33333333       2018ece4-0210-4f07-8cff-eed811f17ded
+
+komodefi-cli cancel coin MARTY  
+Cancelling by coin: MARTY  
+Cancelled: 22532835-8d93-4484-bb6b-e01be0acbde0, 2018ece4-0210-4f07-8cff-eed811f17ded
+```
+

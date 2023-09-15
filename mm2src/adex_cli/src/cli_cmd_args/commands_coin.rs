@@ -9,13 +9,13 @@ use crate::rpc_data::DisableCoinRequest;
 pub(crate) enum CoinCommands {
     #[command(about = "Put a coin to the trading index")]
     Enable(EnableArgs),
-    #[command(about = "Deactivates enabled coin and also cancels all active orders that use the selected coin.")]
+    #[command(about = "Deactivates enabled coin and also cancels all active orders that use the given coin.")]
     Disable(DisableCoinArgs),
     #[command(visible_alias = "enabled", about = "List activated coins")]
     GetEnabled,
     #[command(
         visible_alias = "set-conf",
-        about = "Set the number of confirmations to wait for the selected coin"
+        about = "Set the number of confirmations to wait for the given coin"
     )]
     SetRequiredConf(SetRequiredConfArgs),
     #[command(
@@ -68,7 +68,7 @@ impl From<&mut DisableCoinArgs> for DisableCoinRequest {
 
 #[derive(Args)]
 pub(crate) struct SetRequiredConfArgs {
-    #[arg(help = "Ticker of the selected coin")]
+    #[arg(help = "Ticker of the given coin")]
     pub(crate) coin: String,
     #[arg(visible_alias = "conf", help = "Number of confirmations to require")]
     pub(crate) confirmations: u64,
@@ -85,7 +85,7 @@ impl From<&mut SetRequiredConfArgs> for SetRequiredConfRequest {
 
 #[derive(Args)]
 pub(crate) struct SetRequiredNotaArgs {
-    #[arg(help = "Ticker of the selected coin")]
+    #[arg(help = "Ticker of the given coin")]
     pub(crate) coin: String,
     #[arg(
         long,

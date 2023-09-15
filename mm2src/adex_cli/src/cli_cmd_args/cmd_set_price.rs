@@ -32,7 +32,7 @@ pub(crate) struct SetPriceArgs {
         long,
         short,
         visible_alias = "cancel",
-        help = "Cancel all existing orders for the selected pair"
+        help = "Cancel all existing orders for the give pair"
     )]
     cancel_prev: bool,
     #[arg(
