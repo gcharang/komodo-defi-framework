@@ -100,7 +100,7 @@ impl<M: Send + Sync> GuardedReceiver<M> {
     pub async fn recv(&mut self) -> Option<Arc<M>> { self.rx.recv().await }
 }
 
-#[cfg(test)]
+#[cfg(any(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
 
