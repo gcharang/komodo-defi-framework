@@ -600,7 +600,7 @@ Options:
  -t, --tx-hex <TX_HEX>  Transaction bytes in hexadecimal format;  
  -b, --bare-output      Whether to output only tx_hash [aliases: bare]  
  -h, --help             Print help
- ```
+```
 
 **Example:**
 
@@ -997,15 +997,15 @@ Options:
 **Example:**
 
 ```sh
-komodefi-cli set-price DOC MARTY 3 --volume 1 --cancel-prev    
+komodefi-cli set-price DOC MARTY 3 --volume 1 -c  
 Setting price for pair: DOC MARTY  
 Maker order:    
                base: DOC  
                 rel: MARTY  
               price: 3.00  
-               uuid: f398ffe2-9c74-4340-8702-68eca1d167e8  
-         created at: 23-09-14 13:59:27  
-         updated at: 23-09-14 13:59:27  
+               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+         created at: 23-09-15 13:40:28  
+         updated at: 23-09-15 13:40:28  
        max_base_vol: 1.00  
        min_base_vol: 0.000100  
               swaps: empty  
@@ -1014,7 +1014,12 @@ Maker order:  
 komodefi-cli orders book DOC MARTY --uuids
 Getting orderbook, base: DOC, rel: MARTY  
      Volume: DOC Price: MARTY     Uuid                                    
-*           1.00 3.00000000       f398ffe2-9c74-4340-8702-68eca1d167e8    
+*           1.00 3.00000000       077b68d9-0e71-4a35-9b3f-c3cfe5b57310    
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2    
+     94974264.87 1.00000000       a29748d0-fa6a-4a7f-a402-c569c96ea92a    
+- -------------- ---------------- ------------------------------------    
+     94898462.11 1.00000000       41b0a9cb-8416-4748-af4d-2064dd8ae617    
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086
 ...
 ```
 
@@ -1044,30 +1049,33 @@ Options:
 **Example:**
 
 ```sh
-komodefi-cli update-maker-order --uuid f398ffe2-9c74-4340-8702-68eca1d167e8 -p 10 -d=-2 --base-nota true --bc 5 --rn true --rc 6 -m 4  
+komodefi-cli update-maker-order --uuid 077b68d9-0e71-4a35-9b3f-c3cfe5b57310 -p 10 -d=10 --base-nota false --bc 2 --rn false --rc 2 -m 4    
 Updating maker order  
 Maker order:    
                base: DOC  
                 rel: MARTY  
               price: 10.00  
-               uuid: f398ffe2-9c74-4340-8702-68eca1d167e8  
-         created at: 23-09-14 13:59:27  
-         updated at: 23-09-14 14:33:17  
-       max_base_vol: 9.00  
+               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+         created at: 23-09-15 13:40:28  
+         updated at: 23-09-15 13:43:31  
+       max_base_vol: 21.00  
        min_base_vol: 4.00  
               swaps: empty  
-      conf_settings: 5,true:6,true
-
-komodo-atomicDEX-API]$ komodefi-cli orders book DOC MARTY --uuids -c     
+      conf_settings: 2,false:2,false
+      
+komodefi-cli orders book DOC MARTY --uuids -c  
 Getting orderbook, base: DOC, rel: MARTY  
-     Volume: DOC Price: MARTY     Uuid                                 Order conf 
-*           9.00 10.00000000      f398ffe2-9c74-4340-8702-68eca1d167e8 1,false:1,false             0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2 1,false:1,false      94974264.87 1.00000000       26bdefff-5cfd-440c-83a8-04f3b82aa53b 1,false:1,false 
-- -------------- ---------------- ------------------------------------ ----------------
-     94898462.11 1.00000000       754f76e6-b639-4ce8-b08f-37fbbdc4faa6 1,false:1,false
+     Volume: DOC Price: MARTY     Uuid                                 Order conf (bc,bn:rc,rn)    
+*           21.00 10.00000000      077b68d9-0e71-4a35-9b3f-c3cfe5b57310 1,false:1,false             
+            0.14 1.00000000       0e549623-fead-4645-9c6c-00877b50bac2 1,false:1,false             
+     94974264.87 1.00000000       c4a469c7-fa69-4002-a1be-2578d329d681 1,false:1,false             
+- --------------- ---------------- ------------------------------------ ------------------------    
+     94898462.11 1.00000000       9734d9e5-36f5-4f9f-81b9-deb79390f82b 1,false:1,false             
+            1.94 1.00000000       fbd51c38-f3a7-42c5-aa3a-c52938188086 1,false:1,false
 ...
 ```
 
-*Notice: you can see the responded `conf-settings` for the given order f398ffe2-9c74-4340-8702-68eca1d167e8 are wrong*
+*Notice: you can see the responded `conf-settings` for the given order 077b68d9-0e71-4a35-9b3f-c3cfe5b57310 are wrong*
 ### buy
 
 The `buy` command buys a base coin for a rel one in a given volume and at a given price using the [`buy` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-legacy/buy.html). Like for the `sell` command that is possible to limit  a new order with the `--min-volume`.  If `--uuid` or `--public` options were set matching procedure would be restricted according to the given values. `--base-confs`, `--base-nota`, `--rel-confs`, `--rel-nota` are to override preset confirmation and notarization rules.
@@ -1134,20 +1142,20 @@ Options:
 **Example:**
 
 ```sh
-komodefi-cli order status f398ffe2-9c74-4340-8702-68eca1d167e8  
-Getting order status: f398ffe2-9c74-4340-8702-68eca1d167e8  
+komodefi-cli order status 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+Getting order status: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
                base: DOC  
                 rel: MARTY  
               price: 10.00  
-               uuid: f398ffe2-9c74-4340-8702-68eca1d167e8  
-         created at: 23-09-14 13:59:27  
-         updated at: 23-09-14 14:33:17  
-       max_base_vol: 9.00  
+               uuid: 077b68d9-0e71-4a35-9b3f-c3cfe5b57310  
+         created at: 23-09-15 13:40:28  
+         updated at: 23-09-15 13:43:31  
+       max_base_vol: 21.00  
        min_base_vol: 4.00  
               swaps: empty  
-      conf_settings: 5,true:6,true  
+      conf_settings: 2,false:2,false  
         cancellable: true  
-   available_amount: 9.00
+   available_amount: 21.00
 ```
 
 ### orders orderbook-depth (depth)
@@ -1485,3 +1493,4 @@ events:  
 │                                   │                                                                                                                        │
 ...
 ```
+
