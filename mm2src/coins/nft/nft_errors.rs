@@ -292,3 +292,15 @@ pub enum ParseChainTypeError {
     /// The provided string does not correspond to any of the supported blockchain types.
     UnsupportedChainType,
 }
+
+#[derive(Debug, Display, EnumFromStringify)]
+pub(crate) enum MetaFromUrlError {
+    #[from_stringify("serde_json::Error")]
+    #[display(fmt = "Invalid response: {}", _0)]
+    InvalidResponse(String),
+    GetInfoFromUriError(GetInfoFromUriError),
+}
+
+impl From<GetInfoFromUriError> for MetaFromUrlError {
+    fn from(e: GetInfoFromUriError) -> Self { MetaFromUrlError::GetInfoFromUriError(e) }
+}
