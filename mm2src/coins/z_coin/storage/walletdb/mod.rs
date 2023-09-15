@@ -88,7 +88,7 @@ mod wallet_db_storage_tests {
         Network::TestNetwork.activation_height(NetworkUpgrade::Sapling).unwrap()
     }
 
-    async fn wallet_db_from_zcoin_builder_for_test<'a>(ticker: &'a str) -> WalletIndexedDb {
+    async fn wallet_db_from_zcoin_builder_for_test(ticker: &str) -> WalletIndexedDb {
         let ctx = mm_ctx_with_custom_db();
         let consensus_params = consensus_params();
 

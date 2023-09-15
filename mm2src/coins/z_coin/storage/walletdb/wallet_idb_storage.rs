@@ -406,7 +406,7 @@ impl WalletIndexedDb {
 
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_NF_INDEX)
             .with_value(&ticker)?
-            .with_value(&nf.0.to_vec())?;
+            .with_value(nf.0.to_vec())?;
         let maybe_note = received_notes_table.get_item_by_unique_multi_index(index_keys).await?;
 
         if let Some((id, note)) = maybe_note {
@@ -853,7 +853,7 @@ impl WalletRead for WalletIndexedDb {
         let block_headers_db = db_transaction.table::<WalletDbBlocksTable>().await?;
         let maybe_items = block_headers_db.get_items("ticker", ticker.clone()).await?;
         let (mut min, mut max) = (None, None);
-        if maybe_items.len() >= 1 {
+        if !maybe_items.is_empty() {
             min = Some(maybe_items[0].1.height);
             max = Some(maybe_items[maybe_items.len() - 1].1.height);
         }
