@@ -1435,6 +1435,6 @@ events: │ Started                           │ uuid: 6b007706-d6e1-4565-8655-
 │                                   │ d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4dac68ffffffff0118ddf505000000001976a9149934ebeaa56cb597c936a9ed82 │  
 │                                   │ 02d8d97a0a700388ace6fabf64000000000000000000000000000000                                                               │  
 │                                   │ tx_hash: 4f2cc7a83d7012c5d03fa64df188500db4bee51bbb9a6a0a1f06a50ca3409fdc                                              │  
-│                                   │                                                                                                                        │  
+│                                   │                                                                
 "
 ```

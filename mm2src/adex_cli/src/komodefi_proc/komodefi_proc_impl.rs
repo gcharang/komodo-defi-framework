@@ -303,7 +303,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
         )
     }
 
-    pub(in super::super) async fn active_swaps(&self, include_status: bool, uuids_only: bool) -> Result<()> {
+    pub(in super::super) async fn active_swaps(&self, include_status: bool) -> Result<()> {
         info!("Getting active swaps");
         let active_swaps_command = self.command_legacy(ActiveSwapsRequest { include_status })?;
         request_legacy!(
@@ -311,7 +311,7 @@ impl<T: Transport, P: ResponseHandler, C: KomodefiConfig + 'static> KomodefiProc
             ActiveSwapsResponse,
             self,
             on_active_swaps,
-            uuids_only
+            !include_status
         )
     }
 

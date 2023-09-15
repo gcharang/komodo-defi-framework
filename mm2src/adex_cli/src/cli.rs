@@ -131,9 +131,7 @@ impl Cli {
 
             Command::SetPrice(set_price_args) => proc.set_price(set_price_args.into()).await?,
             Command::UpdateMakerOrder(update_maker_args) => proc.update_maker_order(update_maker_args.into()).await?,
-            Command::Swaps(SwapCommands::ActiveSwaps(args)) => {
-                proc.active_swaps(args.include_status, args.uuids_only).await?
-            },
+            Command::Swaps(SwapCommands::ActiveSwaps(args)) => proc.active_swaps(args.include_status).await?,
             Command::Swaps(SwapCommands::MySwapStatus(args)) => proc.swap_status(args.uuid).await?,
             Command::Swaps(SwapCommands::MyRecentSwaps(args)) => proc.recent_swaps(args.into()).await?,
             Command::Swaps(SwapCommands::RecoverFundsOfSwap(args)) => proc.recover_funds_of_swap(args.into()).await?,

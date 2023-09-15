@@ -20,24 +20,22 @@ use crate::rpc_data::{ActiveSwapsResponse, MakerNegotiationData, MakerSavedEvent
 const DATA_COLUMN_WIDTH: usize = 120;
 
 pub(super) fn on_active_swaps(writer: &mut dyn Write, response: ActiveSwapsResponse, uuids_only: bool) -> Result<()> {
-    let Some(statuses) = response.statuses else {
+    if uuids_only && response.uuids.is_empty() {
         writeln_safe_io!(writer, "No swaps found");
-        return Ok(());
-    };
-
-    if uuids_only {
+    } else if uuids_only && !response.uuids.is_empty() {
         writeln_field(writer, "uuids", "", ZERO_INDENT);
         writeln_safe_io!(writer, "{}", response.uuids.iter().join("\n"));
-        return Ok(());
-    }
-
-    for (_uuid, swap) in statuses {
-        writeln_safe_io!(writer, "");
-        match swap {
-            SavedSwap::Taker(taker_swap) => write_taker_swap(writer, taker_swap)?,
-            SavedSwap::Maker(maker_swap) => write_maker_swap(writer, maker_swap)?,
+    } else if let Some(statuses) = response.statuses {
+        for (_uuid, swap) in statuses {
+            writeln_safe_io!(writer, "");
+            match swap {
+                SavedSwap::Taker(taker_swap) => write_taker_swap(writer, taker_swap)?,
+                SavedSwap::Maker(maker_swap) => write_maker_swap(writer, maker_swap)?,
+            }
         }
-    }
+    } else {
+        writeln_safe_io!(writer, "No swaps found");
+    };
     Ok(())
 }
 

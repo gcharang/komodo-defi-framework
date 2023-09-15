@@ -60,14 +60,6 @@ pub(crate) struct ActiveSwapsArgs {
         help = "Whether to include swap statuses in response; defaults to false"
     )]
     pub(crate) include_status: bool,
-    #[arg(
-        long,
-        short = 'u',
-        visible_alias = "uuids",
-        default_value_t = false,
-        help = "Whether to show only uuids of active swaps"
-    )]
-    pub(crate) uuids_only: bool,
 }
 
 #[derive(Args, Debug)]
