@@ -1280,33 +1280,39 @@ Orders history:
 Requesting detailed makers
 
 ```sh
-komodefi-cli orders history --base RICK --makers  
+komodefi-cli orders history --base RICK --makers     
 Getting order history  
-Maker orders history detailed:
-
-│ base,rel  │ price  │ uuid │ created at,│ min base vol, │ swaps │ conf_settings
-│           │        │      │ updated at │ max base vol  │       │              ...
-│ RICK,MORTY│ 0.95   │ f1b..│ 23-06-30 ..│ 0.00010,      │ fe60..│ 1,false:1,false 
-│           │        │      │ 23-06-30 ..│ 1.00          │ e07b..│ 
-│           │        │      │            │               │ dec7..│ 
-│           │        │      │            │               │ c63b..│ 
-│  matches
-│                       uuid: e07bcf02-788f-407c-a182-63c506280ca4
-│                   req.uuid: e07bcf02-788f-407c-a182-63c506280ca4
-│             req.(base,rel): MORTY(0.0100), RICK(0.01)
-│               req.match_by: Any 
-│                 req.action: Sell 
-│          req.conf_settings: 1,false:1,false 
-│         req.(sender, dest): 144ee16a5960c50a930c26c0e01133de603eb41ce2e2e6...
-│        reserved.(base,rel): RICK(0.01), MORTY(0.0100) 
-│    reserved.(taker, maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76...
-│    reserved.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5...
-│     reserved.conf_settings: 1,false:1,false 
-│    connected.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-...
-│   connected.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5...
-│      connect.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-...
-│     connect.(sender, dest): 00000000000000000000000000000000000000000000000000000000...
-│               last_updated: 23-06-30 09:54:13
+Maker orders history detailed:  
+│ base,rel      │ price         │ uuid                                 │ created at,        │ min base vol, │ swaps                                 │ conf_settings   │ history changes │ orderbook ticker │                │  
+│               │               │                                      │ updated at         │ max base vol  │                                       │                 │                 │ base, rel        │                │  
+│               │               │                                      │                    │               │                                       │                 │                 │                  │                │  
+│ RICK,MORTY    │ 0.50          │ e2db79f4-376e-4917-be37-f383c5516e28 │ 23-07-18 16:50:31, │ 0.000100,     │ empty                                 │ 10,true:10,true │ none            │ none             │                │  
+│               │               │                                      │ 23-07-18 16:58:10  │ 0.10          │                                       │                 │                 │ none             │                │  
+│ RICK,MORTY    │ 0.90          │ 1c739304-dd83-466e-8df4-ef99dc40afb9 │ 23-07-18 09:11:48, │ 0.00011,      │ empty                                 │ 10,true:10,true │ none            │ none             │                │  
+│               │               │                                      │ 23-07-18 09:12:50  │ 0.10          │                                       │                 │                 │ none             │                │  
+│ RICK,MORTY    │ 0.95          │ f1bf7c76-806e-40cb-a489-a52056ec42e6 │ 23-06-30 09:05:34, │ 0.00010,      │ fe6099a2-e29a-441b-be4f-21dd3666efad, │ 1,false:1,false │ none            │ none             │                │  
+│               │               │                                      │ 23-06-30 09:05:34  │ 1.00          │ e07bcf02-788f-407c-a182-63c506280ca4, │                 │                 │ none             │                │  
+│               │               │                                      │                    │               │ dec7fe39-16be-42cc-b3ba-2078ed5019b5, │                 │                 │                  │                │  
+│               │               │                                      │                    │               │ c63bc058-72e7-4b1b-8866-e1e5d2a2253b, │                 │                 │                  │                │  
+│               │               │                                      │                    │               │ 824fa32e-865f-49f1-b499-ba90b7141c2b  │                 │                 │                  │                │  
+│ matches                                                                                                                                                                                                                   │  
+│                       uuid: dec7fe39-16be-42cc-b3ba-2078ed5019b5                                                                                                                                                          │  
+│                   req.uuid: dec7fe39-16be-42cc-b3ba-2078ed5019b5                                                                                                                                                          │  
+│             req.(base,rel): MORTY(0.0100), RICK(0.01)                                                                                                                                                                     │  
+│               req.match_by: Any                                                                                                                                                                                           │  
+│                 req.action: Sell                                                                                                                                                                                          │  
+│          req.conf_settings: 1,false:1,false                                                                                                                                                                               │  
+│         req.(sender, dest): 144ee16a5960c50a930c26c0e01133de603eb41ce2e2e61e744fcfa76d4ffade,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
+│        reserved.(base,rel): RICK(0.01), MORTY(0.0100)                                                                                                                                                                     │  
+│    reserved.(taker, maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
+│    reserved.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,144ee16a5960c50a930c26c0e01133de603eb41ce2e2e61e744fcfa76d4ffade                                                             │  
+│     reserved.conf_settings: 1,false:1,false                                                                                                                                                                               │  
+│    connected.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
+│   connected.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
+│      connect.(taker,maker): dec7fe39-16be-42cc-b3ba-2078ed5019b5,f1bf7c76-806e-40cb-a489-a52056ec42e6                                                                                                                     │  
+│     connect.(sender, dest): 0000000000000000000000000000000000000000000000000000000000000000,0000000000000000000000000000000000000000000000000000000000000000                                                             │  
+│               last_updated: 23-06-30 09:54:13                                                                                                                                                                             │  
+│                                                                                                                                                                                                                           │
 ...
 ```
 
