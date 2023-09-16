@@ -43,6 +43,7 @@ mod wallet_db_storage_tests {
     use common::log::wasm_log::register_wasm_log;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use protobuf::Message;
+    use wallet_idb_storage::NoteId;
     use wasm_bindgen_test::*;
     use zcash_client_backend::wallet::{AccountId, OvkPolicy};
     use zcash_extras::fake_compact_block;
@@ -753,14 +754,14 @@ mod wallet_db_storage_tests {
         let (_, anchor_height2) = walletdb.get_target_and_anchor_heights().await.unwrap().unwrap();
         assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value);
         assert_eq!(
-            walletdb.get_balance_at(AccountId(0), anchor_height).await.unwrap(),
+            walletdb.get_balance_at(AccountId(0), anchor_height2).await.unwrap(),
             value
         );
 
         // Spend fails because there are insufficient verified notes
         let extsk2 = ExtendedSpendingKey::master(&[]);
         let to = extsk2.default_address().unwrap().1.into();
-        match create_spend_to_address(
+        match create_spend_to_address::<_, NoteId, _, _, _>(
             &mut walletdb,
             &network(),
             test_prover(),
@@ -796,7 +797,7 @@ mod wallet_db_storage_tests {
             .is_ok());
 
         // Second spend still fails
-        match create_spend_to_address(
+        match create_spend_to_address::<_, NoteId, _, _, _>(
             &mut walletdb,
             &network(),
             test_prover(),
@@ -828,7 +829,7 @@ mod wallet_db_storage_tests {
             .is_ok());
 
         // Second spend should now succeed
-        create_spend_to_address(
+        create_spend_to_address::<_, NoteId, _, _, _>(
             &mut walletdb,
             &network(),
             test_prover(),
