@@ -44,14 +44,17 @@ mod wallet_db_storage_tests {
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use protobuf::Message;
     use wasm_bindgen_test::*;
-    use zcash_client_backend::wallet::AccountId;
+    use zcash_client_backend::wallet::{AccountId, OvkPolicy};
     use zcash_extras::fake_compact_block;
     use zcash_extras::fake_compact_block_spending;
+    use zcash_extras::wallet::create_spend_to_address;
     use zcash_extras::WalletRead;
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
+    use zcash_primitives::sapling::prover::TxProver;
     use zcash_primitives::transaction::components::Amount;
     use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+    use zcash_proofs::prover::LocalTxProver;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
@@ -709,7 +712,7 @@ mod wallet_db_storage_tests {
         let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
 
         // init walletdb.
-        let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
         let consensus_params = consensus_params();
 
         // Add an account to the wallet
@@ -747,7 +750,7 @@ mod wallet_db_storage_tests {
         blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
 
         // Verified balance does not include the second note
-        let (_, anchor_height2) = (&db_data).get_target_and_anchor_heights().unwrap().unwrap();
+        let (_, anchor_height2) = walletdb.get_target_and_anchor_heights().await.unwrap().unwrap();
         assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value);
         assert_eq!(
             walletdb.get_balance_at(AccountId(0), anchor_height).await.unwrap(),
@@ -759,7 +762,7 @@ mod wallet_db_storage_tests {
         let to = extsk2.default_address().unwrap().1.into();
         match create_spend_to_address(
             &mut walletdb,
-            network(),
+            &network(),
             test_prover(),
             AccountId(0),
             &extsk,
@@ -795,7 +798,7 @@ mod wallet_db_storage_tests {
         // Second spend still fails
         match create_spend_to_address(
             &mut walletdb,
-            network(),
+            &network(),
             test_prover(),
             AccountId(0),
             &extsk,
@@ -803,7 +806,9 @@ mod wallet_db_storage_tests {
             Amount::from_u64(70000).unwrap(),
             None,
             OvkPolicy::Sender,
-        ) {
+        )
+        .await
+        {
             Ok(_) => panic!("Should have failed"),
             Err(e) => assert_eq!(
                 e.to_string(),
@@ -825,7 +830,7 @@ mod wallet_db_storage_tests {
         // Second spend should now succeed
         create_spend_to_address(
             &mut walletdb,
-            network(),
+            &network(),
             test_prover(),
             AccountId(0),
             &extsk,
@@ -834,6 +839,7 @@ mod wallet_db_storage_tests {
             None,
             OvkPolicy::Sender,
         )
+        .await
         .unwrap();
     }
 }

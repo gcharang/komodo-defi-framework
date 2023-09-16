@@ -401,9 +401,16 @@ pub enum ZcoinStorageError {
     NotSupported(String),
 }
 
+use crate::z_coin::storage::walletdb::wallet_idb_storage::NoteId;
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
 use mm2_err_handle::mm_error::MmError;
+
+impl<T: std::fmt::Debug> From<zcash_client_backend::data_api::error::Error<T>> for ZcoinStorageError {
+    fn from(value: zcash_client_backend::data_api::error::Error<T>) -> Self {
+        Self::BackendError(format!("{:?}", value))
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 impl From<InitDbError> for ZcoinStorageError {
