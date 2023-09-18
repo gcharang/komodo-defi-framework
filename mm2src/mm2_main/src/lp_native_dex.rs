@@ -50,19 +50,24 @@ use crate::mm2::lp_ordermatch::{broadcast_maker_orders_keep_alive_loop, clean_me
 use crate::mm2::lp_swap::{running_swaps_num, swap_kick_starts};
 use crate::mm2::rpc::spawn_rpc;
 
+use mm2_event_stream::behaviour::EventBehaviour;
+use mm2_net::network_event::NetworkEvent;
+
 cfg_native! {
     use db_common::sqlite::rusqlite::Error as SqlError;
-    use mm2_event_stream::behaviour::EventBehaviour;
     use mm2_io::fs::{ensure_dir_is_writable, ensure_file_is_writable};
     use mm2_net::ip_addr::myipaddr;
-    use mm2_net::network_event::NetworkEvent;
 }
 
 #[path = "lp_init/init_context.rs"] mod init_context;
 #[path = "lp_init/init_hw.rs"] pub mod init_hw;
-#[cfg(target_arch = "wasm32")]
-#[path = "lp_init/init_metamask.rs"]
-pub mod init_metamask;
+
+cfg_wasm32! {
+    use mm2_net::wasm_event_stream::handle_worker_stream;
+
+    #[path = "lp_init/init_metamask.rs"]
+    pub mod init_metamask;
+}
 
 const NETID_7777_SEEDNODES: [&str; 3] = ["seed1.komodo.earth", "seed2.komodo.earth", "seed3.komodo.earth"];
 
@@ -379,12 +384,18 @@ fn migrate_db(ctx: &MmArc) -> MmInitResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 fn migration_1(_ctx: &MmArc) {}
 
-#[cfg(not(target_arch = "wasm32"))]
 fn init_event_streaming(ctx: &MmArc) {
     // This condition only executed if events were enabled in mm2 configuration.
     if let Some(config) = &ctx.event_stream_configuration {
         // Network event handling
         NetworkEvent::new(ctx.clone()).spawn_if_active(config);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn init_wasm_event_streaming(ctx: &MmArc) {
+    if ctx.event_stream_configuration.is_some() {
+        ctx.spawner().spawn(handle_worker_stream(ctx.clone()));
     }
 }
 
@@ -418,12 +429,14 @@ pub async fn lp_init_continue(ctx: MmArc) -> MmInitResult<()> {
     // an order and start new swap that might get started 2 times because of kick-start
     kick_start(ctx.clone()).await?;
 
-    #[cfg(not(target_arch = "wasm32"))]
     init_event_streaming(&ctx);
 
     ctx.spawner().spawn(lp_ordermatch_loop(ctx.clone()));
 
     ctx.spawner().spawn(broadcast_maker_orders_keep_alive_loop(ctx.clone()));
+
+    #[cfg(target_arch = "wasm32")]
+    init_wasm_event_streaming(&ctx);
 
     ctx.spawner().spawn(clean_memory_loop(ctx.weak()));
 
