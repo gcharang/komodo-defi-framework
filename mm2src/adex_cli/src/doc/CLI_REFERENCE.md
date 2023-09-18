@@ -2392,5 +2392,54 @@ Updating stat collection
 Update stat collection: Success
 ```
 
-## Task managing 
+## Task managing
 
+The komodo defi platform protocol provides a number of asynchronous commands. The current implementation of `komodefi-cli` includes an asynchronous ZHTLC coin enable command. This command returns the `task_id` associated with the command that is running in the background.  The following commands provide task management functionality.
+
+```sh
+komodefi-cli task  
+Tracking the status of long-running commands  
+  
+Usage: komodefi-cli task <COMMAND>  
+  
+Commands:  
+ status  Get status of task  
+ cancel  Cancel task  
+ help    Print this message or the help of the given subcommand(s)  
+  
+Options:  
+ -h, --help  Print help
+```
+
+### task status zcoin
+
+The `status` command gets a status of the background activity by the task_id using the [`task_enable_z_coin_status` RPC API method](https://developers.komodoplatform.com/basic-docs/atomicdex-api-20-dev/zhtlc_coins.html#task-enable-z-coin-status)
+
+```sh
+komodefi-cli task status zcoin --help  
+Get zcoin enabling status  
+  
+Usage: komodefi-cli task status zcoin <TASK_ID>  
+  
+Arguments:  
+ <TASK_ID>     
+  
+Options:  
+ -h, --help  Print help
+```
+
+**Example**
+
+```sh
+komodefi-cli coin enable ZOMBIE  
+Enabling coin: ZOMBIE  
+Enabling zcoin started, task_id: 2
+...
+komodefi-cli task status zcoin 2  
+Getting enable zcoin task status  
+In progress: Activating coin
+...
+komodefi-cli task status zcoin 2  
+Getting enable zcoin task status  
+Error: Error on platform coin ZOMBIE creation: All the current light clients are unavailable.
+```
