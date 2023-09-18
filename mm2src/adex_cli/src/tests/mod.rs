@@ -171,7 +171,7 @@ async fn test_history_makers_detailed() {
 async fn test_active_swaps() {
     let mut buffer: Vec<u8> = vec![];
     let mock_resp = include_bytes!("http_mock_data/active_swaps.http");
-    let command = &["komodefi-cli", "swaps", "active"];
+    let command = &["komodefi-cli", "swaps", "active", "--include-status"];
     start_server_and_do_command(command, &mut buffer, mock_resp, 7799).await;
     assert_eq!(ACTIVE_SWAPS_OUTPUT, String::from_utf8(buffer).unwrap());
 }
@@ -279,7 +279,7 @@ requires_notarization: No
 ";
 
 const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-bebb-5df8ff74b8e0
-      req.(base,rel): MORTY(0.01), RICK(0.01000001)
+      req.(base,rel): MORTY(0.0100), RICK(0.01)
           req.action: Buy
   req.(sender, dest): 264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d, 0000000000000000000000000000000000000000000000000000000000000000
         req.match_by: Any
@@ -289,7 +289,7 @@ const TAKER_STATUS_OUTPUT: &str = r"                uuid: 1ae94a08-47e3-4938-beb
          cancellable: false
              matches: 
                       uuid: 600f62b3-5248-4905-9618-14f339cc7d30
-       reserved.(base,rel): MORTY(0.01), RICK(0.0099999999)
+       reserved.(base,rel): MORTY(0.0100), RICK(0.0099)
    reserved.(taker, maker): 1ae94a08-47e3-4938-bebb-5df8ff74b8e0,600f62b3-5248-4905-9618-14f339cc7d30
    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000
     reserved.conf_settings: 1,false:1,false
@@ -309,7 +309,7 @@ const MY_ORDERS_OUTPUT: &str = "        Taker orders:
 │                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
 │ matches                                                                                                                                                                                                  │
 │                       uuid: 09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                                                         │
-│        reserved.(base,rel): MORTY(0.1), RICK(0.099999999)                                                                                                                                                │
+│        reserved.(base,rel): MORTY(0.10), RICK(0.09)                                                                                                                                                      │
 │    reserved.(taker, maker): ce90f89f-8074-4e9f-8649-7f7689c56fa9,09a0e11e-837e-4763-bc1f-1659573df9dd                                                                                                    │
 │    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
 │     reserved.conf_settings: 1,false:1,false                                                                                                                                                              │
@@ -391,7 +391,7 @@ Taker orders history detailed:
 │                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
 │ matches                                                                                                                                                                                                  │
 │                       uuid: efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                                                         │
-│        reserved.(base,rel): RICK(0.05), MORTY(0.0499999995)                                                                                                                                              │
+│        reserved.(base,rel): RICK(0.05), MORTY(0.04)                                                                                                                                                      │
 │    reserved.(taker, maker): 4e365431-4db0-4365-a67d-1e39820090a2,efbcb9d6-2d9d-4fa0-af82-919c7da46967                                                                                                    │
 │    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
 │     reserved.conf_settings: 0,false:0,false                                                                                                                                                              │
@@ -404,7 +404,7 @@ Taker orders history detailed:
 │                          │ 0000000000000000000000000000000000000000000000000000000000000000 │ 1,false:1,false          │                          │                          │                           │
 │ matches                                                                                                                                                                                                  │
 │                       uuid: e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                                                         │
-│        reserved.(base,rel): RICK(0.05), MORTY(0.0499999995)                                                                                                                                              │
+│        reserved.(base,rel): RICK(0.05), MORTY(0.04)                                                                                                                                                      │
 │    reserved.(taker, maker): 601bfc00-9033-45d8-86b2-3dbd54881212,e16ee590-0562-4fbe-88cd-3cfd6e580615                                                                                                    │
 │    reserved.(sender, dest): 7310a8fb9fd8f198a1a21db830252ad681fccda580ed4101f3f6bfb98b34fab5,0000000000000000000000000000000000000000000000000000000000000000                                            │
 │     reserved.conf_settings: 0,false:0,false                                                                                                                                                              │
@@ -488,7 +488,7 @@ maker_coin: MARTY
 maker_amount: 1.00
 events: 
 │ Started                           │ uuid: 6b007706-d6e1-4565-8655-9eeb128d00e2                                                                             │
-│ 23-07-25 12:20:07                 │ started_at: 70-01-20 13:31:27                                                                                          │
+│ 23-07-25 12:20:07                 │ started_at: 23-07-25 12:20:07                                                                                          │
 │                                   │ taker_coin: DOC                                                                                                        │
 │                                   │ maker_coin: MARTY                                                                                                      │
 │                                   │ maker: 2d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846                                                │
@@ -500,8 +500,8 @@ events:
 │                                   │ maker_payment_requires_nota: false                                                                                     │
 │                                   │ taker_payment_confirmations: 1                                                                                         │
 │                                   │ taker_payment_requires_nota: false                                                                                     │
-│                                   │ tacker_payment_lock: 70-01-20 13:31:35                                                                                 │
-│                                   │ maker_payment_wait: 70-01-20 13:31:30                                                                                  │
+│                                   │ tacker_payment_lock: 23-07-25 14:30:07                                                                                 │
+│                                   │ maker_payment_wait: 23-07-25 13:12:07                                                                                  │
 │                                   │ maker_coin_start_block: 147860                                                                                         │
 │                                   │ taker_coin_start_block: 133421                                                                                         │
 │                                   │ fee_to_send_taker_fee: coin: DOC, amount: 0.00001, paid_from_trading_vol: false                                        │
@@ -510,7 +510,7 @@ events:
 │                                   │ maker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │
 │                                   │ taker_coin_htlc_pubkey: 02264fcd9401d797c50fe2f1c7d5fe09bbc10f3838c1d8d6f793061fa5f38b2b4d                             │
 │                                   │                                                                                                                        │
-│ Negotiated                        │ maker_payment_locktime: 70-01-20 13:31:43                                                                              │
+│ Negotiated                        │ maker_payment_locktime: 23-07-25 16:40:06                                                                              │
 │ 23-07-25 12:20:23                 │ maker_pubkey: 000000000000000000000000000000000000000000000000000000000000000000                                       │
 │                                   │ secret_hash: a5cfc9787066562ba03c7538d024a88fd1a0fe12                                                                  │
 │                                   │ maker_coin_htlc_pubkey: 022d7424c741213a2b9b49aebdaa10e84419e642a8db0a09e359a3d4c850834846                             │
