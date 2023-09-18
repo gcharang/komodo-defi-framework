@@ -402,7 +402,7 @@ pub enum ZcoinStorageError {
 }
 
 #[cfg(target_arch = "wasm32")]
-use crate::z_coin::storage::walletdb::wallet_idb_storage::NoteId;
+use crate::z_coin::storage::walletdb::wasm::NoteId;
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
 use mm2_err_handle::mm_error::MmError;

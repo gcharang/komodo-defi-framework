@@ -1,19 +1,22 @@
-use super::WalletDbShared;
+use crate::z_coin::storage::walletdb::wasm::tables::{WalletDbAccountsTable, WalletDbBlocksTable,
+                                                     WalletDbReceivedNotesTable, WalletDbSaplingWitnessesTable,
+                                                     WalletDbSentNotesTable, WalletDbTransactionsTable};
+use crate::z_coin::storage::wasm::{to_spendable_note, NoteId, SpendableNoteConstructor};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
-use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinConsensusParams};
+use crate::z_coin::{CheckPointBlockInfo, WalletDbShared, ZCoinBuilder, ZcoinConsensusParams};
 
 use async_trait::async_trait;
 use common::log::info;
 use ff::PrimeField;
 use mm2_core::mm_ctx::MmArc;
-use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
-                         InitDbResult, MultiIndex, OnUpgradeResult, SharedDb, TableSignature};
+use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, IndexedDb, IndexedDbBuilder,
+                         InitDbResult, MultiIndex, SharedDb};
 use mm2_err_handle::prelude::*;
 use mm2_number::num_bigint::ToBigInt;
 use mm2_number::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::ops::Deref;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::{PrunedBlock, ReceivedTransaction, SentTransaction};
@@ -26,7 +29,7 @@ use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::{Diversifier, Node, Nullifier, PaymentAddress, Rseed};
+use zcash_primitives::sapling::{Node, Nullifier, PaymentAddress};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
@@ -302,7 +305,6 @@ impl WalletIndexedDb {
 
             for (tx_id, tx) in &txs {
                 if *tx_id == note.tx && spent.is_none() && tx.block.is_some() {
-                    info!("VALUE {value:?}");
                     let value_i64 = value.to_i64().expect("BigInt is too large to fit in an i64");
                     balance += value_i64;
                 }
@@ -785,62 +787,6 @@ impl WalletIndexedDb {
 
         Ok(())
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum NoteId {
-    SentNoteId(i64),
-    ReceivedNoteId(i64),
-}
-
-struct SpendableNoteConstructor {
-    diversifier: Vec<u8>,
-    value: BigInt,
-    rcm: Vec<u8>,
-    witness: Vec<u8>,
-}
-
-fn to_spendable_note(note: SpendableNoteConstructor) -> MmResult<SpendableNote, ZcoinStorageError> {
-    let diversifier = {
-        let d = note.diversifier;
-        if d.len() != 11 {
-            return MmError::err(ZcoinStorageError::CorruptedData(
-                "Invalid diversifier length".to_string(),
-            ));
-        }
-        let mut tmp = [0; 11];
-        tmp.copy_from_slice(&d);
-        Diversifier(tmp)
-    };
-
-    let note_value = Amount::from_i64(note.value.to_i64().expect("BigInt is too large to fit in an i64")).unwrap();
-
-    let rseed = {
-        let rcm_bytes = &note.rcm;
-
-        // We store rcm directly in the data DB, regardless of whether the note
-        // used a v1 or v2 note plaintext, so for the purposes of spending let's
-        // pretend this is a pre-ZIP 212 note.
-        let rcm = jubjub::Fr::from_repr(
-            rcm_bytes[..]
-                .try_into()
-                .map_to_mm(|_| ZcoinStorageError::InvalidNote("Invalid note".to_string()))?,
-        )
-        .ok_or_else(|| MmError::new(ZcoinStorageError::InvalidNote("Invalid note".to_string())))?;
-        Rseed::BeforeZip212(rcm)
-    };
-
-    let witness = {
-        let mut d = note.witness.as_slice();
-        IncrementalWitness::read(&mut d).map_to_mm(|err| ZcoinStorageError::IoError(err.to_string()))?
-    };
-
-    Ok(SpendableNote {
-        diversifier,
-        note_value,
-        rseed,
-        witness,
-    })
 }
 
 #[async_trait]
@@ -1342,11 +1288,9 @@ impl WalletWrite for WalletIndexedDb {
         let mut new_witnesses = vec![];
         for tx in block.transactions {
             let tx_row = selfi.put_tx_meta(tx, block.block_height).await?;
-            info!("tx {:?}", tx.txid);
 
             // Mark notes as spent and remove them from the scanning cache
             for spend in &tx.shielded_spends {
-                info!("spend {:?}", spend.nf);
                 selfi.mark_spent(tx_row, &spend.nf).await?;
             }
 
@@ -1525,239 +1469,5 @@ impl WalletWrite for DataConnStmtCacheWasm {
 
     async fn rewind_to_height(&mut self, block_height: BlockHeight) -> Result<(), Self::Error> {
         self.0.rewind_to_height(block_height).await
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WalletDbAccountsTable {
-    account: BigInt,
-    extfvk: String,
-    address: String,
-    ticker: String,
-}
-
-impl WalletDbAccountsTable {
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * account
-    pub const TICKER_ACCOUNT_INDEX: &str = "ticker_account_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * account
-    /// * extfvk
-    pub const TICKER_ACCOUNT_EXTFVK_INDEX: &str = "ticker_account_extfvk_index";
-}
-
-impl TableSignature for WalletDbAccountsTable {
-    const TABLE_NAME: &'static str = "walletdb_accounts";
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_ACCOUNT_INDEX, &["ticker", "account"], true)?;
-            table.create_multi_index(
-                Self::TICKER_ACCOUNT_EXTFVK_INDEX,
-                &["ticker", "account", "extfvk"],
-                false,
-            )?;
-            table.create_index("ticker", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WalletDbBlocksTable {
-    height: u32,
-    hash: Vec<u8>,
-    time: u32,
-    sapling_tree: Vec<u8>,
-    ticker: String,
-}
-
-impl WalletDbBlocksTable {
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * height
-    pub const TICKER_HEIGHT_INDEX: &str = "ticker_height_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * hash
-    pub const TICKER_HASH_INDEX: &str = "ticker_hash_index";
-}
-
-impl TableSignature for WalletDbBlocksTable {
-    const TABLE_NAME: &'static str = "walletdb_blocks";
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_HEIGHT_INDEX, &["ticker", "height"], true)?;
-            table.create_multi_index(Self::TICKER_HASH_INDEX, &["ticker", "hash"], true)?;
-            table.create_index("ticker", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WalletDbTransactionsTable {
-    txid: Vec<u8>, // unique
-    created: Option<String>,
-    block: Option<u32>,
-    tx_index: Option<i64>,
-    expiry_height: Option<u32>,
-    raw: Option<Vec<u8>>,
-    ticker: String,
-}
-
-impl WalletDbTransactionsTable {
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * txid
-    pub const TICKER_TXID_INDEX: &'static str = "ticker_txid_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * block
-    pub const TICKER_BLOCK_INDEX: &'static str = "ticker_block_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * expiry_height
-    pub const TICKER_EXP_HEIGHT_INDEX: &'static str = "ticker_expiry_height_index";
-}
-
-impl TableSignature for WalletDbTransactionsTable {
-    const TABLE_NAME: &'static str = "walletdb_transactions";
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_TXID_INDEX, &["ticker", "txid"], true)?;
-            table.create_multi_index(Self::TICKER_BLOCK_INDEX, &["ticker", "block"], false)?;
-            table.create_multi_index(Self::TICKER_EXP_HEIGHT_INDEX, &["ticker", "expiry_height"], false)?;
-            table.create_index("ticker", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WalletDbReceivedNotesTable {
-    // references transactions(id_tx)
-    tx: u32,
-    output_index: u32,
-    // references accounts(account)
-    account: BigInt,
-    diversifier: Vec<u8>,
-    value: BigInt,
-    rcm: Vec<u8>,
-    nf: Option<Vec<u8>>, // unique
-    is_change: Option<bool>,
-    memo: Option<Vec<u8>>,
-    // references transactions(id_tx)
-    spent: Option<BigInt>,
-    ticker: String,
-}
-
-impl WalletDbReceivedNotesTable {
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * account
-    pub const TICKER_ACCOUNT_INDEX: &'static str = "ticker_account_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * note_id
-    /// * nf
-    pub const TICKER_NOTES_ID_NF_INDEX: &'static str = "ticker_note_id_nf_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * tx
-    /// * output_index
-    pub const TICKER_TX_OUTPUT_INDEX: &'static str = "ticker_tx_output_index";
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * tx
-    /// * output_index
-    pub const TICKER_NF_INDEX: &'static str = "ticker_nf_index";
-}
-
-impl TableSignature for WalletDbReceivedNotesTable {
-    const TABLE_NAME: &'static str = "walletdb_received_notes";
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_NF_INDEX, &["ticker", "nf"], true)?;
-            table.create_multi_index(Self::TICKER_ACCOUNT_INDEX, &["ticker", "account"], false)?;
-            table.create_multi_index(Self::TICKER_TX_OUTPUT_INDEX, &["ticker", "tx", "output_index"], false)?;
-            table.create_index("ticker", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WalletDbSaplingWitnessesTable {
-    // REFERENCES received_notes(id_note)
-    note: BigInt,
-    // REFERENCES blocks(height)
-    block: u32,
-    witness: Vec<u8>,
-    ticker: String,
-}
-
-impl WalletDbSaplingWitnessesTable {
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * block
-    pub const TICKER_BLOCK_INDEX: &'static str = "ticker_block_index";
-    pub const TICKER_NOTE_BLOCK_INDEX: &'static str = "ticker_note_block_index";
-}
-
-impl TableSignature for WalletDbSaplingWitnessesTable {
-    const TABLE_NAME: &'static str = "walletdb_sapling_witness";
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_NOTE_BLOCK_INDEX, &["ticker", "note", "block"], true)?;
-            table.create_multi_index(Self::TICKER_BLOCK_INDEX, &["ticker", "block"], false)?;
-            table.create_index("ticker", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WalletDbSentNotesTable {
-    // REFERENCES transactions(id_tx)
-    tx: BigInt,
-    output_index: BigInt,
-    // REFERENCES accounts(account)
-    from_account: BigInt,
-    address: String,
-    value: BigInt,
-    memo: Option<Vec<u8>>,
-    ticker: String,
-}
-
-impl WalletDbSentNotesTable {
-    /// A **unique** index that consists of the following properties:
-    /// * ticker
-    /// * tx
-    /// * output_index
-    pub const TICKER_TX_OUTPUT_INDEX: &'static str = "ticker_tx_output_index";
-}
-
-impl TableSignature for WalletDbSentNotesTable {
-    const TABLE_NAME: &'static str = "walletdb_sent_notes";
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::TABLE_NAME)?;
-            table.create_multi_index(Self::TICKER_TX_OUTPUT_INDEX, &["ticker", "tx", "output_index"], false)?;
-            table.create_index("ticker", false)?;
-        }
-        Ok(())
     }
 }

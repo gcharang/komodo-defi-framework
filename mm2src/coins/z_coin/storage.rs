@@ -8,7 +8,7 @@ pub mod walletdb;
 pub use walletdb::*;
 
 #[cfg(target_arch = "wasm32")]
-use walletdb::wallet_idb_storage::DataConnStmtCacheWasm;
+use walletdb::wasm::storage::DataConnStmtCacheWasm;
 #[cfg(debug_assertions)]
 use zcash_client_backend::data_api::error::Error;
 use zcash_client_backend::data_api::PrunedBlock;
