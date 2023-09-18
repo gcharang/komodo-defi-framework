@@ -24,13 +24,8 @@ pub struct NftCacheIDB {
 
 #[async_trait]
 impl DbInstance for NftCacheIDB {
-    /// Return the static name of the database.
     fn db_name() -> &'static str { DB_NAME }
 
-    /// Initialize the `NftCacheIDB` database with the provided identifier.
-    ///
-    /// This method ensures that the database is properly set up with the correct version
-    /// and has the required tables (`NftListTable`, `NftTransferHistoryTable`, and `LastScannedBlockTable`).
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
         let inner = IndexedDbBuilder::new(db_id)
             .with_version(DB_VERSION)

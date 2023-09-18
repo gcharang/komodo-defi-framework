@@ -65,10 +65,15 @@ pub trait TableSignature: DeserializeOwned + Serialize + 'static {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()>;
 }
 
+/// A trait representing the operations essential for initializing an IndexedDb instance.
 #[async_trait]
 pub trait DbInstance: Sized {
+    /// Returns the static name of the database.
     fn db_name() -> &'static str;
 
+    /// Initialize the database with the provided identifier.
+    /// This method ensures that the database is properly set up with the correct version
+    /// and has the required tables.
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self>;
 }
 
