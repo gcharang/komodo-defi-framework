@@ -20,7 +20,6 @@ pub struct WalletDbShared {
     ticker: String,
 }
 
-#[cfg(test)]
 #[cfg(target_arch = "wasm32")]
 mod wallet_db_storage_tests {
     use super::*;
@@ -35,7 +34,7 @@ mod wallet_db_storage_tests {
     use zcash_client_backend::wallet::AccountId;
     use zcash_extras::fake_compact_block;
     use zcash_extras::fake_compact_block_spending;
-    //    use zcash_extras::wallet::create_spend_to_address;
+    // use zcash_extras::wallet::create_spend_to_address;
     use zcash_extras::WalletRead;
     use zcash_primitives::block::BlockHash;
     use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
