@@ -291,6 +291,44 @@ pub struct Nft {
     pub(crate) uri_meta: UriMeta,
 }
 
+pub(crate) struct BuildNftFields {
+    pub(crate) token_address: Address,
+    pub(crate) token_id: BigDecimal,
+    pub(crate) amount: BigDecimal,
+    pub(crate) owner_of: Address,
+    pub(crate) contract_type: ContractType,
+    pub(crate) possible_spam: bool,
+    pub(crate) chain: Chain,
+    pub(crate) block_number: u64,
+}
+
+pub(crate) fn build_nft_with_empty_meta(nft_fields: BuildNftFields) -> Nft {
+    Nft {
+        common: NftCommon {
+            token_address: nft_fields.token_address,
+            token_id: nft_fields.token_id,
+            amount: nft_fields.amount,
+            owner_of: nft_fields.owner_of,
+            token_hash: None,
+            collection_name: None,
+            symbol: None,
+            token_uri: None,
+            token_domain: None,
+            metadata: None,
+            last_token_uri_sync: None,
+            last_metadata_sync: None,
+            minter_address: None,
+            possible_spam: nft_fields.possible_spam,
+        },
+        chain: nft_fields.chain,
+        block_number_minted: None,
+        block_number: nft_fields.block_number,
+        contract_type: nft_fields.contract_type,
+        possible_phishing: false,
+        uri_meta: Default::default(),
+    }
+}
+
 /// Represents an NFT structure specifically for deserialization from Moralis's JSON response.
 ///
 /// This structure is adapted to the specific format provided by Moralis's API.
