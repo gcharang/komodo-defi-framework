@@ -421,14 +421,20 @@ pub(super) async fn init_light_client<'a>(
     let maybe_checkpoint_block = light_rpc_clients
         .checkpoint_block_from_height(sync_height.max(sapling_activation_height))
         .await?;
-
-    let wallet_db = WalletDbShared::new(builder, maybe_checkpoint_block, z_spending_key)
+    let min_height = blocks_db.get_earliest_block().await?;
+    // check if no sync_params was provided and continue syncing from last height in db if it's > 0.
+    let continue_from_prev_sync = min_height > 0 && sync_params.is_none();
+    let wallet_db = WalletDbShared::new(builder, maybe_checkpoint_block, z_spending_key, continue_from_prev_sync)
         .await
         .mm_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 
     // Get min_height in blocks_db and rewind blocks_db to 0 if sync_height != min_height
     let min_height = blocks_db.get_earliest_block().await?;
     if sync_height != min_height as u64 {
+        // let user know we're clearing cache and resyncing from new provided height.
+        if min_height > 0 {
+            info!("Older/Newer sync height detected!, rewinding blocks_db to new height: {sync_height:?}");
+        }
         blocks_db
             .rewind_to_height(u32::MIN)
             .await
@@ -491,7 +497,7 @@ pub(super) async fn init_native_client<'a>(
         is_pre_sapling: false,
         actual: checkpoint_height,
     };
-    let wallet_db = WalletDbShared::new(builder, checkpoint_block, z_spending_key)
+    let wallet_db = WalletDbShared::new(builder, checkpoint_block, z_spending_key, true)
         .await
         .mm_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 

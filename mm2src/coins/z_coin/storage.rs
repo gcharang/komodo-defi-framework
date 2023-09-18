@@ -16,7 +16,7 @@ use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_client_backend::wallet::{AccountId, WalletTx};
 use zcash_client_backend::welding_rig::scan_block;
 #[cfg(not(target_arch = "wasm32"))]
-use zcash_client_sqlite::with_async::DataConnStmtCacheAsync;
+use zcash_client_sqlite::for_async::DataConnStmtCacheAsync;
 use zcash_extras::{WalletRead, WalletWrite};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;

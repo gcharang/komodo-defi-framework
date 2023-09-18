@@ -1,5 +1,4 @@
 use super::WalletDbShared;
-use crate::z_coin::storage::walletdb::is_init_height_modified;
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinConsensusParams};
 
@@ -38,29 +37,38 @@ const DB_VERSION: u32 = 1;
 pub type WalletDbRes<T> = MmResult<T, ZcoinStorageError>;
 pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
 
+#[macro_export]
+macro_rules! num_to_bigint {
+    ($value: ident) => {
+        $value.to_bigint().ok_or_else(|| {
+            $crate::z_coin::z_coin_errors::ZcoinStorageError::CorruptedData(
+                "Number is too large to fit in a BigInt".to_string(),
+            )
+        })
+    };
+}
+
 impl<'a> WalletDbShared {
     pub async fn new(
         builder: ZCoinBuilder<'a>,
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
+        continue_from_prev_sync: bool,
     ) -> MmResult<Self, ZcoinStorageError> {
         let ticker = builder.ticker;
         let consensus_params = builder.protocol_info.consensus_params.clone();
         let db = WalletIndexedDb::new(builder.ctx, ticker, consensus_params).await?;
         let evk = ExtendedFullViewingKey::from(z_spending_key);
         let extrema = db.block_height_extrema().await?;
-
-        let (is_init_height_modified, init_height) =
-            is_init_height_modified(extrema, &checkpoint_block)
-                .await
-                .mm_err(|e| ZcoinStorageError::InitDbError {
-                    ticker: ticker.to_owned(),
-                    err: e.to_string(),
-                })?;
+        let min_sync_height = extrema.map(|(min, _)| u32::from(min));
+        let init_block_height = checkpoint_block.clone().map(|block| block.height);
         let get_evk = db.get_extended_full_viewing_keys().await?;
 
-        if get_evk.is_empty() || !is_init_height_modified {
-            info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_height:?}");
+        if get_evk.is_empty() || (!continue_from_prev_sync && init_block_height != min_sync_height) {
+            // let user know we're clearing cache and resyncing from new provided height.
+            if min_sync_height.unwrap_or(0) > 0 {
+                info!("Older/Newer sync height detected!, rewinding walletdb to new height: {init_block_height:?}");
+            }
             db.rewind_to_height(BlockHeight::from(u32::MIN)).await?;
             if let Some(block) = checkpoint_block {
                 db.init_blocks_table(
@@ -168,7 +176,7 @@ impl<'a> WalletIndexedDb {
 
         // Insert accounts
         for (account, extfvk) in extfvks.iter().enumerate() {
-            let account_int = account.to_bigint().expect("BigInt is too large to fit in an i64");
+            let account_int = num_to_bigint!(account)?;
             // address
             let address = extfvk.default_address().unwrap().1;
             let address = encode_payment_address(self.params.hrp_sapling_payment_address(), &address);
@@ -227,9 +235,10 @@ impl<'a> WalletIndexedDb {
             ticker: ticker.clone(),
         };
         let walletdb_blocks_table = db_transaction.table::<WalletDbBlocksTable>().await?;
+        let height = u32::from(height);
         let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
             .with_value(&ticker)?
-            .with_value(u32::from(height).to_bigint())?;
+            .with_value(num_to_bigint!(height)?)?;
         walletdb_blocks_table
             .replace_item_by_unique_multi_index(index_keys, &block)
             .await?;
@@ -420,7 +429,7 @@ impl WalletIndexedDb {
                 nf: note.nf,
                 is_change: note.is_change,
                 memo: note.memo,
-                spent: Some(tx_ref.to_bigint().unwrap()),
+                spent: Some(num_to_bigint!(tx_ref)?),
                 ticker: ticker.clone(),
             };
             received_notes_table.replace_item(id, &new_received_note).await?;
@@ -491,7 +500,7 @@ impl WalletIndexedDb {
             let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_TX_OUTPUT_INDEX)
                 .with_value(&ticker)?
                 .with_value(tx)?
-                .with_value(output_index.to_bigint())?;
+                .with_value(num_to_bigint!(output_index)?)?;
             received_note_table
                 .replace_item_by_unique_multi_index(index_keys, &new_note)
                 .await?
@@ -594,18 +603,13 @@ impl WalletIndexedDb {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
 
-        let tx_ref = tx_ref.to_bigint().expect("BigInt is too large to fit in an i64");
-        let output_index = output.index.to_bigint().expect("BigInt is too large to fit in an i64");
-        let from_account = output
-            .account
-            .0
-            .to_bigint()
-            .expect("BigInt is too large to fit in an i64");
-        let value = output
-            .note
-            .value
-            .to_bigint()
-            .expect("BigInt is too large to fit in an i64");
+        let tx_ref = num_to_bigint!(tx_ref)?;
+        let output_index = output.index;
+        let output_index = num_to_bigint!(output_index)?;
+        let from_account = output.account.0;
+        let from_account = num_to_bigint!(from_account)?;
+        let value = output.note.value;
+        let value = num_to_bigint!(value)?;
         let address = encode_payment_address(self.params.hrp_sapling_payment_address(), &output.to);
 
         let sent_note_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
@@ -653,14 +657,13 @@ impl WalletIndexedDb {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let sent_note_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
 
-        let tx_ref = tx_ref.to_bigint().expect("BigInt is too large to fit in an i64");
-        let output_index = output_index.to_bigint().expect("BigInt is too large to fit in an i64");
-        let from_account = account.0.to_bigint().expect("BigInt is too large to fit in an i64");
-        let value = i64::from(value)
-            .to_bigint()
-            .expect("BigInt is too large to fit in an i64");
+        let tx_ref = num_to_bigint!(tx_ref)?;
+        let output_index = num_to_bigint!(output_index)?;
+        let from_account = account.0;
+        let from_account = num_to_bigint!(from_account)?;
+        let value = i64::from(value);
+        let value = num_to_bigint!(value)?;
         let address = to.encode(&self.params);
-
         let new_note = WalletDbSentNotesTable {
             tx: tx_ref.clone(),
             output_index: output_index.clone(),
@@ -900,9 +903,10 @@ impl WalletRead for WalletIndexedDb {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_headers_db = db_transaction.table::<WalletDbAccountsTable>().await?;
+        let account_num = account.0;
         let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0.to_bigint().expect("account value can't fit into a bigint."))?;
+            .with_value(num_to_bigint!(account_num)?)?;
 
         let address = block_headers_db
             .get_item_by_unique_multi_index(index_keys)
@@ -1091,7 +1095,7 @@ impl WalletRead for WalletIndexedDb {
         let mut witnesses = vec![];
         for (_, witness) in maybe_witnesses {
             let id_note = witness.note.to_i64().unwrap();
-            let id_note = NoteId::ReceivedNoteId(id_note);
+            let id_note = NoteId::ReceivedNoteId(id_note.to_i64().expect("invalid value"));
             let witness = IncrementalWitness::read(witness.witness.as_slice())
                 .map(|witness| (id_note, witness))
                 .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
@@ -1195,7 +1199,7 @@ impl WalletRead for WalletIndexedDb {
 
         let mut spendable_notes = vec![];
         for (id_note, note) in maybe_notes {
-            let id_note = BigInt::from_u32(*id_note).unwrap();
+            let id_note = num_to_bigint!(id_note)?;
             let witness = witnesses.iter().find(|wit| wit.note == id_note);
             let tx = txs.iter().find(|(id, _tx)| *id == note.tx);
 
@@ -1303,7 +1307,7 @@ impl WalletRead for WalletIndexedDb {
         // Step 4: Get witnesses for selected notes
         let mut spendable_notes = Vec::new();
         for (id_note, note) in final_notes.iter() {
-            let noteid_bigint = BigInt::from_u32(***id_note).unwrap();
+            let noteid_bigint = num_to_bigint!(id_note)?;
             if let Some(witness) = witnesses.iter().find(|&w| w.note == noteid_bigint) {
                 spendable_notes.push(to_spendable_note(SpendableNoteConstructor {
                     diversifier: note.diversifier.clone(),
