@@ -70,6 +70,16 @@ pub(crate) enum WalletCommands {
         about = "Takes a UTXO address as input, and returns the equivalent address for another \
                  UTXO coin (e.g. from BTC address to RVN address)")]
     ConvertUtxoAddress(ConvertUtxoArgs),
+    #[command(
+        visible_aliases = ["get-public", "public-key", "public"],
+        about = "Returns the compressed secp256k1 pubkey corresponding to the user's seed phrase"
+    )]
+    GetPublicKey,
+    #[command(
+        visible_aliases = ["pubkey-hash", "hash", "pubhash"],
+        about = "Returns the RIPEMD-160 hash version of your public key"
+    )]
+    GetPublicKeyHash,
 }
 
 #[derive(Args)]

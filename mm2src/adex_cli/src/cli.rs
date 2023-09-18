@@ -21,37 +21,37 @@ enum Command {
         #[arg(long, visible_alias = "conf", help = "mm2 configuration file path", default_value = MM2_CONFIG_FILE_DEFAULT)]
         mm_conf_path: String,
     },
+    #[command(subcommand, about = "Manage rpc_password and mm2 RPC URL")]
+    Config(ConfigSubcommand),
     #[command(subcommand, about = "Manage mm2 instance commands")]
     Mm2(Mm2Commands),
     #[command(subcommand, about = "Coin commands: enable, disable etc.")]
     Coin(CoinCommands),
-    #[command(subcommand, visible_alias = "swap", about = "Swap related commands")]
-    Swaps(SwapCommands),
-    #[command(subcommand, about = "Manage rpc_password and mm2 RPC URL")]
-    Config(ConfigSubcommand),
-    #[command(subcommand, about = "Network commands")]
-    Network(NetworkCommands),
     #[command(subcommand, about = "Wallet commands: balance, withdraw etc.")]
     Wallet(WalletCommands),
+    Sell(SellOrderArgs),
+    Buy(BuyOrderArgs),
+    SetPrice(SetPriceArgs),
+    #[command(visible_alias = "update", about = "Update order on the orderbook")]
+    UpdateMakerOrder(UpdateMakerOrderArgs),
     #[command(
         subcommand,
         visible_alias = "orders",
         about = "Order listing commands: book, history, depth etc."
     )]
     Order(OrderCommands),
-    #[command(subcommand, visible_aliases = ["util", "pubkeys", "pubkey"], about = "Utility commands")]
-    Utility(UtilityCommands),
-    #[command(subcommand, visible_aliases = ["stat", "vstat"], about = "Version statistic commands")]
-    VersionStat(VersionStatCommands),
-    #[command(subcommand, about = "Message signing commands: sign, verify)")]
-    Message(MessageCommands),
-    Sell(SellOrderArgs),
-    Buy(BuyOrderArgs),
-    SetPrice(SetPriceArgs),
-    #[command(visible_alias = "update", about = "Update order on the orderbook")]
-    UpdateMakerOrder(UpdateMakerOrderArgs),
+    #[command(subcommand, visible_alias = "swap", about = "Swap related commands")]
+    Swaps(SwapCommands),
     #[command(subcommand, about = "Cancel one or many orders")]
     Cancel(CancelSubcommand),
+    #[command(subcommand, visible_aliases = ["util", "pubkeys", "pubkey"], about = "Utility commands")]
+    Utility(UtilityCommands),
+    #[command(subcommand, about = "Message signing commands: sign, verify)")]
+    Message(MessageCommands),
+    #[command(subcommand, about = "Network commands")]
+    Network(NetworkCommands),
+    #[command(subcommand, visible_aliases = ["stat", "vstat"], about = "Version statistic commands")]
+    VersionStat(VersionStatCommands),
     #[command(subcommand, about = "Tracking the status of long-running commands")]
     Task(TaskSubcommand),
 }
@@ -147,8 +147,6 @@ impl Cli {
             Command::Utility(UtilityCommands::BanPubkey(args)) => proc.ban_pubkey(args.into()).await?,
             Command::Utility(UtilityCommands::ListBannedPubkeys) => proc.list_banned_pubkeys().await?,
             Command::Utility(UtilityCommands::UnbanPubkeys(args)) => proc.unban_pubkeys(args.into()).await?,
-            Command::Utility(UtilityCommands::GetPublicKey) => proc.get_public_key().await?,
-            Command::Utility(UtilityCommands::GetPublicKeyHash) => proc.get_public_key_hash().await?,
             Command::Utility(UtilityCommands::GetCurrentMtp(args)) => proc.get_current_mtp(args.into()).await?,
             Command::Wallet(WalletCommands::MyBalance(my_balance_args)) => {
                 proc.get_balance(my_balance_args.into()).await?
@@ -168,6 +166,8 @@ impl Cli {
             Command::Wallet(WalletCommands::KmdRewardsInfo) => proc.get_kmd_rewards_info().await?,
             Command::Wallet(WalletCommands::ConvertAddress(args)) => proc.convert_address(args.try_into()?).await?,
             Command::Wallet(WalletCommands::ConvertUtxoAddress(args)) => proc.convert_utxo_address(args.into()).await?,
+            Command::Wallet(WalletCommands::GetPublicKey) => proc.get_public_key().await?,
+            Command::Wallet(WalletCommands::GetPublicKeyHash) => proc.get_public_key_hash().await?,
             Command::Task(TaskSubcommand::Status(TaskSubcommandStatus::Zcoin { task_id })) => {
                 proc.enable_zcoin_status(*task_id, None).await?
             },

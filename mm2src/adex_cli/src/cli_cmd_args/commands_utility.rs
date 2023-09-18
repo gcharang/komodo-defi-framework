@@ -18,7 +18,7 @@ pub(crate) enum UtilityCommands {
     )]
     BanPubkey(BanPubkeyArgs),
     #[command(
-        visible_aliases = ["ban-list", "list-banned"],
+        visible_aliases = ["list", "ban-list", "list-banned"],
         about = "Returns a list of public keys of nodes that are banned from interacting with the node executing the method"
     )]
     ListBannedPubkeys,
@@ -27,16 +27,6 @@ pub(crate) enum UtilityCommands {
         about = "Remove all currently banned pubkeys from ban list, or specific pubkeys"
     )]
     UnbanPubkeys(UnbanPubkeysArgs),
-    #[command(
-        visible_aliases = ["get-public", "public-key", "public"],
-        about = "Returns the compressed secp256k1 pubkey corresponding to the user's seed phrase"
-    )]
-    GetPublicKey,
-    #[command(
-        visible_aliases = ["pubkey-hash", "hash", "pubhash"],
-        about = "Returns the RIPEMD-160 hash version of your public key"
-    )]
-    GetPublicKeyHash,
     #[command(
         visible_aliases = ["current-mtp", "mtp"],
         about = "Returns the Median Time Past (MTP) from electrum servers for UTXO coins"
