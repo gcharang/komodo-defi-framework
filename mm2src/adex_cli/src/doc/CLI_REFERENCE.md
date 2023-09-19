@@ -476,7 +476,7 @@ Usage: komodefi-cli wallet <COMMAND>
 Commands:  
  my-balance            Get coin balance [aliases: balance]  
  withdraw              Generates, signs, and returns a transaction that transfers the amount of coin to the address indicated in the to argument  
- send-raw-transaction  Broadcasts the transaction to the network of selected coin [aliases: send-raw, send]  
+ send-raw-transaction  Broadcasts the transaction to the network of the given coin [aliases: send-raw, send]  
  get-raw-transaction   Returns the full signed raw transaction hex for any transaction that is confirmed or within the mempool [aliases: get-raw, raw-tx, get]  
  tx-history            Returns the blockchain transactions involving the Komodo DeFi Framework node's coin address [aliases: history]  
  show-priv-key         Returns the private key of the specified coin in a format compatible with coin wallets [aliases: private, private-key]  
@@ -484,6 +484,8 @@ Commands:
  kmd-rewards-info      Informs about the active user rewards that can be claimed by an address's unspent outputs [aliases: rewards]  
  convert-address       Converts an input address to a specified address format [aliases: convert]  
  convert-utxo-address  Takes a UTXO address as input, and returns the equivalent address for another UTXO coin (e.g. from BTC address to RVN address) [aliases: convert-utxo]  
+ get-public-key        Returns the compressed secp256k1 pubkey corresponding to the user's seed phrase [aliases: get-public, public-key, public]  
+ get-public-key-hash   Returns the RIPEMD-160 hash version of your public key [aliases: pubkey-hash, hash, pubhash]  
  help                  Print this message or the help of the given subcommand(s)  
   
 Options:  
