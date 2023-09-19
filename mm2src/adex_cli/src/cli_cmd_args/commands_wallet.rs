@@ -340,7 +340,7 @@ impl TryFrom<&mut WithdrawFromArgs> for WithdrawFrom {
         let account_id = value.hd_account_id.take();
         let is_change = value.hd_is_change.take();
         let address_id = value.hd_address_index.take();
-        if let (Some(account), Some(is_change), Some(address_index)) = (account_id, is_change.clone(), address_id) {
+        if let (Some(account), Some(is_change), Some(address_index)) = (account_id, is_change, address_id) {
             return Ok(WithdrawFrom::HDWalletAddress(StandardHDCoinAddress {
                 account,
                 is_change,
