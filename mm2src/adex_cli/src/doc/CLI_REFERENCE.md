@@ -1277,17 +1277,15 @@ The `my-orders` command requests information about orders created by the current
 ```sh
 komodefi-cli orders mine  
 Getting my orders  
-       Taker orders:
-│ action                │ uuid, sender, dest │ type,created_at   │ match_by │ base,rel     │ | base(vol),rel(vol)    │                    │ confirmation      │          │ ticker       │ 
-│ Sell                  │ 797c0456-7d99-.... │ GoodTillCancelled │ Any      │ none         │ │ MARTY(1.00),DOC(3.00) │ 264fcd9401d797c5...│ 23-09-14 16:11:44 │          │ none         │ 
-
+       Taker orders: empty  
+  
        Maker orders:    
-│ base,rel   │ price │ uuid   │ created at,        │ min base vol, │ cancellable │ ...
-│            │       │        │ updated at         │ max base vol  │             │ 
-│ RICK,MORTY │ 2.00  │ 1fc0d..│ 23-05-08 12:07:18, │ 0.000100,     │ true        │   
-│            │       │        │ 23-05-08 12:07:18  │ 0.50          │             │
-│ DOC,MARTY  │ 10.00 │ f398f..│ 23-09-14 13:59:27, │ 4.00,         │ true        │ 
-│            │       │        | 23-09-14 14:33:17  │ 9.00          │             │ ...
+│ base,rel   │ price  │ uuid                                 │ created at,        │ min base vol, │ cancellable │ available │ swaps │ conf_settings     │ history changes │  
+│            │        │                                      │ updated at         │ max base vol  │             │ amount    │       │                   │                 │  
+│ RICK,MORTY │ 2.00   │ 1fc0df20-9c21-461a-ad78-a4b37d4ab336 │ 23-05-08 12:07:18, │ 0.000100,     │ true        │ 0.50      │ empty │ 555,true:111,true │ none            │  
+│            │        │                                      │ 23-05-08 12:07:18  │ 0.50          │             │           │       │                   │                 │  
+│ DOC,KMD    │ 100.00 │ 009b9b1c-4582-4ec7-aef9-2d6729e8cde2 │ 23-09-15 15:35:48, │ 0.000100,     │ true        │ 1.00      │ empty │ 1,false:2,true    │ none            │  
+│            │        │                                      │ 23-09-15 15:35:48  │ 1.00          │             │           │       │                   │                 │
 ```
 
 ### orders orders-history (history)
