@@ -56,7 +56,7 @@ pub(crate) fn nft() -> Nft {
             external_url: None,
             external_domain: None,
             image_details: None,
-            image_domain: None,
+            image_domain: Some("tikimetadata.s3.amazonaws.com".to_string()),
         },
     }
 }
@@ -91,7 +91,7 @@ fn nft_list() -> Vec<Nft> {
             description: Some("Born to usher in Bull markets.".to_string()),
             attributes: None,
             animation_url: None,
-            animation_domain: None,
+            animation_domain: Some("tikimetadata.s3.amazonaws.com".to_string()),
             external_url: None,
             external_domain: None,
             image_details: None,
@@ -109,7 +109,7 @@ fn nft_list() -> Vec<Nft> {
             collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
             symbol: Some("BMBBBF".to_string()),
             token_uri: Some("https://public.nftstatic.com/static/nft/BSC/BMBBBF/214300047252".to_string()),
-            token_domain: None,
+            token_domain: Some("public.nftstatic.com".to_string()),
             metadata: Some(
                 "{\"image\":\"https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png\"}"
                     .to_string(),
@@ -179,7 +179,7 @@ fn nft_list() -> Vec<Nft> {
             external_url: None,
             external_domain: None,
             image_details: None,
-            image_domain: None,
+            image_domain: Some("public.nftstatic.com".to_string()),
         },
     };
 
@@ -219,7 +219,7 @@ fn nft_list() -> Vec<Nft> {
             animation_url: None,
             animation_domain: None,
             external_url: None,
-            external_domain: None,
+            external_domain: Some("public.nftstatic.com".to_string()),
             image_details: None,
             image_domain: None,
         },
@@ -250,7 +250,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         block_timestamp: 1677166110,
         contract_type: ContractType::Erc1155,
         token_uri: None,
-        token_domain: None,
+        token_domain: Some("tikimetadata.s3.amazonaws.com".to_string()),
         collection_name: None,
         image_url: None,
         image_domain: None,
@@ -281,7 +281,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         block_timestamp: 1683627432,
         contract_type: ContractType::Erc721,
         token_uri: None,
-        token_domain: None,
+        token_domain: Some("public.nftstatic.com".to_string()),
         collection_name: None,
         image_url: None,
         image_domain: None,
@@ -316,7 +316,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         token_domain: None,
         collection_name: None,
         image_url: None,
-        image_domain: None,
+        image_domain: Some("public.nftstatic.com".to_string()),
         token_name: None,
         status: TransferStatus::Receive,
         possible_phishing: false,
@@ -347,7 +347,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
         token_domain: None,
         collection_name: Some("Binance NFT Mystery Box-Back to Blockchain Future".to_string()),
         image_url: Some("https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png".to_string()),
-        image_domain: None,
+        image_domain: Some("tikimetadata.s3.amazonaws.com".to_string()),
         token_name: Some("Nebula Nodes".to_string()),
         status: TransferStatus::Receive,
         possible_phishing: false,
@@ -536,6 +536,20 @@ pub(crate) async fn test_exclude_nft_spam_impl() {
         .unwrap();
     assert_eq!(nft_list.nfts.len(), 3);
 }
+
+pub(crate) async fn test_get_animation_external_domains_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
+
+    let domains = storage.get_animation_external_domains(&chain).await.unwrap();
+    assert_eq!(2, domains.len());
+    assert!(domains.contains("tikimetadata.s3.amazonaws.com"));
+    assert!(domains.contains("public.nftstatic.com"));
+}
+
+// todo test update nft phishing
 
 pub(crate) async fn test_add_get_transfers_impl() {
     let chain = Chain::Bsc;
@@ -733,3 +747,17 @@ pub(crate) async fn test_exclude_transfer_spam_impl() {
         .unwrap();
     assert_eq!(transfer_history.transfer_history.len(), 3);
 }
+
+pub(crate) async fn test_get_domains_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let transfers = nft_transfer_history();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
+
+    let domains = storage.get_domains(&chain).await.unwrap();
+    assert_eq!(2, domains.len());
+    assert!(domains.contains("tikimetadata.s3.amazonaws.com"));
+    assert!(domains.contains("public.nftstatic.com"));
+}
+
+// todo test update transfer phishing

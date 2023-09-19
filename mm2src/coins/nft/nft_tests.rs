@@ -9,7 +9,8 @@ mod native_tests {
                                   PhishingDomainReq, PhishingDomainRes, SpamContractReq, SpamContractRes, UriMeta};
     use crate::nft::nft_tests::{BLOCKLIST_API_ENDPOINT, MORALIS_API_ENDPOINT_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
-    use crate::nft::{check_and_redact_if_spam, check_moralis_ipfs_bafy, check_nft_metadata_for_spam};
+    use crate::nft::{check_and_redact_if_spam, check_moralis_ipfs_bafy, check_nft_metadata_for_spam,
+                     get_domain_from_url};
     use common::block_on;
     use ethereum_types::Address;
     use mm2_net::native_http::send_request_to_uri;
@@ -23,6 +24,14 @@ mod native_tests {
         let res_uri = check_moralis_ipfs_bafy(Some(uri));
         let expected = "https://ipfs.io/ipfs/bafybeifnek24coy5xj5qabdwh24dlp5omq34nzgvazkfyxgnqms4eidsiq/1.json";
         assert_eq!(expected, res_uri.unwrap());
+    }
+
+    #[test]
+    fn test_get_domain_from_url() {
+        let image_url = "https://public.nftstatic.com/static/nft/res/4df0a5da04174e1e9be04b22a805f605.png";
+        let res_domain = get_domain_from_url(Some(image_url));
+        let expected = "public.nftstatic.com";
+        assert_eq!(expected, res_domain.unwrap());
     }
 
     #[test]
@@ -182,6 +191,9 @@ mod native_tests {
     fn test_exclude_nft_spam() { block_on(test_exclude_nft_spam_impl()) }
 
     #[test]
+    fn test_get_animation_external_domains() { block_on(test_get_animation_external_domains_impl()) }
+
+    #[test]
     fn test_add_get_transfers() { block_on(test_add_get_transfers_impl()) }
 
     #[test]
@@ -204,6 +216,9 @@ mod native_tests {
 
     #[test]
     fn test_exclude_transfer_spam() { block_on(test_exclude_transfer_spam_impl()) }
+
+    #[test]
+    fn test_get_domains() { block_on(test_get_domains_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -339,6 +354,9 @@ mod wasm_tests {
     async fn test_exclude_nft_spam() { test_exclude_nft_spam_impl().await }
 
     #[wasm_bindgen_test]
+    async fn test_get_animation_external_domains() { test_get_animation_external_domains_impl().await }
+
+    #[wasm_bindgen_test]
     async fn test_add_get_transfers() { test_add_get_transfers_impl().await }
 
     #[wasm_bindgen_test]
@@ -361,4 +379,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_exclude_transfer_spam() { test_exclude_transfer_spam_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_get_domains() { test_get_domains_impl().await }
 }

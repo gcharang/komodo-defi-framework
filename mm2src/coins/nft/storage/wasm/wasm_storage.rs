@@ -23,6 +23,8 @@ use std::str::FromStr;
 const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
 const CHAIN_TOKEN_ADD_INDEX: &str = "chain_token_add_index";
+const CHAIN_TOKEN_DOMAIN_INDEX: &str = "chain_token_domain_index";
+const CHAIN_IMAGE_DOMAIN_INDEX: &str = "chain_image_domain_index";
 
 /// Provides methods for interacting with the IndexedDB storage specifically designed for NFT data.
 ///
@@ -424,6 +426,101 @@ impl NftListStorageOps for IndexedDbNftStorage {
         }
         Ok(())
     }
+
+    async fn get_animation_external_domains(&self, chain: &Chain) -> MmResult<HashSet<String>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftListTable>().await?;
+
+        let mut domains = HashSet::new();
+        let nft_tables = table.get_items("chain", chain.to_string()).await?;
+        for (_item_id, nft) in nft_tables.into_iter() {
+            if let Some(domain) = nft.animation_domain {
+                domains.insert(domain);
+            }
+            if let Some(domain) = nft.external_domain {
+                domains.insert(domain);
+            }
+        }
+        Ok(domains)
+    }
+
+    async fn update_nft_phishing_by_domain(
+        &self,
+        chain: &Chain,
+        domain: String,
+        possible_phishing: bool,
+    ) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftListTable>().await?;
+
+        let chain_str = chain.to_string();
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_DOMAIN_INDEX)
+            .with_value(&chain_str)?
+            .with_value(&domain)?;
+        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
+        for (_item_id, item) in nfts_table.into_iter() {
+            let mut nft = nft_details_from_item(item)?;
+            nft.possible_phishing = possible_phishing;
+            drop_mutability!(nft);
+            let nft_item = NftListTable::from_nft(&nft)?;
+            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+                .with_value(&chain_str)?
+                .with_value(eth_addr_to_hex(&nft.common.token_address))?
+                .with_value(nft.common.token_id.to_string())?;
+            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+        }
+
+        let index_keys = MultiIndex::new(CHAIN_IMAGE_DOMAIN_INDEX)
+            .with_value(&chain_str)?
+            .with_value(&domain)?;
+        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
+        for (_item_id, item) in nfts_table.into_iter() {
+            let mut nft = nft_details_from_item(item)?;
+            nft.possible_phishing = possible_phishing;
+            drop_mutability!(nft);
+            let nft_item = NftListTable::from_nft(&nft)?;
+            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+                .with_value(&chain_str)?
+                .with_value(eth_addr_to_hex(&nft.common.token_address))?
+                .with_value(nft.common.token_id.to_string())?;
+            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+        }
+
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_ANIMATION_DOMAIN_INDEX)
+            .with_value(&chain_str)?
+            .with_value(&domain)?;
+        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
+        for (_item_id, item) in nfts_table.into_iter() {
+            let mut nft = nft_details_from_item(item)?;
+            nft.possible_phishing = possible_phishing;
+            drop_mutability!(nft);
+            let nft_item = NftListTable::from_nft(&nft)?;
+            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+                .with_value(&chain_str)?
+                .with_value(eth_addr_to_hex(&nft.common.token_address))?
+                .with_value(nft.common.token_id.to_string())?;
+            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+        }
+
+        let index_keys = MultiIndex::new(NftListTable::CHAIN_EXTERNAL_DOMAIN_INDEX)
+            .with_value(&chain_str)?
+            .with_value(&domain)?;
+        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
+        for (_item_id, item) in nfts_table.into_iter() {
+            let mut nft = nft_details_from_item(item)?;
+            nft.possible_phishing = possible_phishing;
+            drop_mutability!(nft);
+            let nft_item = NftListTable::from_nft(&nft)?;
+            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+                .with_value(&chain_str)?
+                .with_value(eth_addr_to_hex(&nft.common.token_address))?
+                .with_value(nft.common.token_id.to_string())?;
+            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -698,6 +795,73 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         }
         Ok(token_addresses)
     }
+
+    async fn get_domains(&self, chain: &Chain) -> MmResult<HashSet<String>, Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTransferHistoryTable>().await?;
+
+        let mut domains = HashSet::new();
+        let transfer_tables = table.get_items("chain", chain.to_string()).await?;
+        for (_item_id, transfer) in transfer_tables.into_iter() {
+            if let Some(domain) = transfer.token_domain {
+                domains.insert(domain);
+            }
+            if let Some(domain) = transfer.image_domain {
+                domains.insert(domain);
+            }
+        }
+        Ok(domains)
+    }
+
+    async fn update_transfer_phishing_by_domain(
+        &self,
+        chain: &Chain,
+        domain: String,
+        possible_phishing: bool,
+    ) -> MmResult<(), Self::Error> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTransferHistoryTable>().await?;
+
+        let chain_str = chain.to_string();
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_DOMAIN_INDEX)
+            .with_value(&chain_str)?
+            .with_value(&domain)?;
+        let transfers_table = table.get_items_by_multi_index(index_keys).await?;
+        for (_item_id, item) in transfers_table.into_iter() {
+            let mut transfer = transfer_details_from_item(item)?;
+            transfer.possible_phishing = possible_phishing;
+            drop_mutability!(transfer);
+            let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
+            let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
+                .with_value(&chain_str)?
+                .with_value(&transfer.common.transaction_hash)?
+                .with_value(transfer.common.log_index)?;
+            table
+                .replace_item_by_unique_multi_index(index_keys, &transfer_item)
+                .await?;
+        }
+
+        let index_keys = MultiIndex::new(CHAIN_IMAGE_DOMAIN_INDEX)
+            .with_value(&chain_str)?
+            .with_value(&domain)?;
+        let transfers_table = table.get_items_by_multi_index(index_keys).await?;
+        for (_item_id, item) in transfers_table.into_iter() {
+            let mut transfer = transfer_details_from_item(item)?;
+            transfer.possible_phishing = possible_phishing;
+            drop_mutability!(transfer);
+            let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
+            let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
+                .with_value(&chain_str)?
+                .with_value(&transfer.common.transaction_hash)?
+                .with_value(transfer.common.log_index)?;
+            table
+                .replace_item_by_unique_multi_index(index_keys, &transfer_item)
+                .await?;
+        }
+        Ok(())
+    }
 }
 
 /// `get_last_block_from_table` function returns the highest block in the table related to certain blockchain type.
@@ -756,10 +920,17 @@ pub(crate) struct NftListTable {
     contract_type: ContractType,
     possible_spam: bool,
     possible_phishing: bool,
+    token_domain: Option<String>,
+    image_domain: Option<String>,
+    animation_domain: Option<String>,
+    external_domain: Option<String>,
     details_json: Json,
 }
 
 impl NftListTable {
+    const CHAIN_ANIMATION_DOMAIN_INDEX: &str = "chain_animation_domain_index";
+    const CHAIN_EXTERNAL_DOMAIN_INDEX: &str = "chain_external_domain_index";
+
     fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
         let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
         Ok(NftListTable {
@@ -771,6 +942,10 @@ impl NftListTable {
             contract_type: nft.contract_type,
             possible_spam: nft.common.possible_spam,
             possible_phishing: nft.possible_phishing,
+            token_domain: nft.common.token_domain.clone(),
+            image_domain: nft.uri_meta.image_domain.clone(),
+            animation_domain: nft.uri_meta.animation_domain.clone(),
+            external_domain: nft.uri_meta.external_domain.clone(),
             details_json,
         })
     }
@@ -789,6 +964,8 @@ impl TableSignature for NftListTable {
             )?;
             table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
             table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
+            table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
             table.create_index("chain", false)?;
             table.create_index("block_number", false)?;
         }
@@ -809,8 +986,10 @@ pub(crate) struct NftTransferHistoryTable {
     status: TransferStatus,
     amount: String,
     token_uri: Option<String>,
+    token_domain: Option<String>,
     collection_name: Option<String>,
     image_url: Option<String>,
+    image_domain: Option<String>,
     token_name: Option<String>,
     possible_spam: bool,
     possible_phishing: bool,
@@ -835,8 +1014,10 @@ impl NftTransferHistoryTable {
             status: transfer.status,
             amount: transfer.common.amount.to_string(),
             token_uri: transfer.token_uri.clone(),
+            token_domain: transfer.token_domain.clone(),
             collection_name: transfer.collection_name.clone(),
             image_url: transfer.image_url.clone(),
+            image_domain: transfer.image_domain.clone(),
             token_name: transfer.token_name.clone(),
             possible_spam: transfer.common.possible_spam,
             possible_phishing: transfer.possible_phishing,
@@ -863,6 +1044,8 @@ impl TableSignature for NftTransferHistoryTable {
             )?;
             table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
             table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
+            table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
             table.create_index("block_number", false)?;
             table.create_index("chain", false)?;
         }

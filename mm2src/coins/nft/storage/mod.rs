@@ -104,6 +104,15 @@ pub trait NftListStorageOps {
         token_address: String,
         possible_spam: bool,
     ) -> MmResult<(), Self::Error>;
+
+    async fn get_animation_external_domains(&self, chain: &Chain) -> MmResult<HashSet<String>, Self::Error>;
+
+    async fn update_nft_phishing_by_domain(
+        &self,
+        chain: &Chain,
+        domain: String,
+        possible_phishing: bool,
+    ) -> MmResult<(), Self::Error>;
 }
 
 /// Provides asynchronous operations related to the history of NFT transfers.
@@ -180,6 +189,16 @@ pub trait NftTransferHistoryStorageOps {
 
     /// `get_token_addresses` return all unique token addresses.
     async fn get_token_addresses(&self, chain: Chain) -> MmResult<HashSet<Address>, Self::Error>;
+
+    /// `get_domains` return all unique token domain fields.
+    async fn get_domains(&self, chain: &Chain) -> MmResult<HashSet<String>, Self::Error>;
+
+    async fn update_transfer_phishing_by_domain(
+        &self,
+        chain: &Chain,
+        domain: String,
+        possible_phishing: bool,
+    ) -> MmResult<(), Self::Error>;
 }
 
 /// Represents potential errors that can occur when creating an NFT storage.

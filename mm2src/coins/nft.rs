@@ -16,8 +16,9 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
 
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_errors::{MetaFromUrlError, ProtectFromSpamError, UpdateSpamPhishingError};
-use crate::nft::nft_structs::{MnemonicHQRes, NftCommon, NftCtx, NftTransferCommon, RefreshMetadataReq,
-                              SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
+use crate::nft::nft_structs::{MnemonicHQRes, NftCommon, NftCtx, NftTransferCommon, PhishingDomainReq,
+                              PhishingDomainRes, RefreshMetadataReq, SpamContractReq, SpamContractRes, TransferMeta,
+                              TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
 use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
@@ -28,6 +29,7 @@ use mm2_number::BigDecimal;
 use regex::Regex;
 use serde_json::Value as Json;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::str::FromStr;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -216,6 +218,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 update_meta_in_transfers(&storage, chain, nfts).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
                 update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+                update_phishing(&storage, chain, &req.url_antispam).await?;
                 continue;
             },
             Err(_) => {
@@ -231,6 +234,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 update_meta_in_transfers(&storage, chain, nft_list).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
                 update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+                update_phishing(&storage, chain, &req.url_antispam).await?;
                 continue;
             },
         };
@@ -260,7 +264,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         .await?;
         update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
         update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
-        // todo update phishing domains
+        update_phishing(&storage, chain, &req.url_antispam).await?;
     }
     Ok(())
 }
@@ -294,6 +298,30 @@ where
                     .await?;
                 storage
                     .update_transfer_spam_by_token_address(&chain, address_hex, is_spam)
+                    .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn update_phishing<T>(storage: &T, chain: &Chain, url_antispam: &Url) -> MmResult<(), UpdateSpamPhishingError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
+    let transfer_domains = storage.get_domains(chain).await?;
+    let nft_domains = storage.get_animation_external_domains(chain).await?;
+    let domains: HashSet<String> = transfer_domains.union(&nft_domains).cloned().collect();
+    if !domains.is_empty() {
+        let domains = domains.into_iter().collect::<Vec<_>>().join(",");
+        let domain_res = send_phishing_request(url_antispam, domains).await?;
+        for (domain, is_phishing) in domain_res.result.into_iter() {
+            if is_phishing {
+                storage
+                    .update_nft_phishing_by_domain(chain, domain.clone(), is_phishing)
+                    .await?;
+                storage
+                    .update_transfer_phishing_by_domain(chain, domain, is_phishing)
                     .await?;
             }
         }
@@ -350,6 +378,19 @@ async fn send_spam_request(
     let scan_contract_res = send_post_request_to_uri(scan_contract_uri.as_str(), req_spam_json).await?;
     let spam_res: SpamContractRes = serde_json::from_slice(&scan_contract_res)?;
     Ok(spam_res)
+}
+
+/// `send_spam_request` function sends request to antispam api to scan domains for phishing.
+async fn send_phishing_request(
+    url_antispam: &Url,
+    domains: String,
+) -> MmResult<PhishingDomainRes, UpdateSpamPhishingError> {
+    let scan_contract_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_DOMAIN, BLOCKLIST_SCAN)?;
+    let req_phishing = PhishingDomainReq { domains };
+    let req_phishing_json = serde_json::to_string(&req_phishing)?;
+    let scan_domains_res = send_post_request_to_uri(scan_contract_uri.as_str(), req_phishing_json).await?;
+    let phishing_res: PhishingDomainRes = serde_json::from_slice(&scan_domains_res)?;
+    Ok(phishing_res)
 }
 
 /// `prepare_uri_for_blocklist_endpoint` function constructs the URI required for the antispam API request.
@@ -412,6 +453,19 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         &req.url_antispam,
     )
     .await;
+    let mut domains = HashSet::new();
+    if let Some(domain) = &token_domain {
+        domains.insert(domain.clone());
+    }
+    if let Some(domain) = &uri_meta.image_domain {
+        domains.insert(domain.clone());
+    }
+    if let Some(domain) = &uri_meta.animation_domain {
+        domains.insert(domain.clone());
+    }
+    if let Some(domain) = &uri_meta.external_domain {
+        domains.insert(domain.clone());
+    }
     nft_db.common.collection_name = moralis_meta.common.collection_name;
     nft_db.common.symbol = moralis_meta.common.symbol;
     nft_db.common.token_uri = token_uri;
@@ -435,7 +489,21 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
             .update_transfer_spam_by_token_address(&req.chain, address_hex, true)
             .await?;
     }
-    // todo also update possible_phishing
+    if !domains.is_empty() {
+        let domain_list = domains.into_iter().collect::<Vec<_>>().join(",");
+        let domain_res = send_phishing_request(&req.url_antispam, domain_list).await?;
+        for (domain, is_phishing) in domain_res.result.into_iter() {
+            if is_phishing {
+                nft_db.possible_phishing = true;
+                storage
+                    .update_transfer_phishing_by_domain(&req.chain, domain.clone(), is_phishing)
+                    .await?;
+                storage
+                    .update_nft_phishing_by_domain(&req.chain, domain, is_phishing)
+                    .await?;
+            }
+        }
+    }
     drop_mutability!(nft_db);
     storage
         .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
@@ -1195,8 +1263,7 @@ async fn build_nft_from_moralis(
 }
 
 #[inline(always)]
-fn get_domain_from_url(url: Option<&str>) -> Option<String> {
-    url.as_ref()
-        .and_then(|uri| Url::parse(uri).ok())
+pub(crate) fn get_domain_from_url(url: Option<&str>) -> Option<String> {
+    url.and_then(|uri| Url::parse(uri).ok())
         .and_then(|url| url.domain().map(String::from))
 }

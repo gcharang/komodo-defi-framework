@@ -879,6 +879,53 @@ impl NftListStorageOps for SqliteNftStorage {
         })
         .await
     }
+
+    async fn get_animation_external_domains(&self, chain: &Chain) -> MmResult<HashSet<String>, Self::Error> {
+        let selfi = self.clone();
+        let table_name = chain.nft_list_table_name()?;
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            let sql_query = format!(
+                "SELECT DISTINCT animation_domain FROM {}
+                UNION
+                SELECT DISTINCT external_domain FROM {}",
+                table_name, table_name
+            );
+            let mut stmt = conn.prepare(&sql_query)?;
+            let domains = stmt
+                .query_map([], |row| row.get::<_, Option<String>>(0))?
+                .collect::<Result<HashSet<_>, _>>()?;
+            let domains = domains.into_iter().flatten().collect();
+            Ok(domains)
+        })
+        .await
+    }
+
+    async fn update_nft_phishing_by_domain(
+        &self,
+        chain: &Chain,
+        domain: String,
+        possible_phishing: bool,
+    ) -> MmResult<(), Self::Error> {
+        let selfi = self.clone();
+
+        let table_name = chain.nft_list_table_name()?;
+        let sql = format!(
+            "UPDATE {} SET possible_phishing = ?1 WHERE token_domain = ?2
+            OR image_domain = ?2 OR animation_domain = ?2 OR external_domain = ?2;",
+            table_name
+        );
+
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+            let params = [Some(i32::from(possible_phishing).to_string()), Some(domain)];
+            sql_transaction.execute(&sql, params)?;
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
+    }
 }
 
 #[async_trait]
@@ -1158,6 +1205,52 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
                 .query_map([], address_from_row)?
                 .collect::<Result<HashSet<_>, _>>()?;
             Ok(addresses)
+        })
+        .await
+    }
+
+    async fn get_domains(&self, chain: &Chain) -> MmResult<HashSet<String>, Self::Error> {
+        let selfi = self.clone();
+        let table_name = chain.transfer_history_table_name()?;
+        async_blocking(move || {
+            let conn = selfi.0.lock().unwrap();
+            let sql_query = format!(
+                "SELECT DISTINCT token_domain FROM {}
+                UNION
+                SELECT DISTINCT image_domain FROM {}",
+                table_name, table_name
+            );
+            let mut stmt = conn.prepare(&sql_query)?;
+            let domains = stmt
+                .query_map([], |row| row.get::<_, Option<String>>(0))?
+                .collect::<Result<HashSet<_>, _>>()?;
+            let domains = domains.into_iter().flatten().collect();
+            Ok(domains)
+        })
+        .await
+    }
+
+    async fn update_transfer_phishing_by_domain(
+        &self,
+        chain: &Chain,
+        domain: String,
+        possible_phishing: bool,
+    ) -> MmResult<(), Self::Error> {
+        let selfi = self.clone();
+
+        let table_name = chain.transfer_history_table_name()?;
+        let sql = format!(
+            "UPDATE {} SET possible_phishing = ?1 WHERE token_domain = ?2 OR image_domain = ?2;",
+            table_name
+        );
+
+        async_blocking(move || {
+            let mut conn = selfi.0.lock().unwrap();
+            let sql_transaction = conn.transaction()?;
+            let params = [Some(i32::from(possible_phishing).to_string()), Some(domain)];
+            sql_transaction.execute(&sql, params)?;
+            sql_transaction.commit()?;
+            Ok(())
         })
         .await
     }
