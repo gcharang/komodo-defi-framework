@@ -408,10 +408,8 @@ use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
 use mm2_err_handle::mm_error::MmError;
 
 #[cfg(target_arch = "wasm32")]
-impl<T: std::fmt::Debug> From<zcash_client_backend::data_api::error::Error<T>> for ZcoinStorageError {
-    fn from(value: zcash_client_backend::data_api::error::Error<T>) -> Self {
-        Self::BackendError(format!("{:?}", value))
-    }
+impl<T: std::fmt::Display> From<zcash_client_backend::data_api::error::Error<T>> for ZcoinStorageError {
+    fn from(value: zcash_client_backend::data_api::error::Error<T>) -> Self { Self::BackendError(value.to_string()) }
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -292,7 +292,7 @@ impl WalletIndexedDb {
 
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0.to_bigint())?;
+            .with_value(account.0.to_bigint().unwrap())?;
         let maybe_notes = rec_note_table.get_items_by_multi_index(index_keys).await?;
 
         let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
@@ -926,9 +926,9 @@ impl WalletRead for WalletIndexedDb {
         let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
         let mut maybe_txs = tx_table
             .cursor_builder()
-            .only("ticker", ticker.clone())?
-            .bound("block", 0u32, anchor_height.into())
-            .open_cursor("ticker")
+            .only("ticker", &ticker)?
+            .bound("block", 0u32, u32::from(anchor_height))
+            .open_cursor(WalletDbTransactionsTable::TICKER_BLOCK_INDEX)
             .await?;
 
         // Retrieves a list of transaction IDs (txid) from the transactions table
@@ -941,7 +941,7 @@ impl WalletRead for WalletIndexedDb {
         let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0.to_bigint())?;
+            .with_value(account.0.to_bigint().unwrap())?;
         let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
 
         let mut value: i64 = 0;
@@ -1177,7 +1177,7 @@ impl WalletRead for WalletIndexedDb {
         let received_notes_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
         let index_keys = MultiIndex::new(WalletDbReceivedNotesTable::TICKER_ACCOUNT_INDEX)
             .with_value(&ticker)?
-            .with_value(account.0.to_bigint())?;
+            .with_value(account.0.to_bigint().unwrap())?;
         let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
         let maybe_notes = maybe_notes
             .clone()
@@ -1186,6 +1186,7 @@ impl WalletRead for WalletIndexedDb {
             .collect::<Vec<(u32, WalletDbReceivedNotesTable)>>();
 
         // Transactions
+        let db_transaction = locked_db.get_inner().transaction().await?;
         let txs_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
         let mut maybe_txs = txs_table
             .cursor_builder()
@@ -1199,17 +1200,9 @@ impl WalletRead for WalletIndexedDb {
         }
 
         // Sapling Witness
+        let db_transaction = locked_db.get_inner().transaction().await?;
         let witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
-        let mut maybe_witness = witness_table
-            .cursor_builder()
-            .only("ticker", ticker.clone())?
-            .bound("block", 0u32, u32::from(anchor_height))
-            .open_cursor("ticker")
-            .await?;
-        let mut witnesses = vec![];
-        while let Some((_, witness)) = maybe_witness.next().await? {
-            witnesses.push(witness)
-        }
+        let witnesses = witness_table.get_items("ticker", &ticker).await?;
 
         // Step 1: Calculate the running sum for each note
         let mut running_sum = 0;
@@ -1254,7 +1247,8 @@ impl WalletRead for WalletIndexedDb {
         let mut spendable_notes = Vec::new();
         for (id_note, note) in final_notes.iter() {
             let noteid_bigint = num_to_bigint!(id_note)?;
-            if let Some(witness) = witnesses.iter().find(|&w| w.note == noteid_bigint) {
+            if let Some((_, witness)) = witnesses.iter().find(|(_, w)| w.note == noteid_bigint) {
+                info!("{:?}", note.value);
                 spendable_notes.push(to_spendable_note(SpendableNoteConstructor {
                     diversifier: note.diversifier.clone(),
                     value: note.value.clone(),

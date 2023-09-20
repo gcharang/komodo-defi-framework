@@ -1079,6 +1079,7 @@ dependencies = [
  "url",
  "utxo_signer",
  "uuid 1.2.2",
+ "wagyu-zcash-parameters",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -2060,7 +2061,7 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "blake2b_simd",
  "byteorder 1.4.3",
@@ -8445,6 +8446,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
+name = "wagyu-zcash-parameters"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61c904628658374e651288f000934c33ef738b2d8b3e65d4100b70b395dbe2bb"
+dependencies = [
+ "wagyu-zcash-parameters-1",
+ "wagyu-zcash-parameters-2",
+ "wagyu-zcash-parameters-3",
+ "wagyu-zcash-parameters-4",
+ "wagyu-zcash-parameters-5",
+ "wagyu-zcash-parameters-6",
+]
+
+[[package]]
+name = "wagyu-zcash-parameters-1"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90bf2e21bb027d3f8428c60d6a720b54a08bf6ce4e6f834ef8e0d38bb5695da8"
+
+[[package]]
+name = "wagyu-zcash-parameters-2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a616ab2e51e74cc48995d476e94de810fb16fc73815f390bf2941b046cc9ba2c"
+
+[[package]]
+name = "wagyu-zcash-parameters-3"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14da1e2e958ff93c0830ee68e91884069253bf3462a67831b02b367be75d6147"
+
+[[package]]
+name = "wagyu-zcash-parameters-4"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f058aeef03a2070e8666ffb5d1057d8bb10313b204a254a6e6103eb958e9a6d6"
+
+[[package]]
+name = "wagyu-zcash-parameters-5"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ffe916b30e608c032ae1b734f02574a3e12ec19ab5cc5562208d679efe4969d"
+
+[[package]]
+name = "wagyu-zcash-parameters-6"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7b6d5a78adc3e8f198e9cd730f219a695431467f7ec29dcfc63ade885feebe1"
+
+[[package]]
 name = "waker-fn"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8921,7 +8972,7 @@ checksum = "0f9079049688da5871a7558ddacb7f04958862c703e68258594cb7a862b5e33f"
 [[package]]
 name = "zcash_client_backend"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "async-trait",
  "base64 0.13.0",
@@ -8947,7 +8998,7 @@ dependencies = [
 [[package]]
 name = "zcash_client_sqlite"
 version = "0.3.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "async-trait",
  "bech32",
@@ -8970,7 +9021,7 @@ dependencies = [
 [[package]]
 name = "zcash_extras"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "async-trait",
  "ff 0.8.0",
@@ -8986,7 +9037,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.0.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "blake2b_simd",
  "byteorder 1.4.3",
@@ -9000,7 +9051,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "aes",
  "bitvec 0.18.5",
@@ -9030,7 +9081,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=becd9d0#becd9d02fd0b945766db9a10e55e5303641cdfbd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "bellman",
  "blake2b_simd",
