@@ -194,6 +194,9 @@ mod native_tests {
     fn test_get_animation_external_domains() { block_on(test_get_animation_external_domains_impl()) }
 
     #[test]
+    fn test_update_nft_phishing_by_domain() { block_on(test_update_nft_phishing_by_domain_impl()) }
+
+    #[test]
     fn test_add_get_transfers() { block_on(test_add_get_transfers_impl()) }
 
     #[test]
@@ -219,6 +222,9 @@ mod native_tests {
 
     #[test]
     fn test_get_domains() { block_on(test_get_domains_impl()) }
+
+    #[test]
+    fn test_update_transfer_phishing_by_domain() { block_on(test_update_transfer_phishing_by_domain_impl()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -357,6 +363,9 @@ mod wasm_tests {
     async fn test_get_animation_external_domains() { test_get_animation_external_domains_impl().await }
 
     #[wasm_bindgen_test]
+    async fn test_update_nft_phishing_by_domain() { test_update_nft_phishing_by_domain_impl().await }
+
+    #[wasm_bindgen_test]
     async fn test_add_get_transfers() { test_add_get_transfers_impl().await }
 
     #[wasm_bindgen_test]
@@ -382,4 +391,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn test_get_domains() { test_get_domains_impl().await }
+
+    #[wasm_bindgen_test]
+    async fn test_update_transfer_phishing_by_domain() { test_update_transfer_phishing_by_domain_impl().await }
 }

@@ -549,7 +549,31 @@ pub(crate) async fn test_get_animation_external_domains_impl() {
     assert!(domains.contains("public.nftstatic.com"));
 }
 
-// todo test update nft phishing
+pub(crate) async fn test_update_nft_phishing_by_domain_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
+
+    let domains = vec![
+        "tikimetadata.s3.amazonaws.com".to_string(),
+        "public.nftstatic.com".to_string(),
+    ];
+    for domain in domains.into_iter() {
+        storage
+            .update_nft_phishing_by_domain(&chain, domain, true)
+            .await
+            .unwrap();
+    }
+    let nfts = storage
+        .get_nft_list(vec![chain], true, 1, None, None)
+        .await
+        .unwrap()
+        .nfts;
+    for nft in nfts.into_iter() {
+        assert!(nft.possible_phishing);
+    }
+}
 
 pub(crate) async fn test_add_get_transfers_impl() {
     let chain = Chain::Bsc;
@@ -760,4 +784,28 @@ pub(crate) async fn test_get_domains_impl() {
     assert!(domains.contains("public.nftstatic.com"));
 }
 
-// todo test update transfer phishing
+pub(crate) async fn test_update_transfer_phishing_by_domain_impl() {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let transfers = nft_transfer_history();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
+
+    let domains = vec![
+        "tikimetadata.s3.amazonaws.com".to_string(),
+        "public.nftstatic.com".to_string(),
+    ];
+    for domain in domains.into_iter() {
+        storage
+            .update_transfer_phishing_by_domain(&chain, domain, true)
+            .await
+            .unwrap();
+    }
+    let transfers = storage
+        .get_transfer_history(vec![chain], true, 1, None, None)
+        .await
+        .unwrap()
+        .transfer_history;
+    for transfer in transfers.into_iter() {
+        assert!(transfer.possible_phishing);
+    }
+}

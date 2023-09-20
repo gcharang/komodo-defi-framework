@@ -625,7 +625,6 @@ pub(crate) struct SpamContractRes {
     pub(crate) result: HashMap<Address, bool>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub(crate) struct PhishingDomainRes {
     pub(crate) result: HashMap<String, bool>,

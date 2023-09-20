@@ -47,7 +47,6 @@ const MORALIS_FROM_BLOCK_QUERY_NAME: &str = "from_block";
 
 const BLOCKLIST_ENDPOINT: &str = "api/blocklist";
 const BLOCKLIST_CONTRACT: &str = "contract";
-#[allow(dead_code)]
 const BLOCKLIST_DOMAIN: &str = "domain";
 const BLOCKLIST_WALLET: &str = "wallet";
 const BLOCKLIST_SCAN: &str = "scan";
@@ -430,21 +429,22 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     let _lock = nft_ctx.guard.lock().await;
 
     let storage = NftStorageBuilder::new(&ctx).build()?;
+    let token_address_str = format!("{:#02x}", req.token_address);
     let moralis_meta = get_moralis_metadata(
-        format!("{:#02x}", req.token_address),
+        token_address_str.clone(),
         req.token_id.clone(),
         &req.chain,
         &req.url,
         &req.url_antispam,
     )
     .await?;
-    let req_meta = NftMetadataReq {
-        token_address: req.token_address,
-        token_id: req.token_id,
-        chain: req.chain,
-        protect_from_spam: false,
-    };
-    let mut nft_db = get_nft_metadata(ctx.clone(), req_meta).await?;
+    let mut nft_db = storage
+        .get_nft(&req.chain, token_address_str.clone(), req.token_id.clone())
+        .await?
+        .ok_or_else(|| GetNftInfoError::TokenNotFoundInWallet {
+            token_address: token_address_str,
+            token_id: req.token_id.to_string(),
+        })?;
     let token_uri = check_moralis_ipfs_bafy(moralis_meta.common.token_uri.as_deref());
     let token_domain = get_domain_from_url(token_uri.as_deref());
     let uri_meta = get_uri_meta(
@@ -453,8 +453,34 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
         &req.url_antispam,
     )
     .await;
+    // Gather domains for phishing checks
+    let domains = gather_domains(&token_domain, &uri_meta);
+    nft_db.common.collection_name = moralis_meta.common.collection_name;
+    nft_db.common.symbol = moralis_meta.common.symbol;
+    nft_db.common.token_uri = token_uri;
+    nft_db.common.token_domain = token_domain;
+    nft_db.common.metadata = moralis_meta.common.metadata;
+    nft_db.common.last_token_uri_sync = moralis_meta.common.last_token_uri_sync;
+    nft_db.common.last_metadata_sync = moralis_meta.common.last_metadata_sync;
+    nft_db.common.possible_spam = moralis_meta.common.possible_spam;
+    nft_db.uri_meta = uri_meta;
+    refresh_possible_spam(&storage, &req.chain, &mut nft_db, &req.url_antispam).await?;
+    refresh_possible_phishing(&storage, &req.chain, domains, &mut nft_db, &req.url_antispam).await?;
+    drop_mutability!(nft_db);
+    storage
+        .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
+        .await?;
+    let transfer_meta = TransferMeta::from(nft_db.clone());
+    storage
+        .update_transfers_meta_by_token_addr_id(&nft_db.chain, transfer_meta)
+        .await?;
+    Ok(())
+}
+
+/// Extracts domains from uri_meta and token_domain.
+fn gather_domains(token_domain: &Option<String>, uri_meta: &UriMeta) -> HashSet<String> {
     let mut domains = HashSet::new();
-    if let Some(domain) = &token_domain {
+    if let Some(domain) = token_domain {
         domains.insert(domain.clone());
     }
     if let Some(domain) = &uri_meta.image_domain {
@@ -466,52 +492,56 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     if let Some(domain) = &uri_meta.external_domain {
         domains.insert(domain.clone());
     }
-    nft_db.common.collection_name = moralis_meta.common.collection_name;
-    nft_db.common.symbol = moralis_meta.common.symbol;
-    nft_db.common.token_uri = token_uri;
-    nft_db.common.token_domain = token_domain;
-    nft_db.common.metadata = moralis_meta.common.metadata;
-    nft_db.common.last_token_uri_sync = moralis_meta.common.last_token_uri_sync;
-    nft_db.common.last_metadata_sync = moralis_meta.common.last_metadata_sync;
-    nft_db.common.possible_spam = moralis_meta.common.possible_spam;
-    nft_db.uri_meta = uri_meta;
+    domains
+}
 
-    let addresses = [nft_db.common.token_address]
-        .iter()
-        .map(eth_addr_to_hex)
-        .collect::<Vec<_>>()
-        .join(",");
-    let spam_res = send_spam_request(&req.chain, &req.url_antispam, addresses).await?;
+/// Refreshes the `possible_spam` flag based on spam results.
+async fn refresh_possible_spam<T>(
+    storage: &T,
+    chain: &Chain,
+    nft_db: &mut Nft,
+    url_antispam: &Url,
+) -> MmResult<(), UpdateNftError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
+    let address_hex = eth_addr_to_hex(&nft_db.common.token_address);
+    let spam_res = send_spam_request(chain, url_antispam, address_hex.clone()).await?;
     if let Some(true) = spam_res.result.get(&nft_db.common.token_address) {
         nft_db.common.possible_spam = true;
-        let address_hex = eth_addr_to_hex(&nft_db.common.token_address);
         storage
-            .update_transfer_spam_by_token_address(&req.chain, address_hex, true)
+            .update_transfer_spam_by_token_address(chain, address_hex, true)
             .await?;
     }
+    Ok(())
+}
+
+/// Refreshes the `possible_phishing` flag based on phishing results.
+async fn refresh_possible_phishing<T>(
+    storage: &T,
+    chain: &Chain,
+    domains: HashSet<String>,
+    nft_db: &mut Nft,
+    url_antispam: &Url,
+) -> MmResult<(), UpdateNftError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
     if !domains.is_empty() {
         let domain_list = domains.into_iter().collect::<Vec<_>>().join(",");
-        let domain_res = send_phishing_request(&req.url_antispam, domain_list).await?;
+        let domain_res = send_phishing_request(url_antispam, domain_list).await?;
         for (domain, is_phishing) in domain_res.result.into_iter() {
             if is_phishing {
                 nft_db.possible_phishing = true;
                 storage
-                    .update_transfer_phishing_by_domain(&req.chain, domain.clone(), is_phishing)
+                    .update_transfer_phishing_by_domain(chain, domain.clone(), is_phishing)
                     .await?;
                 storage
-                    .update_nft_phishing_by_domain(&req.chain, domain, is_phishing)
+                    .update_nft_phishing_by_domain(chain, domain, is_phishing)
                     .await?;
             }
         }
     }
-    drop_mutability!(nft_db);
-    storage
-        .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
-        .await?;
-    let transfer_meta = TransferMeta::from(nft_db.clone());
-    storage
-        .update_transfers_meta_by_token_addr_id(&nft_db.chain, transfer_meta)
-        .await?;
     Ok(())
 }
 
