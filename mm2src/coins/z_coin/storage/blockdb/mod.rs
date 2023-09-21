@@ -51,7 +51,7 @@ mod block_db_storage_tests {
     pub(crate) async fn test_rewind_to_height_impl() {
         info!("Running!");
         let ctx = mm_ctx_with_custom_db();
-        info!("RewDB inding to height started!");
+        info!("Rewinding to height started!");
         let db = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
         info!("Rewinding to height started!");
         // insert block

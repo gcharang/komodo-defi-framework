@@ -1179,11 +1179,6 @@ impl WalletRead for WalletIndexedDb {
             .with_value(&ticker)?
             .with_value(account.0.to_bigint().unwrap())?;
         let maybe_notes = received_notes_table.get_items_by_multi_index(index_keys).await?;
-        let maybe_notes = maybe_notes
-            .clone()
-            .into_iter()
-            .filter(|(_, note)| note.spent.is_none())
-            .collect::<Vec<(u32, WalletDbReceivedNotesTable)>>();
 
         // Transactions
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -1195,69 +1190,62 @@ impl WalletRead for WalletIndexedDb {
             .open_cursor(WalletDbTransactionsTable::TICKER_BLOCK_INDEX)
             .await?;
         let mut txs = vec![];
-        while let Some((_, ts)) = maybe_txs.next().await? {
-            txs.push(ts)
+        while let Some((id, ts)) = maybe_txs.next().await? {
+            txs.push((id, ts))
         }
 
         // Sapling Witness
         let db_transaction = locked_db.get_inner().transaction().await?;
         let witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
-        let witnesses = witness_table.get_items("ticker", &ticker).await?;
+        let index_keys = MultiIndex::new(WalletDbSaplingWitnessesTable::TICKER_BLOCK_INDEX)
+            .with_value(&ticker)?
+            .with_value(u32::from(anchor_height))?;
+        let witnesses = witness_table.get_items_by_multi_index(index_keys).await?;
 
-        // Step 1: Calculate the running sum for each note
         let mut running_sum = 0;
-        let mut note_running_sums = HashMap::new();
-
-        for (id_note, note) in maybe_notes.iter() {
-            if note.account == account.0.into() {
-                let value = note.value.clone().to_i64().expect("price is too large");
+        let mut notes = vec![];
+        for (id_note, note) in &maybe_notes {
+            let value = note.value.clone().to_i64().expect("price is too large");
+            if note.spent.is_none() {
                 running_sum += value;
-            }
-
-            note_running_sums.insert(id_note, running_sum);
-        }
-
-        // Step 2: Select eligible notes
-        let mut selected_notes = Vec::new();
-        for (id_note, note) in maybe_notes.iter() {
-            if note.account == account.0.into() && note.spent.is_none() {
-                let note_running_sum = note_running_sums.get(&id_note).unwrap_or(&0);
-                if Amount::from_i64(*note_running_sum)
-                    .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
-                    < target_value
-                {
-                    selected_notes.push((id_note, note, *note_running_sum));
-                }
+                notes.push((id_note, value, note, running_sum));
             }
         }
 
-        // Step 2: Select all unspent notes in the desired account, along with their running sum.
-        let mut final_notes = Vec::new();
-        for (id_note, note, sum) in &selected_notes {
-            if note.spent.is_none()
-                && Amount::from_i64(*sum)
-                    .map_to_mm(|_| ZcoinStorageError::CorruptedData("price is too large".to_string()))?
-                    < target_value
-            {
-                final_notes.push((id_note, note));
+        let mut final_note = vec![];
+        for (id_note, value, note, running_sum) in &notes {
+            if let Some(tx_block) = txs.iter().find(|(id_tx, tx)| *id_tx == note.tx).map(|(_, tx)| tx.block) {
+                final_note.push((id_note, value, note, running_sum));
             }
         }
+
+        let mut unspent_notes = vec![];
+        for (id, value, note, sum) in &final_note {
+            if **sum < i64::from(target_value) {
+                unspent_notes.push((*id, *value, note.clone(), *sum))
+            }
+        }
+
+        if let Some(note) = final_note.iter().find(|(_, _, _, sum)| **sum >= target_value.into()) {
+            unspent_notes.push(note.clone());
+        };
 
         // Step 4: Get witnesses for selected notes
         let mut spendable_notes = Vec::new();
-        for (id_note, note) in final_notes.iter() {
+        for (id_note, _, note, _) in &unspent_notes {
             let noteid_bigint = num_to_bigint!(id_note)?;
             if let Some((_, witness)) = witnesses.iter().find(|(_, w)| w.note == noteid_bigint) {
-                info!("{:?}", note.value);
-                spendable_notes.push(to_spendable_note(SpendableNoteConstructor {
+                let spendable = to_spendable_note(SpendableNoteConstructor {
                     diversifier: note.diversifier.clone(),
                     value: note.value.clone(),
                     rcm: note.rcm.clone(),
                     witness: witness.witness.clone(),
-                })?);
+                })?;
+                spendable_notes.push(spendable);
             }
         }
 
+        info!("GATHERED!");
         Ok(spendable_notes)
     }
 }

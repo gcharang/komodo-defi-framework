@@ -1071,6 +1071,7 @@ dependencies = [
  "spv_validation",
  "tendermint-config",
  "tendermint-rpc",
+ "time 0.3.11",
  "tiny-bip39",
  "tokio",
  "tokio-rustls",
@@ -2061,7 +2062,6 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "blake2b_simd",
  "byteorder 1.4.3",
@@ -8972,7 +8972,6 @@ checksum = "0f9079049688da5871a7558ddacb7f04958862c703e68258594cb7a862b5e33f"
 [[package]]
 name = "zcash_client_backend"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "async-trait",
  "base64 0.13.0",
@@ -8998,7 +8997,6 @@ dependencies = [
 [[package]]
 name = "zcash_client_sqlite"
 version = "0.3.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "async-trait",
  "bech32",
@@ -9021,7 +9019,6 @@ dependencies = [
 [[package]]
 name = "zcash_extras"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "async-trait",
  "ff 0.8.0",
@@ -9037,7 +9034,6 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.0.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "blake2b_simd",
  "byteorder 1.4.3",
@@ -9051,7 +9047,6 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "aes",
  "bitvec 0.18.5",
@@ -9081,7 +9076,6 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=ef13898#ef1389821dd6ccf1ed66ad2946a0f915b39549f4"
 dependencies = [
  "bellman",
  "blake2b_simd",
