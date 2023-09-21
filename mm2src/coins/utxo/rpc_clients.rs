@@ -2546,14 +2546,20 @@ impl UtxoRpcClientOps for ElectrumClient {
     }
 }
 
+/// Trait
 #[async_trait]
 trait ConnMngTrait: Debug {
     async fn get_conn(&self, address: Option<&str>) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
     async fn connect(&self) -> Result<(), String>;
+    async fn connect_to(
+        &self,
+        conn_settings: ElectrumConnSettings,
+        event_handlers: Vec<RpcTransportEventHandlerShared>,
+        weak_spawner: WeakSpawner,
+    ) -> Result<(), String>;
     async fn is_connected(&self) -> bool;
     async fn remove_server(&self, address: String) -> Result<(), String>;
     async fn register(&self, handler: RpcTransportEventHandlerShared);
-    async fn on_verified(&self, address: String);
     fn on_disconnected(&self, address: String);
 }
 
@@ -2577,7 +2583,7 @@ struct ElectrumConnCtx {
     conn_settings: ElectrumConnSettings,
     abortable_system: AbortableQueue,
     suspend_timeout_sec: u64,
-    connection: Option<Arc<AsyncMutex<ElectrumConnection>>>,
+    connection: Option<Arc<AsyncMutex<ElectrumConnection>>>, // TODO: check if thid could not be guarded and hidden under the Arc.
 }
 
 #[derive(Clone, Debug)]
@@ -2590,7 +2596,11 @@ impl ConnMng {
             address, 20, self.0.guarded
         );
         let mut guard = self.0.guarded.lock().await;
-        let _ = guard.active.take();
+        if let Some(ref active) = guard.active {
+            if *active == address {
+                guard.active.take();
+            }
+        }
 
         match &guard
             .conn_ctxs
@@ -2607,33 +2617,81 @@ impl ConnMng {
             },
         };
 
-        Self::cancel_connection(
+        Self::reset_connection_context(
             &mut guard,
             &address,
             self.0.abortable_system.create_subsystem().unwrap(),
-        )
-        .await?;
+        )?;
 
         let suspend_timeout_sec = Self::get_suspend_timeout(&guard, &address).await?;
         Self::duplicate_suspend_timeout(&mut guard, &address).await?;
         drop(guard);
 
-        self.0.abortable_system.weak_spawner().spawn(async move {
-            debug!("Suspend server: {}, for: {} seconds", address, suspend_timeout_sec);
-            tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
-            self.restore_server(address).await;
-        });
-
+        self.spawn_resume_server(address, suspend_timeout_sec);
         debug!("Suspend future spawned");
         Ok(())
     }
 
-    async fn cancel_connection(
+    // workaround to avoid the cycle detected compilation error that blocks recursive async calls
+    fn spawn_resume_server(self, address: String, suspend_timeout_sec: u64) {
+        let self_clone = self.clone();
+        self.0.abortable_system.weak_spawner().spawn(Box::new(
+            async move {
+                debug!("Suspend server: {}, for: {} seconds", address, suspend_timeout_sec);
+                tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
+                let _ = self_clone.resume_server(address).await;
+            }
+            .boxed(),
+        ));
+    }
+
+    async fn resume_server(self, address: String) -> Result<(), String> {
+        debug!("Resume holding address: {}", address);
+        let mut guard = self.0.guarded.lock().await;
+        let priority = guard.conn_ctxs.get(&address).expect("").conn_settings.priority.clone();
+        match priority {
+            Priority::Primary => guard.queue.primary.push_back(address.clone()),
+            Priority::Secondary => guard.queue.backup.push_back(address.clone()),
+        }
+        let conn_ctx = guard.conn_ctxs.get(&address).expect("");
+
+        if let Some(active) = guard.active.clone() {
+            let active_ctx = guard.conn_ctxs.get(&active).expect("");
+            let active_priority = &active_ctx.conn_settings.priority;
+            if let (Priority::Secondary, Priority::Primary) = (active_priority, priority) {
+                let conn_settings = conn_ctx.conn_settings.clone();
+                let event_handlers = guard.event_handlers.clone();
+                let conn_spawner = conn_ctx.abortable_system.weak_spawner();
+                drop(guard);
+                if let Ok(()) = self
+                    .clone()
+                    .connect_to(conn_settings, event_handlers, conn_spawner)
+                    .await
+                {
+                    let mut guard = self.0.guarded.lock().await;
+                    Self::reset_connection_context(
+                        &mut guard,
+                        &active,
+                        self.0.abortable_system.create_subsystem().unwrap(),
+                    )?;
+                    ConnMngImpl::set_active_conn(&mut guard, address.clone())?;
+                } else {
+                    self.suspend_server(address).await?;
+                }
+            }
+        } else {
+            drop(guard);
+            let _ = self.connect().await;
+        };
+        Ok(())
+    }
+
+    fn reset_connection_context(
         state: &mut MutexGuard<'_, ConnMngState>,
         address: &str,
         abortable_system: AbortableQueue,
     ) -> Result<(), String> {
-        debug!("Cancel connection: {}", address);
+        debug!("Reset connection context for: {}", address);
         let mut conn_ctx = state.conn_ctxs.get_mut(address).expect("TODO");
         conn_ctx.abortable_system.abort_all().map_err(|err| {
             ERRL!(
@@ -2644,6 +2702,21 @@ impl ConnMng {
         })?;
         conn_ctx.connection.take();
         conn_ctx.abortable_system = abortable_system;
+        Ok(())
+    }
+
+    fn register_connection(conn: ElectrumConnection, state: &mut MutexGuard<'_, ConnMngState>) -> Result<(), String> {
+        state
+            .conn_ctxs
+            .get_mut(&conn.addr)
+            .ok_or_else(|| {
+                format!(
+                    "Failed to get connection ctx to replace established conn for: {}",
+                    conn.addr
+                )
+            })?
+            .connection
+            .replace(Arc::new(AsyncMutex::new(conn)));
         Ok(())
     }
 
@@ -2676,7 +2749,7 @@ impl ConnMng {
         Ok(())
     }
 
-    async fn reset_suspend_timeout(state: &mut MutexGuard<'_, ConnMngState>, address: &str) -> Result<(), String> {
+    fn reset_suspend_timeout(state: &mut MutexGuard<'_, ConnMngState>, address: &str) -> Result<(), String> {
         let suspend_timeout = &mut state
             .conn_ctxs
             .get_mut(address)
@@ -2688,32 +2761,6 @@ impl ConnMng {
         );
         *suspend_timeout = SUSPEND_TIMEOUT_INIT_SEC;
         Ok(())
-    }
-
-    async fn restore_server(self, addr: String) {
-        debug!("Put back the connection to addr: {} after timeout: {}", addr, 5);
-        let mut guard = self.0.guarded.lock().await;
-        match guard
-            .conn_ctxs
-            .get(&addr)
-            .as_ref()
-            .expect("TODO") // TODO: get rid of unwrap
-            .conn_settings
-            .priority
-        {
-            Priority::Primary => guard.queue.primary.push_back(addr),
-            Priority::Secondary => guard.queue.backup.push_back(addr),
-        }
-
-        if let Some(current_addr) = guard.active.as_ref() {
-            debug!(
-                "Electrum: {} - is currently active, may be it should be substituted with the primary one",
-                current_addr
-            );
-        } else {
-            drop(guard);
-            let _ = self.connect().await;
-        };
     }
 }
 
@@ -2781,50 +2828,34 @@ impl ConnMngTrait for ConnMng {
             (conn_settings, weak_spawner, event_handlers)
         };
         debug!("conn_settings: {:?}", conn_settings);
+        let address = conn_settings.url.clone();
+        self.connect_to(conn_settings, event_handlers, weak_spawner).await?;
+        ConnMngImpl::set_active_conn(&mut self.0.guarded.lock().await, address)
+    }
 
-        let (conn, verified_notify) = match spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone()) {
-            Ok((conn, on_connected_notify)) => (conn, on_connected_notify),
-            Err(err) => {
-                return ERR!("spawn_electrum: {}", err);
-            },
-        };
-        {
-            debug!("lock");
-            self.0
-                .guarded
-                .lock()
-                .await
-                .conn_ctxs
-                .get_mut(&conn.addr)
-                .unwrap()
-                .connection
-                .replace(Arc::new(AsyncMutex::new(conn)));
-            debug!("unlock");
-        }
+    async fn connect_to(
+        &self,
+        conn_settings: ElectrumConnSettings,
+        event_handlers: Vec<RpcTransportEventHandlerShared>,
+        weak_spawner: WeakSpawner,
+    ) -> Result<(), String> {
+        let (conn, verified_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
+        Self::register_connection(conn, &mut self.0.guarded.lock().await)?;
         let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
                 warn!("Failed to connect to: {}, timed out", conn_settings.url);
-                if let Err(err) = self.clone().suspend_server(conn_settings.url.clone()).await {
-                    error!("Failed to suspend server: {}, error: {}", conn_settings.url, err);
-                }
-                if let Err(err) = self.clone().connect().await {
-                error!(
-                    "Failed to reconnect after addr connection failed: {}, error: {}",
-                    conn_settings.url, err
-                );
-            }
+                self.clone().suspend_server(conn_settings.url.clone()).await.map_err(|err|
+                    ERRL!("Failed to suspend server: {}, error: {}", conn_settings.url, err)
+                )?;
+                self.clone().connect().await.map_err(|err|
+                    ERRL!(
+                        "Failed to reconnect after addr connection failed: {}, error: {}",
+                        conn_settings.url, err
+                    ))
             },
-            _ = verified_notify.notified() => {
-                debug!("Verified: {}, guard: {:?}", conn_settings.url, self.0.guarded);
-                let mut guard = self.0.guarded.lock().await;
-                guard.active.replace(conn_settings.url);
-                drop(guard);
-                debug!("Unlock verified guard");
-            }
+            _ = verified_notify.notified() => Ok(())
         }
-
-        Ok(())
     }
 
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
@@ -2834,13 +2865,6 @@ impl ConnMngTrait for ConnMng {
     async fn register(&self, handler: RpcTransportEventHandlerShared) {
         let mut guard = self.0.guarded.lock().await;
         guard.event_handlers.push(handler)
-    }
-
-    async fn on_verified(&self, address: String) {
-        debug!("On connection verified: {}", address);
-        if let Err(err) = self.0.set_active_conn(address).await {
-            error!("Failed to process on_verified, error: {}", err);
-        }
     }
 
     fn on_disconnected(&self, address: String) {
@@ -2866,10 +2890,19 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
         self.deref().get_conn(address).await
     }
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
+    async fn connect_to(
+        &self,
+        conn_settings: ElectrumConnSettings, // TODO: conn_setting should be more abstract
+        event_handlers: Vec<RpcTransportEventHandlerShared>,
+        weak_spawner: WeakSpawner,
+    ) -> Result<(), String> {
+        self.deref()
+            .connect_to(conn_settings, event_handlers, weak_spawner)
+            .await
+    }
     async fn is_connected(&self) -> bool { self.deref().is_connected().await }
     async fn remove_server(&self, address: String) -> Result<(), String> { self.deref().remove_server(address).await }
     async fn register(&self, handler: RpcTransportEventHandlerShared) { self.deref().register(handler).await; }
-    async fn on_verified(&self, address: String) { self.deref().on_verified(address).await }
     fn on_disconnected(&self, address: String) { self.deref().on_disconnected(address) }
 }
 
@@ -2935,9 +2968,8 @@ impl ConnMngImpl {
         Ok(())
     }
 
-    async fn set_active_conn(&self, address: String) -> Result<(), String> {
-        let mut guard = self.guarded.lock().await;
-        ConnMng::reset_suspend_timeout(&mut guard, &address).await?;
+    fn set_active_conn(guard: &mut MutexGuard<'_, ConnMngState>, address: String) -> Result<(), String> {
+        ConnMng::reset_suspend_timeout(guard, &address)?;
         if let Some(active) = guard.active.replace(address) {
             return ERR!("Failed to set active connection, already was set as: {}", active);
         };
