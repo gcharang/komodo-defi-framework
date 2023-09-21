@@ -6,6 +6,7 @@ use crate::utxo::{output_script, sat_from_big_decimal, GetBlockHeaderError, GetC
                   GetTxHeightError};
 use crate::{big_decimal_from_sat_unsigned, NumConversError, RpcTransportEventHandler, RpcTransportEventHandlerShared};
 use async_trait::async_trait;
+use bytes::Buf;
 use chain::{BlockHeader, BlockHeaderBits, BlockHeaderNonce, OutPoint, Transaction as UtxoTx};
 use common::custom_futures::timeout::FutureTimerExt;
 use common::custom_iter::{CollectInto, TryIntoGroupMap};
@@ -22,6 +23,7 @@ use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::future::{join_all, FutureExt, TryFutureExt};
 use futures::lock::{Mutex as AsyncMutex, MutexGuard};
 use futures::{select, StreamExt};
+use futures01::future::select_ok;
 use futures01::sync::mpsc;
 use futures01::{Future, Sink, Stream};
 use http::Uri;
@@ -53,6 +55,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use common::custom_futures::select_ok_sequential;
 use common::executor::abortable_queue::WeakSpawner;
 use tokio::sync::Notify;
 
@@ -1551,7 +1554,7 @@ impl ElectrumConnection {
 
     //async fn reset_protocol_version(&self) { *self.protocol_version.lock().await = None; }
 
-    async fn is_protocol_version_verified(&self) -> bool { self.protocol_version.lock().await.is_some() }
+    // async fn is_protocol_version_verified(&self) -> bool { self.protocol_version.lock().await.is_some() }
 }
 
 #[derive(Debug)]
@@ -1686,63 +1689,51 @@ async fn electrum_request_multi(
     client: ElectrumClient,
     request: JsonRpcRequestEnum,
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
-    let Some(bind) = client.conn_mng.get_conn().await else {
+    let mut futures = vec![];
+    let connections = client.conn_mng.get_conn().await;
+
+    for (i, connection) in connections.iter().enumerate() {
+        let connection = connection.lock().await;
+        if client.negotiate_version && connection.protocol_version.lock().await.is_none() {
+            continue;
+        }
+
+        let connection_addr = connection.addr.clone();
+        let json = json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string()))?;
+        if let Some(tx) = &*connection.tx.lock().await {
+            let fut = electrum_request(
+                json,
+                request.rpc_id(),
+                tx.clone(),
+                connection.responses.clone(),
+                ELECTRUM_TIMEOUT_SEC / (connections.len() - i) as u64,
+            )
+            .map(|response| (JsonRpcRemoteAddr(connection_addr), response));
+            futures.push(fut)
+        };
+    }
+    drop(connections);
+
+    if futures.is_empty() {
         return Err(JsonRpcErrorType::Transport(
             "All electrums are currently disconnected".to_string(),
         ));
-    };
-
-    let conn_guard = bind.lock().await;
-
-    if client.negotiate_version && conn_guard.protocol_version.lock().await.is_none() {
-        return Err(JsonRpcErrorType::Transport(
-            "Protocol version is not negotiated".to_string(),
-        ));
     }
 
-    let connection_addr = conn_guard.addr.clone();
-    let json = json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string()))?;
+    if let JsonRpcRequestEnum::Single(single) = &request {
+        if single.method == "server.ping" {
+            // server.ping must be sent to all servers to keep all connections alive
+            return select_ok(futures).map(|(result, _)| result).compat().await;
+        }
+    }
 
-    let Some(tx) = &*conn_guard.tx.lock().await else {
-         return Err(JsonRpcErrorType::Transport(
-            "Sender is not set".to_string()
-        ))
-    };
+    let (res, no_of_failed_requests) = select_ok_sequential(futures)
+        .compat()
+        .await
+        .map_err(|e| JsonRpcErrorType::Transport(format!("{:?}", e)))?;
+    client.rotate_servers(no_of_failed_requests).await;
 
-    let res = electrum_request(
-        json,
-        request.rpc_id(),
-        tx.clone(),
-        conn_guard.responses.clone(),
-        ELECTRUM_TIMEOUT_SEC,
-    )
-    .map(|response| (JsonRpcRemoteAddr(connection_addr), response))
-    .compat()
-    .await?;
     Ok(res)
-
-    // let connections = client.connections.lock().await;
-    // for (i, connection) in connections.iter().enumerate() {
-    //     if client.negotiate_version && connection.protocol_version.lock().await.is_none() {
-    //         continue;
-    //     }
-    //
-    //     let connection_addr = connection.addr.clone();
-    //     let json = json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string()))?;
-    //     if let Some(tx) = &*connection.tx.lock().await {
-    //         let fut = electrum_request(
-    //             json,
-    //             request.rpc_id(),
-    //             tx.clone(),
-    //             connection.responses.clone(),
-    //             ELECTRUM_TIMEOUT_SEC / (connections.len() - i) as u64,
-    //         )
-    //         .map(|response| (JsonRpcRemoteAddr(connection_addr), response));
-    //         futures.push(fut)
-    //     }
-    // }
-    // drop(connections);
-    //
 }
 
 async fn electrum_request_to(
@@ -1811,15 +1802,15 @@ impl ElectrumClientImpl {
     /// Check if all connections have been removed.
     pub async fn is_connections_pool_empty(&self) -> bool { self.connections.lock().await.is_empty() }
 
-    /// Check if the protocol version was checked for one of the spawned connections.
-    pub async fn is_protocol_version_verified(&self) -> bool {
-        let Some(conn_mut) = self.conn_mng.get_conn().await else {
-            error!("Failed to check if protocol version is verified, no connection");
-            return false;
-        };
-        let is_verified = conn_mut.lock().await.is_protocol_version_verified().await;
-        is_verified
-    }
+    // /// Check if the protocol version was checked for one of the spawned connections.
+    // pub async fn is_protocol_version_verified(&self) -> bool {
+    //     let Some(conn_mut) = self.conn_mng.get_conn().await else {
+    //         error!("Failed to check if protocol version is verified, no connection");
+    //         return false;
+    //     };
+    //     let is_verified = conn_mut.lock().await.is_protocol_version_verified().await;
+    //     is_verified
+    // }
 
     /// Set the protocol version for the specified server.
     pub async fn set_protocol_version(&self, server_addr: &str, version: f32) -> Result<(), String> {
@@ -2546,7 +2537,7 @@ impl UtxoRpcClientOps for ElectrumClient {
 /// Trait
 #[async_trait]
 trait ConnMngTrait: Debug {
-    async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
+    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>>;
     async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
     async fn connect(&self) -> Result<(), String>;
 
@@ -2557,7 +2548,7 @@ trait ConnMngTrait: Debug {
 }
 
 #[derive(Debug)]
-struct ConnMngImpl {
+struct ConnMngPrioritizedImpl {
     guarded: AsyncMutex<ConnMngState>,
     abortable_system: AbortableQueue,
 }
@@ -2576,13 +2567,13 @@ struct ElectrumConnCtx {
     conn_settings: ElectrumConnSettings,
     abortable_system: AbortableQueue,
     suspend_timeout_sec: u64,
-    connection: Option<Arc<AsyncMutex<ElectrumConnection>>>, // TODO: check if thid could not be guarded and hidden under the Arc.
+    connection: Option<Arc<AsyncMutex<ElectrumConnection>>>,
 }
 
 #[derive(Clone, Debug)]
-struct ConnMng(Arc<ConnMngImpl>);
+struct ConnMngPrioritized(Arc<ConnMngPrioritizedImpl>);
 
-impl ConnMng {
+impl ConnMngPrioritized {
     async fn suspend_server(self, address: String) -> Result<(), String> {
         debug!(
             "About to suspend connection to addr: {}, timeout: {}, guard: {:?}",
@@ -2672,7 +2663,7 @@ impl ConnMng {
                         &active,
                         self.0.abortable_system.create_subsystem().unwrap(),
                     )?;
-                    ConnMngImpl::set_active_conn(&mut guard, address.clone())?;
+                    ConnMngPrioritizedImpl::set_active_conn(&mut guard, address.clone())?;
                 }
             }
         } else {
@@ -2785,12 +2776,24 @@ struct ConnMngQueue {
 }
 
 #[async_trait]
-impl ConnMngTrait for ConnMng {
-    async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
+impl ConnMngTrait for ConnMngPrioritized {
+    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> {
         debug!("Getting available connection");
         let guard = self.0.guarded.lock().await;
-        let address: String = guard.active.as_ref().cloned()?;
-        guard.conn_ctxs.get(&address).map(|ctx| ctx.connection.clone())?
+        let Some(address) = guard.active.as_ref().cloned() else {
+            return vec![];
+        };
+
+        let Some(conn_ctx) = guard.conn_ctxs.get(&address) else {
+            error!("Failed to get conn_ctx for address: {}", address);
+            return vec![];
+        };
+
+        if let Some(conn) = conn_ctx.connection.clone() {
+            vec![conn]
+        } else {
+            vec![]
+        }
     }
 
     async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
@@ -2802,7 +2805,7 @@ impl ConnMngTrait for ConnMng {
     async fn connect(&self) -> Result<(), String> {
         let weak_spawner = self.0.abortable_system.weak_spawner();
 
-        struct ConnectingStateCtx(ConnMng, WeakSpawner);
+        struct ConnectingStateCtx(ConnMngPrioritized, WeakSpawner);
         impl Drop for ConnectingStateCtx {
             fn drop(&mut self) {
                 let spawner = self.1.clone();
@@ -2814,21 +2817,21 @@ impl ConnMngTrait for ConnMng {
             }
         }
 
-        if self.0.guarded.lock().await.connecting.load(AtomicOrdering::Relaxed) {
-            debug!("Skip concurrent connecting, already is in process");
-            return Ok(());
-        }
-
-        let _connecting_state_ctx = ConnectingStateCtx(self.clone(), weak_spawner.clone());
-
         while let Some((conn_settings, weak_spawner, event_handlers)) = {
+            if self.0.guarded.lock().await.connecting.load(AtomicOrdering::Relaxed) {
+                debug!("Skip concurrent connecting, already is in process");
+                return Ok(());
+            }
+
+            let _connecting_state_ctx = ConnectingStateCtx(self.clone(), weak_spawner.clone());
+
             let guard = self.0.guarded.lock().await;
             if guard.active.is_some() {
                 return ERR!("Failed to connect, already connected");
             }
             debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
             debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-            if let Some((conn_settings, weak_spawner)) = ConnMngImpl::get_settings_to_connect(&guard).await {
+            if let Some((conn_settings, weak_spawner)) = ConnMngPrioritizedImpl::get_settings_to_connect(&guard).await {
                 Some((conn_settings, weak_spawner, guard.event_handlers.clone()))
             } else {
                 warn!("Failed to connect, no connection settings found");
@@ -2839,7 +2842,7 @@ impl ConnMngTrait for ConnMng {
             let address = conn_settings.url.clone();
             match self.connect_to(conn_settings, event_handlers, weak_spawner).await {
                 Ok(_) => {
-                    ConnMngImpl::set_active_conn(&mut self.0.guarded.lock().await, address)?;
+                    ConnMngPrioritizedImpl::set_active_conn(&mut self.0.guarded.lock().await, address)?;
                     break;
                 },
                 Err(_) => {
@@ -2881,7 +2884,7 @@ impl ConnMngTrait for ConnMng {
 
 #[async_trait]
 impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
-    async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>> { self.deref().get_conn().await }
+    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> { self.deref().get_conn().await }
     async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
         self.deref().get_conn_by_address(address).await
     }
@@ -2894,12 +2897,12 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
     fn on_disconnected(&self, address: String) { self.deref().on_disconnected(address) }
 }
 
-impl ConnMngImpl {
+impl ConnMngPrioritizedImpl {
     fn new(
         servers: Vec<ElectrumConnSettings>,
         abortable_system: AbortableQueue,
         event_handlers: Vec<RpcTransportEventHandlerShared>,
-    ) -> ConnMngImpl {
+    ) -> ConnMngPrioritizedImpl {
         let mut primary: LinkedList<String> = LinkedList::new();
         let mut backup: LinkedList<String> = LinkedList::new();
         let mut abortable_systems: BTreeMap<String, ElectrumConnCtx> = BTreeMap::new();
@@ -2916,7 +2919,7 @@ impl ConnMngImpl {
             });
         }
 
-        ConnMngImpl {
+        ConnMngPrioritizedImpl {
             guarded: AsyncMutex::new(ConnMngState {
                 connecting: AtomicBool::new(false),
                 event_handlers,
@@ -2955,7 +2958,7 @@ impl ConnMngImpl {
     }
 
     fn set_active_conn(guard: &mut MutexGuard<'_, ConnMngState>, address: String) -> Result<(), String> {
-        ConnMng::reset_suspend_timeout(guard, &address)?;
+        ConnMngPrioritized::reset_suspend_timeout(guard, &address)?;
         let _ = guard.active.replace(address);
         Ok(())
     }
@@ -2974,7 +2977,7 @@ impl ElectrumClientImpl {
         abortable_system: AbortableQueue,
         negotiate_version: bool,
     ) -> ElectrumClientImpl {
-        let conn_mng = Arc::new(ConnMng(Arc::new(ConnMngImpl::new(
+        let conn_mng = Arc::new(ConnMngPrioritized(Arc::new(ConnMngPrioritizedImpl::new(
             servers,
             abortable_system,
             event_handlers.clone(),
