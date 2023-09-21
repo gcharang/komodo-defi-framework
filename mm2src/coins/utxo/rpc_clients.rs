@@ -2551,12 +2551,7 @@ impl UtxoRpcClientOps for ElectrumClient {
 trait ConnMngTrait: Debug {
     async fn get_conn(&self, address: Option<&str>) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
     async fn connect(&self) -> Result<(), String>;
-    async fn connect_to(
-        &self,
-        conn_settings: ElectrumConnSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
-        weak_spawner: WeakSpawner,
-    ) -> Result<(), String>;
+
     async fn is_connected(&self) -> bool;
     async fn remove_server(&self, address: String) -> Result<(), String>;
     async fn register(&self, handler: RpcTransportEventHandlerShared);
@@ -2762,6 +2757,31 @@ impl ConnMng {
         *suspend_timeout = SUSPEND_TIMEOUT_INIT_SEC;
         Ok(())
     }
+
+    async fn connect_to(
+        &self,
+        conn_settings: ElectrumConnSettings,
+        event_handlers: Vec<RpcTransportEventHandlerShared>,
+        weak_spawner: WeakSpawner,
+    ) -> Result<(), String> {
+        let (conn, verified_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
+        Self::register_connection(conn, &mut self.0.guarded.lock().await)?;
+        let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
+                warn!("Failed to connect to: {}, timed out", conn_settings.url);
+                self.clone().suspend_server(conn_settings.url.clone()).await.map_err(|err|
+                    ERRL!("Failed to suspend server: {}, error: {}", conn_settings.url, err)
+                )?;
+                self.clone().connect().await.map_err(|err|
+                    ERRL!(
+                        "Failed to reconnect after addr connection failed: {}, error: {}",
+                        conn_settings.url, err
+                    ))
+            },
+            _ = verified_notify.notified() => Ok(())
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -2810,52 +2830,21 @@ impl ConnMngTrait for ConnMng {
         let _connecting_state_ctx = ConnectingStateCtx(self.clone(), weak_spawner.clone());
 
         let (conn_settings, weak_spawner, event_handlers) = {
-            debug!("Try lock state: {:?}", self.0.guarded);
             let guard = self.0.guarded.lock().await;
-
             if guard.active.is_some() {
                 return ERR!("Failed to connect, already connected");
             }
             debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
             debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-
-            let Some((conn_settings, weak_spawner)) =
-                ConnMngImpl::get_settings_to_connect(&guard).await
-                else {
-                    return ERR!("Failed to connect, no settings");
-                };
-            let event_handlers = guard.event_handlers.clone();
-            (conn_settings, weak_spawner, event_handlers)
+            let (conn_settings, weak_spawner) = ConnMngImpl::get_settings_to_connect(&guard)
+                .await
+                .ok_or_else(|| ERRL!("Failed to connect, no connection settings found"))?;
+            (conn_settings, weak_spawner, guard.event_handlers.clone())
         };
-        debug!("conn_settings: {:?}", conn_settings);
+        debug!("Got conn_settings to connect to: {:?}", conn_settings);
         let address = conn_settings.url.clone();
         self.connect_to(conn_settings, event_handlers, weak_spawner).await?;
         ConnMngImpl::set_active_conn(&mut self.0.guarded.lock().await, address)
-    }
-
-    async fn connect_to(
-        &self,
-        conn_settings: ElectrumConnSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
-        weak_spawner: WeakSpawner,
-    ) -> Result<(), String> {
-        let (conn, verified_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
-        Self::register_connection(conn, &mut self.0.guarded.lock().await)?;
-        let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
-                warn!("Failed to connect to: {}, timed out", conn_settings.url);
-                self.clone().suspend_server(conn_settings.url.clone()).await.map_err(|err|
-                    ERRL!("Failed to suspend server: {}, error: {}", conn_settings.url, err)
-                )?;
-                self.clone().connect().await.map_err(|err|
-                    ERRL!(
-                        "Failed to reconnect after addr connection failed: {}, error: {}",
-                        conn_settings.url, err
-                    ))
-            },
-            _ = verified_notify.notified() => Ok(())
-        }
     }
 
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
@@ -2890,16 +2879,7 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
         self.deref().get_conn(address).await
     }
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
-    async fn connect_to(
-        &self,
-        conn_settings: ElectrumConnSettings, // TODO: conn_setting should be more abstract
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
-        weak_spawner: WeakSpawner,
-    ) -> Result<(), String> {
-        self.deref()
-            .connect_to(conn_settings, event_handlers, weak_spawner)
-            .await
-    }
+
     async fn is_connected(&self) -> bool { self.deref().is_connected().await }
     async fn remove_server(&self, address: String) -> Result<(), String> { self.deref().remove_server(address).await }
     async fn register(&self, handler: RpcTransportEventHandlerShared) { self.deref().register(handler).await; }
@@ -2945,9 +2925,7 @@ impl ConnMngImpl {
     ) -> Option<(ElectrumConnSettings, WeakSpawner)> {
         let mut iter = guard.queue.primary.iter().chain(guard.queue.backup.iter());
         let addr = iter.next()?.clone();
-        debug!("conn_mnt ctx unlocked, conn_mng got address: {}", addr);
-
-        let conn_ctx = guard.conn_ctxs.get(&addr).expect("TODO");
+        let conn_ctx = guard.conn_ctxs.get(&addr)?;
         Some((conn_ctx.conn_settings.clone(), conn_ctx.abortable_system.weak_spawner()))
     }
 
