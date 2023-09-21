@@ -1,8 +1,15 @@
-```toc
+`komodefi-cli` provides a CLI interface and facilitates interoperating to komodo defi platform via the `mm2` service. It's a multi-purpose utility that facilitates using komodo platform to be used as a multi-chain Wallet and DEX at the same time.
+
+## Build
+
+The `komodefi-cli` binary file can be built in the root of the project using the following commands:
+
+```sh
+export PATH=${PATH}:$(pwd)/bin
+cargo build --manifest-path=mm2src/adex_cli/Cargo.toml --out-dir bin -Z unstable-options
 ```
 
-
-`komodefi-cli` provides a CLI interface and facilitates interoperating to komodo defi platform via the `mm2` service. It's a multi-purpose utility that facilitates using komodo platform to be used as a multi-chain Wallet and DEX at the same time.
+Now `komodefi-cli` is built and available in the `bin` directory and can be called, as is done in the current reference examples.
 
 ## Manage mm2 service
 
