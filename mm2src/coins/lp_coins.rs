@@ -3427,6 +3427,8 @@ pub async fn balance_event_loop(ctx: MmArc) {
         let coins: Vec<MmCoinEnum> = coins_mutex
             .values()
             .filter_map(|coin| {
+                // We loop this over every 5 seconds, so it's not necessary to sequentially load the atomics all over
+                // the threads, since the cost of it is way too higher than the `AtomicOrdering::Relaxed`
                 if coin.is_available.load(AtomicOrdering::Relaxed) && coin.inner.is_platform_coin() {
                     Some(coin.inner.clone())
                 } else {
@@ -3435,6 +3437,8 @@ pub async fn balance_event_loop(ctx: MmArc) {
             })
             .collect();
 
+        // Similar to above, we don't need to held the lock(which will block all other processes that depends
+        // on this lock(like coin activation)) since we loop this over continuously.
         drop(coins_mutex);
 
         for coin in coins {
