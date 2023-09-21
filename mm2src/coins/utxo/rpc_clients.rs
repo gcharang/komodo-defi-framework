@@ -1695,7 +1695,6 @@ async fn electrum_request_multi(
 
     let conn_guard = bind.lock().await;
 
-    debug!("Connection locked: {}", conn_guard.addr);
     if client.negotiate_version && conn_guard.protocol_version.lock().await.is_none() {
         return Err(JsonRpcErrorType::Transport(
             "Protocol version is not negotiated".to_string(),
@@ -1721,7 +1720,6 @@ async fn electrum_request_multi(
     .map(|response| (JsonRpcRemoteAddr(connection_addr), response))
     .compat()
     .await?;
-    debug!("Connection unlocked: {}", conn_guard.addr);
     Ok(res)
 
     // let connections = client.connections.lock().await;
@@ -2658,11 +2656,16 @@ impl ConnMng {
                 let event_handlers = guard.event_handlers.clone();
                 let conn_spawner = conn_ctx.abortable_system.weak_spawner();
                 drop(guard);
-                if let Ok(()) = self
+                if let Err(err) = self
                     .clone()
                     .connect_to(conn_settings, event_handlers, conn_spawner)
                     .await
                 {
+                    error!("Failed to resume: {}", err);
+                    self.suspend_server(address.clone())
+                        .await
+                        .map_err(|err| ERRL!("Failed to suspend server: {}, error: {}", address, err))?;
+                } else {
                     let mut guard = self.0.guarded.lock().await;
                     Self::reset_connection_context(
                         &mut guard,
@@ -2670,8 +2673,6 @@ impl ConnMng {
                         self.0.abortable_system.create_subsystem().unwrap(),
                     )?;
                     ConnMngImpl::set_active_conn(&mut guard, address.clone())?;
-                } else {
-                    self.suspend_server(address).await?;
                 }
             }
         } else {
@@ -2770,14 +2771,7 @@ impl ConnMng {
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
                 warn!("Failed to connect to: {}, timed out", conn_settings.url);
-                self.clone().suspend_server(conn_settings.url.clone()).await.map_err(|err|
-                    ERRL!("Failed to suspend server: {}, error: {}", conn_settings.url, err)
-                )?;
-                self.clone().connect().await.map_err(|err|
-                    ERRL!(
-                        "Failed to reconnect after addr connection failed: {}, error: {}",
-                        conn_settings.url, err
-                    ))
+                ERR!("Timed out: {}", conn_settings.url)
             },
             _ = verified_notify.notified() => Ok(())
         }
@@ -2829,22 +2823,36 @@ impl ConnMngTrait for ConnMng {
 
         let _connecting_state_ctx = ConnectingStateCtx(self.clone(), weak_spawner.clone());
 
-        let (conn_settings, weak_spawner, event_handlers) = {
+        while let Some((conn_settings, weak_spawner, event_handlers)) = {
             let guard = self.0.guarded.lock().await;
             if guard.active.is_some() {
                 return ERR!("Failed to connect, already connected");
             }
             debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
             debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-            let (conn_settings, weak_spawner) = ConnMngImpl::get_settings_to_connect(&guard)
-                .await
-                .ok_or_else(|| ERRL!("Failed to connect, no connection settings found"))?;
-            (conn_settings, weak_spawner, guard.event_handlers.clone())
-        };
-        debug!("Got conn_settings to connect to: {:?}", conn_settings);
-        let address = conn_settings.url.clone();
-        self.connect_to(conn_settings, event_handlers, weak_spawner).await?;
-        ConnMngImpl::set_active_conn(&mut self.0.guarded.lock().await, address)
+            if let Some((conn_settings, weak_spawner)) = ConnMngImpl::get_settings_to_connect(&guard).await {
+                Some((conn_settings, weak_spawner, guard.event_handlers.clone()))
+            } else {
+                warn!("Failed to connect, no connection settings found");
+                None
+            }
+        } {
+            debug!("Got conn_settings to connect to: {:?}", conn_settings);
+            let address = conn_settings.url.clone();
+            match self.connect_to(conn_settings, event_handlers, weak_spawner).await {
+                Ok(_) => {
+                    ConnMngImpl::set_active_conn(&mut self.0.guarded.lock().await, address)?;
+                    break;
+                },
+                Err(err) => {
+                    self.clone()
+                        .suspend_server(address.clone())
+                        .await
+                        .map_err(|err| ERRL!("Failed to suspend server: {}, error: {}", address, err))?;
+                },
+            };
+        }
+        Ok(())
     }
 
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
@@ -2879,7 +2887,6 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
         self.deref().get_conn(address).await
     }
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
-
     async fn is_connected(&self) -> bool { self.deref().is_connected().await }
     async fn remove_server(&self, address: String) -> Result<(), String> { self.deref().remove_server(address).await }
     async fn register(&self, handler: RpcTransportEventHandlerShared) { self.deref().register(handler).await; }
@@ -2948,9 +2955,7 @@ impl ConnMngImpl {
 
     fn set_active_conn(guard: &mut MutexGuard<'_, ConnMngState>, address: String) -> Result<(), String> {
         ConnMng::reset_suspend_timeout(guard, &address)?;
-        if let Some(active) = guard.active.replace(address) {
-            return ERR!("Failed to set active connection, already was set as: {}", active);
-        };
+        let _ = guard.active.replace(address);
         Ok(())
     }
 
