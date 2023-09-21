@@ -970,6 +970,12 @@ impl TableSignature for NftListTable {
             table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
             table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
             table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
+            table.create_multi_index(
+                Self::CHAIN_ANIMATION_DOMAIN_INDEX,
+                &["chain", "animation_domain"],
+                false,
+            )?;
+            table.create_multi_index(Self::CHAIN_EXTERNAL_DOMAIN_INDEX, &["chain", "external_domain"], false)?;
             table.create_index("chain", false)?;
             table.create_index("block_number", false)?;
         }
