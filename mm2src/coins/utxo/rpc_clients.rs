@@ -1686,8 +1686,7 @@ async fn electrum_request_multi(
     client: ElectrumClient,
     request: JsonRpcRequestEnum,
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
-    // TODO: this method is getting redundant
-    let Some(bind) = client.conn_mng.get_conn(None).await else {
+    let Some(bind) = client.conn_mng.get_conn().await else {
         return Err(JsonRpcErrorType::Transport(
             "All electrums are currently disconnected".to_string(),
         ));
@@ -1759,7 +1758,7 @@ async fn electrum_request_to(
         //     .ok_or_else()?;
 
         //TODO: @rozhkovdmitrii, look at where this function is called with a certain address
-        let conn_opt = client.conn_mng.get_conn(Some(to_addr.as_ref())).await;
+        let conn_opt = client.conn_mng.get_conn_by_address(to_addr.as_ref()).await;
         let conn =
             conn_opt.ok_or_else(|| JsonRpcErrorType::Internal(format!("Unknown destination address {}", to_addr)))?;
         let guard = conn.lock().await;
@@ -1793,7 +1792,7 @@ impl ElectrumClientImpl {
     pub fn set_weak(&self, self_weak: Weak<ElectrumClientImpl>) { self.weak_self.lock().replace(self_weak); }
 
     pub async fn register(&self, handler: RpcTransportEventHandlerShared) {
-        self.conn_mng.register(handler.clone()).await;
+        self.conn_mng.set_rpc_enent_handler(handler.clone()).await;
     }
 
     pub async fn connect(&self) -> Result<(), String> {
@@ -1814,7 +1813,7 @@ impl ElectrumClientImpl {
 
     /// Check if the protocol version was checked for one of the spawned connections.
     pub async fn is_protocol_version_verified(&self) -> bool {
-        let Some(conn_mut) = self.conn_mng.get_conn(None).await else {
+        let Some(conn_mut) = self.conn_mng.get_conn().await else {
             error!("Failed to check if protocol version is verified, no connection");
             return false;
         };
@@ -1828,7 +1827,7 @@ impl ElectrumClientImpl {
             "Set protocol version for electrum server: {}, version: {}",
             server_addr, version
         );
-        let conn_opt = self.conn_mng.get_conn(Some(server_addr)).await;
+        let conn_opt = self.conn_mng.get_conn_by_address(server_addr).await;
         let conn = conn_opt.ok_or_else(|| ERRL!("Unknown electrum address {}", server_addr))?;
         conn.lock().await.set_protocol_version(version).await;
         Ok(())
@@ -2547,12 +2546,13 @@ impl UtxoRpcClientOps for ElectrumClient {
 /// Trait
 #[async_trait]
 trait ConnMngTrait: Debug {
-    async fn get_conn(&self, address: Option<&str>) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
+    async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
+    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
     async fn connect(&self) -> Result<(), String>;
 
     async fn is_connected(&self) -> bool;
     async fn remove_server(&self, address: String) -> Result<(), String>;
-    async fn register(&self, handler: RpcTransportEventHandlerShared);
+    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared);
     fn on_disconnected(&self, address: String);
 }
 
@@ -2786,19 +2786,17 @@ struct ConnMngQueue {
 
 #[async_trait]
 impl ConnMngTrait for ConnMng {
-    async fn get_conn(&self, address: Option<&str>) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
+    async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
+        debug!("Getting available connection");
+        let guard = self.0.guarded.lock().await;
+        let address: String = guard.active.as_ref().cloned()?;
+        guard.conn_ctxs.get(&address).map(|ctx| ctx.connection.clone())?
+    }
+
+    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
         debug!("Getting connection for address: {:?}", address);
         let guard = self.0.guarded.lock().await;
-
-        let address: String = {
-            if address.is_some() {
-                address.map(|internal| internal.to_string())
-            } else {
-                guard.active.as_ref().cloned()
-            }
-        }?;
-
-        guard.conn_ctxs.get(&address).map(|ctx| ctx.connection.clone())?
+        guard.conn_ctxs.get(address).map(|ctx| ctx.connection.clone())?
     }
 
     async fn connect(&self) -> Result<(), String> {
@@ -2844,7 +2842,7 @@ impl ConnMngTrait for ConnMng {
                     ConnMngImpl::set_active_conn(&mut self.0.guarded.lock().await, address)?;
                     break;
                 },
-                Err(err) => {
+                Err(_) => {
                     self.clone()
                         .suspend_server(address.clone())
                         .await
@@ -2859,7 +2857,7 @@ impl ConnMngTrait for ConnMng {
 
     async fn remove_server(&self, address: String) -> Result<(), String> { self.0.remove_server(address).await }
 
-    async fn register(&self, handler: RpcTransportEventHandlerShared) {
+    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
         let mut guard = self.0.guarded.lock().await;
         guard.event_handlers.push(handler)
     }
@@ -2883,13 +2881,16 @@ impl ConnMngTrait for ConnMng {
 
 #[async_trait]
 impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
-    async fn get_conn(&self, address: Option<&str>) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
-        self.deref().get_conn(address).await
+    async fn get_conn(&self) -> Option<Arc<AsyncMutex<ElectrumConnection>>> { self.deref().get_conn().await }
+    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
+        self.deref().get_conn_by_address(address).await
     }
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
     async fn is_connected(&self) -> bool { self.deref().is_connected().await }
     async fn remove_server(&self, address: String) -> Result<(), String> { self.deref().remove_server(address).await }
-    async fn register(&self, handler: RpcTransportEventHandlerShared) { self.deref().register(handler).await; }
+    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
+        self.deref().set_rpc_enent_handler(handler).await;
+    }
     fn on_disconnected(&self, address: String) { self.deref().on_disconnected(address) }
 }
 
