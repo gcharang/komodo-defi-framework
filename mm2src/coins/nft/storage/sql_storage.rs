@@ -467,6 +467,15 @@ fn update_transfers_meta_by_token_addr_id_sql(chain: &Chain) -> MmResult<String,
     Ok(sql)
 }
 
+fn update_transfer_spam_by_token_addr_id(chain: &Chain) -> MmResult<String, SqlError> {
+    let table_name = chain.transfer_history_table_name()?;
+    let sql = format!(
+        "UPDATE {} SET possible_spam = ?1 WHERE token_address = ?2 AND token_id = ?3;",
+        table_name
+    );
+    Ok(sql)
+}
+
 fn select_last_block_number_sql(table_name: String) -> MmResult<String, SqlError> {
     let sql = format!(
         "SELECT block_number FROM {} ORDER BY block_number DESC LIMIT 1",
@@ -1121,6 +1130,7 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
         &self,
         chain: &Chain,
         transfer_meta: TransferMeta,
+        set_spam: bool,
     ) -> MmResult<(), Self::Error> {
         let sql = update_transfers_meta_by_token_addr_id_sql(chain)?;
         let params = [
@@ -1130,6 +1140,12 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
             transfer_meta.image_url,
             transfer_meta.image_domain,
             transfer_meta.token_name,
+            Some(transfer_meta.token_address.clone()),
+            Some(transfer_meta.token_id.to_string()),
+        ];
+        let sql_spam = update_transfer_spam_by_token_addr_id(chain)?;
+        let params_spam = [
+            Some(i32::from(true).to_string()),
             Some(transfer_meta.token_address),
             Some(transfer_meta.token_id.to_string()),
         ];
@@ -1138,6 +1154,9 @@ impl NftTransferHistoryStorageOps for SqliteNftStorage {
             let mut conn = selfi.0.lock().unwrap();
             let sql_transaction = conn.transaction()?;
             sql_transaction.execute(&sql, params)?;
+            if set_spam {
+                sql_transaction.execute(&sql_spam, params_spam)?;
+            }
             sql_transaction.commit()?;
             Ok(())
         })

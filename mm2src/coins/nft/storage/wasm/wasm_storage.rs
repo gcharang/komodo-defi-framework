@@ -653,6 +653,7 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         &self,
         chain: &Chain,
         transfer_meta: TransferMeta,
+        set_spam: bool,
     ) -> MmResult<(), Self::Error> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -679,6 +680,9 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
             transfer.image_url = transfer_meta.image_url.clone();
             transfer.image_domain = transfer_meta.image_domain.clone();
             transfer.token_name = transfer_meta.token_name.clone();
+            if set_spam {
+                transfer.common.possible_spam = true;
+            }
             drop_mutability!(transfer);
 
             let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)

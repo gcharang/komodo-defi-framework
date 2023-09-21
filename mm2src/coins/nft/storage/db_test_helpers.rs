@@ -243,7 +243,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             amount: BigDecimal::from_str("1").unwrap(),
             verified: Some(1),
             operator: Some("0x4ff0bbc9b64d635a4696d1a38554fb2529c103ff".to_string()),
-            possible_spam: true,
+            possible_spam: false,
         },
         chain: Chain::Bsc,
         block_number: 25919780,
@@ -274,7 +274,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
             amount: BigDecimal::from_str("1").unwrap(),
             verified: Some(1),
             operator: None,
-            possible_spam: false,
+            possible_spam: true,
         },
         chain: Chain::Bsc,
         block_number: 28056726,
@@ -711,7 +711,7 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
         token_name: Some("Tiki box".to_string()),
     };
     storage
-        .update_transfers_meta_by_token_addr_id(&chain, transfer_meta)
+        .update_transfers_meta_by_token_addr_id(&chain, transfer_meta, true)
         .await
         .unwrap();
     let transfer_upd = storage
@@ -720,6 +720,7 @@ pub(crate) async fn test_get_update_transfer_meta_impl() {
         .unwrap();
     let transfer_upd = transfer_upd.get(0).unwrap();
     assert_eq!(transfer_upd.token_name, Some("Tiki box".to_string()));
+    assert!(transfer_upd.common.possible_spam);
 }
 
 pub(crate) async fn test_update_transfer_spam_by_token_address_impl() {

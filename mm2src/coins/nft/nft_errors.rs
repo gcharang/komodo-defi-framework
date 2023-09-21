@@ -183,6 +183,7 @@ pub enum UpdateNftError {
     GetInfoFromUriError(GetInfoFromUriError),
     #[from_stringify("serde_json::Error")]
     SerdeError(String),
+    ProtectFromSpamError(ProtectFromSpamError),
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -213,6 +214,10 @@ impl From<GetInfoFromUriError> for UpdateNftError {
     fn from(e: GetInfoFromUriError) -> Self { UpdateNftError::GetInfoFromUriError(e) }
 }
 
+impl From<ProtectFromSpamError> for UpdateNftError {
+    fn from(e: ProtectFromSpamError) -> Self { UpdateNftError::ProtectFromSpamError(e) }
+}
+
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -228,7 +233,8 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::InvalidHexString(_)
             | UpdateNftError::UpdateSpamPhishingError(_)
             | UpdateNftError::GetInfoFromUriError(_)
-            | UpdateNftError::SerdeError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::SerdeError(_)
+            | UpdateNftError::ProtectFromSpamError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

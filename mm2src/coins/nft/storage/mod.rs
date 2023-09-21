@@ -164,10 +164,13 @@ pub trait NftTransferHistoryStorageOps {
         log_index: u32,
     ) -> MmResult<Option<NftTransferHistory>, Self::Error>;
 
+    /// Updates the metadata for NFT transfers identified by their token address and ID.
+    /// Flags the transfers as `possible_spam` if `set_spam` is true.
     async fn update_transfers_meta_by_token_addr_id(
         &self,
         chain: &Chain,
         transfer_meta: TransferMeta,
+        set_spam: bool,
     ) -> MmResult<(), Self::Error>;
 
     async fn get_transfers_with_empty_meta(&self, chain: Chain) -> MmResult<Vec<NftTokenAddrId>, Self::Error>;

@@ -9,8 +9,8 @@ mod native_tests {
                                   PhishingDomainReq, PhishingDomainRes, SpamContractReq, SpamContractRes, UriMeta};
     use crate::nft::nft_tests::{BLOCKLIST_API_ENDPOINT, MORALIS_API_ENDPOINT_TEST, TEST_WALLET_ADDR_EVM};
     use crate::nft::storage::db_test_helpers::*;
-    use crate::nft::{check_and_redact_if_spam, check_moralis_ipfs_bafy, check_nft_metadata_for_spam,
-                     get_domain_from_url};
+    use crate::nft::{check_moralis_ipfs_bafy, get_domain_from_url, process_metadata_for_spam_link,
+                     process_text_for_spam_link};
     use common::block_on;
     use ethereum_types::Address;
     use mm2_net::native_http::send_request_to_uri;
@@ -42,33 +42,33 @@ mod native_tests {
     }
 
     #[test]
-    fn test_check_for_spam() {
+    fn test_check_for_spam_links() {
         let mut spam_text = Some("https://arweave.net".to_string());
-        assert!(check_and_redact_if_spam(&mut spam_text).unwrap());
+        assert!(process_text_for_spam_link(&mut spam_text, true).unwrap());
         let url_redacted = "URL redacted for user protection";
         assert_eq!(url_redacted, spam_text.unwrap());
 
         let mut spam_text = Some("ftp://123path ".to_string());
-        assert!(check_and_redact_if_spam(&mut spam_text).unwrap());
+        assert!(process_text_for_spam_link(&mut spam_text, true).unwrap());
         let url_redacted = "URL redacted for user protection";
         assert_eq!(url_redacted, spam_text.unwrap());
 
         let mut spam_text = Some("/192.168.1.1/some.example.org?type=A".to_string());
-        assert!(check_and_redact_if_spam(&mut spam_text).unwrap());
+        assert!(process_text_for_spam_link(&mut spam_text, true).unwrap());
         let url_redacted = "URL redacted for user protection";
         assert_eq!(url_redacted, spam_text.unwrap());
 
         let mut spam_text = Some(r"C:\Users\path\".to_string());
-        assert!(check_and_redact_if_spam(&mut spam_text).unwrap());
+        assert!(process_text_for_spam_link(&mut spam_text, true).unwrap());
         let url_redacted = "URL redacted for user protection";
         assert_eq!(url_redacted, spam_text.unwrap());
 
         let mut valid_text = Some("Hello my name is NFT (The best ever!)".to_string());
-        assert!(!check_and_redact_if_spam(&mut valid_text).unwrap());
+        assert!(!process_text_for_spam_link(&mut valid_text, true).unwrap());
         assert_eq!("Hello my name is NFT (The best ever!)", valid_text.unwrap());
 
         let mut nft = nft();
-        assert!(check_nft_metadata_for_spam(&mut nft).unwrap());
+        assert!(process_metadata_for_spam_link(&mut nft, true).unwrap());
         let meta_redacted = "{\"name\":\"URL redacted for user protection\",\"image\":\"https://tikimetadata.s3.amazonaws.com/tiki_box.png\"}";
         assert_eq!(meta_redacted, nft.common.metadata.unwrap())
     }

@@ -88,7 +88,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         .await?;
     if req.protect_from_spam {
         for nft in &mut nft_list.nfts {
-            protect_from_nft_spam(nft)?;
+            protect_from_nft_spam_links(nft, true)?;
         }
     }
     drop_mutability!(nft_list);
@@ -129,7 +129,7 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
             token_id: req.token_id.to_string(),
         })?;
     if req.protect_from_spam {
-        protect_from_nft_spam(&mut nft)?;
+        protect_from_nft_spam_links(&mut nft, true)?;
     }
     drop_mutability!(nft);
     Ok(nft)
@@ -170,7 +170,7 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
         .await?;
     if req.protect_from_spam {
         for transfer in &mut transfer_history_list.transfer_history {
-            protect_from_history_spam(transfer)?;
+            protect_from_history_spam_links(transfer, true)?;
         }
     }
     drop_mutability!(transfer_history_list);
@@ -212,24 +212,18 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         let nft_block = match NftListStorageOps::get_last_block_number(&storage, chain).await {
             Ok(Some(block)) => block,
             Ok(None) => {
-                // if there are no rows in NFT LIST table we can try to get all info from moralis.
-                let nfts = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url, &req.url_antispam).await?;
-                update_meta_in_transfers(&storage, chain, nfts).await?;
+                // if there are no rows in NFT LIST table we can try to get nft list from moralis.
+                let nft_list = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url, &req.url_antispam).await?;
+                update_meta_in_transfers(&storage, chain, nft_list).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
                 update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
                 update_phishing(&storage, chain, &req.url_antispam).await?;
                 continue;
             },
             Err(_) => {
-                // if there is an error, then NFT LIST table doesnt exist, so we need to cache from moralis.
+                // if there is an error, then NFT LIST table doesnt exist, so we need to cache nft list from moralis.
                 NftListStorageOps::init(&storage, chain).await?;
-                let nft_list = get_moralis_nft_list(&ctx, chain, &req.url, &req.url_antispam).await?;
-                let last_scanned_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, chain)
-                    .await?
-                    .unwrap_or(0);
-                storage
-                    .add_nfts_to_list(*chain, nft_list.clone(), last_scanned_block)
-                    .await?;
+                let nft_list = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url, &req.url_antispam).await?;
                 update_meta_in_transfers(&storage, chain, nft_list).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
                 update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
@@ -466,13 +460,23 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     nft_db.uri_meta = uri_meta;
     refresh_possible_spam(&storage, &req.chain, &mut nft_db, &req.url_antispam).await?;
     refresh_possible_phishing(&storage, &req.chain, domains, &mut nft_db, &req.url_antispam).await?;
-    drop_mutability!(nft_db);
     storage
         .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
         .await?;
-    let transfer_meta = TransferMeta::from(nft_db.clone());
+    update_transfer_meta_using_nft(&storage, &req.chain, &mut nft_db).await?;
+    Ok(())
+}
+
+/// The `update_transfer_meta_using_nft` function updates the transfer metadata associated with the given NFT.
+/// If metadata info contains potential spam links, function sets `possible_spam` true.
+async fn update_transfer_meta_using_nft<T>(storage: &T, chain: &Chain, nft: &mut Nft) -> MmResult<(), UpdateNftError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
+    let set_spam = protect_from_nft_spam_links(nft, false)?;
+    let transfer_meta = TransferMeta::from(nft.clone());
     storage
-        .update_transfers_meta_by_token_addr_id(&nft_db.chain, transfer_meta)
+        .update_transfers_meta_by_token_addr_id(chain, transfer_meta, set_spam)
         .await?;
     Ok(())
 }
@@ -581,7 +585,8 @@ async fn get_moralis_nft_list(
                     Some(contract_type) => contract_type,
                     None => continue,
                 };
-                let nft = build_nft_from_moralis(*chain, nft_moralis, contract_type, url_antispam).await;
+                let mut nft = build_nft_from_moralis(*chain, nft_moralis, contract_type, url_antispam).await;
+                protect_from_nft_spam_links(&mut nft, false)?;
                 // collect NFTs from the page
                 res_list.push(nft);
             }
@@ -857,7 +862,7 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTransferHistoryStorageOps>
     chain: &Chain,
     transfer: NftTransferHistory,
 ) -> MmResult<(), UpdateNftError> {
-    let nft_db = storage
+    storage
         .get_nft(
             chain,
             eth_addr_to_hex(&transfer.common.token_address),
@@ -868,10 +873,6 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTransferHistoryStorageOps>
             token_address: eth_addr_to_hex(&transfer.common.token_address),
             token_id: transfer.common.token_id.to_string(),
         })?;
-    let transfer_meta = TransferMeta::from(nft_db);
-    storage
-        .update_transfers_meta_by_token_addr_id(chain, transfer_meta)
-        .await?;
     storage
         .remove_nft_from_list(
             chain,
@@ -891,7 +892,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTransferHistoryStorageO
     url_antispam: &Url,
     my_address: &str,
 ) -> MmResult<(), UpdateNftError> {
-    let nft = match storage
+    let mut nft = match storage
         .get_nft(
             chain,
             eth_addr_to_hex(&transfer.common.token_address),
@@ -929,6 +930,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTransferHistoryStorageO
             nft.common.owner_of =
                 Address::from_str(my_address).map_to_mm(|e| UpdateNftError::InvalidHexString(e.to_string()))?;
             nft.block_number = transfer.block_number;
+            protect_from_nft_spam_links(&mut nft, false)?;
             drop_mutability!(nft);
             storage
                 .add_nfts_to_list(*chain, vec![nft.clone()], transfer.block_number)
@@ -936,10 +938,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTransferHistoryStorageO
             nft
         },
     };
-    let transfer_meta = TransferMeta::from(nft);
-    storage
-        .update_transfers_meta_by_token_addr_id(chain, transfer_meta)
-        .await?;
+    update_transfer_meta_using_nft(storage, chain, &mut nft).await?;
     Ok(())
 }
 
@@ -983,10 +982,6 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTransferHistoryStorageOps
             });
         },
     }
-    let transfer_meta = TransferMeta::from(nft_db);
-    storage
-        .update_transfers_meta_by_token_addr_id(chain, transfer_meta)
-        .await?;
     Ok(())
 }
 
@@ -998,7 +993,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
     url_antispam: &Url,
     my_address: &str,
 ) -> MmResult<(), UpdateNftError> {
-    let nft = match storage
+    let mut nft = match storage
         .get_nft(
             chain,
             eth_addr_to_hex(&transfer.common.token_address),
@@ -1037,7 +1032,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
                 url_antispam,
             )
             .await;
-            let nft = Nft {
+            let mut nft = Nft {
                 common: NftCommon {
                     token_address: moralis_meta.common.token_address,
                     token_id: moralis_meta.common.token_id,
@@ -1062,16 +1057,15 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
                 possible_phishing: false,
                 uri_meta,
             };
+            protect_from_nft_spam_links(&mut nft, false)?;
+            drop_mutability!(nft);
             storage
                 .add_nfts_to_list(*chain, [nft.clone()], transfer.block_number)
                 .await?;
             nft
         },
     };
-    let transfer_meta = TransferMeta::from(nft);
-    storage
-        .update_transfers_meta_by_token_addr_id(chain, transfer_meta)
-        .await?;
+    update_transfer_meta_using_nft(storage, chain, &mut nft).await?;
     Ok(())
 }
 
@@ -1122,11 +1116,8 @@ async fn update_meta_in_transfers<T>(storage: &T, chain: &Chain, nfts: Vec<Nft>)
 where
     T: NftListStorageOps + NftTransferHistoryStorageOps,
 {
-    for nft in nfts.into_iter() {
-        let transfer_meta = TransferMeta::from(nft);
-        storage
-            .update_transfers_meta_by_token_addr_id(chain, transfer_meta)
-            .await?;
+    for mut nft in nfts.into_iter() {
+        update_transfer_meta_using_nft(storage, chain, &mut nft).await?;
     }
     Ok(())
 }
@@ -1143,7 +1134,7 @@ where
 {
     let nft_token_addr_id = storage.get_transfers_with_empty_meta(*chain).await?;
     for addr_id_pair in nft_token_addr_id.into_iter() {
-        let nft_meta = get_moralis_metadata(
+        let mut nft_meta = get_moralis_metadata(
             addr_id_pair.token_address,
             addr_id_pair.token_id,
             chain,
@@ -1151,10 +1142,7 @@ where
             url_antispam,
         )
         .await?;
-        let transfer_meta = TransferMeta::from(nft_meta);
-        storage
-            .update_transfers_meta_by_token_addr_id(chain, transfer_meta)
-            .await?;
+        update_transfer_meta_using_nft(storage, chain, &mut nft_meta).await?;
     }
     Ok(())
 }
@@ -1167,26 +1155,31 @@ fn contains_disallowed_url(text: &str) -> Result<bool, regex::Error> {
     Ok(url_regex.is_match(text))
 }
 
-/// `check_and_redact_if_spam` checks if the text contains any links.
+/// `process_text_for_spam_link` checks if the text contains any links and optionally redacts it.
 /// It doesn't matter if the link is valid or not, as this is a spam check.
-/// If text contains some link, then it is a spam.
-fn check_and_redact_if_spam(text: &mut Option<String>) -> Result<bool, regex::Error> {
+/// If text contains some link, then function returns `true`.
+fn process_text_for_spam_link(text: &mut Option<String>, redact: bool) -> Result<bool, regex::Error> {
     match text {
         Some(s) if contains_disallowed_url(s)? => {
-            *text = Some("URL redacted for user protection".to_string());
+            if redact {
+                *text = Some("URL redacted for user protection".to_string());
+            }
             Ok(true)
         },
         _ => Ok(false),
     }
 }
 
-/// `protect_from_history_spam` function checks and redact spam in `NftTransferHistory`.
+/// `protect_from_history_spam_links` function checks and redact spam in `NftTransferHistory`.
 ///
 /// `collection_name` and `token_name` in `NftTransferHistory` shouldn't contain any links,
 /// they must be just an arbitrary text, which represents NFT names.
-fn protect_from_history_spam(transfer: &mut NftTransferHistory) -> MmResult<(), ProtectFromSpamError> {
-    let collection_name_spam = check_and_redact_if_spam(&mut transfer.collection_name)?;
-    let token_name_spam = check_and_redact_if_spam(&mut transfer.token_name)?;
+fn protect_from_history_spam_links(
+    transfer: &mut NftTransferHistory,
+    redact: bool,
+) -> MmResult<(), ProtectFromSpamError> {
+    let collection_name_spam = process_text_for_spam_link(&mut transfer.collection_name, redact)?;
+    let token_name_spam = process_text_for_spam_link(&mut transfer.token_name, redact)?;
 
     if collection_name_spam || token_name_spam {
         transfer.common.possible_spam = true;
@@ -1194,58 +1187,62 @@ fn protect_from_history_spam(transfer: &mut NftTransferHistory) -> MmResult<(), 
     Ok(())
 }
 
-/// `protect_from_nft_spam` function checks and redact spam in `Nft`.
+/// `protect_from_nft_spam_links` function checks and optionally redacts spam links in `Nft`.
 ///
 /// `collection_name` and `token_name` in `Nft` shouldn't contain any links,
 /// they must be just an arbitrary text, which represents NFT names.
 /// `symbol` also must be a text or sign that represents a symbol.
 /// This function also checks `metadata` field for spam.
-fn protect_from_nft_spam(nft: &mut Nft) -> MmResult<(), ProtectFromSpamError> {
-    let collection_name_spam = check_and_redact_if_spam(&mut nft.common.collection_name)?;
-    let symbol_spam = check_and_redact_if_spam(&mut nft.common.symbol)?;
-    let token_name_spam = check_and_redact_if_spam(&mut nft.uri_meta.token_name)?;
-    let meta_spam = check_nft_metadata_for_spam(nft)?;
+fn protect_from_nft_spam_links(nft: &mut Nft, redact: bool) -> MmResult<bool, ProtectFromSpamError> {
+    let collection_name_spam = process_text_for_spam_link(&mut nft.common.collection_name, redact)?;
+    let symbol_spam = process_text_for_spam_link(&mut nft.common.symbol, redact)?;
+    let token_name_spam = process_text_for_spam_link(&mut nft.uri_meta.token_name, redact)?;
+    let meta_spam = process_metadata_for_spam_link(nft, redact)?;
 
     if collection_name_spam || symbol_spam || token_name_spam || meta_spam {
-        nft.common.possible_spam = true;
+        return Ok(true);
     }
-    Ok(())
+    Ok(false)
 }
 
-/// `check_nft_metadata_for_spam` function checks and redact spam in `metadata` field from `Nft`.
+/// The `process_metadata_for_spam_link` function checks and optionally redacts spam link in the `metadata` field of `Nft`.
 ///
 /// **note:** `token_name` is usually called `name` in `metadata`.
-fn check_nft_metadata_for_spam(nft: &mut Nft) -> MmResult<bool, ProtectFromSpamError> {
+fn process_metadata_for_spam_link(nft: &mut Nft, redact: bool) -> MmResult<bool, ProtectFromSpamError> {
     if let Some(Ok(mut metadata)) = nft
         .common
         .metadata
         .as_ref()
         .map(|t| serde_json::from_str::<serde_json::Map<String, Json>>(t))
     {
-        if check_spam_and_redact_metadata_field(&mut metadata, "name")? {
+        let spam_detected = process_metadata_field(&mut metadata, "name", redact)?;
+        if redact && spam_detected {
             nft.common.metadata = Some(serde_json::to_string(&metadata)?);
-            return Ok(true);
         }
+        return Ok(spam_detected);
     }
     Ok(false)
 }
 
-/// The `check_spam_and_redact_metadata_field` function scans a specified field in a JSON metadata object for potential spam.
+/// The `process_metadata_field` function scans a specified field in a JSON metadata object for potential spam.
 ///
 /// This function checks the provided `metadata` map for a field matching the `field` parameter.
 /// If this field is found and its value contains some link, it's considered to contain spam.
-/// To protect users, function redacts field containing spam link.
-/// The function returns `true` if it detected spam link, or `false` otherwise.
-fn check_spam_and_redact_metadata_field(
+/// Depending on the `redact` flag, it will either redact the spam link or leave it as it is.
+/// The function returns `true` if it detected a spam link, or `false` otherwise.
+fn process_metadata_field(
     metadata: &mut serde_json::Map<String, Json>,
     field: &str,
+    redact: bool,
 ) -> MmResult<bool, ProtectFromSpamError> {
     match metadata.get(field).and_then(|v| v.as_str()) {
         Some(text) if contains_disallowed_url(text)? => {
-            metadata.insert(
-                field.to_string(),
-                serde_json::Value::String("URL redacted for user protection".to_string()),
-            );
+            if redact {
+                metadata.insert(
+                    field.to_string(),
+                    serde_json::Value::String("URL redacted for user protection".to_string()),
+                );
+            }
             Ok(true)
         },
         _ => Ok(false),
