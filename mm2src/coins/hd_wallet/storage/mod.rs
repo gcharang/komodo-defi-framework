@@ -16,19 +16,18 @@ use std::ops::Deref;
 
 #[cfg(any(test, target_arch = "wasm32"))] mod mock_storage;
 #[cfg(any(test, target_arch = "wasm32"))]
-pub use mock_storage::HDWalletMockStorage;
+pub(crate) use mock_storage::HDWalletMockStorage;
 
 cfg_wasm32! {
     use wasm_storage::HDWalletIndexedDbStorage as HDWalletStorageInstance;
-
-    pub use wasm_storage::{HDWalletDb, HDWalletDbLocked};
+    pub(crate) use wasm_storage::HDWalletDb;
 }
 
 cfg_native! {
     use sqlite_storage::HDWalletSqliteStorage as HDWalletStorageInstance;
 }
 
-pub type HDWalletStorageResult<T> = MmResult<T, HDWalletStorageError>;
+pub(crate) type HDWalletStorageResult<T> = MmResult<T, HDWalletStorageError>;
 type HDWalletStorageBoxed = Box<dyn HDWalletStorageInternalOps + Send + Sync>;
 
 #[derive(Debug, Display)]
@@ -85,7 +84,7 @@ pub struct HDAccountStorageItem {
 
 #[async_trait]
 #[cfg_attr(test, mockable)]
-pub trait HDWalletStorageInternalOps {
+pub(crate) trait HDWalletStorageInternalOps {
     async fn init(ctx: &MmArc) -> HDWalletStorageResult<Self>
     where
         Self: Sized;
@@ -290,14 +289,14 @@ mod tests {
     use primitives::hash::H160;
 
     cfg_wasm32! {
-        use crate::hd_wallet_storage::wasm_storage::get_all_storage_items;
+        use wasm_storage::get_all_storage_items;
         use wasm_bindgen_test::*;
 
         wasm_bindgen_test_configure!(run_in_browser);
     }
 
     cfg_native! {
-        use crate::hd_wallet_storage::sqlite_storage::get_all_storage_items;
+        use sqlite_storage::get_all_storage_items;
         use common::block_on;
     }
 

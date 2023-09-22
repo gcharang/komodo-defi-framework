@@ -1,5 +1,5 @@
-use crate::hd_wallet_storage::{HDAccountStorageItem, HDWalletId, HDWalletStorageError, HDWalletStorageInternalOps,
-                               HDWalletStorageResult};
+use crate::hd_wallet::{HDAccountStorageItem, HDWalletId, HDWalletStorageError, HDWalletStorageInternalOps,
+                       HDWalletStorageResult};
 use crate::CoinsContext;
 use async_trait::async_trait;
 use crypto::XPub;
@@ -22,7 +22,7 @@ const WALLET_ID_INDEX: &str = "wallet_id";
 /// * account_id - HD account id
 const WALLET_ACCOUNT_ID_INDEX: &str = "wallet_account_id";
 
-pub type HDWalletDbLocked<'a> = DbLocked<'a, HDWalletDb>;
+type HDWalletDbLocked<'a> = DbLocked<'a, HDWalletDb>;
 
 impl From<DbTransactionError> for HDWalletStorageError {
     fn from(e: DbTransactionError) -> Self {
@@ -78,7 +78,7 @@ impl From<InitDbError> for HDWalletStorageError {
 /// and one unique multi-index `wallet_account_id` that consists of these four indexes in a row.
 /// See [`HDAccountTable::on_update_needed`].
 #[derive(Deserialize, Serialize)]
-pub struct HDAccountTable {
+struct HDAccountTable {
     /// [`HDWalletId::coin`].
     /// Non-unique index that is used to fetch/remove items from the storage.
     coin: String,
@@ -136,7 +136,7 @@ impl From<HDAccountTable> for HDAccountStorageItem {
     }
 }
 
-pub struct HDWalletDb {
+pub(crate) struct HDWalletDb {
     pub(crate) inner: IndexedDb,
 }
 
@@ -155,7 +155,7 @@ impl DbInstance for HDWalletDb {
 }
 
 /// The wrapper over the [`CoinsContext::hd_wallet_db`] weak pointer.
-pub struct HDWalletIndexedDbStorage {
+pub(super) struct HDWalletIndexedDbStorage {
     db: WeakDb<HDWalletDb>,
 }
 

@@ -99,7 +99,7 @@ cfg_native! {
 
 cfg_wasm32! {
     use ethereum_types::{H264 as EthH264, H520 as EthH520};
-    use hd_wallet_storage::HDWalletDb;
+    use hd_wallet::HDWalletDb;
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked, SharedDb};
     use tx_history_storage::wasm::{clear_tx_history, load_tx_history, save_tx_history, TxHistoryDb};
     pub type TxHistoryDbLocked<'a> = DbLocked<'a, TxHistoryDb>;
@@ -225,7 +225,6 @@ pub mod hd_pubkey;
 pub mod hd_wallet;
 use hd_wallet::{HDAccountAddressId, HDAddress};
 
-pub mod hd_wallet_storage;
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 pub mod my_tx_history_v2;

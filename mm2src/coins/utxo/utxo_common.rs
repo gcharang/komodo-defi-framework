@@ -5,8 +5,8 @@ use crate::eth::EthCoinType;
 use crate::hd_confirm_address::HDConfirmAddress;
 use crate::hd_pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor};
 use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, HDAccountMut, HDAccountsMap,
-                       NewAccountCreatingError, NewAddressDeriveConfirmError, NewAddressDerivingError};
-use crate::hd_wallet_storage::{HDWalletCoinWithStorageOps, HDWalletStorageResult};
+                       HDWalletCoinWithStorageOps, HDWalletStorageResult, NewAccountCreatingError,
+                       NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,

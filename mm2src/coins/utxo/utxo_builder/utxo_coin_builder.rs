@@ -1,5 +1,4 @@
-use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
-use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
+use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex, HDWalletCoinStorage, HDWalletStorageError};
 use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumRpcRequest, EstimateFeeMethod,
                                UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
