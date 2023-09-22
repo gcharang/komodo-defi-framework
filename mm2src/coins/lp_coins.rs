@@ -45,7 +45,6 @@ use async_trait::async_trait;
 use base58::FromBase58Error;
 use bip32::ExtendedPrivateKey;
 use common::custom_futures::timeout::TimeoutError;
-use common::executor::Timer;
 use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        AbortSettings, AbortedError, SpawnAbortable, SpawnFuture};
 use common::log::{warn, LogOnError};
@@ -251,7 +250,7 @@ pub use test_coin::TestCoin;
 
 pub mod tx_history_storage;
 
-pub mod events;
+pub mod coin_balance_event;
 
 #[doc(hidden)]
 #[allow(unused_variables)]
@@ -3412,72 +3411,6 @@ fn lp_spawn_tx_history(ctx: MmArc, coin: MmCoinEnum) -> Result<(), String> {
     };
     spawner.spawn(fut);
     Ok(())
-}
-
-/// Concurrent balance event controller loop for active coins
-pub async fn balance_event_loop(ctx: MmArc) {
-    let cctx = CoinsContext::from_ctx(&ctx).unwrap();
-
-    // Events that are already fired
-    let mut event_pool: Vec<String> = vec![];
-
-    loop {
-        let coins_mutex = cctx.coins.lock().await;
-
-        let coins: Vec<MmCoinEnum> = coins_mutex
-            .values()
-            .filter_map(|coin| {
-                // We loop this over every 5 seconds, so it's not necessary to sequentially load the atomics all over
-                // the threads, since the cost of it is way too higher than the `AtomicOrdering::Relaxed`
-                if coin.is_available.load(AtomicOrdering::Relaxed) && coin.inner.is_platform_coin() {
-                    Some(coin.inner.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Similar to above, we don't need to held the lock(which will block all other processes that depends
-        // on this lock(like coin activation)) since we loop this over continuously.
-        drop(coins_mutex);
-
-        for coin in coins {
-            let ticker = coin.ticker().to_owned();
-
-            if event_pool.contains(&ticker) {
-                continue;
-            }
-
-            match coin {
-                MmCoinEnum::Tendermint(_) => {
-                    println!("COIN IS HERE {:?}", ticker);
-                },
-                MmCoinEnum::TendermintToken(_) => {
-                    unimplemented!();
-                },
-                MmCoinEnum::UtxoCoin(_) => todo!(),
-                MmCoinEnum::QtumCoin(_) => todo!(),
-                MmCoinEnum::Qrc20Coin(_) => todo!(),
-                MmCoinEnum::EthCoin(_) => todo!(),
-                MmCoinEnum::ZCoin(_) => todo!(),
-                MmCoinEnum::Bch(_) => todo!(),
-                MmCoinEnum::SlpToken(_) => todo!(),
-                MmCoinEnum::LightningCoin(_) => todo!(),
-                MmCoinEnum::Test(_) => todo!(),
-                #[cfg(all(
-                    feature = "enable-solana",
-                    not(target_os = "ios"),
-                    not(target_os = "android"),
-                    not(target_arch = "wasm32")
-                ))]
-                MmCoinEnum::SolanaCoin(_) | MmCoinEnum::SplToken(_) => todo!(),
-            }
-
-            event_pool.push(ticker);
-        }
-
-        Timer::sleep(5.).await;
-    }
 }
 
 /// NB: Returns only the enabled (aka active) coins.

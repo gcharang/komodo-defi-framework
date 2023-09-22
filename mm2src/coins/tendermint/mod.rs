@@ -2,7 +2,6 @@
 // Useful resources
 // https://docs.cosmos.network/
 
-pub mod balance_event;
 mod ibc;
 mod iris;
 mod rpc;

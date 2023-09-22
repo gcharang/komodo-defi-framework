@@ -19,7 +19,7 @@
 //
 
 use bitcrypto::sha256;
-use coins::balance_event_loop;
+use coins::coin_balance_event::CoinBalanceEvent;
 use coins::register_balance_update_handler;
 use common::executor::{SpawnFuture, Timer};
 use common::log::{info, warn};
@@ -389,11 +389,9 @@ fn init_event_streaming(ctx: &MmArc) {
     // This condition only executed if events were enabled in mm2 configuration.
 
     if let Some(config) = &ctx.event_stream_configuration {
-        // Network event handling
         NetworkEvent::new(ctx.clone()).spawn_if_active(config);
+        CoinBalanceEvent::new(ctx.clone()).spawn_if_active(config);
     }
-
-    ctx.spawner().spawn(balance_event_loop(ctx.clone()));
 }
 
 #[cfg(target_arch = "wasm32")]
