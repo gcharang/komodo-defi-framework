@@ -456,69 +456,12 @@ impl NftListStorageOps for IndexedDbNftStorage {
         let table = db_transaction.table::<NftListTable>().await?;
 
         let chain_str = chain.to_string();
-        let index_keys = MultiIndex::new(CHAIN_TOKEN_DOMAIN_INDEX)
-            .with_value(&chain_str)?
-            .with_value(&domain)?;
-        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
-        for (_item_id, item) in nfts_table.into_iter() {
-            let mut nft = nft_details_from_item(item)?;
-            nft.possible_phishing = possible_phishing;
-            drop_mutability!(nft);
-            let nft_item = NftListTable::from_nft(&nft)?;
-            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-                .with_value(&chain_str)?
-                .with_value(eth_addr_to_hex(&nft.common.token_address))?
-                .with_value(nft.common.token_id.to_string())?;
-            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
-        }
-
-        let index_keys = MultiIndex::new(CHAIN_IMAGE_DOMAIN_INDEX)
-            .with_value(&chain_str)?
-            .with_value(&domain)?;
-        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
-        for (_item_id, item) in nfts_table.into_iter() {
-            let mut nft = nft_details_from_item(item)?;
-            nft.possible_phishing = possible_phishing;
-            drop_mutability!(nft);
-            let nft_item = NftListTable::from_nft(&nft)?;
-            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-                .with_value(&chain_str)?
-                .with_value(eth_addr_to_hex(&nft.common.token_address))?
-                .with_value(nft.common.token_id.to_string())?;
-            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
-        }
-
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_ANIMATION_DOMAIN_INDEX)
-            .with_value(&chain_str)?
-            .with_value(&domain)?;
-        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
-        for (_item_id, item) in nfts_table.into_iter() {
-            let mut nft = nft_details_from_item(item)?;
-            nft.possible_phishing = possible_phishing;
-            drop_mutability!(nft);
-            let nft_item = NftListTable::from_nft(&nft)?;
-            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-                .with_value(&chain_str)?
-                .with_value(eth_addr_to_hex(&nft.common.token_address))?
-                .with_value(nft.common.token_id.to_string())?;
-            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
-        }
-
-        let index_keys = MultiIndex::new(NftListTable::CHAIN_EXTERNAL_DOMAIN_INDEX)
-            .with_value(&chain_str)?
-            .with_value(&domain)?;
-        let nfts_table = table.get_items_by_multi_index(index_keys).await?;
-        for (_item_id, item) in nfts_table.into_iter() {
-            let mut nft = nft_details_from_item(item)?;
-            nft.possible_phishing = possible_phishing;
-            drop_mutability!(nft);
-            let nft_item = NftListTable::from_nft(&nft)?;
-            let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-                .with_value(&chain_str)?
-                .with_value(eth_addr_to_hex(&nft.common.token_address))?
-                .with_value(nft.common.token_id.to_string())?;
-            table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
-        }
+        update_nft_phishing_for_index(&table, &chain_str, CHAIN_TOKEN_DOMAIN_INDEX, &domain, possible_phishing).await?;
+        update_nft_phishing_for_index(&table, &chain_str, CHAIN_IMAGE_DOMAIN_INDEX, &domain, possible_phishing).await?;
+        let animation_index = NftListTable::CHAIN_ANIMATION_DOMAIN_INDEX;
+        update_nft_phishing_for_index(&table, &chain_str, animation_index, &domain, possible_phishing).await?;
+        let external_index = NftListTable::CHAIN_EXTERNAL_DOMAIN_INDEX;
+        update_nft_phishing_for_index(&table, &chain_str, external_index, &domain, possible_phishing).await?;
         Ok(())
     }
 }
@@ -829,43 +772,60 @@ impl NftTransferHistoryStorageOps for IndexedDbNftStorage {
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
 
         let chain_str = chain.to_string();
-        let index_keys = MultiIndex::new(CHAIN_TOKEN_DOMAIN_INDEX)
-            .with_value(&chain_str)?
-            .with_value(&domain)?;
-        let transfers_table = table.get_items_by_multi_index(index_keys).await?;
-        for (_item_id, item) in transfers_table.into_iter() {
-            let mut transfer = transfer_details_from_item(item)?;
-            transfer.possible_phishing = possible_phishing;
-            drop_mutability!(transfer);
-            let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
-            let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
-                .with_value(&chain_str)?
-                .with_value(&transfer.common.transaction_hash)?
-                .with_value(transfer.common.log_index)?;
-            table
-                .replace_item_by_unique_multi_index(index_keys, &transfer_item)
-                .await?;
-        }
-
-        let index_keys = MultiIndex::new(CHAIN_IMAGE_DOMAIN_INDEX)
-            .with_value(&chain_str)?
-            .with_value(&domain)?;
-        let transfers_table = table.get_items_by_multi_index(index_keys).await?;
-        for (_item_id, item) in transfers_table.into_iter() {
-            let mut transfer = transfer_details_from_item(item)?;
-            transfer.possible_phishing = possible_phishing;
-            drop_mutability!(transfer);
-            let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
-            let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
-                .with_value(&chain_str)?
-                .with_value(&transfer.common.transaction_hash)?
-                .with_value(transfer.common.log_index)?;
-            table
-                .replace_item_by_unique_multi_index(index_keys, &transfer_item)
-                .await?;
-        }
+        update_transfer_phishing_for_index(&table, &chain_str, CHAIN_TOKEN_DOMAIN_INDEX, &domain, possible_phishing)
+            .await?;
+        update_transfer_phishing_for_index(&table, &chain_str, CHAIN_IMAGE_DOMAIN_INDEX, &domain, possible_phishing)
+            .await?;
         Ok(())
     }
+}
+
+async fn update_transfer_phishing_for_index(
+    table: &DbTable<'_, NftTransferHistoryTable>,
+    chain: &str,
+    index: &str,
+    domain: &str,
+    possible_phishing: bool,
+) -> MmResult<(), WasmNftCacheError> {
+    let index_keys = MultiIndex::new(index).with_value(chain)?.with_value(domain)?;
+    let transfers_table = table.get_items_by_multi_index(index_keys).await?;
+    for (_item_id, item) in transfers_table.into_iter() {
+        let mut transfer = transfer_details_from_item(item)?;
+        transfer.possible_phishing = possible_phishing;
+        drop_mutability!(transfer);
+        let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
+        let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
+            .with_value(chain)?
+            .with_value(&transfer.common.transaction_hash)?
+            .with_value(transfer.common.log_index)?;
+        table
+            .replace_item_by_unique_multi_index(index_keys, &transfer_item)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn update_nft_phishing_for_index(
+    table: &DbTable<'_, NftListTable>,
+    chain: &str,
+    index: &str,
+    domain: &str,
+    possible_phishing: bool,
+) -> MmResult<(), WasmNftCacheError> {
+    let index_keys = MultiIndex::new(index).with_value(chain)?.with_value(domain)?;
+    let nfts_table = table.get_items_by_multi_index(index_keys).await?;
+    for (_item_id, item) in nfts_table.into_iter() {
+        let mut nft = nft_details_from_item(item)?;
+        nft.possible_phishing = possible_phishing;
+        drop_mutability!(nft);
+        let nft_item = NftListTable::from_nft(&nft)?;
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain)?
+            .with_value(eth_addr_to_hex(&nft.common.token_address))?
+            .with_value(nft.common.token_id.to_string())?;
+        table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+    }
+    Ok(())
 }
 
 /// `get_last_block_from_table` function returns the highest block in the table related to certain blockchain type.
