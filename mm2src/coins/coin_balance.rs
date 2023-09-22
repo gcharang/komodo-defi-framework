@@ -1,6 +1,5 @@
-use crate::hd_pubkey::HDXPubExtractor;
 use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddress, HDAddressId, HDWalletCoinOps, HDWalletOps,
-                       NewAccountCreatingError, NewAddressDerivingError};
+                       HDXPubExtractor, NewAccountCreatingError, NewAddressDerivingError};
 use crate::{BalanceError, BalanceResult, CoinBalance, CoinWithDerivationMethod, DerivationMethod, MarketCoinOps};
 use async_trait::async_trait;
 use common::log::{debug, info};

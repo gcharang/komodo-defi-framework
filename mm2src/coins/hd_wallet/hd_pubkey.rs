@@ -86,13 +86,14 @@ pub trait ExtractExtendedPubkey {
 
 #[async_trait]
 pub trait HDXPubExtractor: Sync {
-    async fn extract_utxo_xpub(
+    async fn extract_xpub(
         &self,
-        trezor_utxo_coin: String,
+        trezor_coin: String,
         derivation_path: DerivationPath,
     ) -> MmResult<XPub, HDExtractPubkeyError>;
 }
 
+// Todo: it would be good to separate hardware wallet specific code from HD wallet code.
 pub enum RpcTaskXPubExtractor<'task, Task: RpcTask> {
     Trezor {
         hw_ctx: HardwareWalletArc,
@@ -107,9 +108,9 @@ where
     Task: RpcTask,
     Task::UserAction: TryIntoUserAction + Send,
 {
-    async fn extract_utxo_xpub(
+    async fn extract_xpub(
         &self,
-        trezor_utxo_coin: String,
+        trezor_coin: String,
         derivation_path: DerivationPath,
     ) -> MmResult<XPub, HDExtractPubkeyError> {
         match self {
@@ -117,10 +118,7 @@ where
                 hw_ctx,
                 task_handle,
                 statuses,
-            } => {
-                Self::extract_utxo_xpub_from_trezor(hw_ctx, task_handle, statuses, trezor_utxo_coin, derivation_path)
-                    .await
-            },
+            } => Self::extract_xpub_from_trezor(hw_ctx, task_handle, statuses, trezor_coin, derivation_path).await,
         }
     }
 }
@@ -146,7 +144,7 @@ where
         })
     }
 
-    async fn extract_utxo_xpub_from_trezor(
+    async fn extract_xpub_from_trezor(
         hw_ctx: &HardwareWalletArc,
         task_handle: &RpcTaskHandle<Task>,
         statuses: &HwConnectStatuses<Task::InProgressStatus, Task::AwaitingStatus>,
@@ -185,15 +183,15 @@ impl<XPubExtractor> HDXPubExtractor for XPubExtractorUnchecked<XPubExtractor>
 where
     XPubExtractor: HDXPubExtractor + Send + Sync,
 {
-    async fn extract_utxo_xpub(
+    async fn extract_xpub(
         &self,
-        trezor_utxo_coin: String,
+        trezor_coin: String,
         derivation_path: DerivationPath,
     ) -> MmResult<XPub, HDExtractPubkeyError> {
         self.0
             .as_ref()
             .map_err(Clone::clone)?
-            .extract_utxo_xpub(trezor_utxo_coin, derivation_path)
+            .extract_xpub(trezor_coin, derivation_path)
             .await
     }
 }

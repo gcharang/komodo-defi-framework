@@ -1,6 +1,5 @@
 use crate::coin_balance::HDAccountBalance;
-use crate::hd_pubkey::{HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
-use crate::hd_wallet::NewAccountCreatingError;
+use crate::hd_wallet::{HDExtractPubkeyError, HDXPubExtractor, NewAccountCreatingError, RpcTaskXPubExtractor};
 use crate::{lp_coinfind_or_err, BalanceError, CoinBalance, CoinFindError, CoinWithDerivationMethod, CoinsContext,
             MarketCoinOps, MmCoinEnum, UnexpectedDerivationMethod};
 use async_trait::async_trait;

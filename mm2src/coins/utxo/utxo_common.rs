@@ -2,10 +2,10 @@ use super::*;
 use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
-use crate::hd_pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor};
-use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, HDAccountMut, HDAccountsMap, HDConfirmAddress,
-                       HDWalletCoinWithStorageOps, HDWalletStorageResult, NewAccountCreatingError,
-                       NewAddressDeriveConfirmError, NewAddressDerivingError};
+use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, ExtractExtendedPubkey, HDAccountMut,
+                       HDAccountsMap, HDConfirmAddress, HDExtractPubkeyError, HDWalletCoinWithStorageOps,
+                       HDWalletStorageResult, HDXPubExtractor, NewAccountCreatingError, NewAddressDeriveConfirmError,
+                       NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
@@ -586,7 +586,7 @@ where
                 .trezor_coin
                 .clone()
                 .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
-            let xpub = xpub_extractor.extract_utxo_xpub(trezor_coin, derivation_path).await?;
+            let xpub = xpub_extractor.extract_xpub(trezor_coin, derivation_path).await?;
             Secp256k1ExtendedPublicKey::from_str(&xpub).map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
         },
         None => {

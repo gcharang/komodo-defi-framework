@@ -21,6 +21,9 @@ pub(crate) use hd_confirm_address::for_tests::MockableConfirmAddress;
 pub(crate) use hd_confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
 pub use hd_confirm_address::{HDConfirmAddress, HDConfirmAddressError};
 
+mod hd_pubkey;
+pub use hd_pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
+
 mod storage;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use storage::HDWalletDb;

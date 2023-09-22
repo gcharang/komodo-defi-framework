@@ -1,8 +1,8 @@
 use super::*;
 use crate::coin_errors::MyAddressError;
-use crate::hd_pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor};
-use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, HDAccountMut, HDConfirmAddress,
-                       HDWalletCoinWithStorageOps, NewAccountCreatingError, NewAddressDeriveConfirmError};
+use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, ExtractExtendedPubkey, HDAccountMut,
+                       HDConfirmAddress, HDExtractPubkeyError, HDWalletCoinWithStorageOps, HDXPubExtractor,
+                       NewAccountCreatingError, NewAddressDeriveConfirmError};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxDetailsBuilder,
                               TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};

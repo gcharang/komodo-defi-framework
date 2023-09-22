@@ -4,7 +4,7 @@ use crate::utxo_activation::init_utxo_standard_statuses::{UtxoStandardAwaitingSt
                                                           UtxoStandardUserAction};
 use crate::utxo_activation::utxo_standard_activation_result::UtxoStandardActivationResult;
 use coins::coin_balance::EnableCoinBalanceOps;
-use coins::hd_pubkey::RpcTaskXPubExtractor;
+use coins::hd_wallet::RpcTaskXPubExtractor;
 use coins::my_tx_history_v2::TxHistoryStorage;
 use coins::utxo::utxo_tx_history_v2::{utxo_history_loop, UtxoTxHistoryOps};
 use coins::utxo::{UtxoActivationParams, UtxoCoinFields};
