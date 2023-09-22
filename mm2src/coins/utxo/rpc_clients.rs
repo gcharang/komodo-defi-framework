@@ -1,6 +1,11 @@
 #![cfg_attr(target_arch = "wasm32", allow(unused_macros))]
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
+#[path = "rpc_clients/conn_mng_multiple.rs"]
+mod conn_mng_multiple;
+#[path = "rpc_clients/conn_mng_selective.rs"]
+mod conn_mng_selective;
+
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::{output_script, sat_from_big_decimal, GetBlockHeaderError, GetConfirmedTxError, GetTxError,
                   GetTxHeightError};
@@ -9,7 +14,7 @@ use async_trait::async_trait;
 use chain::{BlockHeader, BlockHeaderBits, BlockHeaderNonce, OutPoint, Transaction as UtxoTx};
 use common::custom_futures::timeout::FutureTimerExt;
 use common::custom_iter::{CollectInto, TryIntoGroupMap};
-use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, SpawnFuture, Timer};
+use common::executor::{abortable_queue::AbortableQueue, SpawnFuture, Timer};
 use common::jsonrpc_client::{JsonRpcBatchClient, JsonRpcBatchResponse, JsonRpcClient, JsonRpcError, JsonRpcErrorType,
                              JsonRpcId, JsonRpcMultiClient, JsonRpcRemoteAddr, JsonRpcRequest, JsonRpcRequestEnum,
                              JsonRpcResponse, JsonRpcResponseEnum, JsonRpcResponseFut, RpcRes};
@@ -20,7 +25,7 @@ use derive_more::Display;
 use futures::channel::oneshot as async_oneshot;
 use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::future::{join_all, FutureExt, TryFutureExt};
-use futures::lock::{Mutex as AsyncMutex, MutexGuard};
+use futures::lock::Mutex as AsyncMutex;
 use futures::{select, StreamExt};
 use futures01::future::select_ok;
 use futures01::sync::mpsc;
@@ -42,7 +47,7 @@ use sha2::{Digest, Sha256};
 use spv_validation::helpers_validation::SPVError;
 use spv_validation::storage::BlockHeaderStorageOps;
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap, LinkedList};
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
@@ -50,12 +55,13 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::num::NonZeroU64;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use common::custom_futures::select_ok_sequential;
 use common::executor::abortable_queue::WeakSpawner;
+use conn_mng_selective::{ConnMngSelective, ConnMngSelectiveImpl};
 use mm2_core::ConnMngPolicy;
 use tokio::sync::Notify;
 
@@ -76,9 +82,6 @@ cfg_native! {
     use tokio_rustls::webpki::DnsNameRef;
     use webpki_roots::TLS_SERVER_ROOTS;
 }
-
-#[path = "rpc_clients/conn_mng_selective.rs"]
-mod conn_mng_selective;
 
 pub const NO_TX_ERROR_CODE: &str = "'code': -5";
 const RESPONSE_TOO_LARGE_CODE: i16 = -32600;
@@ -1745,15 +1748,8 @@ async fn electrum_request_to(
     to_addr: String,
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
     let (tx, responses) = {
-        // let connections = client.connections.lock().await;
-        // let connection = connections
-        //     .iter()
-        //     .find(|c| c.addr == to_addr)
-        //     .ok_or_else()?; // TODO: to be a part of conn_mng
-
-        let conn_opt = client.conn_mng.get_conn_by_address(to_addr.as_ref()).await;
-        let conn =
-            conn_opt.ok_or_else(|| JsonRpcErrorType::Internal(format!("Unknown destination address {}", to_addr)))?;
+        let conn = client.conn_mng.get_conn_by_address(to_addr.as_ref()).await;
+        let conn = conn.map_err(|err| JsonRpcErrorType::Internal(err))?;
         let guard = conn.lock().await;
         let connection: &ElectrumConnection = guard.deref();
 
@@ -1815,8 +1811,7 @@ impl ElectrumClientImpl {
             "Set protocol version for electrum server: {}, version: {}",
             server_addr, version
         );
-        let conn_opt = self.conn_mng.get_conn_by_address(server_addr).await;
-        let conn = conn_opt.ok_or_else(|| ERRL!("Unknown electrum address {}", server_addr))?;
+        let conn = self.conn_mng.get_conn_by_address(server_addr).await?;
         conn.lock().await.set_protocol_version(version).await;
         Ok(())
     }
@@ -2519,7 +2514,7 @@ impl UtxoRpcClientOps for ElectrumClient {
 #[async_trait]
 trait ConnMngTrait: Debug {
     async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>>;
-    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>>;
+    async fn get_conn_by_address(&self, address: &str) -> Result<Arc<AsyncMutex<ElectrumConnection>>, String>;
     async fn connect(&self) -> Result<(), String>;
 
     async fn is_connected(&self) -> bool;
@@ -2531,332 +2526,10 @@ trait ConnMngTrait: Debug {
     fn on_disconnected(&self, address: String);
 }
 
-#[derive(Debug)]
-struct ConnMngConcurrentImpl {}
-
-#[derive(Debug)]
-struct ConnMngState {
-    connecting: AtomicBool,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
-    queue: ConnMngQueue,
-    active: Option<String>,
-    conn_ctxs: BTreeMap<String, ElectrumConnCtx>,
-}
-
-#[derive(Debug)]
-struct ElectrumConnCtx {
-    conn_settings: ElectrumConnSettings,
-    abortable_system: AbortableQueue,
-    suspend_timeout_sec: u64,
-    connection: Option<Arc<AsyncMutex<ElectrumConnection>>>,
-}
-
-#[derive(Clone, Debug)]
-struct ConnMngSelective(Arc<ConnMngSelectiveImpl>);
-
-#[derive(Clone, Debug)]
-struct ConnMngConcurrent(Arc<ConnMngConcurrentImpl>);
-
-impl ConnMngSelective {
-    async fn suspend_server(&self, address: String) -> Result<(), String> {
-        debug!(
-            "About to suspend connection to addr: {}, timeout: {}, guard: {:?}",
-            address, 20, self.0.guarded
-        );
-        let mut guard = self.0.guarded.lock().await;
-        if let Some(ref active) = guard.active {
-            if *active == address {
-                guard.active.take();
-            }
-        }
-
-        match &guard
-            .conn_ctxs
-            .get(&address)
-            .ok_or_else(|| ERRL!("Failed to get conn_ctx for address: {}", address))?
-            .conn_settings
-            .priority
-        {
-            Priority::Primary => {
-                guard.queue.primary.pop_front();
-            },
-            Priority::Secondary => {
-                guard.queue.backup.pop_front();
-            },
-        };
-
-        Self::reset_connection_context(
-            &mut guard,
-            &address,
-            self.0.abortable_system.create_subsystem().unwrap(),
-        )?;
-
-        let suspend_timeout_sec = Self::get_suspend_timeout(&guard, &address).await?;
-        Self::duplicate_suspend_timeout(&mut guard, &address).await?;
-        drop(guard);
-
-        self.clone().spawn_resume_server(address, suspend_timeout_sec);
-        debug!("Suspend future spawned");
-        Ok(())
-    }
-
-    // workaround to avoid the cycle detected compilation error that blocks recursive async calls
-    fn spawn_resume_server(self, address: String, suspend_timeout_sec: u64) {
-        let spawner = self.0.abortable_system.weak_spawner();
-        spawner.spawn(Box::new(
-            async move {
-                debug!("Suspend server: {}, for: {} seconds", address, suspend_timeout_sec);
-                tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
-                let _ = self.resume_server(address).await;
-            }
-            .boxed(),
-        ));
-    }
-
-    async fn resume_server(self, address: String) -> Result<(), String> {
-        debug!("Resume holding address: {}", address);
-        let mut guard = self.0.guarded.lock().await;
-        let priority = guard.conn_ctxs.get(&address).expect("").conn_settings.priority.clone();
-        match priority {
-            Priority::Primary => guard.queue.primary.push_back(address.clone()),
-            Priority::Secondary => guard.queue.backup.push_back(address.clone()),
-        }
-        let conn_ctx = guard.conn_ctxs.get(&address).expect("");
-
-        if let Some(active) = guard.active.clone() {
-            let active_ctx = guard.conn_ctxs.get(&active).expect("");
-            let active_priority = &active_ctx.conn_settings.priority;
-            if let (Priority::Secondary, Priority::Primary) = (active_priority, priority) {
-                let conn_settings = conn_ctx.conn_settings.clone();
-                let event_handlers = guard.event_handlers.clone();
-                let conn_spawner = conn_ctx.abortable_system.weak_spawner();
-                drop(guard);
-                if let Err(err) = self
-                    .clone()
-                    .connect_to(conn_settings, event_handlers, conn_spawner)
-                    .await
-                {
-                    error!("Failed to resume: {}", err);
-                    self.suspend_server(address.clone())
-                        .await
-                        .map_err(|err| ERRL!("Failed to suspend server: {}, error: {}", address, err))?;
-                } else {
-                    let mut guard = self.0.guarded.lock().await;
-                    Self::reset_connection_context(
-                        &mut guard,
-                        &active,
-                        self.0.abortable_system.create_subsystem().unwrap(),
-                    )?;
-                    ConnMngSelectiveImpl::set_active_conn(&mut guard, address.clone())?;
-                }
-            }
-        } else {
-            drop(guard);
-            let _ = self.connect().await;
-        };
-        Ok(())
-    }
-
-    fn reset_connection_context(
-        state: &mut MutexGuard<'_, ConnMngState>,
-        address: &str,
-        abortable_system: AbortableQueue,
-    ) -> Result<(), String> {
-        debug!("Reset connection context for: {}", address);
-        let mut conn_ctx = state.conn_ctxs.get_mut(address).expect("TODO");
-        conn_ctx.abortable_system.abort_all().map_err(|err| {
-            ERRL!(
-                "Failed to abort on electrum connection related spawner: {}, error: {:?}",
-                address,
-                err
-            )
-        })?;
-        conn_ctx.connection.take();
-        conn_ctx.abortable_system = abortable_system;
-        Ok(())
-    }
-
-    fn register_connection(conn: ElectrumConnection, state: &mut MutexGuard<'_, ConnMngState>) -> Result<(), String> {
-        state
-            .conn_ctxs
-            .get_mut(&conn.addr)
-            .ok_or_else(|| {
-                format!(
-                    "Failed to get connection ctx to replace established conn for: {}",
-                    conn.addr
-                )
-            })?
-            .connection
-            .replace(Arc::new(AsyncMutex::new(conn)));
-        Ok(())
-    }
-
-    async fn get_suspend_timeout(state: &MutexGuard<'_, ConnMngState>, address: &str) -> Result<u64, String> {
-        state
-            .conn_ctxs
-            .get(address)
-            .map(|ctx| ctx.suspend_timeout_sec)
-            .ok_or_else(|| {
-                ERRL!(
-                    "Failed to get suspend_timeout for address: {}, use default value: {}",
-                    SUSPEND_TIMEOUT_INIT_SEC,
-                    address
-                )
-            })
-    }
-
-    async fn duplicate_suspend_timeout(state: &mut MutexGuard<'_, ConnMngState>, address: &str) -> Result<(), String> {
-        let suspend_timeout = &mut state
-            .conn_ctxs
-            .get_mut(address)
-            .ok_or_else(|| ERRL!("Failed to duplicate suspend_timeout for address: {}, no entry", address))?
-            .suspend_timeout_sec;
-        let new_timeout = *suspend_timeout * 2;
-        debug!(
-            "Duplicate suspend timeout for address: {} from: {} to: {}",
-            address, suspend_timeout, new_timeout
-        );
-        *suspend_timeout = new_timeout;
-        Ok(())
-    }
-
-    fn reset_suspend_timeout(state: &mut MutexGuard<'_, ConnMngState>, address: &str) -> Result<(), String> {
-        let suspend_timeout = &mut state
-            .conn_ctxs
-            .get_mut(address)
-            .ok_or_else(|| ERRL!("Failed to duplicate suspend_timeout for address: {}, no entry", address))?
-            .suspend_timeout_sec;
-        debug!(
-            "Reset supsend timeout for address: {} from: {} to the initial value: {}",
-            address, suspend_timeout, SUSPEND_TIMEOUT_INIT_SEC
-        );
-        *suspend_timeout = SUSPEND_TIMEOUT_INIT_SEC;
-        Ok(())
-    }
-
-    async fn connect_to(
-        &self,
-        conn_settings: ElectrumConnSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
-        weak_spawner: WeakSpawner,
-    ) -> Result<(), String> {
-        let (conn, verified_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
-        Self::register_connection(conn, &mut self.0.guarded.lock().await)?;
-        let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
-                warn!("Failed to connect to: {}, timed out", conn_settings.url);
-                ERR!("Timed out: {}", conn_settings.url)
-            },
-            _ = verified_notify.notified() => Ok(())
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ConnMngQueue {
-    primary: LinkedList<String>,
-    backup: LinkedList<String>,
-}
-
-#[async_trait]
-impl ConnMngTrait for ConnMngSelective {
-    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> { self.0.get_conn().await }
-
-    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
-        self.0.get_conn_by_address(address).await
-    }
-
-    async fn connect(&self) -> Result<(), String> {
-        let weak_spawner = self.0.abortable_system.weak_spawner();
-
-        struct ConnectingStateCtx(ConnMngSelective, WeakSpawner);
-        impl Drop for ConnectingStateCtx {
-            fn drop(&mut self) {
-                let spawner = self.1.clone();
-                let conn_mng = self.0.clone();
-                spawner.spawn(async move {
-                    let state = conn_mng.0.guarded.lock().await;
-                    state.connecting.store(false, AtomicOrdering::Relaxed);
-                })
-            }
-        }
-
-        while let Some((conn_settings, weak_spawner, event_handlers)) = {
-            if self.0.guarded.lock().await.connecting.load(AtomicOrdering::Relaxed) {
-                debug!("Skip concurrent connecting, already is in process");
-                return Ok(());
-            }
-
-            let _connecting_state_ctx = ConnectingStateCtx(self.clone(), weak_spawner.clone());
-
-            let guard = self.0.guarded.lock().await;
-            if guard.active.is_some() {
-                return ERR!("Failed to connect, already connected");
-            }
-            debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
-            debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-            if let Some((conn_settings, weak_spawner)) = ConnMngSelectiveImpl::get_settings_to_connect(&guard).await {
-                Some((conn_settings, weak_spawner, guard.event_handlers.clone()))
-            } else {
-                warn!("Failed to connect, no connection settings found");
-                None
-            }
-        } {
-            debug!("Got conn_settings to connect to: {:?}", conn_settings);
-            let address = conn_settings.url.clone();
-            match self.connect_to(conn_settings, event_handlers, weak_spawner).await {
-                Ok(_) => {
-                    ConnMngSelectiveImpl::set_active_conn(&mut self.0.guarded.lock().await, address)?;
-                    break;
-                },
-                Err(_) => {
-                    self.clone()
-                        .suspend_server(address.clone())
-                        .await
-                        .map_err(|err| ERRL!("Failed to suspend server: {}, error: {}", address, err))?;
-                },
-            };
-        }
-        Ok(())
-    }
-
-    async fn is_connected(&self) -> bool { self.0.is_connected().await }
-
-    async fn remove_server(&self, address: String) -> Result<(), String> { self.0.remove_server(address).await }
-
-    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
-        let mut guard = self.0.guarded.lock().await;
-        guard.event_handlers.push(handler)
-    }
-
-    async fn rotate_servers(&self, _no_of_rotations: usize) {
-        // not implemented for this conn_mng implementation intentionally
-    }
-
-    async fn is_connections_pool_empty(&self) -> bool { self.0.is_connections_pool_empty().await }
-
-    fn on_disconnected(&self, address: String) {
-        info!("electrum_conn_mng on_disconnected from: {}", address);
-        let self_copy = self.clone();
-        self.0.abortable_system.weak_spawner().spawn(async move {
-            if let Err(err) = self_copy.clone().suspend_server(address.clone()).await {
-                error!("Failed to suspend server: {}, error: {}", address, err);
-            }
-            if let Err(err) = self_copy.connect().await {
-                error!(
-                    "Failed to reconnect after addr was disconnected: {}, error: {}",
-                    address, err
-                );
-            }
-        });
-    }
-}
-
 #[async_trait]
 impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
     async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> { self.deref().get_conn().await }
-    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
+    async fn get_conn_by_address(&self, address: &str) -> Result<Arc<AsyncMutex<ElectrumConnection>>, String> {
         self.deref().get_conn_by_address(address).await
     }
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
@@ -2868,108 +2541,6 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
     async fn rotate_servers(&self, no_of_rotations: usize) { self.deref().rotate_servers(no_of_rotations).await }
     async fn is_connections_pool_empty(&self) -> bool { self.deref().is_connections_pool_empty().await }
     fn on_disconnected(&self, address: String) { self.deref().on_disconnected(address) }
-}
-
-#[derive(Debug)]
-struct ConnMngSelectiveImpl {
-    guarded: AsyncMutex<ConnMngState>,
-    abortable_system: AbortableQueue,
-}
-
-impl ConnMngSelectiveImpl {
-    fn new(
-        servers: Vec<ElectrumConnSettings>,
-        abortable_system: AbortableQueue,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
-    ) -> ConnMngSelectiveImpl {
-        let mut primary: LinkedList<String> = LinkedList::new();
-        let mut backup: LinkedList<String> = LinkedList::new();
-        let mut abortable_systems: BTreeMap<String, ElectrumConnCtx> = BTreeMap::new();
-        for conn_settings in servers {
-            match conn_settings.priority {
-                Priority::Primary => primary.push_back(conn_settings.url.clone()),
-                Priority::Secondary => backup.push_back(conn_settings.url.clone()),
-            }
-            let _ = abortable_systems.insert(conn_settings.url.clone(), ElectrumConnCtx {
-                conn_settings,
-                connection: None,
-                abortable_system: abortable_system.create_subsystem().unwrap(),
-                suspend_timeout_sec: SUSPEND_TIMEOUT_INIT_SEC,
-            });
-        }
-
-        ConnMngSelectiveImpl {
-            guarded: AsyncMutex::new(ConnMngState {
-                connecting: AtomicBool::new(false),
-                event_handlers,
-                queue: ConnMngQueue { primary, backup },
-                active: None,
-                conn_ctxs: abortable_systems,
-            }),
-            abortable_system,
-        }
-    }
-
-    pub async fn get_settings_to_connect(
-        guard: &MutexGuard<'_, ConnMngState>,
-    ) -> Option<(ElectrumConnSettings, WeakSpawner)> {
-        let mut iter = guard.queue.primary.iter().chain(guard.queue.backup.iter());
-        let addr = iter.next()?.clone();
-        let conn_ctx = guard.conn_ctxs.get(&addr)?;
-        Some((conn_ctx.conn_settings.clone(), conn_ctx.abortable_system.weak_spawner()))
-    }
-
-    async fn remove_server(&self, address: String) -> Result<(), String> {
-        debug!("Remove server: {}", address);
-        let mut guard = self.guarded.lock().await;
-        let conn_ctx = guard.conn_ctxs.remove(&address).expect("TODO");
-
-        match conn_ctx.conn_settings.priority {
-            Priority::Primary => guard.queue.primary.pop_front(),
-            Priority::Secondary => guard.queue.backup.pop_front(),
-        };
-        if let Some(active) = guard.active.as_ref() {
-            if active == address.as_str() {
-                guard.active.take();
-            }
-        }
-        Ok(())
-    }
-
-    fn set_active_conn(guard: &mut MutexGuard<'_, ConnMngState>, address: String) -> Result<(), String> {
-        ConnMngSelective::reset_suspend_timeout(guard, &address)?;
-        let _ = guard.active.replace(address);
-        Ok(())
-    }
-
-    async fn is_connected(&self) -> bool { self.guarded.lock().await.active.is_some() }
-
-    async fn is_connections_pool_empty(&self) -> bool { self.guarded.lock().await.conn_ctxs.is_empty() }
-
-    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> {
-        debug!("Getting available connection");
-        let guard = self.guarded.lock().await;
-        let Some(address) = guard.active.as_ref().cloned() else {
-            return vec![];
-        };
-
-        let Some(conn_ctx) = guard.conn_ctxs.get(&address) else {
-            error!("Failed to get conn_ctx for address: {}", address);
-            return vec![];
-        };
-
-        if let Some(conn) = conn_ctx.connection.clone() {
-            vec![conn]
-        } else {
-            vec![]
-        }
-    }
-
-    async fn get_conn_by_address(&self, address: &str) -> Option<Arc<AsyncMutex<ElectrumConnection>>> {
-        debug!("Getting connection for address: {:?}", address);
-        let guard = self.guarded.lock().await;
-        guard.conn_ctxs.get(address).map(|ctx| ctx.connection.clone())?
-    }
 }
 
 #[cfg_attr(test, mockable)]
