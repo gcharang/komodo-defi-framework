@@ -2,7 +2,7 @@
 use common::executor::Timer;
 use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        graceful_shutdown, AbortSettings, AbortableSystem, SpawnAbortable, SpawnFuture};
-use common::log::{self, LogLevel, LogOnError, LogState};
+use common::log::{self, error, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
@@ -18,6 +18,8 @@ use std::fmt;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
+
+use super::ConnMngPolicy;
 
 cfg_wasm32! {
     use mm2_rpc::wasm_rpc::WasmRpcSender;
@@ -296,6 +298,19 @@ impl MmCtx {
     pub fn is_stopping(&self) -> bool { self.stop.copy_or(false) }
 
     pub fn gui(&self) -> Option<&str> { self.conf["gui"].as_str() }
+
+    pub fn electrum_conn_mng_policy(&self) -> ConnMngPolicy {
+        let conn_policy = self.conf["electrum_conn_policy"].clone();
+
+        serde_json::from_value(conn_policy.clone())
+            .map_err(|err| {
+                error!(
+                    "Failed to get conn_mng_policy from the value: {:?}, error: {}",
+                    conn_policy, err
+                )
+            })
+            .unwrap_or_default()
+    }
 
     pub fn mm_version(&self) -> &str { &self.mm_version }
 

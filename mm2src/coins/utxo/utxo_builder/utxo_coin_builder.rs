@@ -494,7 +494,7 @@ pub trait UtxoCoinBuilderCommonOps {
         let gui = ctx.gui().unwrap_or("UNKNOWN").to_string();
         let mm_version = ctx.mm_version().to_string();
         let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
-
+        let conn_mng_policy = ctx.electrum_conn_mng_policy();
         let client = ElectrumClient(Arc::new(ElectrumClientImpl::new(
             client_name.clone(),
             servers.clone(),
@@ -503,6 +503,7 @@ pub trait UtxoCoinBuilderCommonOps {
             block_headers_storage,
             abortable_system,
             args.negotiate_version,
+            conn_mng_policy,
         )));
         client.0.set_weak(Arc::downgrade(&client.0));
 

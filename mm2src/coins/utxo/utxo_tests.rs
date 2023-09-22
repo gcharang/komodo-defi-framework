@@ -41,6 +41,7 @@ use futures::channel::mpsc::channel;
 use futures::future::join_all;
 use futures::TryFutureExt;
 use mm2_core::mm_ctx::MmCtxBuilder;
+use mm2_core::ConnMngPolicy;
 use mm2_number::bigdecimal::{BigDecimal, Signed};
 use mm2_test_helpers::for_tests::{mm_ctx_with_custom_db, MORTY_ELECTRUM_ADDRS, RICK_ELECTRUM_ADDRS};
 use mocktopus::mocking::*;
@@ -469,6 +470,7 @@ fn test_wait_for_payment_spend_timeout_electrum() {
         block_headers_storage,
         abortable_system,
         true,
+        ConnMngPolicy::default(),
     );
     let client = UtxoRpcClientEnum::Electrum(ElectrumClient(Arc::new(client)));
     let coin = utxo_coin_for_test(client, None, false);
@@ -1504,7 +1506,14 @@ fn test_network_info_negative_time_offset() {
 #[test]
 fn test_unavailable_electrum_proto_version() {
     ElectrumClientImpl::new.mock_safe(
-        |client_name, servers, coin_ticker, event_handlers, block_headers_storage, abortable_system, _| {
+        |client_name,
+         servers,
+         coin_ticker,
+         event_handlers,
+         block_headers_storage,
+         abortable_system,
+         _,
+         conn_mng_policy| {
             MockResult::Return(ElectrumClientImpl::with_protocol_version(
                 client_name,
                 servers,
@@ -1513,6 +1522,7 @@ fn test_unavailable_electrum_proto_version() {
                 OrdRange::new(1.8, 1.9).unwrap(),
                 block_headers_storage,
                 abortable_system,
+                conn_mng_policy,
             ))
         },
     );

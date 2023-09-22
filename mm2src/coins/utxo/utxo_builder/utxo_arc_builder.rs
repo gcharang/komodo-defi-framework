@@ -105,7 +105,6 @@ where
 
     async fn build(self) -> MmResult<Self::ResultCoin, Self::Error> {
         let utxo = self.build_utxo_fields().await?;
-        // TODO: @rozhkovdmitrii check further stuff if it's broken or not
         let sync_status_loop_handle = utxo.block_headers_status_notifier.clone();
         let spv_conf = utxo.conf.spv_conf.clone();
         let utxo_arc = UtxoArc::new(utxo);
