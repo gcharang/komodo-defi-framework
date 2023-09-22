@@ -2465,7 +2465,7 @@ pub trait MmCoin:
     fn on_token_deactivated(&self, ticker: &str);
 
     // Handler for coin balance streaming continuously to the thread/stream channels
-    async fn handle_balance_stream(self);
+    async fn handle_balance_stream(self, interval: f64);
 }
 
 /// The coin futures spawner. It's used to spawn futures that can be aborted immediately or after a timeout

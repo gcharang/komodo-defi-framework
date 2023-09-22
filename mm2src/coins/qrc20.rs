@@ -1466,7 +1466,7 @@ impl MmCoin for Qrc20Coin {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    async fn handle_balance_stream(self) { todo!() }
+    async fn handle_balance_stream(self, _interval: f64) { todo!() }
 }
 
 pub fn qrc20_swap_id(time_lock: u32, secret_hash: &[u8]) -> Vec<u8> {

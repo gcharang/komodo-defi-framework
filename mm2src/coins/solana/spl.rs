@@ -571,5 +571,5 @@ impl MmCoin for SplToken {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    async fn handle_balance_stream(self) { todo!() }
+    async fn handle_balance_stream(self, _interval: f64) { todo!() }
 }

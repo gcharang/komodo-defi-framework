@@ -1309,7 +1309,7 @@ impl MmCoin for BchCoin {
         };
     }
 
-    async fn handle_balance_stream(self) { todo!() }
+    async fn handle_balance_stream(self, _interval: f64) { todo!() }
 }
 
 impl CoinWithDerivationMethod for BchCoin {

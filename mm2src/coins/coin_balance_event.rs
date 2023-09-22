@@ -53,44 +53,47 @@ impl EventBehaviour for CoinBalanceEvent {
                 }
 
                 match coin {
-                    MmCoinEnum::UtxoCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::QtumCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::Qrc20Coin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::EthCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::ZCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::Bch(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::SlpToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::Tendermint(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::TendermintToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::LightningCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
-                    MmCoinEnum::Test(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::UtxoCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::QtumCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::Qrc20Coin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::EthCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::ZCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::Bch(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::SlpToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::Tendermint(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::TendermintToken(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(interval))
+                    },
+                    MmCoinEnum::LightningCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::Test(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
                     #[cfg(all(
                         feature = "enable-solana",
                         not(target_os = "ios"),
                         not(target_os = "android"),
                         not(target_arch = "wasm32")
                     ))]
-                    MmCoinEnum::SolanaCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::SolanaCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
                     #[cfg(all(
                         feature = "enable-solana",
                         not(target_os = "ios"),
                         not(target_os = "android"),
                         not(target_arch = "wasm32")
                     ))]
-                    MmCoinEnum::SplToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::SplToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
                 }
 
                 event_pool.push(ticker);
             }
 
-            Timer::sleep(interval).await;
+            Timer::sleep(5.).await;
         }
     }
 
     fn spawn_if_active(self, config: &EventStreamConfiguration) {
         if let Some(event) = config.get_event(Self::EVENT_NAME) {
             info!(
-                "NETWORK event is activated with {} seconds interval.",
+                "{} event is activated. `stream_interval_seconds`({}) has no effect for this event.",
+                Self::EVENT_NAME,
                 event.stream_interval_seconds
             );
             self.ctx.spawner().spawn(self.handle(event.stream_interval_seconds));
