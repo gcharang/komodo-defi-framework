@@ -2195,6 +2195,8 @@ impl MmCoin for TendermintCoin {
     fn on_disabled(&self) -> Result<(), AbortedError> { AbortableSystem::abort_all(&self.abortable_system) }
 
     fn on_token_deactivated(&self, _ticker: &str) {}
+
+    async fn handle_balance_stream(self) { todo!() }
 }
 
 impl MarketCoinOps for TendermintCoin {

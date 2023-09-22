@@ -1,4 +1,4 @@
-use crate::{CoinsContext, MmCoinEnum};
+use crate::{CoinsContext, MmCoin, MmCoinEnum};
 use async_trait::async_trait;
 use common::{executor::{SpawnFuture, Timer},
              log::info};
@@ -32,7 +32,7 @@ impl EventBehaviour for CoinBalanceEvent {
                 .filter_map(|coin| {
                     // We loop this over and over, so it's not necessary to sequentially load the atomics all over
                     // the threads, since the cost of it is way too higher than the `AtomicOrdering::Relaxed`
-                    if coin.is_available.load(Ordering::Relaxed) && coin.inner.is_platform_coin() {
+                    if coin.is_available.load(Ordering::Relaxed) {
                         Some(coin.inner.clone())
                     } else {
                         None
@@ -44,6 +44,7 @@ impl EventBehaviour for CoinBalanceEvent {
             // on this lock(like coin activation)) since we loop this over continuously.
             drop(coins_mutex);
 
+            // Handle balance streaming concurrently for each coin
             for coin in coins {
                 let ticker = coin.ticker().to_owned();
 
@@ -52,26 +53,31 @@ impl EventBehaviour for CoinBalanceEvent {
                 }
 
                 match coin {
-                    MmCoinEnum::TendermintToken(_) => unreachable!(),
-                    MmCoinEnum::Tendermint(_) => {
-                        println!("TODO: here we will spawn a thread for tendermint balance handler which uses socket connection under the hood.");
-                    },
-                    MmCoinEnum::UtxoCoin(_) => todo!(),
-                    MmCoinEnum::QtumCoin(_) => todo!(),
-                    MmCoinEnum::Qrc20Coin(_) => todo!(),
-                    MmCoinEnum::EthCoin(_) => todo!(),
-                    MmCoinEnum::ZCoin(_) => todo!(),
-                    MmCoinEnum::Bch(_) => todo!(),
-                    MmCoinEnum::SlpToken(_) => todo!(),
-                    MmCoinEnum::LightningCoin(_) => todo!(),
-                    MmCoinEnum::Test(_) => todo!(),
+                    MmCoinEnum::UtxoCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::QtumCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::Qrc20Coin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::EthCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::ZCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::Bch(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::SlpToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::Tendermint(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::TendermintToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::LightningCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    MmCoinEnum::Test(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
                     #[cfg(all(
                         feature = "enable-solana",
                         not(target_os = "ios"),
                         not(target_os = "android"),
                         not(target_arch = "wasm32")
                     ))]
-                    MmCoinEnum::SolanaCoin(_) | MmCoinEnum::SplToken(_) => todo!(),
+                    MmCoinEnum::SolanaCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
+                    #[cfg(all(
+                        feature = "enable-solana",
+                        not(target_os = "ios"),
+                        not(target_os = "android"),
+                        not(target_arch = "wasm32")
+                    ))]
+                    MmCoinEnum::SplToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream()),
                 }
 
                 event_pool.push(ticker);

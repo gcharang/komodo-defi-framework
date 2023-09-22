@@ -793,6 +793,8 @@ impl MmCoin for UtxoStandardCoin {
     fn on_disabled(&self) -> Result<(), AbortedError> { AbortableSystem::abort_all(&self.as_ref().abortable_system) }
 
     fn on_token_deactivated(&self, _ticker: &str) {}
+
+    async fn handle_balance_stream(self) { todo!() }
 }
 
 #[async_trait]

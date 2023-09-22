@@ -1308,6 +1308,8 @@ impl MmCoin for BchCoin {
             tokens.remove(ticker);
         };
     }
+
+    async fn handle_balance_stream(self) { todo!() }
 }
 
 impl CoinWithDerivationMethod for BchCoin {

@@ -4732,6 +4732,8 @@ impl MmCoin for EthCoin {
             tokens.remove(ticker);
         };
     }
+
+    async fn handle_balance_stream(self) { todo!() }
 }
 
 pub trait TryToAddress {

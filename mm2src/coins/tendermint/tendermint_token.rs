@@ -874,4 +874,6 @@ impl MmCoin for TendermintToken {
     fn on_disabled(&self) -> Result<(), AbortedError> { self.abortable_system.abort_all() }
 
     fn on_token_deactivated(&self, _ticker: &str) {}
+
+    async fn handle_balance_stream(self) { todo!() }
 }
