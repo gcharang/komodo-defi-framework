@@ -1,7 +1,7 @@
 use crate::coin_balance::HDAddressBalance;
-use crate::hd_confirm_address::{ConfirmAddressStatus, HDConfirmAddress, HDConfirmAddressError, RpcTaskConfirmAddress};
-use crate::hd_wallet::{AddressDerivingError, InvalidBip44ChainError, NewAddressDeriveConfirmError,
-                       NewAddressDerivingError};
+use crate::hd_wallet::{AddressDerivingError, ConfirmAddressStatus, HDConfirmAddress, HDConfirmAddressError,
+                       InvalidBip44ChainError, NewAddressDeriveConfirmError, NewAddressDerivingError,
+                       RpcTaskConfirmAddress};
 use crate::{lp_coinfind_or_err, BalanceError, CoinFindError, CoinsContext, MmCoinEnum, UnexpectedDerivationMethod};
 use async_trait::async_trait;
 use common::{HttpStatusCode, SuccessResponse};
@@ -378,8 +378,8 @@ pub async fn cancel_get_new_address(
 pub(crate) mod common_impl {
     use super::*;
     use crate::coin_balance::{HDAddressBalanceScanner, HDWalletBalanceOps};
-    use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
-    use crate::{CoinWithDerivationMethod, HDAddress};
+    use crate::hd_wallet::{HDAccountOps, HDAddress, HDWalletCoinOps, HDWalletOps};
+    use crate::CoinWithDerivationMethod;
     use crypto::RpcDerivationPath;
     use std::fmt;
     use std::ops::DerefMut;

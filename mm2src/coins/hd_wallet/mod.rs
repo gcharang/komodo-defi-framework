@@ -1,4 +1,3 @@
-use crate::hd_confirm_address::HDConfirmAddressError;
 use crate::{BalanceError, WithdrawError};
 use async_trait::async_trait;
 use crypto::{Bip32DerPathError, Bip32DerPathOps, Bip32Error, Bip44Chain, ChildNumber, DerivationPath, HwError,
@@ -10,18 +9,25 @@ use rpc_task::RpcTaskError;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-pub(crate) mod hd_account_ops;
-pub(crate) use hd_account_ops::{AccountUpdatingError, HDAccountOps, InvalidBip44ChainError};
+mod hd_account_ops;
+pub use hd_account_ops::{AccountUpdatingError, HDAccountOps, InvalidBip44ChainError};
 
-pub(crate) mod hd_coin_ops;
-pub(crate) use hd_coin_ops::{HDAddressId, HDWalletCoinOps};
+mod hd_coin_ops;
+pub use hd_coin_ops::{HDAddressId, HDWalletCoinOps};
 
-pub(crate) mod storage;
+mod hd_confirm_address;
+#[cfg(test)]
+pub(crate) use hd_confirm_address::for_tests::MockableConfirmAddress;
+pub(crate) use hd_confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
+pub use hd_confirm_address::{HDConfirmAddress, HDConfirmAddressError};
+
+mod storage;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use storage::HDWalletDb;
 #[cfg(test)] pub(crate) use storage::HDWalletMockStorage;
-pub(crate) use storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletCoinWithStorageOps, HDWalletId,
-                         HDWalletStorageError, HDWalletStorageInternalOps, HDWalletStorageResult};
+pub use storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletCoinWithStorageOps, HDWalletId,
+                  HDWalletStorageError};
+pub(crate) use storage::{HDWalletStorageInternalOps, HDWalletStorageResult};
 
 pub(crate) type HDAccountsMap<HDAccount> = BTreeMap<u32, HDAccount>;
 pub(crate) type HDAccountsMutex<HDAccount> = AsyncMutex<HDAccountsMap<HDAccount>>;

@@ -1,9 +1,8 @@
 use super::*;
 use crate::coin_balance::HDAddressBalance;
 use crate::coin_errors::ValidatePaymentError;
-use crate::hd_confirm_address::for_tests::MockableConfirmAddress;
-use crate::hd_confirm_address::{HDConfirmAddress, HDConfirmAddressError};
-use crate::hd_wallet::{HDAccountsMap, HDWalletMockStorage, HDWalletStorageInternalOps};
+use crate::hd_wallet::{HDAccountsMap, HDConfirmAddress, HDConfirmAddressError, HDWalletMockStorage,
+                       HDWalletStorageInternalOps, MockableConfirmAddress};
 use crate::my_tx_history_v2::for_tests::init_storage_for;
 use crate::my_tx_history_v2::CoinWithTxHistoryV2;
 use crate::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps, HDAccountBalanceResponse};

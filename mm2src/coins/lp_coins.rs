@@ -219,7 +219,6 @@ use eth::GetValidEthWithdrawAddError;
 use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetailsErr, EthTxFeeDetails,
           GetEthAddressError, SignedEthTx};
 
-pub mod hd_confirm_address;
 pub mod hd_pubkey;
 
 pub mod hd_wallet;

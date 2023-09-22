@@ -48,7 +48,7 @@ impl From<HwProcessingError<RpcTaskError>> for HDConfirmAddressError {
 }
 
 /// An `InProgress` status constructor.
-pub trait ConfirmAddressStatus: Sized {
+pub(crate) trait ConfirmAddressStatus: Sized {
     /// Returns an `InProgress` RPC status that will be used to ask the user
     /// to confirm an `address` on his HW device.
     fn confirm_addr_status(address: String) -> Self;
@@ -66,7 +66,7 @@ pub trait HDConfirmAddress: Sync {
     ) -> MmResult<(), HDConfirmAddressError>;
 }
 
-pub enum RpcTaskConfirmAddress<'task, Task: RpcTask> {
+pub(crate) enum RpcTaskConfirmAddress<'task, Task: RpcTask> {
     Trezor {
         hw_ctx: HardwareWalletArc,
         task_handle: &'task RpcTaskHandle<Task>,
@@ -167,7 +167,7 @@ pub(crate) mod for_tests {
     use mocktopus::macros::mockable;
 
     #[derive(Default)]
-    pub struct MockableConfirmAddress;
+    pub(crate) struct MockableConfirmAddress;
 
     #[async_trait]
     #[mockable]
