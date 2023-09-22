@@ -783,9 +783,8 @@ async fn get_uri_meta(token_uri: Option<&str>, metadata: Option<&str>, url_antis
 fn construct_camo_url_with_token(token_uri: &str, url_antispam: &Url) -> Option<Url> {
     let mut url = url_antispam.clone();
     url.set_path("url/decode");
-    let hex_token_uri = hex::encode(token_uri);
     match url.path_segments_mut() {
-        Ok(mut segments) => segments.push(hex_token_uri.as_str()),
+        Ok(mut segments) => segments.push(hex::encode(token_uri).as_str()),
         Err(_) => return None,
     };
     Some(url)
