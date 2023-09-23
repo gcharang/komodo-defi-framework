@@ -8,12 +8,6 @@ use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 
-cfg_wasm32! {
-    use wasm_bindgen_test::*;
-
-    wasm_bindgen_test_configure!(run_in_browser);
-}
-
 const TOKEN_ADD: &str = "0xfd913a305d70a60aac4faac70c739563738e1f81";
 const TOKEN_ID: &str = "214300044414";
 const TX_HASH: &str = "0x1e9f04e9b571b283bde02c98c2a97da39b2bb665b57c1f2b0b733f9b681debbe";
@@ -61,7 +55,7 @@ pub(crate) fn nft() -> Nft {
     }
 }
 
-fn nft_list() -> Vec<Nft> {
+pub(crate) fn nft_list() -> Vec<Nft> {
     let nft = Nft {
         common: NftCommon {
             token_address: Address::from_str("0x5c7d6712dfaf0cb079d48981781c8705e8417ca0").unwrap(),
@@ -227,7 +221,7 @@ fn nft_list() -> Vec<Nft> {
     vec![nft, nft1, nft2, nft3]
 }
 
-fn nft_transfer_history() -> Vec<NftTransferHistory> {
+pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
     let transfer = NftTransferHistory {
         common: NftTransferCommon {
             block_hash: Some("0xcb41654fc5cf2bf5d7fd3f061693405c74d419def80993caded0551ecfaeaae5".to_string()),
@@ -355,7 +349,7 @@ fn nft_transfer_history() -> Vec<NftTransferHistory> {
     vec![transfer, transfer1, transfer2, transfer3]
 }
 
-async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTransferHistoryStorageOps {
+pub(crate) async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTransferHistoryStorageOps {
     let ctx = mm_ctx_with_custom_db();
     let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     NftListStorageOps::init(&storage, chain).await.unwrap();
@@ -364,7 +358,7 @@ async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTra
     storage
 }
 
-async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + NftTransferHistoryStorageOps {
+pub(crate) async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + NftTransferHistoryStorageOps {
     let ctx = mm_ctx_with_custom_db();
     let storage = NftStorageBuilder::new(&ctx).build().unwrap();
     NftTransferHistoryStorageOps::init(&storage, chain).await.unwrap();
