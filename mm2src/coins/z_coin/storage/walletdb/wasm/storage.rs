@@ -1214,7 +1214,7 @@ impl WalletRead for WalletIndexedDb {
 
         let mut final_note = vec![];
         for (id_note, value, note, running_sum) in &notes {
-            if let Some(tx_block) = txs.iter().find(|(id_tx, tx)| *id_tx == note.tx).map(|(_, tx)| tx.block) {
+            if let Some(_tx_block) = txs.iter().find(|(id_tx, _tx)| *id_tx == note.tx) {
                 final_note.push((id_note, value, note, running_sum));
             }
         }
@@ -1245,7 +1245,6 @@ impl WalletRead for WalletIndexedDb {
             }
         }
 
-        info!("GATHERED!");
         Ok(spendable_notes)
     }
 }
