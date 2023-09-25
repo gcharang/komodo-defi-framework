@@ -75,6 +75,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio_tungstenite::tungstenite;
 use uuid::Uuid;
 
 // ABCI Request Paths
@@ -2197,30 +2198,47 @@ impl MmCoin for TendermintCoin {
     fn on_token_deactivated(&self, _ticker: &str) {}
 
     async fn handle_balance_stream(self, _interval: f64) {
-        let ws_conn = "ws://35.234.10.84:26657/websocket";
-        let (mut socket, _) = tokio_tungstenite::connect_async(ws_conn).await.unwrap();
+        let node_uri = self.rpc_client().await.unwrap().uri();
 
-        let q = json!({
+        let address_prefix = match node_uri.scheme_str() {
+            Some("https") => "wss",
+            _ => "ws",
+        };
+        let host_address = node_uri.host().expect("Host can't be empty.");
+        let port = node_uri.port_u16().map(|p| format!(":{}", p)).unwrap_or_default();
+
+        let socket_address = format!("{}://{}{}/websocket", address_prefix, host_address, port);
+        println!("SOCKET_ADDRESS! {:?}", socket_address);
+
+        let (mut socket, _) = tokio_tungstenite::connect_async(socket_address).await.unwrap();
+
+        let account_id = self.account_id.to_string();
+
+        // Filter received TX events
+        let query_filter = format!("coin_received.receiver = '{}'", account_id);
+        let query_payload = json!({
             "jsonrpc": "2.0",
             "method": "subscribe",
             "id": 0,
             "params": {
-                "query": "coin_received.receiver = 'iaa1e0rx87mdj79zejewuc4jg7ql9ud2286g2us8f2'"
+                "query": query_filter
             }
         });
-        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string());
-        socket.send(msg).await.unwrap();
+        let query_payload = tungstenite::Message::text(query_payload.to_string());
+        socket.send(query_payload).await.unwrap();
 
-        let q = json!({
+        // Filter spent TX events
+        let query_filter = format!("coin_spent.spender = '{}'", account_id);
+        let query_payload = json!({
             "jsonrpc": "2.0",
             "method": "subscribe",
             "id": 0,
             "params": {
-                "query": "coin_spent.spender = 'iaa1e0rx87mdj79zejewuc4jg7ql9ud2286g2us8f2'"
+                "query": query_filter
             }
         });
-        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string());
-        socket.send(msg).await.unwrap();
+        let query_payload = tungstenite::Message::text(query_payload.to_string());
+        socket.send(query_payload).await.unwrap();
 
         while let Some(message) = socket.next().await {
             let msg = match message.unwrap() {
@@ -2228,9 +2246,9 @@ impl MmCoin for TendermintCoin {
                 _ => String::new(),
             };
 
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&msg) {
+            if let Ok(json_val) = json::from_str::<json::Value>(&msg) {
                 let transfers: Vec<String> =
-                    json::from_value(parsed["result"]["events"]["transfer.amount"].clone()).unwrap_or_default();
+                    json::from_value(json_val["result"]["events"]["transfer.amount"].clone()).unwrap_or_default();
 
                 let mut denoms: Vec<String> = transfers
                     .iter()
