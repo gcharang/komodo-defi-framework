@@ -100,7 +100,6 @@ impl ConnMngTrait for ConnMngSelective {
             if let Err(err) = self_copy.clone().suspend_server(address.clone()).await {
                 error!("Failed to suspend server: {}, error: {}", address, err);
             }
-            //  !!!!!!! TODO: no need to connect
             if let Err(err) = self_copy.connect().await {
                 error!(
                     "Failed to reconnect after addr was disconnected: {}, error: {}",
@@ -305,7 +304,7 @@ impl ConnMngSelective {
     }
 
     async fn resume_server(self, address: String) -> Result<(), String> {
-        debug!("Resume holding address: {}", address);
+        debug!("Resume address: {}", address);
         let mut guard = self.0.guarded.lock().await;
         let priority = guard
             .conn_ctxs

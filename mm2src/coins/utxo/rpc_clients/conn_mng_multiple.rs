@@ -84,25 +84,17 @@ impl ConnMngMultiple {
         if guarded.conn_ctxs.is_empty() {
             return ERR!("Not settings to connect to found");
         }
-        let mut notified = vec![];
-        // let event_handlers = guarded.event_handlers.clone();
+
         let event_handlers = guarded.event_handlers.clone();
         for mut conn_ctx in &mut guarded.conn_ctxs {
             let conn_settings = conn_ctx.conn_settings.clone();
             let weak_spawner = conn_ctx.abortable_system.weak_spawner();
-            let (connection, ready_notify) =
-                try_s!(spawn_electrum(&conn_settings, event_handlers.clone(), weak_spawner));
+            let self_clone = self.clone();
             let event_handlers = event_handlers.clone();
-            notified.push(Box::new(
-                async move {
-                    ready_notify.notified().await;
-                }
-                .boxed(),
-            ));
-            conn_ctx.connection.replace(Arc::new(AsyncMutex::new(connection)));
+            self.0.abortable_system.weak_spawner().spawn(async move {
+                let _ = self_clone.connect_to(conn_settings, event_handlers, weak_spawner).await;
+            });
         }
-        drop(guarded);
-        select_all(notified).await;
         Ok(())
     }
 
@@ -142,7 +134,7 @@ impl ConnMngMultiple {
     }
 
     async fn resume_server(self, address: String) -> Result<(), String> {
-        debug!("Resume holding address: {}", address);
+        debug!("Resume address: {}", address);
         let guard = self.0.guarded.lock().await;
 
         let conn_ctx = Self::get_conn_ctx(&guard, &address)?;
