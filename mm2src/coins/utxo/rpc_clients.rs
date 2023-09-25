@@ -61,6 +61,7 @@ use std::time::Duration;
 
 use common::custom_futures::select_ok_sequential;
 use common::executor::abortable_queue::WeakSpawner;
+use conn_mng_multiple::{ConnMngMultiple, ConnMngMultipleImpl};
 use conn_mng_selective::{ConnMngSelective, ConnMngSelectiveImpl};
 use mm2_core::ConnMngPolicy;
 use tokio::sync::Notify;
@@ -1554,7 +1555,7 @@ pub struct ElectrumConnection {
 }
 
 impl ElectrumConnection {
-    //    async fn is_connected(&self) -> bool { self.tx.lock().await.is_some() }
+    async fn is_connected(&self) -> bool { self.tx.lock().await.is_some() }
 
     async fn set_protocol_version(&self, version: f32) { self.protocol_version.lock().await.replace(version); }
 
@@ -1749,7 +1750,7 @@ async fn electrum_request_to(
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
     let (tx, responses) = {
         let conn = client.conn_mng.get_conn_by_address(to_addr.as_ref()).await;
-        let conn = conn.map_err(|err| JsonRpcErrorType::Internal(err))?;
+        let conn = conn.map_err(JsonRpcErrorType::Internal)?;
         let guard = conn.lock().await;
         let connection: &ElectrumConnection = guard.deref();
 
@@ -2555,13 +2556,17 @@ impl ElectrumClientImpl {
         negotiate_version: bool,
         conn_mng_policy: ConnMngPolicy,
     ) -> ElectrumClientImpl {
-        let conn_mng = match conn_mng_policy {
+        let conn_mng: Arc<dyn ConnMngTrait + Send + Sync + 'static> = match conn_mng_policy {
             ConnMngPolicy::Selective => Arc::new(ConnMngSelective(Arc::new(ConnMngSelectiveImpl::new(
                 servers,
                 abortable_system,
-                event_handlers.clone(),
+                event_handlers,
             )))),
-            ConnMngPolicy::Concurrent => todo!(),
+            ConnMngPolicy::Concurrent => Arc::new(ConnMngMultiple(Arc::new(ConnMngMultipleImpl::new(
+                servers,
+                abortable_system,
+                event_handlers,
+            )))),
         };
 
         let protocol_version = OrdRange::new(1.2, 1.4).unwrap();

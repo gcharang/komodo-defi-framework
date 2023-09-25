@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
 use common::executor::{AbortableSystem, SpawnFuture};
-use common::jsonrpc_client::JsonRpcErrorType;
 use common::log::{debug, error, info, warn};
 use futures::future::FutureExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard};
@@ -81,8 +80,8 @@ impl ConnMngTrait for ConnMngSelective {
     async fn remove_server(&self, address: String) -> Result<(), String> { self.0.remove_server(address).await }
 
     async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
-        let mut guard = self.0.guarded.lock().await;
-        guard.event_handlers.push(handler)
+        let mut guarded = self.0.guarded.lock().await;
+        guarded.event_handlers.push(handler)
     }
 
     async fn rotate_servers(&self, _no_of_rotations: usize) {
@@ -101,6 +100,7 @@ impl ConnMngTrait for ConnMngSelective {
             if let Err(err) = self_copy.clone().suspend_server(address.clone()).await {
                 error!("Failed to suspend server: {}, error: {}", address, err);
             }
+            //  !!!!!!! TODO: no need to connect
             if let Err(err) = self_copy.connect().await {
                 error!(
                     "Failed to reconnect after addr was disconnected: {}, error: {}",
@@ -251,8 +251,8 @@ pub struct ConnMngSelective(pub Arc<ConnMngSelectiveImpl>);
 impl ConnMngSelective {
     async fn suspend_server(&self, address: String) -> Result<(), String> {
         debug!(
-            "About to suspend connection to addr: {}, timeout: {}, guard: {:?}",
-            address, 20, self.0.guarded
+            "About to suspend connection to addr: {}, guard: {:?}",
+            address, self.0.guarded
         );
         let mut guard = self.0.guarded.lock().await;
         if let Some(ref active) = guard.active {
@@ -307,7 +307,13 @@ impl ConnMngSelective {
     async fn resume_server(self, address: String) -> Result<(), String> {
         debug!("Resume holding address: {}", address);
         let mut guard = self.0.guarded.lock().await;
-        let priority = guard.conn_ctxs.get(&address).expect("").conn_settings.priority.clone();
+        let priority = guard
+            .conn_ctxs
+            .get(&address)
+            .ok_or_else(|| format!("Failed to resume server, not conn_ctx found for: {}", address))?
+            .conn_settings
+            .priority
+            .clone();
         match priority {
             Priority::Primary => guard.queue.primary.push_back(address.clone()),
             Priority::Secondary => guard.queue.backup.push_back(address.clone()),
@@ -368,8 +374,8 @@ impl ConnMngSelective {
     }
 
     fn register_connection(
-        conn: ElectrumConnection,
         state: &mut MutexGuard<'_, ConnMngSelectiveState>,
+        conn: ElectrumConnection,
     ) -> Result<(), String> {
         state
             .conn_ctxs
@@ -437,15 +443,15 @@ impl ConnMngSelective {
         event_handlers: Vec<RpcTransportEventHandlerShared>,
         weak_spawner: WeakSpawner,
     ) -> Result<(), String> {
-        let (conn, verified_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
-        Self::register_connection(conn, &mut self.0.guarded.lock().await)?;
+        let (conn, ready_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
+        Self::register_connection(&mut self.0.guarded.lock().await, conn)?;
         let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
                 warn!("Failed to connect to: {}, timed out", conn_settings.url);
-                ERR!("Timed out: {}", conn_settings.url)
+                ERR!("Timed out: {}", timeout_sec)
             },
-            _ = verified_notify.notified() => Ok(())
+            _ = ready_notify.notified() => Ok(())
         }
     }
 }
