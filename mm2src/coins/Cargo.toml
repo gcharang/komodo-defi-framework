@@ -91,7 +91,6 @@ serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 serialization = { path = "../mm2_bitcoin/serialization" }
 serialization_derive = { path = "../mm2_bitcoin/serialization_derive" }
 spv_validation = { path = "../mm2_bitcoin/spv_validation" }
-time = "0.3"
 sha2 = "0.9"
 sha3 = "0.9"
 utxo_signer = { path = "utxo_signer" }
@@ -125,6 +124,7 @@ js-sys = { version = "0.3.27" }
 mm2_db = { path = "../mm2_db" }
 mm2_metamask = { path = "../mm2_metamask" }
 mm2_test_helpers = { path = "../mm2_test_helpers" }
+time = "0.3"
 wasm-bindgen = "0.2.86"
 wasm-bindgen-futures = { version = "0.4.1" }
 wasm-bindgen-test = { version = "0.3.2" }

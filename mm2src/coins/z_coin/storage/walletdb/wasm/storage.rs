@@ -1,7 +1,7 @@
 use crate::z_coin::storage::walletdb::wasm::tables::{WalletDbAccountsTable, WalletDbBlocksTable,
                                                      WalletDbReceivedNotesTable, WalletDbSaplingWitnessesTable,
                                                      WalletDbSentNotesTable, WalletDbTransactionsTable};
-use crate::z_coin::storage::wasm::{to_spendable_note, NoteId, SpendableNoteConstructor};
+use crate::z_coin::storage::wasm::{to_spendable_note, SpendableNoteConstructor};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::{CheckPointBlockInfo, WalletDbShared, ZCoinBuilder, ZcoinConsensusParams};
 
@@ -24,7 +24,7 @@ use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_pa
                                      encode_extended_full_viewing_key, encode_payment_address};
 use zcash_client_backend::wallet::{AccountId, SpendableNote, WalletTx};
 use zcash_client_backend::DecryptedOutput;
-use zcash_extras::{ShieldedOutput, WalletRead, WalletWrite};
+use zcash_extras::{NoteId, ShieldedOutput, WalletRead, WalletWrite};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_primitives::memo::{Memo, MemoBytes};

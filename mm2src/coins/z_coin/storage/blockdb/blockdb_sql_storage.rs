@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_client_sqlite::error::{SqliteClientError as ZcashClientError, SqliteClientError};
-use zcash_client_sqlite::NoteId;
+use zcash_extras::NoteId;
 use zcash_extras::WalletRead;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
