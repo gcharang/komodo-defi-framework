@@ -55,7 +55,7 @@ use crypto::{Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin};
 use derive_more::Display;
 use futures::future::try_join_all;
 use futures::lock::Mutex as AsyncMutex;
-use futures::{FutureExt, TryFutureExt};
+use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use futures01::Future;
 use hex::FromHexError;
 use itertools::Itertools;
@@ -71,7 +71,7 @@ use rpc::v1::types::Bytes as BytesJson;
 use serde_json::{self as json, Value as Json};
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -2196,7 +2196,37 @@ impl MmCoin for TendermintCoin {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    async fn handle_balance_stream(self, _interval: f64) { todo!() }
+    async fn handle_balance_stream(self, _interval: f64) {
+        let ws_conn = "ws://35.234.10.84:26657/websocket";
+        let (mut socket, _) = tokio_tungstenite::connect_async(ws_conn).await.unwrap();
+
+        let q = json!({
+            "jsonrpc": "2.0",
+            "method": "subscribe",
+            "id": 0,
+            "params": {
+                "query": "coin_received.receiver = 'iaa1e0rx87mdj79zejewuc4jg7ql9ud2286g2us8f2'"
+            }
+        });
+        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string()).into();
+        socket.send(msg).await.unwrap();
+
+        let q = json!({
+            "jsonrpc": "2.0",
+            "method": "subscribe",
+            "id": 0,
+            "params": {
+                "query": "coin_spent.spender = 'iaa1e0rx87mdj79zejewuc4jg7ql9ud2286g2us8f2'"
+            }
+        });
+        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string()).into();
+        socket.send(msg).await.unwrap();
+
+        while let Some(message) = socket.next().await {
+            let message = message.unwrap();
+            println!("AAAAAAAAAAAAAAAAA {:?}", message);
+        }
+    }
 }
 
 impl MarketCoinOps for TendermintCoin {
