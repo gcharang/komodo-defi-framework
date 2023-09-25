@@ -71,7 +71,7 @@ use rpc::v1::types::Bytes as BytesJson;
 use serde_json::{self as json, Value as Json};
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -2223,8 +2223,16 @@ impl MmCoin for TendermintCoin {
         socket.send(msg).await.unwrap();
 
         while let Some(message) = socket.next().await {
-            let message = message.unwrap();
-            println!("AAAAAAAAAAAAAAAAA {:?}", message);
+            let msg = match message.unwrap() {
+                tokio_tungstenite::tungstenite::Message::Text(s) => s,
+                _ => String::new(),
+            };
+
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&msg) {
+                let transfers = &parsed["result"]["events"]["transfer.amount"];
+
+                println!("AAAAAAAAAAAAAAAAA {:?}", transfers);
+            }
         }
     }
 }
