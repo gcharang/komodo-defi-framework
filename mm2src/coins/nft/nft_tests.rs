@@ -380,6 +380,28 @@ cross_test!(test_update_nft_phishing_by_domain, {
     }
 });
 
+cross_test!(test_exclude_nft_phishing_spam, {
+    let chain = Chain::Bsc;
+    let storage = init_nft_list_storage(&chain).await;
+    let nft_list = nft_list();
+    storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
+
+    storage
+        .update_nft_phishing_by_domain(&chain, "tikimetadata.s3.amazonaws.com".to_string(), true)
+        .await
+        .unwrap();
+    let filters = NftListFilters {
+        exclude_spam: true,
+        exclude_phishing: true,
+    };
+    let nfts = storage
+        .get_nft_list(vec![chain], true, 1, None, Some(filters))
+        .await
+        .unwrap()
+        .nfts;
+    assert_eq!(nfts.len(), 2);
+});
+
 cross_test!(test_add_get_transfers, {
     let chain = Chain::Bsc;
     let storage = init_nft_history_storage(&chain).await;
@@ -614,4 +636,45 @@ cross_test!(test_update_transfer_phishing_by_domain, {
     for transfer in transfers.into_iter() {
         assert!(transfer.possible_phishing);
     }
+});
+
+cross_test!(test_exclude_transfer_phishing_spam, {
+    let chain = Chain::Bsc;
+    let storage = init_nft_history_storage(&chain).await;
+    let transfers = nft_transfer_history();
+    storage.add_transfers_to_history(chain, transfers).await.unwrap();
+
+    storage
+        .update_transfer_phishing_by_domain(&chain, "tikimetadata.s3.amazonaws.com".to_string(), true)
+        .await
+        .unwrap();
+    let filters = NftTransferHistoryFilters {
+        receive: true,
+        send: true,
+        from_date: None,
+        to_date: None,
+        exclude_spam: false,
+        exclude_phishing: true,
+    };
+    let transfers = storage
+        .get_transfer_history(vec![chain], true, 1, None, Some(filters))
+        .await
+        .unwrap()
+        .transfer_history;
+    assert_eq!(transfers.len(), 2);
+
+    let filters1 = NftTransferHistoryFilters {
+        receive: true,
+        send: true,
+        from_date: None,
+        to_date: None,
+        exclude_spam: true,
+        exclude_phishing: true,
+    };
+    let transfers = storage
+        .get_transfer_history(vec![chain], true, 1, None, Some(filters1))
+        .await
+        .unwrap()
+        .transfer_history;
+    assert_eq!(transfers.len(), 1);
 });
