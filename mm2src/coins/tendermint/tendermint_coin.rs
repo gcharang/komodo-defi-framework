@@ -2208,7 +2208,7 @@ impl MmCoin for TendermintCoin {
                 "query": "coin_received.receiver = 'iaa1e0rx87mdj79zejewuc4jg7ql9ud2286g2us8f2'"
             }
         });
-        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string()).into();
+        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string());
         socket.send(msg).await.unwrap();
 
         let q = json!({
@@ -2219,7 +2219,7 @@ impl MmCoin for TendermintCoin {
                 "query": "coin_spent.spender = 'iaa1e0rx87mdj79zejewuc4jg7ql9ud2286g2us8f2'"
             }
         });
-        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string()).into();
+        let msg = tokio_tungstenite::tungstenite::Message::text(q.to_string());
         socket.send(msg).await.unwrap();
 
         while let Some(message) = socket.next().await {
@@ -2229,9 +2229,22 @@ impl MmCoin for TendermintCoin {
             };
 
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&msg) {
-                let transfers = &parsed["result"]["events"]["transfer.amount"];
+                let transfers: Vec<String> =
+                    json::from_value(parsed["result"]["events"]["transfer.amount"].clone()).unwrap_or_default();
 
-                println!("AAAAAAAAAAAAAAAAA {:?}", transfers);
+                let mut denoms: Vec<String> = transfers
+                    .iter()
+                    .map(|t| {
+                        let amount: String = t.chars().take_while(|c| c.is_numeric()).collect();
+                        let denom = &t[amount.len()..];
+                        denom.to_owned()
+                    })
+                    .collect();
+
+                denoms.dedup();
+                drop_mutability!(denoms);
+
+                println!("DENOMS {:?}", denoms);
             }
         }
     }
