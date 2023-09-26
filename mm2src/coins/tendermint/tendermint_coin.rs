@@ -1822,6 +1822,22 @@ impl TendermintCoin {
             _ => (self.gas_price(), fallback_gas_limit),
         }
     }
+
+    async fn active_ticker_from_denom(&self, denom: &str) -> Option<String> {
+        if self.denom.to_string() == denom {
+            return Some(self.ticker.clone());
+        }
+
+        let tokens = self.tokens_info.lock();
+
+        for (ticker, token) in &*tokens {
+            if token.denom.to_string() == denom {
+                return Some(ticker.to_owned());
+            }
+        }
+
+        None
+    }
 }
 
 fn clients_from_urls(rpc_urls: &[String]) -> MmResult<Vec<HttpClient>, TendermintInitErrorKind> {
@@ -2262,7 +2278,12 @@ impl MmCoin for TendermintCoin {
                 denoms.dedup();
                 drop_mutability!(denoms);
 
-                println!("DENOMS {:?}", denoms);
+                println!("DENOMS {:?}", &denoms);
+
+                for denom in denoms {
+                    let ticker = self.active_ticker_from_denom(&denom).await;
+                    println!("COIN IS ACTIVE: {:?}", ticker);
+                }
             }
         }
     }
