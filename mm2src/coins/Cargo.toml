@@ -49,6 +49,7 @@ ethereum-types = { version = "0.13", default-features = false, features = ["std"
 ethkey = { git = "https://github.com/KomodoPlatform/mm2-parity-ethereum.git" }
 # Waiting for https://github.com/rust-lang/rust/issues/54725 to use on Stable.
 #enum_dispatch = "0.1"
+ewebsock = { git = "https://github.com/KomodoPlatform/ewebsock.git", branch = "async", features = ["tls"] }
 futures01 = { version = "0.1", package = "futures" }
 # using select macro requires the crate to be named futures, compilation failed with futures03 name
 futures = { version = "0.3", package = "futures", features = ["compat", "async-await"] }
@@ -98,7 +99,6 @@ utxo_signer = { path = "utxo_signer" }
 # using the same version as cosmrs
 tendermint-rpc = { version = "=0.23.7", default-features = false }
 tiny-bip39 = "0.8.0"
-tokio-tungstenite = { version = "0.19.0", features = ["native-tls"]}
 url = { version = "2.2.2", features = ["serde"] }
 uuid = { version = "1.2.2", features = ["fast-rng", "serde", "v4"] }
 # One of web3 dependencies is the old `tokio-uds 0.1.7` which fails cross-compiling to ARM.

@@ -54,9 +54,10 @@ use cosmrs::{AccountId, Any, Coin, Denom, ErrorReport};
 use crypto::privkey::key_pair_from_secret;
 use crypto::{Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin};
 use derive_more::Display;
+use ewebsock::{WsEvent, WsMessage};
 use futures::future::try_join_all;
 use futures::lock::Mutex as AsyncMutex;
-use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
+use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
 use hex::FromHexError;
 use itertools::Itertools;
@@ -77,7 +78,6 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio_tungstenite::tungstenite;
 use uuid::Uuid;
 
 // ABCI Request Paths
@@ -2233,10 +2233,10 @@ impl MmCoin for TendermintCoin {
         let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
 
         let receiver_q = generate_subscription_query(format!("coin_received.receiver = '{}'", account_id));
-        let receiver_q = tungstenite::Message::text(receiver_q);
+        let receiver_q = ewebsock::WsMessage::Text(receiver_q);
 
         let spender_q = generate_subscription_query(format!("coin_spent.spender = '{}'", account_id));
-        let spender_q = tungstenite::Message::text(spender_q);
+        let spender_q = ewebsock::WsMessage::Text(spender_q);
 
         loop {
             let node_uri = match self.rpc_client().await {
@@ -2249,8 +2249,8 @@ impl MmCoin for TendermintCoin {
 
             let socket_address = format!("{}/{}", http_uri_to_ws_address(node_uri), "websocket");
 
-            let mut socket = match tokio_tungstenite::connect_async(socket_address).await {
-                Ok((socket, _)) => socket,
+            let (mut sender, mut receiver) = match ewebsock::connect(socket_address, 100) {
+                Ok(ws) => ws,
                 Err(e) => {
                     error!("{e}");
                     continue;
@@ -2258,20 +2258,18 @@ impl MmCoin for TendermintCoin {
             };
 
             // Filter received TX events
-            if let Err(e) = socket.send(receiver_q.clone()).await {
-                error!("{e}");
-                continue;
-            }
+            sender.send(receiver_q.clone());
 
             // Filter spent TX events
-            if let Err(e) = socket.send(spender_q.clone()).await {
-                error!("{e}");
-                continue;
-            }
+            sender.send(spender_q.clone());
 
-            while let Some(message) = socket.next().await {
-                let msg = match message {
-                    Ok(tungstenite::Message::Text(s)) => s,
+            while let Some(message) = receiver.try_recv().await {
+                let msg = match &*message {
+                    WsEvent::Message(WsMessage::Text(data)) => data.clone(),
+                    WsEvent::Error(err) => {
+                        error!("{err}");
+                        break;
+                    },
                     _ => continue,
                 };
 
@@ -2329,8 +2327,6 @@ impl MmCoin for TendermintCoin {
                     }
                 }
             }
-
-            Timer::sleep(2.0).await;
         }
     }
 }
