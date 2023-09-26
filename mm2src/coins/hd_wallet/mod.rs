@@ -9,20 +9,20 @@ use rpc_task::RpcTaskError;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-mod hd_account_ops;
-pub use hd_account_ops::{AccountUpdatingError, HDAccountOps, InvalidBip44ChainError};
+mod account_ops;
+pub use account_ops::{AccountUpdatingError, HDAccountOps, InvalidBip44ChainError};
 
-mod hd_coin_ops;
-pub use hd_coin_ops::{HDAddressId, HDWalletCoinOps};
+mod coin_ops;
+pub use coin_ops::{HDAddressId, HDWalletCoinOps};
 
-mod hd_confirm_address;
+mod confirm_address;
 #[cfg(test)]
-pub(crate) use hd_confirm_address::for_tests::MockableConfirmAddress;
-pub(crate) use hd_confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
-pub use hd_confirm_address::{HDConfirmAddress, HDConfirmAddressError};
+pub(crate) use confirm_address::for_tests::MockableConfirmAddress;
+pub(crate) use confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
+pub use confirm_address::{HDConfirmAddress, HDConfirmAddressError};
 
-mod hd_pubkey;
-pub use hd_pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
+mod pubkey;
+pub use pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
 
 mod storage;
 #[cfg(target_arch = "wasm32")]
@@ -372,7 +372,7 @@ pub trait HDWalletOps: Send + Sync {
 
 pub(crate) mod inner_impl {
     use super::*;
-    use hd_coin_ops::HDWalletCoinOps;
+    use coin_ops::HDWalletCoinOps;
 
     pub struct NewAddress<Address, Pubkey> {
         pub address: HDAddress<Address, Pubkey>,

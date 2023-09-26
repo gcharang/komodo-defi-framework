@@ -1,6 +1,6 @@
-use crate::hd_wallet::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountMut,
-                       HDAccountOps, HDAddress, HDConfirmAddress, HDWalletOps, HDXPubExtractor,
-                       NewAccountCreatingError, NewAddressDeriveConfirmError, NewAddressDerivingError};
+use super::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountMut, HDAccountOps,
+            HDAddress, HDConfirmAddress, HDWalletOps, HDXPubExtractor, NewAccountCreatingError,
+            NewAddressDeriveConfirmError, NewAddressDerivingError};
 use async_trait::async_trait;
 use crypto::Bip44Chain;
 use itertools::Itertools;

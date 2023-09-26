@@ -1,4 +1,4 @@
-use crate::hd_wallet::NewAccountCreatingError;
+use super::NewAccountCreatingError;
 use async_trait::async_trait;
 use crypto::hw_rpc_task::HwConnectStatuses;
 use crypto::trezor::trezor_rpc_task::{TrezorRpcTaskProcessor, TryIntoUserAction};
