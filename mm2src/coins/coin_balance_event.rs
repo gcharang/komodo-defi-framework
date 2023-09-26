@@ -6,6 +6,7 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_event_stream::{behaviour::EventBehaviour, EventStreamConfiguration};
 use std::sync::atomic::Ordering;
 
+/// Event tag for broadcasting balance events
 pub(crate) const COIN_BALANCE_EVENT_TAG: &str = "COIN_BALANCE";
 
 pub struct CoinBalanceEvent {

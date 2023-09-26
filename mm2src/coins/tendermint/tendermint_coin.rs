@@ -35,7 +35,7 @@ use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem};
 use common::executor::{AbortedError, Timer};
-use common::log::{debug, warn};
+use common::log::{debug, error, warn};
 use common::{get_utc_timestamp, http_uri_to_ws_address, now_sec, Future01CompatExt, DEX_FEE_ADDR_PUBKEY};
 use cosmrs::bank::MsgSend;
 use cosmrs::crypto::secp256k1::SigningKey;
@@ -2215,7 +2215,6 @@ impl MmCoin for TendermintCoin {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    // TODO: handle/rotate socket connection when server goes down
     async fn handle_balance_stream(self, ctx: MmArc) {
         fn generate_subscription_query(query_filter: String) -> String {
             let q = json!({
@@ -2230,80 +2229,108 @@ impl MmCoin for TendermintCoin {
             q.to_string()
         }
 
-        let node_uri = self.rpc_client().await.unwrap().uri();
-        let socket_address = format!("{}/{}", http_uri_to_ws_address(node_uri), "websocket");
-        let (mut socket, _) = tokio_tungstenite::connect_async(socket_address).await.unwrap();
-
         let account_id = self.account_id.to_string();
-
-        // Filter received TX events
-        let query = generate_subscription_query(format!("coin_received.receiver = '{}'", account_id));
-        let query = tungstenite::Message::text(query);
-        socket.send(query).await.unwrap();
-
-        // Filter spent TX events
-        let query = generate_subscription_query(format!("coin_spent.spender = '{}'", account_id));
-        let query = tungstenite::Message::text(query);
-        socket.send(query).await.unwrap();
-
         let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
-        while let Some(message) = socket.next().await {
-            let msg = match message.unwrap() {
-                tokio_tungstenite::tungstenite::Message::Text(s) => s,
-                _ => continue,
+
+        let receiver_q = generate_subscription_query(format!("coin_received.receiver = '{}'", account_id));
+        let receiver_q = tungstenite::Message::text(receiver_q);
+
+        let spender_q = generate_subscription_query(format!("coin_spent.spender = '{}'", account_id));
+        let spender_q = tungstenite::Message::text(spender_q);
+
+        loop {
+            let node_uri = match self.rpc_client().await {
+                Ok(client) => client.uri(),
+                Err(e) => {
+                    error!("{e}");
+                    continue;
+                },
             };
 
-            if let Ok(json_val) = json::from_str::<json::Value>(&msg) {
-                let transfers: Vec<String> =
-                    json::from_value(json_val["result"]["events"]["transfer.amount"].clone()).unwrap_or_default();
+            let socket_address = format!("{}/{}", http_uri_to_ws_address(node_uri), "websocket");
 
-                let mut denoms: Vec<String> = transfers
-                    .iter()
-                    .map(|t| {
-                        let amount: String = t.chars().take_while(|c| c.is_numeric()).collect();
-                        let denom = &t[amount.len()..];
-                        denom.to_owned()
-                    })
-                    .collect();
+            let mut socket = match tokio_tungstenite::connect_async(socket_address).await {
+                Ok((socket, _)) => socket,
+                Err(e) => {
+                    error!("{e}");
+                    continue;
+                },
+            };
 
-                denoms.dedup();
-                drop_mutability!(denoms);
+            // Filter received TX events
+            if let Err(e) = socket.send(receiver_q.clone()).await {
+                error!("{e}");
+                continue;
+            }
 
-                for denom in denoms {
-                    if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom).await {
-                        let balance_denom = self
-                            .account_balance_for_denom(&self.account_id, denom)
-                            .await
-                            .map_err(|e| e.into_inner())
-                            .unwrap();
+            // Filter spent TX events
+            if let Err(e) = socket.send(spender_q.clone()).await {
+                error!("{e}");
+                continue;
+            }
 
-                        let balance_decimal = big_decimal_from_sat_unsigned(balance_denom, decimals);
+            while let Some(message) = socket.next().await {
+                let msg = match message {
+                    Ok(tungstenite::Message::Text(s)) => s,
+                    _ => continue,
+                };
 
-                        // Only broadcast when balance is changed
-                        let mut broadcast = false;
-                        if let Some(balance) = current_balances.get_mut(&ticker) {
-                            if *balance != balance_decimal {
-                                *balance = balance_decimal.clone();
+                if let Ok(json_val) = json::from_str::<json::Value>(&msg) {
+                    let transfers: Vec<String> =
+                        json::from_value(json_val["result"]["events"]["transfer.amount"].clone()).unwrap_or_default();
+
+                    let mut denoms: Vec<String> = transfers
+                        .iter()
+                        .map(|t| {
+                            let amount: String = t.chars().take_while(|c| c.is_numeric()).collect();
+                            let denom = &t[amount.len()..];
+                            denom.to_owned()
+                        })
+                        .collect();
+
+                    denoms.dedup();
+                    drop_mutability!(denoms);
+
+                    for denom in denoms {
+                        if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom).await {
+                            let balance_denom = match self.account_balance_for_denom(&self.account_id, denom).await {
+                                Ok(balance_denom) => balance_denom,
+                                Err(e) => {
+                                    error!("{e}");
+                                    continue;
+                                },
+                            };
+
+                            let balance_decimal = big_decimal_from_sat_unsigned(balance_denom, decimals);
+
+                            // Only broadcast when balance is changed
+                            let mut broadcast = false;
+                            if let Some(balance) = current_balances.get_mut(&ticker) {
+                                if *balance != balance_decimal {
+                                    *balance = balance_decimal.clone();
+                                    broadcast = true;
+                                }
+                            } else {
+                                current_balances.insert(ticker.clone(), balance_decimal.clone());
                                 broadcast = true;
                             }
-                        } else {
-                            current_balances.insert(ticker.clone(), balance_decimal.clone());
-                            broadcast = true;
-                        }
 
-                        if broadcast {
-                            let payload = json!({
-                                "ticker": ticker,
-                                "balance": { "spendable": balance_decimal, "unspendable": BigDecimal::default() }
-                            });
+                            if broadcast {
+                                let payload = json!({
+                                    "ticker": ticker,
+                                    "balance": { "spendable": balance_decimal, "unspendable": BigDecimal::default() }
+                                });
 
-                            ctx.stream_channel_controller
-                                .broadcast(Event::new(COIN_BALANCE_EVENT_TAG.to_string(), payload.to_string()))
-                                .await;
+                                ctx.stream_channel_controller
+                                    .broadcast(Event::new(COIN_BALANCE_EVENT_TAG.to_string(), payload.to_string()))
+                                    .await;
+                            }
                         }
                     }
                 }
             }
+
+            Timer::sleep(2.0).await;
         }
     }
 }
