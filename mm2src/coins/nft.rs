@@ -16,9 +16,9 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
 
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721};
 use crate::nft::nft_errors::{MetaFromUrlError, ProtectFromSpamError, UpdateSpamPhishingError};
-use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, MnemonicHQRes, NftCommon, NftCtx,
-                              NftTransferCommon, PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq,
-                              SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
+use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, NftCommon, NftCtx, NftTransferCommon,
+                              PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq, SpamContractReq,
+                              SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
 use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
@@ -48,7 +48,6 @@ const MORALIS_FROM_BLOCK_QUERY_NAME: &str = "from_block";
 const BLOCKLIST_ENDPOINT: &str = "api/blocklist";
 const BLOCKLIST_CONTRACT: &str = "contract";
 const BLOCKLIST_DOMAIN: &str = "domain";
-const BLOCKLIST_WALLET: &str = "wallet";
 const BLOCKLIST_SCAN: &str = "scan";
 
 /// `WithdrawNftResult` type represents the result of an NFT withdrawal operation. On success, it provides the details
@@ -216,7 +215,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 let nft_list = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url, &req.url_antispam).await?;
                 update_meta_in_transfers(&storage, chain, nft_list).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
-                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+                update_spam(&storage, *chain, &req.url_antispam).await?;
                 update_phishing(&storage, chain, &req.url_antispam).await?;
                 continue;
             },
@@ -226,7 +225,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
                 let nft_list = cache_nfts_from_moralis(&ctx, &storage, chain, &req.url, &req.url_antispam).await?;
                 update_meta_in_transfers(&storage, chain, nft_list).await?;
                 update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
-                update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+                update_spam(&storage, *chain, &req.url_antispam).await?;
                 update_phishing(&storage, chain, &req.url_antispam).await?;
                 continue;
             },
@@ -256,25 +255,17 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
         )
         .await?;
         update_transfers_with_empty_meta(&storage, chain, &req.url, &req.url_antispam).await?;
-        update_spam(&ctx, &storage, *chain, &req.url_antispam).await?;
+        update_spam(&storage, *chain, &req.url_antispam).await?;
         update_phishing(&storage, chain, &req.url_antispam).await?;
     }
     Ok(())
 }
 
 /// `update_spam` function updates spam contracts info in NFT list and NFT transfers.
-async fn update_spam<T>(
-    ctx: &MmArc,
-    storage: &T,
-    chain: Chain,
-    url_antispam: &Url,
-) -> MmResult<(), UpdateSpamPhishingError>
+async fn update_spam<T>(storage: &T, chain: Chain, url_antispam: &Url) -> MmResult<(), UpdateSpamPhishingError>
 where
     T: NftListStorageOps + NftTransferHistoryStorageOps,
 {
-    if chain == Chain::Eth || chain == Chain::Polygon {
-        return update_spam_nft_with_mnemonichq(ctx, storage, &chain, url_antispam).await;
-    }
     let token_addresses = storage.get_token_addresses(chain).await?;
     if !token_addresses.is_empty() {
         let addresses = token_addresses
@@ -318,40 +309,6 @@ where
                     .await?;
             }
         }
-    }
-    Ok(())
-}
-
-/// Uses `/api/blocklist/wallet/{network}/{wallet_address}` endpoint to get **all spam contract addresses** of NFTs owned by the user.
-/// Currently, only the `Eth` and `Polygon` networks are supported.
-async fn update_spam_nft_with_mnemonichq<T>(
-    ctx: &MmArc,
-    storage: &T,
-    chain: &Chain,
-    url_antispam: &Url,
-) -> MmResult<(), UpdateSpamPhishingError>
-where
-    T: NftListStorageOps + NftTransferHistoryStorageOps,
-{
-    let mut scan_wallet_uri = prepare_uri_for_blocklist_endpoint(url_antispam, BLOCKLIST_WALLET, &chain.to_string())?;
-    let req = MyAddressReq {
-        coin: chain.to_ticker(),
-        path_to_address: Default::default(),
-    };
-    let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
-    scan_wallet_uri
-        .path_segments_mut()
-        .map_to_mm(|_| UpdateSpamPhishingError::Internal("Invalid URI".to_string()))?
-        .push(&my_address);
-    let response = send_request_to_uri(scan_wallet_uri.as_str()).await?;
-    let mnemonichq_res: MnemonicHQRes = serde_json::from_value(response)?;
-    for contract in mnemonichq_res.spam_contracts.iter() {
-        storage
-            .update_nft_spam_by_token_address(chain, eth_addr_to_hex(contract), true)
-            .await?;
-        storage
-            .update_transfer_spam_by_token_address(chain, eth_addr_to_hex(contract), true)
-            .await?;
     }
     Ok(())
 }

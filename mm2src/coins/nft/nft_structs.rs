@@ -667,12 +667,3 @@ pub(crate) struct SpamContractRes {
 pub(crate) struct PhishingDomainRes {
     pub(crate) result: HashMap<String, bool>,
 }
-
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-pub(crate) struct MnemonicHQRes {
-    pub(crate) network: Chain,
-    pub(crate) address: Address,
-    pub(crate) result: String,
-    pub(crate) spam_contracts: Vec<Address>,
-}

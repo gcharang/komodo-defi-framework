@@ -1,5 +1,5 @@
 use crate::eth::eth_addr_to_hex;
-use crate::nft::nft_structs::{Chain, MnemonicHQRes, NftFromMoralis, NftListFilters, NftTransferHistoryFilters,
+use crate::nft::nft_structs::{Chain, NftFromMoralis, NftListFilters, NftTransferHistoryFilters,
                               NftTransferHistoryFromMoralis, PhishingDomainReq, PhishingDomainRes, SpamContractReq,
                               SpamContractRes, TransferMeta, UriMeta};
 use crate::nft::storage::db_test_helpers::{init_nft_history_storage, init_nft_list_storage, nft, nft_list,
@@ -126,19 +126,6 @@ cross_test!(test_moralis_requests, {
     let response_meta = send_request_to_uri(uri_meta.as_str()).await.unwrap();
     let nft_moralis: NftFromMoralis = serde_json::from_str(&response_meta.to_string()).unwrap();
     assert_eq!(41237364, *nft_moralis.block_number_minted.unwrap());
-});
-
-cross_test!(test_antispam_wallet_endpoint, {
-    let uri_mnemonichq = format!(
-        "{}/api/blocklist/wallet/eth/0x3eb4b12127EdC81A4d2fD49658db07005bcAd065",
-        BLOCKLIST_API_ENDPOINT
-    );
-    let res_value = send_request_to_uri(uri_mnemonichq.as_str()).await.unwrap();
-    let mnemonichq_res: MnemonicHQRes = serde_json::from_value(res_value).unwrap();
-    assert!(mnemonichq_res
-        .spam_contracts
-        .contains(&Address::from_str("0x0ded8542fc8b2b4e781b96e99fee6406550c9b7c").unwrap()));
-    assert_eq!(Chain::Eth, mnemonichq_res.network);
 });
 
 cross_test!(test_antispam_scan_endpoints, {
