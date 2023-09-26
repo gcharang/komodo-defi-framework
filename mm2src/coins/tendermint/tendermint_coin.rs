@@ -5,6 +5,7 @@ use super::iris::htlc::{IrisHtlc, MsgClaimHtlc, MsgCreateHtlc, HTLC_STATE_COMPLE
                         HTLC_STATE_REFUNDED};
 use super::iris::htlc_proto::{CreateHtlcProtoRep, QueryHtlcRequestProto, QueryHtlcResponseProto};
 use super::rpc::*;
+use crate::coin_balance_event::COIN_BALANCE_EVENT_TAG;
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::rpc_command::tendermint::{IBCChainRegistriesResponse, IBCChainRegistriesResult, IBCChainsRequestError,
                                      IBCTransferChannel, IBCTransferChannelTag, IBCTransferChannelsRequest,
@@ -62,6 +63,7 @@ use itertools::Itertools;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
+use mm2_event_stream::Event;
 use mm2_git::{FileMetadata, GitController, GithubClient, RepositoryOperations, GITHUB_API_URI};
 use mm2_number::MmNumber;
 use parking_lot::Mutex as PaMutex;
@@ -1823,16 +1825,16 @@ impl TendermintCoin {
         }
     }
 
-    async fn active_ticker_from_denom(&self, denom: &str) -> Option<String> {
+    async fn active_ticker_and_decimals_from_denom(&self, denom: &str) -> Option<(String, u8)> {
         if self.denom.to_string() == denom {
-            return Some(self.ticker.clone());
+            return Some((self.ticker.clone(), self.decimals));
         }
 
         let tokens = self.tokens_info.lock();
 
         for (ticker, token) in &*tokens {
             if token.denom.to_string() == denom {
-                return Some(ticker.to_owned());
+                return Some((ticker.to_owned(), token.decimals));
             }
         }
 
@@ -2213,7 +2215,7 @@ impl MmCoin for TendermintCoin {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    async fn handle_balance_stream(self, _interval: f64) {
+    async fn handle_balance_stream(self, ctx: MmArc) {
         let node_uri = self.rpc_client().await.unwrap().uri();
 
         let address_prefix = match node_uri.scheme_str() {
@@ -2224,7 +2226,6 @@ impl MmCoin for TendermintCoin {
         let port = node_uri.port_u16().map(|p| format!(":{}", p)).unwrap_or_default();
 
         let socket_address = format!("{}://{}{}/websocket", address_prefix, host_address, port);
-        println!("SOCKET_ADDRESS! {:?}", socket_address);
 
         let (mut socket, _) = tokio_tungstenite::connect_async(socket_address).await.unwrap();
 
@@ -2256,6 +2257,7 @@ impl MmCoin for TendermintCoin {
         let query_payload = tungstenite::Message::text(query_payload.to_string());
         socket.send(query_payload).await.unwrap();
 
+        let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
         while let Some(message) = socket.next().await {
             let msg = match message.unwrap() {
                 tokio_tungstenite::tungstenite::Message::Text(s) => s,
@@ -2278,11 +2280,38 @@ impl MmCoin for TendermintCoin {
                 denoms.dedup();
                 drop_mutability!(denoms);
 
-                println!("DENOMS {:?}", &denoms);
-
                 for denom in denoms {
-                    let ticker = self.active_ticker_from_denom(&denom).await;
-                    println!("COIN IS ACTIVE: {:?}", ticker);
+                    if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom).await {
+                        let balance_denom = self
+                            .account_balance_for_denom(&self.account_id, denom)
+                            .await
+                            .map_err(|e| e.into_inner())
+                            .unwrap();
+
+                        let balance_decimal = big_decimal_from_sat_unsigned(balance_denom, decimals);
+
+                        let mut broadcast = false;
+                        if let Some(balance) = current_balances.get_mut(&ticker) {
+                            if *balance != balance_decimal {
+                                *balance = balance_decimal.clone();
+                                broadcast = true;
+                            }
+                        } else {
+                            current_balances.insert(ticker.clone(), balance_decimal.clone());
+                            broadcast = true;
+                        }
+
+                        if broadcast {
+                            let payload = json!({
+                                "ticker": ticker,
+                                "balance": { "spendable": balance_decimal, "unspendable": BigDecimal::default() }
+                            });
+
+                            ctx.stream_channel_controller
+                                .broadcast(Event::new(COIN_BALANCE_EVENT_TAG.to_string(), payload.to_string()))
+                                .await;
+                        }
+                    }
                 }
             }
         }

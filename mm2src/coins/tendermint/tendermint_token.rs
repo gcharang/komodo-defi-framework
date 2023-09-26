@@ -875,7 +875,7 @@ impl MmCoin for TendermintToken {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    async fn handle_balance_stream(self, _interval: f64) {
-        debug!("`fn handle_balance_stream` has no effect for Cosmos tokens.")
+    async fn handle_balance_stream(self, _ctx: MmArc) {
+        debug!("`fn handle_balance_stream` has no effect on Cosmos tokens.")
     }
 }

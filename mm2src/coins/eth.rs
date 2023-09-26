@@ -4733,7 +4733,7 @@ impl MmCoin for EthCoin {
         };
     }
 
-    async fn handle_balance_stream(self, _interval: f64) { todo!() }
+    async fn handle_balance_stream(self, _ctx: MmArc) { todo!() }
 }
 
 pub trait TryToAddress {

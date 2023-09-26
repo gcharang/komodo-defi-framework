@@ -794,7 +794,7 @@ impl MmCoin for UtxoStandardCoin {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
-    async fn handle_balance_stream(self, _interval: f64) { todo!() }
+    async fn handle_balance_stream(self, _ctx: MmArc) { todo!() }
 }
 
 #[async_trait]

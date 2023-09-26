@@ -6,6 +6,8 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_event_stream::{behaviour::EventBehaviour, EventStreamConfiguration};
 use std::sync::atomic::Ordering;
 
+pub(crate) const COIN_BALANCE_EVENT_TAG: &str = "COIN_BALANCE";
+
 pub struct CoinBalanceEvent {
     ctx: MmArc,
 }
@@ -16,9 +18,9 @@ impl CoinBalanceEvent {
 
 #[async_trait]
 impl EventBehaviour for CoinBalanceEvent {
-    const EVENT_NAME: &'static str = "COIN_BALANCE";
+    const EVENT_NAME: &'static str = COIN_BALANCE_EVENT_TAG;
 
-    async fn handle(self, interval: f64) {
+    async fn handle(self, _interval: f64) {
         let cctx = CoinsContext::from_ctx(&self.ctx).expect("Unexpected internal panic.");
 
         // Events that are already fired
@@ -53,33 +55,51 @@ impl EventBehaviour for CoinBalanceEvent {
                 }
 
                 match coin {
-                    MmCoinEnum::UtxoCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::QtumCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::Qrc20Coin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::EthCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::ZCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::Bch(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::SlpToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::Tendermint(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::TendermintToken(inner) => {
-                        self.ctx.spawner().spawn(inner.handle_balance_stream(interval))
+                    MmCoinEnum::UtxoCoin(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
                     },
-                    MmCoinEnum::LightningCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
-                    MmCoinEnum::Test(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::QtumCoin(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::Qrc20Coin(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::EthCoin(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::ZCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone())),
+                    MmCoinEnum::Bch(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone())),
+                    MmCoinEnum::SlpToken(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::Tendermint(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::TendermintToken(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::LightningCoin(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
+                    MmCoinEnum::Test(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone())),
                     #[cfg(all(
                         feature = "enable-solana",
                         not(target_os = "ios"),
                         not(target_os = "android"),
                         not(target_arch = "wasm32")
                     ))]
-                    MmCoinEnum::SolanaCoin(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::SolanaCoin(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
                     #[cfg(all(
                         feature = "enable-solana",
                         not(target_os = "ios"),
                         not(target_os = "android"),
                         not(target_arch = "wasm32")
                     ))]
-                    MmCoinEnum::SplToken(inner) => self.ctx.spawner().spawn(inner.handle_balance_stream(interval)),
+                    MmCoinEnum::SplToken(inner) => {
+                        self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
+                    },
                 }
 
                 event_pool.push(ticker);
