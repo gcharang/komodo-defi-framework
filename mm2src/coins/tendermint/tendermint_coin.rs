@@ -36,7 +36,7 @@ use bitcrypto::{dhash160, sha256};
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem};
 use common::executor::{AbortedError, Timer};
 use common::log::{debug, warn};
-use common::{get_utc_timestamp, now_sec, Future01CompatExt, DEX_FEE_ADDR_PUBKEY};
+use common::{get_utc_timestamp, http_uri_to_ws_address, now_sec, Future01CompatExt, DEX_FEE_ADDR_PUBKEY};
 use cosmrs::bank::MsgSend;
 use cosmrs::crypto::secp256k1::SigningKey;
 use cosmrs::proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
@@ -2215,53 +2215,42 @@ impl MmCoin for TendermintCoin {
 
     fn on_token_deactivated(&self, _ticker: &str) {}
 
+    // TODO: handle/rotate socket connection when server goes down
     async fn handle_balance_stream(self, ctx: MmArc) {
+        fn generate_subscription_query(query_filter: String) -> String {
+            let q = json!({
+                "jsonrpc": "2.0",
+                "method": "subscribe",
+                "id": 0,
+                "params": {
+                    "query": query_filter
+                }
+            });
+
+            q.to_string()
+        }
+
         let node_uri = self.rpc_client().await.unwrap().uri();
-
-        let address_prefix = match node_uri.scheme_str() {
-            Some("https") => "wss",
-            _ => "ws",
-        };
-        let host_address = node_uri.host().expect("Host can't be empty.");
-        let port = node_uri.port_u16().map(|p| format!(":{}", p)).unwrap_or_default();
-
-        let socket_address = format!("{}://{}{}/websocket", address_prefix, host_address, port);
-
+        let socket_address = format!("{}/{}", http_uri_to_ws_address(node_uri), "websocket");
         let (mut socket, _) = tokio_tungstenite::connect_async(socket_address).await.unwrap();
 
         let account_id = self.account_id.to_string();
 
         // Filter received TX events
-        let query_filter = format!("coin_received.receiver = '{}'", account_id);
-        let query_payload = json!({
-            "jsonrpc": "2.0",
-            "method": "subscribe",
-            "id": 0,
-            "params": {
-                "query": query_filter
-            }
-        });
-        let query_payload = tungstenite::Message::text(query_payload.to_string());
-        socket.send(query_payload).await.unwrap();
+        let query = generate_subscription_query(format!("coin_received.receiver = '{}'", account_id));
+        let query = tungstenite::Message::text(query);
+        socket.send(query).await.unwrap();
 
         // Filter spent TX events
-        let query_filter = format!("coin_spent.spender = '{}'", account_id);
-        let query_payload = json!({
-            "jsonrpc": "2.0",
-            "method": "subscribe",
-            "id": 0,
-            "params": {
-                "query": query_filter
-            }
-        });
-        let query_payload = tungstenite::Message::text(query_payload.to_string());
-        socket.send(query_payload).await.unwrap();
+        let query = generate_subscription_query(format!("coin_spent.spender = '{}'", account_id));
+        let query = tungstenite::Message::text(query);
+        socket.send(query).await.unwrap();
 
         let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
         while let Some(message) = socket.next().await {
             let msg = match message.unwrap() {
                 tokio_tungstenite::tungstenite::Message::Text(s) => s,
-                _ => String::new(),
+                _ => continue,
             };
 
             if let Ok(json_val) = json::from_str::<json::Value>(&msg) {
@@ -2290,6 +2279,7 @@ impl MmCoin for TendermintCoin {
 
                         let balance_decimal = big_decimal_from_sat_unsigned(balance_denom, decimals);
 
+                        // Only broadcast when balance is changed
                         let mut broadcast = false;
                         if let Some(balance) = current_balances.get_mut(&ticker) {
                             if *balance != balance_decimal {
