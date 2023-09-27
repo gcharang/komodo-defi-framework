@@ -19,7 +19,6 @@
 //
 
 use bitcrypto::sha256;
-use coins::coin_balance_event::CoinBalanceEvent;
 use coins::register_balance_update_handler;
 use common::executor::{SpawnFuture, Timer};
 use common::log::{info, warn};
@@ -53,6 +52,7 @@ use crate::mm2::rpc::spawn_rpc;
 
 use mm2_event_stream::behaviour::EventBehaviour;
 use mm2_net::network_event::NetworkEvent;
+use coins::coin_balance_event::CoinBalanceEvent;
 
 cfg_native! {
     use db_common::sqlite::rusqlite::Error as SqlError;

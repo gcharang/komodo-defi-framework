@@ -79,6 +79,7 @@ impl EventBehaviour for CoinBalanceEvent {
                     MmCoinEnum::TendermintToken(inner) => {
                         self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
                     },
+                    #[cfg(not(target_arch = "wasm32"))]
                     MmCoinEnum::LightningCoin(inner) => {
                         self.ctx.spawner().spawn(inner.handle_balance_stream(self.ctx.clone()))
                     },

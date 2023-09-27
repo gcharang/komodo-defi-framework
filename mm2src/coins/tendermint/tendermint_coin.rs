@@ -54,11 +54,11 @@ use cosmrs::{AccountId, Any, Coin, Denom, ErrorReport};
 use crypto::privkey::key_pair_from_secret;
 use crypto::{Secp256k1Secret, StandardHDCoinAddress, StandardHDPathToCoin};
 use derive_more::Display;
-use ewebsock::{WsEvent, WsMessage};
 use futures::future::try_join_all;
 use futures::lock::Mutex as AsyncMutex;
 use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
+use futures_util::{SinkExt, StreamExt};
 use hex::FromHexError;
 use itertools::Itertools;
 use keys::KeyPair;
@@ -1825,7 +1825,7 @@ impl TendermintCoin {
         }
     }
 
-    async fn active_ticker_and_decimals_from_denom(&self, denom: &str) -> Option<(String, u8)> {
+    fn active_ticker_and_decimals_from_denom(&self, denom: &str) -> Option<(String, u8)> {
         if self.denom.to_string() == denom {
             return Some((self.ticker.clone(), self.decimals));
         }
@@ -2233,10 +2233,10 @@ impl MmCoin for TendermintCoin {
         let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
 
         let receiver_q = generate_subscription_query(format!("coin_received.receiver = '{}'", account_id));
-        let receiver_q = ewebsock::WsMessage::Text(receiver_q);
+        let receiver_q = tokio_tungstenite_wasm::Message::Text(receiver_q);
 
         let spender_q = generate_subscription_query(format!("coin_spent.spender = '{}'", account_id));
-        let spender_q = ewebsock::WsMessage::Text(spender_q);
+        let spender_q = tokio_tungstenite_wasm::Message::Text(spender_q);
 
         loop {
             let node_uri = match self.rpc_client().await {
@@ -2249,7 +2249,7 @@ impl MmCoin for TendermintCoin {
 
             let socket_address = format!("{}/{}", http_uri_to_ws_address(node_uri), "websocket");
 
-            let (mut sender, mut receiver) = match ewebsock::connect(socket_address, 100) {
+            let mut wsocket = match tokio_tungstenite_wasm::connect(socket_address).await {
                 Ok(ws) => ws,
                 Err(e) => {
                     error!("{e}");
@@ -2258,15 +2258,22 @@ impl MmCoin for TendermintCoin {
             };
 
             // Filter received TX events
-            sender.send(receiver_q.clone());
+            if let Err(e) = wsocket.send(receiver_q.clone()).await {
+                error!("{e}");
+                continue;
+            }
 
             // Filter spent TX events
-            sender.send(spender_q.clone());
+            if let Err(e) = wsocket.send(spender_q.clone()).await {
+                error!("{e}");
+                continue;
+            }
 
-            while let Some(message) = receiver.try_recv().await {
-                let msg = match &*message {
-                    WsEvent::Message(WsMessage::Text(data)) => data.clone(),
-                    WsEvent::Error(err) => {
+            while let Some(message) = wsocket.next().await {
+                let msg = match message {
+                    Ok(tokio_tungstenite_wasm::Message::Text(data)) => data.clone(),
+                    Ok(tokio_tungstenite_wasm::Message::Close(_)) => break,
+                    Err(err) => {
                         error!("{err}");
                         break;
                     },
@@ -2290,7 +2297,7 @@ impl MmCoin for TendermintCoin {
                     drop_mutability!(denoms);
 
                     for denom in denoms {
-                        if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom).await {
+                        if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom) {
                             let balance_denom = match self.account_balance_for_denom(&self.account_id, denom).await {
                                 Ok(balance_denom) => balance_denom,
                                 Err(e) => {
