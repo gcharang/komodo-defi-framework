@@ -1,4 +1,3 @@
-use log::trace;
 use std::io::Write;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
