@@ -5,7 +5,7 @@
 
 pub use activation::{eth::GasStationPricePolicy,
                      utxo::{ElectrumProtocol, UtxoMergeParams},
-                     CoinInitResponse, EnabledCoin, GetEnabledResponse};
+                     CoinInitResponse, EnabledCoin, GetEnabledResponse, Priority};
 pub use orders::{AggregatedOrderbookEntry, MatchBy, OrderConfirmationsSettings, OrderType, OrderbookRequest,
                  OrderbookResponse, RpcOrderbookEntry, SellBuyRequest, SellBuyResponse, TakerAction,
                  TakerRequestForRpc};

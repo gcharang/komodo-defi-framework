@@ -36,7 +36,7 @@ use keys::hash::H256;
 use keys::{Address, Type as ScriptType};
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigInt, MmNumber};
-use mm2_rpc::data::legacy::ElectrumProtocol;
+use mm2_rpc::data::legacy::{ElectrumProtocol, Priority};
 #[cfg(test)] use mocktopus::macros::*;
 use parking_lot::Mutex;
 use rpc::v1::types::{Bytes as BytesJson, Transaction as RpcTransaction, H256 as H256Json};
@@ -1421,17 +1421,6 @@ pub struct ElectrumConnSettings {
     #[serde(default)]
     pub priority: Priority,
     pub timeout_sec: Option<u64>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Priority {
-    Primary,
-    Secondary,
-}
-
-impl Default for Priority {
-    fn default() -> Self { Priority::Secondary }
 }
 
 /// Electrum client configuration

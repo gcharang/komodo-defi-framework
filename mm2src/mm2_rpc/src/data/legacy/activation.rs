@@ -24,3 +24,14 @@ pub struct CoinInitResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mature_confirmations: Option<u32>,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Priority {
+    Primary,
+    Secondary,
+}
+
+impl Default for Priority {
+    fn default() -> Self { Priority::Secondary }
+}

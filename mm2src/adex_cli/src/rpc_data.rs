@@ -89,15 +89,3 @@ pub(super) struct Server {
     pub priority: Priority,
     pub timeout_sec: Option<u64>,
 }
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Priority {
-    Primary,
-    Secondary,
-    Tertiary,
-}
-
-impl Default for Priority {
-    fn default() -> Self { Priority::Secondary }
-}

@@ -1419,13 +1419,14 @@ pub struct SwapPubkeys {
 mod lp_swap_tests {
     use super::*;
     use crate::mm2::lp_native_dex::{fix_directories, init_p2p};
-    use coins::utxo::rpc_clients::{ElectrumConnSettings, Priority};
+    use coins::utxo::rpc_clients::ElectrumConnSettings;
     use coins::utxo::utxo_standard::utxo_standard_coin_with_priv_key;
     use coins::utxo::{UtxoActivationParams, UtxoRpcMode};
     use coins::MarketCoinOps;
     use coins::PrivKeyActivationPolicy;
     use common::{block_on, new_uuid};
     use mm2_core::mm_ctx::MmCtxBuilder;
+    use mm2_rpc::data::legacy::Priority;
     use mm2_test_helpers::for_tests::{morty_conf, rick_conf, MORTY_ELECTRUM_ADDRS, RICK_ELECTRUM_ADDRS};
 
     #[test]
