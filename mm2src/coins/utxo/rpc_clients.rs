@@ -1637,7 +1637,6 @@ impl Debug for ElectrumClientImpl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { f.write_str("electrum_client_impl") }
 }
 
-#[async_trait]
 impl RpcTransportEventHandler for ElectrumClientImpl {
     fn debug_info(&self) -> String { String::default() }
 
@@ -1676,8 +1675,6 @@ impl RpcTransportEventHandler for ElectrumClientImpl {
         conn_spawner.spawn(fut);
         Ok(())
     }
-
-    fn on_connected_async(&self, _address: String) -> Result<(), String> { Ok(()) }
 
     fn on_disconnected(&self, address: &str, _conn_spawner: WeakSpawner) -> Result<(), String> {
         self.conn_mng.on_disconnected(address);
