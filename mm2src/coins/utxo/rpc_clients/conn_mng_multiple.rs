@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use core::time::Duration;
-use futures::future::select_all;
 use futures::lock::MutexGuard;
 use futures::FutureExt;
 use std::ops::Deref;
@@ -50,7 +49,7 @@ impl ConnMngTrait for ConnMngMultiple {
 
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
 
-    async fn remove_server(&self, address: String) -> Result<(), String> { Ok(()) }
+    async fn remove_server(&self, address: &str) -> Result<(), String> { self.0.remove_server(address).await }
 
     async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
         let mut guarded = self.0.guarded.lock().await;
@@ -63,12 +62,13 @@ impl ConnMngTrait for ConnMngMultiple {
 
     async fn is_connections_pool_empty(&self) -> bool { false }
 
-    fn on_disconnected(&self, address: String) {
+    fn on_disconnected(&self, address: &str) {
         info!(
             "electrum_conn_mng disconnected from: {}, it will be suspended and trying to reconnect",
             address
         );
         let self_copy = self.clone();
+        let address = address.to_string();
         self.0.abortable_system.weak_spawner().spawn(async move {
             if let Err(err) = self_copy.clone().suspend_server(address.clone()).await {
                 error!("Failed to suspend server: {}, error: {}", address, err);
@@ -86,7 +86,12 @@ impl ConnMngMultiple {
         }
 
         let event_handlers = guarded.event_handlers.clone();
-        for mut conn_ctx in &mut guarded.conn_ctxs {
+        for conn_ctx in &mut guarded.conn_ctxs {
+            if conn_ctx.connection.is_some() {
+                let address = &conn_ctx.conn_settings.url;
+                warn!("An attempt to connect over an existing one: {}", address);
+                continue;
+            }
             let conn_settings = conn_ctx.conn_settings.clone();
             let weak_spawner = conn_ctx.abortable_system.weak_spawner();
             let self_clone = self.clone();
@@ -137,7 +142,7 @@ impl ConnMngMultiple {
         debug!("Resume address: {}", address);
         let guard = self.0.guarded.lock().await;
 
-        let conn_ctx = Self::get_conn_ctx(&guard, &address)?;
+        let (_, conn_ctx) = Self::get_conn_ctx(&guard, &address)?;
         let conn_settings = conn_ctx.conn_settings.clone();
         let event_handlers = guard.event_handlers.clone();
         let conn_spawner = conn_ctx.abortable_system.weak_spawner();
@@ -162,7 +167,7 @@ impl ConnMngMultiple {
         abortable_system: AbortableQueue,
     ) -> Result<(), String> {
         debug!("Reset connection context for: {}", address);
-        let conn_ctx = Self::get_conn_ctx_mut(state, address)?;
+        let (_, conn_ctx) = Self::get_conn_ctx_mut(state, address)?;
         conn_ctx.abortable_system.abort_all().map_err(|err| {
             ERRL!(
                 "Failed to abort on electrum connection related spawner: {}, error: {:?}",
@@ -176,14 +181,14 @@ impl ConnMngMultiple {
     }
 
     async fn get_suspend_timeout(state: &MutexGuard<'_, ConnMngMultipleState>, address: &str) -> Result<u64, String> {
-        Self::get_conn_ctx(state, address).map(|conn_ctx| conn_ctx.suspend_timeout_sec)
+        Self::get_conn_ctx(state, address).map(|(_, conn_ctx)| conn_ctx.suspend_timeout_sec)
     }
 
     async fn duplicate_suspend_timeout(
         state: &mut MutexGuard<'_, ConnMngMultipleState>,
         address: &str,
     ) -> Result<(), String> {
-        let conn_ctx = Self::get_conn_ctx_mut(state, address)?;
+        let (_, conn_ctx) = Self::get_conn_ctx_mut(state, address)?;
         let suspend_timeout = &mut conn_ctx.suspend_timeout_sec;
         let new_timeout = *suspend_timeout * 2;
         debug!(
@@ -197,22 +202,24 @@ impl ConnMngMultiple {
     fn get_conn_ctx<'a>(
         state: &'a MutexGuard<'a, ConnMngMultipleState>,
         address: &str,
-    ) -> Result<&'a ElectrumConnCtx, String> {
+    ) -> Result<(usize, &'a ElectrumConnCtx), String> {
         state
             .conn_ctxs
             .iter()
-            .find(|c| c.conn_settings.url == address)
+            .enumerate()
+            .find(|(_, c)| c.conn_settings.url == address)
             .ok_or_else(|| format!("Unknown destination address {}", address))
     }
 
     fn get_conn_ctx_mut<'a, 'b>(
         state: &'a mut MutexGuard<'b, ConnMngMultipleState>,
         address: &'_ str,
-    ) -> Result<&'a mut ElectrumConnCtx, String> {
+    ) -> Result<(usize, &'a mut ElectrumConnCtx), String> {
         state
             .conn_ctxs
             .iter_mut()
-            .find(|c| c.conn_settings.url == address)
+            .enumerate()
+            .find(|(_, ctx)| ctx.conn_settings.url == address)
             .ok_or_else(|| format!("Unknown destination address {}", address))
     }
 
@@ -241,7 +248,7 @@ impl ConnMngMultiple {
         state: &mut MutexGuard<'_, ConnMngMultipleState>,
         conn: ElectrumConnection,
     ) -> Result<(), String> {
-        let conn_ctx = Self::get_conn_ctx_mut(state, &conn.addr)?;
+        let (_, conn_ctx) = Self::get_conn_ctx_mut(state, &conn.addr)?;
         conn_ctx.connection.replace(Arc::new(AsyncMutex::new(conn)));
         Ok(())
     }
@@ -285,7 +292,7 @@ impl ConnMngMultipleImpl {
 
     async fn get_conn_by_address(&self, address: &str) -> Result<Arc<AsyncMutex<ElectrumConnection>>, String> {
         let guarded = self.guarded.lock().await;
-        let conn_ctx = ConnMngMultiple::get_conn_ctx(&guarded, address)?;
+        let (_, conn_ctx) = ConnMngMultiple::get_conn_ctx(&guarded, address)?;
         conn_ctx
             .connection
             .as_ref()
@@ -305,5 +312,14 @@ impl ConnMngMultipleImpl {
         }
 
         false
+    }
+
+    async fn remove_server(&self, address: &str) -> Result<(), String> {
+        debug!("Remove electrum server: {}", address);
+        let mut guarded = self.guarded.lock().await;
+        let (i, _) = ConnMngMultiple::get_conn_ctx(&guarded, address)?;
+        let conn_ctx = guarded.conn_ctxs.remove(i);
+        conn_ctx.abortable_system.abort_all().map_err(|err| err.to_string())?;
+        Ok(())
     }
 }

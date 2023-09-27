@@ -1337,11 +1337,11 @@ impl RpcTransportEventHandler for ElectrumProtoVerifier {
         Ok(())
     }
 
-    fn on_disconnected(&self, address: String, _conn_spawner: WeakSpawner) -> Result<(), String> {
+    fn on_disconnected(&self, address: &str, _conn_spawner: WeakSpawner) -> Result<(), String> {
         debug!("Disconnected from the electrum server: {}", address);
         try_s!(self
             .on_event_tx
-            .unbounded_send(ElectrumProtoVerifierEvent::Disconnected(address)));
+            .unbounded_send(ElectrumProtoVerifierEvent::Disconnected(address.to_string())));
         Ok(())
     }
 }

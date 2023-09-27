@@ -1,7 +1,4 @@
 use async_trait::async_trait;
-use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
-use common::executor::{AbortableSystem, SpawnFuture};
-use common::log::{debug, error, info, warn};
 use futures::future::FutureExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard};
 use std::collections::{BTreeMap, LinkedList};
@@ -9,8 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::{spawn_electrum, ConnMngTrait, ElectrumConnSettings, ElectrumConnection, Priority,
-            DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
+use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
+use common::executor::{AbortableSystem, SpawnFuture};
+use common::log::{debug, error, info, warn};
+use mm2_rpc::data::legacy::Priority;
+
+use super::{spawn_electrum, ConnMngTrait, ElectrumConnSettings, ElectrumConnection, DEFAULT_CONN_TIMEOUT_SEC,
+            SUSPEND_TIMEOUT_INIT_SEC};
 use crate::RpcTransportEventHandlerShared;
 
 #[async_trait]
@@ -37,8 +39,13 @@ impl ConnMngTrait for ConnMngSelective {
         }
 
         while let Some((conn_settings, weak_spawner, event_handlers)) = {
+            if self.0.is_connected().await {
+                debug!("Skip connecting, is connected");
+                return Ok(());
+            }
+
             if self.0.guarded.lock().await.connecting.load(AtomicOrdering::Relaxed) {
-                debug!("Skip concurrent connecting, already is in process");
+                debug!("Skip connecting, is in progress");
                 return Ok(());
             }
 
@@ -77,7 +84,7 @@ impl ConnMngTrait for ConnMngSelective {
 
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
 
-    async fn remove_server(&self, address: String) -> Result<(), String> { self.0.remove_server(address).await }
+    async fn remove_server(&self, address: &str) -> Result<(), String> { self.0.remove_server(address).await }
 
     async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
         let mut guarded = self.0.guarded.lock().await;
@@ -90,12 +97,13 @@ impl ConnMngTrait for ConnMngSelective {
 
     async fn is_connections_pool_empty(&self) -> bool { self.0.is_connections_pool_empty().await }
 
-    fn on_disconnected(&self, address: String) {
+    fn on_disconnected(&self, address: &str) {
         info!(
             "electrum_conn_mng disconnected from: {}, it will be suspended and trying to reconnect",
             address
         );
         let self_copy = self.clone();
+        let address = address.to_string();
         self.0.abortable_system.weak_spawner().spawn(async move {
             if let Err(err) = self_copy.clone().suspend_server(address.clone()).await {
                 error!("Failed to suspend server: {}, error: {}", address, err);
@@ -182,17 +190,20 @@ impl ConnMngSelectiveImpl {
         Some((conn_ctx.conn_settings.clone(), conn_ctx.abortable_system.weak_spawner()))
     }
 
-    async fn remove_server(&self, address: String) -> Result<(), String> {
+    async fn remove_server(&self, address: &str) -> Result<(), String> {
         debug!("Remove server: {}", address);
         let mut guard = self.guarded.lock().await;
-        let conn_ctx = guard.conn_ctxs.remove(&address).expect("TODO");
+        let conn_ctx = guard
+            .conn_ctxs
+            .remove(address)
+            .ok_or_else(|| ERRL!("Failed to get conn_ctx: {}", address))?;
 
         match conn_ctx.conn_settings.priority {
             Priority::Primary => guard.queue.primary.pop_front(),
             Priority::Secondary => guard.queue.backup.pop_front(),
         };
         if let Some(active) = guard.active.as_ref() {
-            if active == address.as_str() {
+            if active == address {
                 guard.active.take();
             }
         }

@@ -1,7 +1,6 @@
 use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
 use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
-use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumConnSettings, EstimateFeeMethod,
-                               UtxoRpcClientEnum};
+use crate::utxo::rpc_clients::{ElectrumClient, ElectrumConnSettings, EstimateFeeMethod, UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::utxo_builder::utxo_conf_builder::{UtxoConfBuilder, UtxoConfError};
@@ -9,14 +8,12 @@ use crate::utxo::{output_script, utxo_common, ElectrumBuilderArgs, RecentlySpent
                   UtxoCoinFields, UtxoHDAccount, UtxoHDWallet, UtxoRpcMode, UtxoSyncStatus, UtxoSyncStatusLoopHandle,
                   DEFAULT_GAP_LIMIT, UTXO_DUST_AMOUNT};
 use crate::{BlockchainNetwork, CoinTransportMetrics, DerivationMethod, HistorySyncState, IguanaPrivKey,
-            PrivKeyBuildPolicy, PrivKeyPolicy, PrivKeyPolicyNotAllowed, RpcClientType, RpcTransportEventHandlerShared,
-            UtxoActivationParams};
+            PrivKeyBuildPolicy, PrivKeyPolicy, PrivKeyPolicyNotAllowed, RpcClientType, UtxoActivationParams};
 
 use async_trait::async_trait;
 use chain::TxHashAlgo;
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, AbortedError, Timer};
 use common::log::{debug, error};
-use common::small_rng;
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, Secp256k1Secret,
              StandardHDPathError, StandardHDPathToCoin};
 use derive_more::Display;
@@ -29,7 +26,6 @@ pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, Key
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use primitives::hash::H160;
-use rand::seq::SliceRandom;
 use serde_json::{self as json, Value as Json};
 use spv_validation::conf::SPVConf;
 use spv_validation::helpers_validation::SPVError;
@@ -469,7 +465,7 @@ pub trait UtxoCoinBuilderCommonOps {
         &self,
         abortable_system: AbortableQueue,
         args: ElectrumBuilderArgs,
-        mut servers: Vec<ElectrumConnSettings>,
+        servers: Vec<ElectrumConnSettings>,
     ) -> UtxoCoinBuildResult<ElectrumClient> {
         let ticker = self.ticker().to_owned();
         let ctx = self.ctx();
@@ -487,15 +483,11 @@ pub trait UtxoCoinBuilderCommonOps {
             block_headers_storage.init().await?;
         }
 
-        // Sort them by priority
-        let mut rng = small_rng();
-        servers.as_mut_slice().shuffle(&mut rng);
-
         let gui = ctx.gui().unwrap_or("UNKNOWN").to_string();
         let mm_version = ctx.mm_version().to_string();
         let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
         let conn_mng_policy = ctx.electrum_conn_mng_policy();
-        let client = ElectrumClient(Arc::new(ElectrumClientImpl::new(
+        let client = ElectrumClient::new(
             client_name.clone(),
             servers.clone(),
             ticker,
@@ -504,11 +496,8 @@ pub trait UtxoCoinBuilderCommonOps {
             abortable_system,
             args.negotiate_version,
             conn_mng_policy,
-        )));
-        client.0.set_weak(Arc::downgrade(&client.0));
-
-        let handler: RpcTransportEventHandlerShared = client.0.clone();
-        client.register(handler).await;
+        )
+        .await;
 
         if let Err(err) = client.connect().await {
             error!("Error connecting to the electrum server address: {}", err);
@@ -523,7 +512,6 @@ pub trait UtxoCoinBuilderCommonOps {
                     seconds: 5,
                 });
             }
-
             Timer::sleep(0.5).await;
             attempts += 1;
         }

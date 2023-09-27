@@ -1,6 +1,6 @@
 use derive_more::Display;
 use rand::{thread_rng, Rng};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub mod event_dispatcher;
 pub mod mm_ctx;
@@ -24,10 +24,10 @@ impl DbNamespaceId {
     }
 }
 
-#[derive(Deserialize, Display)]
+#[derive(Clone, Deserialize, Display, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnMngPolicy {
-    Concurrent,
+    Multiple,
     Selective,
 }
 
