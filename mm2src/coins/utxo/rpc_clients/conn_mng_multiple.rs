@@ -56,8 +56,10 @@ impl ConnMngTrait for ConnMngMultiple {
         guarded.event_handlers.push(handler)
     }
 
-    async fn rotate_servers(&self, _no_of_rotations: usize) {
-        // not implemented for this conn_mng implementation intentionally
+    async fn rotate_servers(&self, no_of_rotations: usize) {
+        debug!("Rotate servers: {}", no_of_rotations);
+        let mut guarded = self.0.guarded.lock().await;
+        guarded.conn_ctxs.rotate_left(no_of_rotations);
     }
 
     async fn is_connections_pool_empty(&self) -> bool { false }

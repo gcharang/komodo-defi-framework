@@ -1787,11 +1787,7 @@ impl ElectrumClientImpl {
     }
 
     /// Moves the Electrum servers that fail in a multi request to the end.
-    pub async fn rotate_servers(&self, no_of_rotations: usize) {
-        self.conn_mng.rotate_servers(no_of_rotations).await
-        // let mut connections = self.connections.lock().await;
-        // connections.rotate_left(no_of_rotations); // TODO: to be a part of other implementation
-    }
+    pub async fn rotate_servers(&self, no_of_rotations: usize) { self.conn_mng.rotate_servers(no_of_rotations).await }
 
     /// Check if one of the spawned connections is connected.
     pub async fn is_connected(&self) -> bool { self.conn_mng.is_connected().await }
@@ -2546,7 +2542,7 @@ trait ConnMngTrait: Debug {
     async fn is_connected(&self) -> bool;
     async fn remove_server(&self, address: &str) -> Result<(), String>;
     async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared);
-    // it is certainly should not be a part of this trait
+
     async fn rotate_servers(&self, no_of_rotations: usize);
     async fn is_connections_pool_empty(&self) -> bool;
     fn on_disconnected(&self, address: &str);
