@@ -1862,7 +1862,7 @@ impl JsonRpcMultiClient for ElectrumClient {
 }
 
 impl ElectrumClient {
-    pub async fn new(
+    pub async fn try_new(
         client_name: String,
         servers: Vec<ElectrumConnSettings>,
         coin_ticker: String,
@@ -1871,9 +1871,9 @@ impl ElectrumClient {
         abortable_system: AbortableQueue,
         negotiate_version: bool,
         conn_mng_policy: ConnMngPolicy,
-    ) -> ElectrumClient {
+    ) -> Result<ElectrumClient, String> {
         let spawner = abortable_system.weak_spawner();
-        let client = ElectrumClient(Arc::new(ElectrumClientImpl::new(
+        let client = ElectrumClient(Arc::new(ElectrumClientImpl::try_new(
             client_name,
             servers,
             coin_ticker,
@@ -1882,12 +1882,12 @@ impl ElectrumClient {
             abortable_system,
             negotiate_version,
             conn_mng_policy,
-        )));
+        )?));
         let handler: RpcTransportEventHandlerShared = client.0.clone();
         client.register(handler).await;
         client.0.set_weak(Arc::downgrade(&client.0));
         spawner.spawn(ElectrumClientImpl::ping_loop(Arc::downgrade(&client.0)));
-        client
+        Ok(client)
     }
 
     /// https://electrumx.readthedocs.io/en/latest/protocol-methods.html#server-ping
@@ -2564,7 +2564,7 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
 
 #[cfg_attr(test, mockable)]
 impl ElectrumClientImpl {
-    pub fn new(
+    pub fn try_new(
         client_name: String,
         mut servers: Vec<ElectrumConnSettings>,
         coin_ticker: String,
@@ -2573,16 +2573,18 @@ impl ElectrumClientImpl {
         abortable_system: AbortableQueue,
         negotiate_version: bool,
         conn_mng_policy: ConnMngPolicy,
-    ) -> ElectrumClientImpl {
-        let conn_mng_abortable_system = abortable_system.create_subsystem().unwrap();
+    ) -> Result<ElectrumClientImpl, String> {
+        let conn_mng_abortable_system = abortable_system
+            .create_subsystem()
+            .map_err(|err| ERRL!("Failed to create conn_mng abortable_system: {}", err))?;
         let mut rng = small_rng();
         servers.as_mut_slice().shuffle(&mut rng);
         let conn_mng: Arc<dyn ConnMngTrait + Send + Sync + 'static> = match conn_mng_policy {
-            ConnMngPolicy::Selective => Arc::new(ConnMngSelective(Arc::new(ConnMngSelectiveImpl::new(
+            ConnMngPolicy::Selective => Arc::new(ConnMngSelective(Arc::new(ConnMngSelectiveImpl::try_new(
                 servers,
                 conn_mng_abortable_system,
                 event_handlers,
-            )))),
+            )?))),
             ConnMngPolicy::Multiple => Arc::new(ConnMngMultiple(Arc::new(ConnMngMultipleImpl::new(
                 servers,
                 conn_mng_abortable_system,
@@ -2591,7 +2593,7 @@ impl ElectrumClientImpl {
         };
 
         let protocol_version = OrdRange::new(1.2, 1.4).unwrap();
-        ElectrumClientImpl {
+        Ok(ElectrumClientImpl {
             weak_self: Mutex::default(),
             client_name,
             coin_ticker,
@@ -2604,7 +2606,7 @@ impl ElectrumClientImpl {
             block_headers_storage,
             negotiate_version,
             abortable_system,
-        }
+        })
     }
 
     #[cfg(test)]
@@ -2620,7 +2622,7 @@ impl ElectrumClientImpl {
     ) -> ElectrumClientImpl {
         ElectrumClientImpl {
             protocol_version,
-            ..ElectrumClientImpl::new(
+            ..ElectrumClientImpl::try_new(
                 client_name,
                 servers,
                 coin_ticker,
@@ -2630,6 +2632,7 @@ impl ElectrumClientImpl {
                 false,
                 conn_mng_policy,
             )
+            .expect("Expected electrum_client_impl constructed without a problem")
         }
     }
 }

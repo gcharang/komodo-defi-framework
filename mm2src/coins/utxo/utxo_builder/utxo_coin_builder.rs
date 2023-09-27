@@ -13,7 +13,7 @@ use crate::{BlockchainNetwork, CoinTransportMetrics, DerivationMethod, HistorySy
 use async_trait::async_trait;
 use chain::TxHashAlgo;
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, AbortedError, Timer};
-use common::log::{debug, error};
+use common::log::debug;
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, Secp256k1Secret,
              StandardHDPathError, StandardHDPathToCoin};
 use derive_more::Display;
@@ -487,7 +487,7 @@ pub trait UtxoCoinBuilderCommonOps {
         let mm_version = ctx.mm_version().to_string();
         let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
         let conn_mng_policy = ctx.electrum_conn_mng_policy();
-        let client = ElectrumClient::new(
+        let client = ElectrumClient::try_new(
             client_name.clone(),
             servers.clone(),
             ticker,
@@ -497,11 +497,10 @@ pub trait UtxoCoinBuilderCommonOps {
             args.negotiate_version,
             conn_mng_policy,
         )
-        .await;
+        .await
+        .map_to_mm(UtxoCoinBuildError::Internal)?;
 
-        if let Err(err) = client.connect().await {
-            error!("Error connecting to the electrum server address: {}", err);
-        };
+        client.connect().await.map_to_mm(UtxoCoinBuildError::Internal)?;
 
         let mut attempts = 0i32;
         while !client.is_connected().await {

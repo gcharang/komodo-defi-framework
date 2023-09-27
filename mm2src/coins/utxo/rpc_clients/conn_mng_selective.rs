@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::future::FutureExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard};
-use std::collections::{BTreeMap, LinkedList};
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,42 +143,49 @@ struct ElectrumConnCtx {
 
 #[derive(Debug)]
 struct ConnMngSelectiveQueue {
-    primary: LinkedList<String>,
-    backup: LinkedList<String>,
+    primary: VecDeque<String>,
+    backup: VecDeque<String>,
 }
 
 impl ConnMngSelectiveImpl {
-    pub fn new(
+    pub fn try_new(
         servers: Vec<ElectrumConnSettings>,
         abortable_system: AbortableQueue,
         event_handlers: Vec<RpcTransportEventHandlerShared>,
-    ) -> ConnMngSelectiveImpl {
-        let mut primary: LinkedList<String> = LinkedList::new();
-        let mut backup: LinkedList<String> = LinkedList::new();
-        let mut abortable_systems: BTreeMap<String, ElectrumConnCtx> = BTreeMap::new();
+    ) -> Result<ConnMngSelectiveImpl, String> {
+        let mut primary = VecDeque::<String>::new();
+        let mut backup = VecDeque::<String>::new();
+        let mut conn_ctxs: BTreeMap<String, ElectrumConnCtx> = BTreeMap::new();
         for conn_settings in servers {
             match conn_settings.priority {
                 Priority::Primary => primary.push_back(conn_settings.url.clone()),
                 Priority::Secondary => backup.push_back(conn_settings.url.clone()),
             }
-            let _ = abortable_systems.insert(conn_settings.url.clone(), ElectrumConnCtx {
+            let conn_abortable_system = abortable_system.create_subsystem().map_err(|err| {
+                ERRL!(
+                    "Failed to create abortable subsystem for conn: {}, error: {}",
+                    conn_settings.url,
+                    err
+                )
+            })?;
+            let _ = conn_ctxs.insert(conn_settings.url.clone(), ElectrumConnCtx {
                 conn_settings,
                 connection: None,
-                abortable_system: abortable_system.create_subsystem().unwrap(),
+                abortable_system: conn_abortable_system,
                 suspend_timeout_sec: SUSPEND_TIMEOUT_INIT_SEC,
             });
         }
 
-        ConnMngSelectiveImpl {
+        Ok(ConnMngSelectiveImpl {
             guarded: AsyncMutex::new(ConnMngSelectiveState {
                 connecting: AtomicBool::new(false),
                 event_handlers,
                 queue: ConnMngSelectiveQueue { primary, backup },
                 active: None,
-                conn_ctxs: abortable_systems,
+                conn_ctxs,
             }),
             abortable_system,
-        }
+        })
     }
 
     async fn get_settings_to_connect(
