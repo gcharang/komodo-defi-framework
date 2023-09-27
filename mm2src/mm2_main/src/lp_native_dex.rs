@@ -50,9 +50,9 @@ use crate::mm2::lp_ordermatch::{broadcast_maker_orders_keep_alive_loop, clean_me
 use crate::mm2::lp_swap::{running_swaps_num, swap_kick_starts};
 use crate::mm2::rpc::spawn_rpc;
 
+use coins::coin_balance_event::CoinBalanceEvent;
 use mm2_event_stream::behaviour::EventBehaviour;
 use mm2_net::network_event::NetworkEvent;
-use coins::coin_balance_event::CoinBalanceEvent;
 
 cfg_native! {
     use db_common::sqlite::rusqlite::Error as SqlError;
