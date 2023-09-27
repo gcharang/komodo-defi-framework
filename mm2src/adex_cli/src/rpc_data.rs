@@ -3,7 +3,7 @@
 //! *Note: it's expected that the following data types will be moved to mm2_rpc::data when mm2 is refactored to be able to handle them*
 //!
 
-use mm2_rpc::data::legacy::{ElectrumProtocol, GasStationPricePolicy, UtxoMergeParams};
+use mm2_rpc::data::legacy::{ElectrumProtocol, GasStationPricePolicy, Priority, UtxoMergeParams};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
 

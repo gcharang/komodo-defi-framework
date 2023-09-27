@@ -2,12 +2,14 @@ use anyhow::{anyhow, Result};
 use bip39::{Language, Mnemonic, MnemonicType};
 use common::log::{error, info};
 use common::password_policy;
-use inquire::{validator::Validation, Confirm, CustomType, CustomUserError, Text};
+use inquire::{validator::Validation, Confirm, CustomType, CustomUserError, Select, Text};
 use passwords::PasswordGenerator;
 use serde::Serialize;
 use std::net::Ipv4Addr;
 use std::ops::Not;
 use std::path::Path;
+
+use mm2_core::ConnMngPolicy;
 
 use super::inquire_extentions::{InquireOption, DEFAULT_DEFAULT_OPTION_BOOL_FORMATTER, DEFAULT_OPTION_BOOL_FORMATTER,
                                 OPTION_BOOL_PARSER};
@@ -52,6 +54,7 @@ struct Mm2Cfg {
     seednodes: Vec<Ipv4Addr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hd_account_id: Option<u64>,
+    conn_mng_policy: ConnMngPolicy,
 }
 
 impl Mm2Cfg {
@@ -69,6 +72,7 @@ impl Mm2Cfg {
             i_am_seed: None,
             seednodes: Vec::<Ipv4Addr>::new(),
             hd_account_id: None,
+            conn_mng_policy: ConnMngPolicy::default(),
         }
     }
 
@@ -85,6 +89,7 @@ impl Mm2Cfg {
         self.inquire_i_am_a_seed()?;
         self.inquire_seednodes()?;
         self.inquire_hd_account_id()?;
+        self.inquire_conn_mng_policy()?;
         Ok(())
     }
 
@@ -320,6 +325,18 @@ impl Mm2Cfg {
                     error_anyhow!("Failed to get hd_account_id: {}", error)
                 )?
                 .into();
+        Ok(())
+    }
+
+    #[inline]
+    fn inquire_conn_mng_policy(&mut self) -> Result<()> {
+        self.conn_mng_policy = Select::new("What is conn_mng_policy", vec![
+            ConnMngPolicy::Selective,
+            ConnMngPolicy::Multiple,
+        ])
+        .with_help_message("conn_mng_policy determines the preferable way of managing electrum connections")
+        .prompt()
+        .map_err(|error| error_anyhow!("Failed to get conn_mng_policy: {}", error))?;
         Ok(())
     }
 }

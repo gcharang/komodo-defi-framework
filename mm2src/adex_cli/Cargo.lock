@@ -29,6 +29,7 @@ dependencies = [
  "inquire",
  "itertools",
  "log 0.4.17",
+ "mm2_core",
  "mm2_net",
  "mm2_number",
  "mm2_rpc",
