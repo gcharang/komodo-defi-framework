@@ -1,6 +1,7 @@
 use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex};
 use crate::hd_wallet_storage::{HDWalletCoinStorage, HDWalletStorageError};
-use crate::utxo::rpc_clients::{ElectrumClient, ElectrumConnSettings, EstimateFeeMethod, UtxoRpcClientEnum};
+use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientSettings, ElectrumConnSettings, EstimateFeeMethod,
+                               UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::utxo_builder::utxo_conf_builder::{UtxoConfBuilder, UtxoConfError};
@@ -12,10 +13,8 @@ use crate::{BlockchainNetwork, CoinTransportMetrics, DerivationMethod, HistorySy
 
 use async_trait::async_trait;
 use chain::TxHashAlgo;
-use common::custom_futures::repeatable::{Ready, Retry};
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, AbortedError, Timer};
-use common::log::{error, info, LogOnError};
-use common::{now_sec, small_rng};
+use common::now_sec;
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, StandardHDPathError,
              StandardHDPathToCoin};
 use derive_more::Display;
@@ -491,12 +490,13 @@ pub trait UtxoCoinBuilderCommonOps {
         args: ElectrumBuilderArgs,
         servers: Vec<ElectrumConnSettings>,
     ) -> UtxoCoinBuildResult<ElectrumClient> {
-        let ticker = self.ticker().to_owned();
+        let coin_ticker = self.ticker().to_owned();
         let ctx = self.ctx();
         let mut event_handlers = vec![];
         if args.collect_metrics {
             event_handlers.push(
-                CoinTransportMetrics::new(ctx.metrics.weak(), ticker.clone(), RpcClientType::Electrum).into_shared(),
+                CoinTransportMetrics::new(ctx.metrics.weak(), coin_ticker.clone(), RpcClientType::Electrum)
+                    .into_shared(),
             );
         }
 
@@ -509,20 +509,15 @@ pub trait UtxoCoinBuilderCommonOps {
 
         let gui = ctx.gui().unwrap_or("UNKNOWN").to_string();
         let mm_version = ctx.mm_version().to_string();
-        let client_name = format!("{} GUI/MM2 {}", gui, mm_version);
-        let conn_mng_policy = ctx.electrum_conn_mng_policy();
-        let client = ElectrumClient::try_new(
-            client_name.clone(),
-            servers.clone(),
-            ticker,
-            event_handlers,
-            block_headers_storage,
-            abortable_system,
-            args.negotiate_version,
-            conn_mng_policy,
-        )
-        .await
-        .map_to_mm(UtxoCoinBuildError::Internal)?;
+        let client_settings = ElectrumClientSettings {
+            client_name: format!("{} GUI/MM2 {}", gui, mm_version),
+            servers: servers.clone(),
+            coin_ticker,
+            negotiate_version: args.negotiate_version,
+            conn_mng_policy: ctx.electrum_conn_mng_policy(),
+        };
+        let client = ElectrumClient::try_new(client_settings, event_handlers, block_headers_storage, abortable_system)
+            .map_to_mm(UtxoCoinBuildError::Internal)?;
 
         client.connect().await.map_to_mm(UtxoCoinBuildError::Internal)?;
 

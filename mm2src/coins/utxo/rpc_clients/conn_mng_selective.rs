@@ -1,18 +1,19 @@
+use async_std::stream::StreamExt;
 use async_trait::async_trait;
+use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
+use common::executor::{AbortableSystem, SpawnFuture};
+use common::log::{debug, error, info, warn};
 use futures::future::FutureExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard};
+use futures::select;
+use mm2_rpc::data::legacy::Priority;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
-use common::executor::{AbortableSystem, SpawnFuture};
-use common::log::{debug, error, info, warn};
-use mm2_rpc::data::legacy::Priority;
-
-use super::{spawn_electrum, ConnMngTrait, ElectrumConnSettings, ElectrumConnection, DEFAULT_CONN_TIMEOUT_SEC,
-            SUSPEND_TIMEOUT_INIT_SEC};
+use super::{spawn_electrum, ConnMngTrait, ElectrumClientEvent, ElectrumConnSettings, ElectrumConnection,
+            DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
 use crate::RpcTransportEventHandlerShared;
 
 #[async_trait]
@@ -66,7 +67,10 @@ impl ConnMngTrait for ConnMngSelective {
         } {
             debug!("Got conn_settings to connect to: {:?}", conn_settings);
             let address = conn_settings.url.clone();
-            match self.connect_to(conn_settings, event_handlers, weak_spawner).await {
+            match self
+                .connect_to(conn_settings, event_handlers, weak_spawner, self.0.event_sender.clone())
+                .await
+            {
                 Ok(_) => {
                     ConnMngSelectiveImpl::set_active_conn(&mut self.0.guarded.lock().await, address)?;
                     break;
@@ -122,6 +126,7 @@ impl ConnMngTrait for ConnMngSelective {
 pub struct ConnMngSelectiveImpl {
     guarded: AsyncMutex<ConnMngSelectiveState>,
     abortable_system: AbortableQueue,
+    event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
 }
 
 #[derive(Debug)]
@@ -148,10 +153,11 @@ struct ConnMngSelectiveQueue {
 }
 
 impl ConnMngSelectiveImpl {
-    pub fn try_new(
+    pub(super) fn try_new(
         servers: Vec<ElectrumConnSettings>,
         abortable_system: AbortableQueue,
         event_handlers: Vec<RpcTransportEventHandlerShared>,
+        event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
     ) -> Result<ConnMngSelectiveImpl, String> {
         let mut primary = VecDeque::<String>::new();
         let mut backup = VecDeque::<String>::new();
@@ -177,6 +183,7 @@ impl ConnMngSelectiveImpl {
         }
 
         Ok(ConnMngSelectiveImpl {
+            event_sender,
             guarded: AsyncMutex::new(ConnMngSelectiveState {
                 connecting: AtomicBool::new(false),
                 event_handlers,
@@ -347,7 +354,7 @@ impl ConnMngSelective {
                 drop(guard);
                 if let Err(err) = self
                     .clone()
-                    .connect_to(conn_settings, event_handlers, conn_spawner)
+                    .connect_to(conn_settings, event_handlers, conn_spawner, self.0.event_sender.clone())
                     .await
                 {
                     error!("Failed to resume: {}", err);
@@ -459,16 +466,21 @@ impl ConnMngSelective {
         conn_settings: ElectrumConnSettings,
         event_handlers: Vec<RpcTransportEventHandlerShared>,
         weak_spawner: WeakSpawner,
+        event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
     ) -> Result<(), String> {
-        let (conn, ready_notify) = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
+        let (conn, mut conn_ready_receiver) =
+            spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone(), event_sender)?;
+        //        let conn = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
         Self::register_connection(&mut self.0.guarded.lock().await, conn)?;
         let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(timeout_sec)) => {
+
+        select! {
+            _ = async_std::task::sleep(Duration::from_secs(timeout_sec)).fuse() => {
                 warn!("Failed to connect to: {}, timed out", conn_settings.url);
                 ERR!("Timed out: {}", timeout_sec)
+                // TODO: suspend_server????
             },
-            _ = ready_notify.notified() => Ok(())
+            _ = conn_ready_receiver.next().fuse() => Ok(()) // TODO: handle cancelled
         }
     }
 }

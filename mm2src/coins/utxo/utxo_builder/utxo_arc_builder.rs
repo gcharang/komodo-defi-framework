@@ -263,7 +263,7 @@ pub(crate) async fn block_header_utxo_loop(
 
     let (mut electrum_addresses, mut block_count) = match weak.upgrade() {
         Some(client) => {
-            let client = ElectrumClient(client);
+            let client = ElectrumClient { client_impl: client };
             match client.get_servers_with_latest_block_count().compat().await {
                 Ok((electrum_addresses, block_count)) => (electrum_addresses, block_count),
                 Err(err) => {
@@ -279,7 +279,7 @@ pub(crate) async fn block_header_utxo_loop(
     };
     let mut args = BlockHeaderUtxoLoopExtraArgs::default();
     while let Some(client) = weak.upgrade() {
-        let client = &ElectrumClient(client);
+        let client = &ElectrumClient { client_impl: client };
         let ticker = client.coin_name();
 
         let storage = client.block_headers_storage();
@@ -673,7 +673,7 @@ fn spawn_block_header_utxo_loop(
     };
     info!("Starting UTXO block header loop for coin {ticker}");
 
-    let electrum_weak = Arc::downgrade(&client.0);
+    let electrum_weak = Arc::downgrade(&client.client_impl);
     let fut = block_header_utxo_loop(electrum_weak, sync_status_loop_handle, spv_conf);
 
     let settings = AbortSettings::info_on_abort(format!("spawn_block_header_utxo_loop stopped for {ticker}"));

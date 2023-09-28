@@ -14,9 +14,9 @@ use crate::rpc_command::init_scan_for_new_addresses::{InitScanAddressesRpcOps, S
 use crate::utxo::qtum::{qtum_coin_with_priv_key, QtumCoin, QtumDelegationOps, QtumDelegationRequest};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::rpc_clients::{BlockHashOrHeight, NativeUnspent};
-use crate::utxo::rpc_clients::{ElectrumBalance, ElectrumClient, ElectrumClientImpl, GetAddressInfoRes,
-                               ListSinceBlockRes, NativeClient, NativeClientImpl, NetworkInfo, UtxoRpcClientOps,
-                               ValidateAddressRes, VerboseBlock};
+use crate::utxo::rpc_clients::{ElectrumBalance, ElectrumClient, ElectrumClientImpl, ElectrumClientSettings,
+                               GetAddressInfoRes, ListSinceBlockRes, NativeClient, NativeClientImpl, NetworkInfo,
+                               UtxoRpcClientOps, ValidateAddressRes, VerboseBlock};
 use crate::utxo::spv::SimplePaymentVerification;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utxo::utxo_block_header_storage::{BlockHeaderStorage, SqliteBlockHeadersStorage};
@@ -462,18 +462,21 @@ fn test_wait_for_payment_spend_timeout_electrum() {
     };
     let abortable_system = AbortableQueue::default();
 
-    let client = ElectrumClientImpl::try_new(
-        "test".to_string(),
-        vec![],
-        TEST_COIN_NAME.into(),
+    let client_settings = ElectrumClientSettings {
+        client_name: "test".to_string(),
+        servers: vec![],
+        coin_ticker: TEST_COIN_NAME.into(),
+        negotiate_version: true,
+        conn_mng_policy: ConnMngPolicy::default(),
+    };
+    let client = ElectrumClient::try_new(
+        client_settings,
         Default::default(),
         block_headers_storage,
         abortable_system,
-        true,
-        ConnMngPolicy::default(),
     )
     .expect("Expected electrum_client_impl constructed without a problem");
-    let client = UtxoRpcClientEnum::Electrum(ElectrumClient(Arc::new(client)));
+    let client = UtxoRpcClientEnum::Electrum(client);
     let coin = utxo_coin_for_test(client, None, false);
     let transaction = hex::decode("01000000000102fff7f7881a8099afa6940d42d1e7f6362bec38171ea3edf433541db4e4ad969f00000000494830450221008b9d1dc26ba6a9cb62127b02742fa9d754cd3bebf337f7a55d114c8e5cdd30be022040529b194ba3f9281a99f2b1c0a19c0489bc22ede944ccf4ecbab4cc618ef3ed01eeffffffef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a0100000000ffffffff02202cb206000000001976a9148280b37df378db99f66f85c95a783a76ac7a6d5988ac9093510d000000001976a9143bde42dbee7e4dbe6a21b2d50ce2f0167faa815988ac000247304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee0121025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee635711000000")
         .unwrap();
@@ -1507,23 +1510,14 @@ fn test_network_info_negative_time_offset() {
 #[test]
 fn test_unavailable_electrum_proto_version() {
     ElectrumClientImpl::try_new.mock_safe(
-        |client_name,
-         servers,
-         coin_ticker,
-         event_handlers,
-         block_headers_storage,
-         abortable_system,
-         _,
-         conn_mng_policy| {
+        |client_settings, event_handlers, block_headers_storage, abortable_system, event_sender| {
             MockResult::Return(Ok(ElectrumClientImpl::with_protocol_version(
-                client_name,
-                servers,
-                coin_ticker,
+                client_settings,
                 event_handlers,
                 OrdRange::new(1.8, 1.9).unwrap(),
                 block_headers_storage,
                 abortable_system,
-                conn_mng_policy,
+                event_sender,
             )))
         },
     );
@@ -4411,7 +4405,7 @@ fn test_block_header_utxo_loop() {
         "max_stored_block_headers": 15
     }));
 
-    let weak_client = Arc::downgrade(&client.0);
+    let weak_client = Arc::downgrade(&client.client_impl);
     let loop_fut = async move { block_header_utxo_loop(weak_client, loop_handle, spv_conf.unwrap()).await };
 
     let test_fut = async move {
@@ -4630,7 +4624,7 @@ fn test_block_header_utxo_loop_with_reorg() {
         "max_stored_block_headers": 100
     }));
 
-    let weak_client = Arc::downgrade(&client.0);
+    let weak_client = Arc::downgrade(&client.client_impl);
     let loop_fut = async move { block_header_utxo_loop(weak_client, loop_handle, spv_conf.unwrap()).await };
 
     let test_fut = async move {
