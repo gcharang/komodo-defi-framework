@@ -4,6 +4,8 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        graceful_shutdown, AbortSettings, AbortableSystem, SpawnAbortable, SpawnFuture};
 use common::log::{self, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
+#[cfg(not(target_arch = "wasm32"))]
+use db_common::async_sql_conn::AsyncConnection;
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
 use mm2_event_stream::{controller::Controller, Event, EventStreamConfiguration};
@@ -58,6 +60,7 @@ const EXPORT_METRICS_INTERVAL: f64 = 5. * 60.;
 /// Only the pointers (`MmArc`, `MmWeak`) can be moved around.
 ///
 /// Threads only have the non-`mut` access to `MmCtx`, allowing us to directly share certain fields.
+#[allow(dead_code)]
 pub struct MmCtx {
     /// MM command-line configuration.
     pub conf: Json,
@@ -128,6 +131,8 @@ pub struct MmCtx {
     pub db_namespace: DbNamespaceId,
     /// The context belonging to the `nft` mod: `NftCtx`.
     pub nft_ctx: Mutex<Option<Arc<dyn Any + 'static + Send + Sync>>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async_sqlite_connection: Constructible<Arc<AsyncConnection>>,
 }
 
 impl MmCtx {
@@ -172,6 +177,8 @@ impl MmCtx {
             #[cfg(target_arch = "wasm32")]
             db_namespace: DbNamespaceId::Main,
             nft_ctx: Mutex::new(None),
+            #[cfg(not(target_arch = "wasm32"))]
+            async_sqlite_connection: Constructible::default(),
         }
     }
 
@@ -321,6 +328,15 @@ impl MmCtx {
         log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
         let connection = try_s!(Connection::open(sqlite_file_path));
         try_s!(self.shared_sqlite_conn.pin(Arc::new(Mutex::new(connection))));
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn init_async_sqlite_connection(&self) -> Result<(), String> {
+        let sqlite_file_path = self.dbdir().join("DB_ASYNC.db");
+        log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        let async_conn = try_s!(AsyncConnection::open(sqlite_file_path).await);
+        try_s!(self.async_sqlite_connection.pin(Arc::new(async_conn)));
         Ok(())
     }
 

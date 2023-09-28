@@ -1,7 +1,11 @@
 use crate::eth::GetEthAddressError;
-use crate::nft::storage::{CreateNftStorageError, NftStorageError};
+#[cfg(target_arch = "wasm32")]
+use crate::nft::storage::wasm::WasmNftCacheError;
+use crate::nft::storage::NftStorageError;
 use crate::{GetMyAddressError, WithdrawError};
 use common::{HttpStatusCode, ParseRfc3339Err};
+#[cfg(not(target_arch = "wasm32"))]
+use db_common::sqlite::rusqlite::Error as SqlError;
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use http::StatusCode;
@@ -73,14 +77,6 @@ impl From<GetEthAddressError> for GetNftInfoError {
     fn from(e: GetEthAddressError) -> Self { GetNftInfoError::GetEthAddressError(e) }
 }
 
-impl From<CreateNftStorageError> for GetNftInfoError {
-    fn from(e: CreateNftStorageError) -> Self {
-        match e {
-            CreateNftStorageError::Internal(err) => GetNftInfoError::Internal(err),
-        }
-    }
-}
-
 impl<T: NftStorageError> From<T> for GetNftInfoError {
     fn from(err: T) -> Self { GetNftInfoError::DbError(format!("{:?}", err)) }
 }
@@ -102,6 +98,10 @@ impl From<ParseRfc3339Err> for GetNftInfoError {
 
 impl From<ProtectFromSpamError> for GetNftInfoError {
     fn from(e: ProtectFromSpamError) -> Self { GetNftInfoError::ProtectFromSpamError(e) }
+}
+
+impl From<LockDBError> for GetNftInfoError {
+    fn from(e: LockDBError) -> Self { GetNftInfoError::DbError(format!("{:?}", e)) }
 }
 
 impl HttpStatusCode for GetNftInfoError {
@@ -186,14 +186,6 @@ pub enum UpdateNftError {
     ProtectFromSpamError(ProtectFromSpamError),
 }
 
-impl From<CreateNftStorageError> for UpdateNftError {
-    fn from(e: CreateNftStorageError) -> Self {
-        match e {
-            CreateNftStorageError::Internal(err) => UpdateNftError::Internal(err),
-        }
-    }
-}
-
 impl From<GetNftInfoError> for UpdateNftError {
     fn from(e: GetNftInfoError) -> Self { UpdateNftError::GetNftInfoError(e) }
 }
@@ -216,6 +208,10 @@ impl From<GetInfoFromUriError> for UpdateNftError {
 
 impl From<ProtectFromSpamError> for UpdateNftError {
     fn from(e: ProtectFromSpamError) -> Self { UpdateNftError::ProtectFromSpamError(e) }
+}
+
+impl From<LockDBError> for UpdateNftError {
+    fn from(e: LockDBError) -> Self { UpdateNftError::DbError(format!("{:?}", e)) }
 }
 
 impl HttpStatusCode for UpdateNftError {
@@ -309,4 +305,22 @@ pub(crate) enum MetaFromUrlError {
 
 impl From<GetInfoFromUriError> for MetaFromUrlError {
     fn from(e: GetInfoFromUriError) -> Self { MetaFromUrlError::GetInfoFromUriError(e) }
+}
+
+#[derive(Debug)]
+pub enum LockDBError {
+    #[cfg(target_arch = "wasm32")]
+    WasmNftCacheError(WasmNftCacheError),
+    #[cfg(not(target_arch = "wasm32"))]
+    SqlError(SqlError),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<SqlError> for LockDBError {
+    fn from(e: SqlError) -> Self { LockDBError::SqlError(e) }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<WasmNftCacheError> for LockDBError {
+    fn from(e: WasmNftCacheError) -> Self { LockDBError::WasmNftCacheError(e) }
 }

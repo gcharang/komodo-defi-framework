@@ -907,6 +907,19 @@ pub fn mm_ctx_with_custom_db() -> MmArc {
     ctx
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn mm_ctx_with_custom_async_db() -> MmArc {
+    use db_common::async_sql_conn::AsyncConnection;
+    use std::sync::Arc;
+
+    let ctx = MmCtxBuilder::new().into_mm_arc();
+
+    let connection = AsyncConnection::open_in_memory().await.unwrap();
+    let _ = ctx.async_sqlite_connection.pin(Arc::new(connection));
+
+    ctx
+}
+
 /// Automatically kill a wrapped process.
 pub struct RaiiKill {
     pub handle: Child,

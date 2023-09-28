@@ -1,9 +1,12 @@
 use crate::nft::eth_addr_to_hex;
 use crate::{TransactionType, TxFeeDetails, WithdrawFee};
 use common::ten;
+#[cfg(not(target_arch = "wasm32"))]
+use db_common::async_sql_conn::AsyncConnection;
 use ethereum_types::Address;
 use futures::lock::Mutex as AsyncMutex;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
+use mm2_err_handle::mm_error::MmResult;
 use mm2_number::BigDecimal;
 use rpc::v1::types::Bytes as BytesJson;
 use serde::de::{self, Deserializer};
@@ -16,9 +19,20 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 
-use crate::nft::nft_errors::ParseChainTypeError;
+use crate::nft::nft_errors::{LockDBError, ParseChainTypeError};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::nft::storage::sql_storage::AsyncSqlWrapper;
+
+use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
+
+#[cfg(target_arch = "wasm32")]
+use mm2_err_handle::map_mm_error::MapMmError;
+
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
+
+#[cfg(target_arch = "wasm32")]
+use crate::nft::storage::wasm::WasmNftCacheError;
 
 #[cfg(target_arch = "wasm32")]
 use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
@@ -624,26 +638,62 @@ impl From<Nft> for TransferMeta {
 /// This struct provides an interface for interacting with the underlying data structures
 /// required for NFT operations, including guarding against concurrent accesses and
 /// dealing with platform-specific storage mechanisms.
+#[allow(dead_code)]
 pub(crate) struct NftCtx {
     /// An asynchronous mutex to guard against concurrent NFT operations, ensuring data consistency.
     pub(crate) guard: Arc<AsyncMutex<()>>,
     #[cfg(target_arch = "wasm32")]
     /// Platform-specific database for caching NFT data.
     pub(crate) nft_cache_db: SharedDb<NftCacheIDB>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) nft_cache_db: Arc<AsyncConnection>,
 }
 
 impl NftCtx {
     /// Create a new `NftCtx` from the given MM context.
     ///
     /// If an `NftCtx` instance doesn't already exist in the MM context, it gets created and cached for subsequent use.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
+        Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
+            let async_sqlite_connection = ctx
+                .async_sqlite_connection
+                .ok_or("async_sqlite_connection is not initialized".to_owned())?;
+            Ok(NftCtx {
+                guard: Arc::new(AsyncMutex::new(())),
+                nft_cache_db: async_sqlite_connection.clone(),
+            })
+        })))
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
         Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
             Ok(NftCtx {
                 guard: Arc::new(AsyncMutex::new(())),
-                #[cfg(target_arch = "wasm32")]
                 nft_cache_db: ConstructibleDb::new(ctx).into_shared(),
             })
         })))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn get_storage(
+        &self,
+    ) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
+        let async_db = self.nft_cache_db.clone();
+        Ok(AsyncSqlWrapper::new(async_db))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) async fn get_storage(
+        &self,
+    ) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
+        let locked_db = self
+            .nft_cache_db
+            .get_or_initialize()
+            .await
+            .mm_err(WasmNftCacheError::from)?;
+        Ok(locked_db)
     }
 }
 

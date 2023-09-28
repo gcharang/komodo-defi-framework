@@ -1,10 +1,14 @@
-use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftTransferCommon, NftTransferHistory,
+use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftCtx, NftTransferCommon, NftTransferHistory,
                               TransferStatus, UriMeta};
-use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
+// use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 use ethereum_types::Address;
 use mm2_number::BigDecimal;
+#[cfg(not(target_arch = "wasm32"))]
+use mm2_test_helpers::for_tests::mm_ctx_with_custom_async_db;
+#[cfg(target_arch = "wasm32")]
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub(crate) fn nft() -> Nft {
     Nft {
@@ -342,22 +346,10 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
     vec![transfer, transfer1, transfer2, transfer3]
 }
 
-pub(crate) async fn init_nft_list_storage(chain: &Chain) -> impl NftListStorageOps + NftTransferHistoryStorageOps {
+pub(crate) async fn get_nft_ctx(_chain: &Chain) -> Arc<NftCtx> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let ctx = mm_ctx_with_custom_async_db().await;
+    #[cfg(target_arch = "wasm32")]
     let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
-    NftListStorageOps::init(&storage, chain).await.unwrap();
-    let is_initialized = NftListStorageOps::is_initialized(&storage, chain).await.unwrap();
-    assert!(is_initialized);
-    storage
-}
-
-pub(crate) async fn init_nft_history_storage(chain: &Chain) -> impl NftListStorageOps + NftTransferHistoryStorageOps {
-    let ctx = mm_ctx_with_custom_db();
-    let storage = NftStorageBuilder::new(&ctx).build().unwrap();
-    NftTransferHistoryStorageOps::init(&storage, chain).await.unwrap();
-    let is_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, chain)
-        .await
-        .unwrap();
-    assert!(is_initialized);
-    storage
+    NftCtx::from_ctx(&ctx).unwrap()
 }
