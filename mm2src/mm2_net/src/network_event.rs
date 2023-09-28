@@ -23,6 +23,8 @@ impl EventBehaviour for NetworkEvent {
     async fn handle(self, interval: f64) {
         let p2p_ctx = P2PContext::fetch_from_mm_arc(&self.ctx);
 
+        let mut previously_sent = json!({});
+
         loop {
             let p2p_cmd_tx = p2p_ctx.cmd_tx.lock().clone();
 
@@ -40,10 +42,14 @@ impl EventBehaviour for NetworkEvent {
                 "relay_mesh": relay_mesh,
             });
 
-            self.ctx
-                .stream_channel_controller
-                .broadcast(Event::new(Self::EVENT_NAME.to_string(), event_data.to_string()))
-                .await;
+            if previously_sent != event_data {
+                self.ctx
+                    .stream_channel_controller
+                    .broadcast(Event::new(Self::EVENT_NAME.to_string(), event_data.to_string()))
+                    .await;
+
+                previously_sent = event_data;
+            }
 
             Timer::sleep(interval).await;
         }
