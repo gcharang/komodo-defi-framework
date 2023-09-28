@@ -1077,6 +1077,7 @@ dependencies = [
  "tokio-rustls",
  "tonic",
  "tonic-build",
+ "tonic-web-wasm-client",
  "url",
  "utxo_signer",
  "uuid 1.2.2",
@@ -8019,6 +8020,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-web-wasm-client"
+version = "0.4.0"
+source = "git+https://github.com/borngraced/tonic-web-wasm-client?rev=cd49d00#cd49d003b337e053878ab8070c63e0b77963a7c5"
+dependencies = [
+ "base64 0.21.2",
+ "byteorder 1.4.3",
+ "bytes 1.1.0",
+ "futures-util",
+ "http 0.2.7",
+ "http-body 0.4.5",
+ "httparse",
+ "js-sys",
+ "pin-project 1.0.10",
+ "thiserror",
+ "tonic",
+ "tower-service",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-streams",
+ "web-sys",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8623,6 +8647,19 @@ checksum = "2c2e18093f11c19ca4e188c177fecc7c372304c311189f12c2f9bea5b7324ac7"
 dependencies = [
  "proc-macro2 1.0.58",
  "quote 1.0.27",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4609d447824375f43e1ffbc051b50ad8f4b3ae8219680c94452ea05eb240ac7"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
