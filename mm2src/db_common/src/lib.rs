@@ -1,3 +1,6 @@
+#[allow(dead_code)]
+#[cfg(not(target_arch = "wasm32"))]
+pub mod async_sql_conn;
 #[cfg(not(target_arch = "wasm32"))] mod sql_condition;
 #[cfg(not(target_arch = "wasm32"))] mod sql_constraint;
 #[cfg(not(target_arch = "wasm32"))] mod sql_create;

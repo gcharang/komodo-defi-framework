@@ -19,7 +19,7 @@ use crate::nft::nft_errors::{MetaFromUrlError, ProtectFromSpamError, UpdateSpamP
 use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, NftCommon, NftCtx, NftTransferCommon,
                               PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq, SpamContractReq,
                               SpamContractRes, TransferMeta, TransferStatus, UriMeta};
-use crate::nft::storage::{NftListStorageOps, NftStorageBuilder, NftTransferHistoryStorageOps};
+use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
 use ethereum_types::Address;
@@ -76,7 +76,10 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = nft_ctx.get_storage()?;
+    #[cfg(target_arch = "wasm32")]
+    let storage = nft_ctx.get_storage().await?;
     for chain in req.chains.iter() {
         if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
@@ -116,7 +119,10 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = nft_ctx.get_storage()?;
+    #[cfg(target_arch = "wasm32")]
+    let storage = nft_ctx.get_storage().await?;
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
         NftListStorageOps::init(&storage, &req.chain).await?;
     }
@@ -158,7 +164,10 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = nft_ctx.get_storage()?;
+    #[cfg(target_arch = "wasm32")]
+    let storage = nft_ctx.get_storage().await?;
     for chain in req.chains.iter() {
         if !NftTransferHistoryStorageOps::is_initialized(&storage, chain).await? {
             NftTransferHistoryStorageOps::init(&storage, chain).await?;
@@ -194,7 +203,10 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = nft_ctx.get_storage()?;
+    #[cfg(target_arch = "wasm32")]
+    let storage = nft_ctx.get_storage().await?;
     for chain in req.chains.iter() {
         let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
 
@@ -379,7 +391,10 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    let storage = NftStorageBuilder::new(&ctx).build()?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = nft_ctx.get_storage()?;
+    #[cfg(target_arch = "wasm32")]
+    let storage = nft_ctx.get_storage().await?;
     let token_address_str = eth_addr_to_hex(&req.token_address);
     let moralis_meta = match get_moralis_metadata(
         token_address_str.clone(),
@@ -1082,10 +1097,13 @@ pub(crate) async fn find_wallet_nft_amount(
     token_address: String,
     token_id: BigDecimal,
 ) -> MmResult<BigDecimal, GetNftInfoError> {
-    let nft_ctx = NftCtx::from_ctx(ctx).map_err(GetNftInfoError::Internal)?;
+    let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    let storage = NftStorageBuilder::new(ctx).build()?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = nft_ctx.get_storage()?;
+    #[cfg(target_arch = "wasm32")]
+    let storage = nft_ctx.get_storage().await?;
     if !NftListStorageOps::is_initialized(&storage, chain).await? {
         NftListStorageOps::init(&storage, chain).await?;
     }
