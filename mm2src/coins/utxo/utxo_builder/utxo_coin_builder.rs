@@ -31,6 +31,7 @@ use serde_json::{self as json, Value as Json};
 use spv_validation::conf::SPVConf;
 use spv_validation::helpers_validation::SPVError;
 use spv_validation::storage::{BlockHeaderStorageError, BlockHeaderStorageOps};
+#[cfg(not(target_arch = "wasm32"))] use std::sync::Arc;
 use std::sync::Mutex;
 
 cfg_native! {

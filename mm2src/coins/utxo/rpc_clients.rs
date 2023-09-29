@@ -2699,12 +2699,6 @@ async fn electrum_process_chunk(chunk: &[u8], arc: &JsonRpcPendingRequestsShared
     }
 }
 
-fn increase_delay(delay: &AtomicU64) {
-    if delay.load(AtomicOrdering::Relaxed) < 60 {
-        delay.fetch_add(5, AtomicOrdering::Relaxed);
-    }
-}
-
 /// The enum wrapping possible variants of underlying Streams
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::large_enum_variant)]
@@ -2801,19 +2795,6 @@ fn rustls_client_config(unsafe_conf: bool) -> Arc<ClientConfig> {
 lazy_static! {
     static ref SAFE_TLS_CONFIG: Arc<ClientConfig> = rustls_client_config(false);
     static ref UNSAFE_TLS_CONFIG: Arc<ClientConfig> = rustls_client_config(true);
-}
-
-macro_rules! try_loop {
-    ($e:expr, $addr: ident, $delay: ident) => {
-        match $e {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{:?} error {:?}", $addr, e);
-                increase_delay(&$delay);
-                continue;
-            },
-        }
-    };
 }
 
 macro_rules! handle_connect_err {
