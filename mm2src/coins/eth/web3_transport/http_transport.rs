@@ -202,7 +202,7 @@ async fn send_request(
                 },
             };
 
-        event_handlers.on_outgoing_request(serialized_request.as_bytes());
+        event_handlers.on_outgoing_request(serialized_request.len());
 
         let mut req = http::Request::new(serialized_request.clone().into_bytes());
         *req.method_mut() = http::Method::POST;
@@ -233,7 +233,7 @@ async fn send_request(
             },
         };
 
-        event_handlers.on_incoming_response(&body);
+        event_handlers.on_incoming_response(body.len());
 
         if !status.is_success() {
             errors.push(Web3RpcError::Transport(format!(
@@ -301,7 +301,7 @@ async fn send_request_once(
     use mm2_net::wasm_http::FetchRequest;
 
     // account for outgoing traffic
-    event_handlers.on_outgoing_request(request_payload.as_bytes());
+    event_handlers.on_outgoing_request(request_payload.len());
 
     let (status_code, response_str) = FetchRequest::post(&uri.to_string())
         .cors()
@@ -318,7 +318,7 @@ async fn send_request_once(
     }
 
     // account for incoming traffic
-    event_handlers.on_incoming_response(response_str.as_bytes());
+    event_handlers.on_incoming_response(response_str.len());
 
     let response: Response = serde_json::from_str(&response_str).map_err(|e| Error::InvalidResponse(e.to_string()))?;
     match response {

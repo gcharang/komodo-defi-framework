@@ -300,7 +300,7 @@ impl MmCtx {
     pub fn gui(&self) -> Option<&str> { self.conf["gui"].as_str() }
 
     pub fn electrum_conn_mng_policy(&self) -> ConnMngPolicy {
-        let conn_policy = self.conf["electrum_conn_policy"].clone();
+        let conn_policy = self.conf["conn_mng_policy"].clone();
 
         serde_json::from_value(conn_policy.clone())
             .map_err(|err| {

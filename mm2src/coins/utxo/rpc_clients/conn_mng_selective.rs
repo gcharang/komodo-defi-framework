@@ -1,7 +1,6 @@
-use async_std::stream::StreamExt;
 use async_trait::async_trait;
 use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
-use common::executor::{AbortableSystem, SpawnFuture};
+use common::executor::{AbortableSystem, SpawnFuture, Timer};
 use common::log::{debug, error, info, warn};
 use futures::future::FutureExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard};
@@ -14,7 +13,6 @@ use std::time::Duration;
 
 use super::{spawn_electrum, ConnMngTrait, ElectrumClientEvent, ElectrumConnSettings, ElectrumConnection,
             DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
-use crate::RpcTransportEventHandlerShared;
 
 #[async_trait]
 impl ConnMngTrait for ConnMngSelective {
@@ -39,7 +37,7 @@ impl ConnMngTrait for ConnMngSelective {
             }
         }
 
-        while let Some((conn_settings, weak_spawner, event_handlers)) = {
+        while let Some((conn_settings, weak_spawner)) = {
             if self.0.is_connected().await {
                 debug!("Skip connecting, is connected");
                 return Ok(());
@@ -59,7 +57,7 @@ impl ConnMngTrait for ConnMngSelective {
             debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
             debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
             if let Some((conn_settings, weak_spawner)) = ConnMngSelectiveImpl::get_settings_to_connect(&guard).await {
-                Some((conn_settings, weak_spawner, guard.event_handlers.clone()))
+                Some((conn_settings, weak_spawner))
             } else {
                 warn!("Failed to connect, no connection settings found");
                 None
@@ -68,7 +66,7 @@ impl ConnMngTrait for ConnMngSelective {
             debug!("Got conn_settings to connect to: {:?}", conn_settings);
             let address = conn_settings.url.clone();
             match self
-                .connect_to(conn_settings, event_handlers, weak_spawner, self.0.event_sender.clone())
+                .connect_to(conn_settings, weak_spawner, self.0.event_sender.clone())
                 .await
             {
                 Ok(_) => {
@@ -89,11 +87,6 @@ impl ConnMngTrait for ConnMngSelective {
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
 
     async fn remove_server(&self, address: &str) -> Result<(), String> { self.0.remove_server(address).await }
-
-    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
-        let mut guarded = self.0.guarded.lock().await;
-        guarded.event_handlers.push(handler)
-    }
 
     async fn rotate_servers(&self, _no_of_rotations: usize) {
         // not implemented for this conn_mng implementation intentionally
@@ -132,7 +125,6 @@ pub struct ConnMngSelectiveImpl {
 #[derive(Debug)]
 struct ConnMngSelectiveState {
     connecting: AtomicBool,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
     queue: ConnMngSelectiveQueue,
     active: Option<String>,
     conn_ctxs: BTreeMap<String, ElectrumConnCtx>,
@@ -156,7 +148,6 @@ impl ConnMngSelectiveImpl {
     pub(super) fn try_new(
         servers: Vec<ElectrumConnSettings>,
         abortable_system: AbortableQueue,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
         event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
     ) -> Result<ConnMngSelectiveImpl, String> {
         let mut primary = VecDeque::<String>::new();
@@ -186,7 +177,6 @@ impl ConnMngSelectiveImpl {
             event_sender,
             guarded: AsyncMutex::new(ConnMngSelectiveState {
                 connecting: AtomicBool::new(false),
-                event_handlers,
                 queue: ConnMngSelectiveQueue { primary, backup },
                 active: None,
                 conn_ctxs,
@@ -321,7 +311,7 @@ impl ConnMngSelective {
         spawner.spawn(Box::new(
             async move {
                 debug!("Suspend server: {}, for: {} seconds", address, suspend_timeout_sec);
-                tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
+                Timer::sleep(suspend_timeout_sec as f64).await;
                 let _ = self.resume_server(address).await;
             }
             .boxed(),
@@ -349,12 +339,11 @@ impl ConnMngSelective {
             let active_priority = &active_ctx.conn_settings.priority;
             if let (Priority::Secondary, Priority::Primary) = (active_priority, priority) {
                 let conn_settings = conn_ctx.conn_settings.clone();
-                let event_handlers = guard.event_handlers.clone();
                 let conn_spawner = conn_ctx.abortable_system.weak_spawner();
                 drop(guard);
                 if let Err(err) = self
                     .clone()
-                    .connect_to(conn_settings, event_handlers, conn_spawner, self.0.event_sender.clone())
+                    .connect_to(conn_settings, conn_spawner, self.0.event_sender.clone())
                     .await
                 {
                     error!("Failed to resume: {}", err);
@@ -464,13 +453,10 @@ impl ConnMngSelective {
     async fn connect_to(
         &self,
         conn_settings: ElectrumConnSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
         weak_spawner: WeakSpawner,
         event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
     ) -> Result<(), String> {
-        let (conn, mut conn_ready_receiver) =
-            spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone(), event_sender)?;
-        //        let conn = spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone())?;
+        let (conn, mut conn_ready_receiver) = spawn_electrum(&conn_settings, weak_spawner.clone(), event_sender)?;
         Self::register_connection(&mut self.0.guarded.lock().await, conn)?;
         let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
 
@@ -480,7 +466,7 @@ impl ConnMngSelective {
                 ERR!("Timed out: {}", timeout_sec)
                 // TODO: suspend_server????
             },
-            _ = conn_ready_receiver.next().fuse() => Ok(()) // TODO: handle cancelled
+            _ = conn_ready_receiver => Ok(()) // TODO: handle cancelled
         }
     }
 }

@@ -3091,8 +3091,8 @@ pub type RpcTransportEventHandlerShared = Arc<dyn RpcTransportEventHandler + Sen
 /// Common methods to measure the outgoing requests and incoming responses statistics.
 pub trait RpcTransportEventHandler {
     fn debug_info(&self) -> String;
-    fn on_outgoing_request(&self, data: &[u8]);
-    fn on_incoming_response(&self, data: &[u8]);
+    fn on_outgoing_request(&self, data_len: usize);
+    fn on_incoming_response(&self, data_len: usize);
     fn on_connected(&self, address: String) -> Result<(), String>;
     fn on_disconnected(&self, address: &str) -> Result<(), String>;
 }
@@ -3105,9 +3105,9 @@ impl fmt::Debug for dyn RpcTransportEventHandler + Send + Sync {
 impl RpcTransportEventHandler for RpcTransportEventHandlerShared {
     fn debug_info(&self) -> String { self.deref().debug_info() }
 
-    fn on_outgoing_request(&self, data: &[u8]) { self.as_ref().on_outgoing_request(data) }
+    fn on_outgoing_request(&self, data_len: usize) { self.as_ref().on_outgoing_request(data_len) }
 
-    fn on_incoming_response(&self, data: &[u8]) { self.as_ref().on_incoming_response(data) }
+    fn on_incoming_response(&self, data_len: usize) { self.as_ref().on_incoming_response(data_len) }
 
     fn on_connected(&self, address: String) -> Result<(), String> { self.as_ref().on_connected(address) }
 
@@ -3120,15 +3120,15 @@ impl<T: RpcTransportEventHandler> RpcTransportEventHandler for Vec<T> {
         format!("{:?}", selfi)
     }
 
-    fn on_outgoing_request(&self, data: &[u8]) {
+    fn on_outgoing_request(&self, data_len: usize) {
         for handler in self {
-            handler.on_outgoing_request(data)
+            handler.on_outgoing_request(data_len)
         }
     }
 
-    fn on_incoming_response(&self, data: &[u8]) {
+    fn on_incoming_response(&self, data_len: usize) {
         for handler in self {
-            handler.on_incoming_response(data)
+            handler.on_incoming_response(data_len)
         }
     }
 
@@ -3188,15 +3188,15 @@ impl CoinTransportMetrics {
 impl RpcTransportEventHandler for CoinTransportMetrics {
     fn debug_info(&self) -> String { "CoinTransportMetrics".into() }
 
-    fn on_outgoing_request(&self, data: &[u8]) {
-        mm_counter!(self.metrics, "rpc_client.traffic.out", data.len() as u64,
+    fn on_outgoing_request(&self, data_len: usize) {
+        mm_counter!(self.metrics, "rpc_client.traffic.out", data_len as u64,
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());
         mm_counter!(self.metrics, "rpc_client.request.count", 1,
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());
     }
 
-    fn on_incoming_response(&self, data: &[u8]) {
-        mm_counter!(self.metrics, "rpc_client.traffic.in", data.len() as u64,
+    fn on_incoming_response(&self, data_len: usize) {
+        mm_counter!(self.metrics, "rpc_client.traffic.in", data_len as u64,
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());
         mm_counter!(self.metrics, "rpc_client.response.count", 1,
             "coin" => self.ticker.to_owned(), "client" => self.client.to_owned());

@@ -1328,9 +1328,9 @@ struct ElectrumProtoVerifier {
 impl RpcTransportEventHandler for ElectrumProtoVerifier {
     fn debug_info(&self) -> String { "ElectrumProtoVerifier".into() }
 
-    fn on_outgoing_request(&self, _data: &[u8]) {}
+    fn on_outgoing_request(&self, _data_len: usize) {}
 
-    fn on_incoming_response(&self, _data: &[u8]) {}
+    fn on_incoming_response(&self, _data_len: usize) {}
 
     fn on_connected(&self, address: String) -> Result<(), String> {
         debug!("Connected to the electrum server: {}", address);

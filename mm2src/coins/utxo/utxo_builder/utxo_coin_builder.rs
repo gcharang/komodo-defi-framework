@@ -31,7 +31,7 @@ use serde_json::{self as json, Value as Json};
 use spv_validation::conf::SPVConf;
 use spv_validation::helpers_validation::SPVError;
 use spv_validation::storage::{BlockHeaderStorageError, BlockHeaderStorageOps};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 cfg_native! {
     use crate::utxo::coin_daemon_data_dir;

@@ -1,22 +1,17 @@
 use async_trait::async_trait;
 use core::time::Duration;
-use futures::channel::oneshot as async_oneshot;
 use futures::lock::MutexGuard;
 use futures::{select, FutureExt};
-use futures01::sync::mpsc::UnboundedSender;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
-use common::executor::{AbortableSystem, SpawnFuture};
+use common::executor::{AbortableSystem, SpawnFuture, Timer};
 use common::log::{debug, error, info, warn};
 
 use super::{ConnMngTrait, ElectrumConnSettings, ElectrumConnection, DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
 use crate::hd_wallet::AsyncMutex;
 use crate::utxo::rpc_clients::{spawn_electrum, ElectrumClientEvent};
-use crate::RpcTransportEventHandlerShared;
-use async_std::stream::StreamExt;
-use futures01::Sink;
 
 #[derive(Clone, Debug)]
 pub struct ConnMngMultiple(pub Arc<ConnMngMultipleImpl>);
@@ -30,7 +25,6 @@ pub struct ConnMngMultipleImpl {
 
 #[derive(Debug)]
 struct ConnMngMultipleState {
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
     conn_ctxs: Vec<ElectrumConnCtx>,
 }
 
@@ -50,16 +44,11 @@ impl ConnMngTrait for ConnMngMultiple {
         self.0.get_conn_by_address(address).await
     }
 
-    async fn connect(&self) -> Result<(), String> { self.deref().connect(self.0.event_sender.clone()).await }
+    async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
 
     async fn is_connected(&self) -> bool { self.0.is_connected().await }
 
     async fn remove_server(&self, address: &str) -> Result<(), String> { self.0.remove_server(address).await }
-
-    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
-        let mut guarded = self.0.guarded.lock().await;
-        guarded.event_handlers.push(handler)
-    }
 
     async fn rotate_servers(&self, no_of_rotations: usize) {
         debug!("Rotate servers: {}", no_of_rotations);
@@ -67,7 +56,7 @@ impl ConnMngTrait for ConnMngMultiple {
         guarded.conn_ctxs.rotate_left(no_of_rotations);
     }
 
-    async fn is_connections_pool_empty(&self) -> bool { false }
+    async fn is_connections_pool_empty(&self) -> bool { self.0.is_connections_pool_empty().await }
 
     fn on_disconnected(&self, address: &str) {
         info!(
@@ -85,18 +74,13 @@ impl ConnMngTrait for ConnMngMultiple {
 }
 
 impl ConnMngMultiple {
-    async fn connect(
-        &self,
-        event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-    ) -> Result<(), String> {
-        let (s, r) = async_oneshot::channel::<()>();
+    async fn connect(&self) -> Result<(), String> {
         let mut guarded = self.0.guarded.lock().await;
 
         if guarded.conn_ctxs.is_empty() {
             return ERR!("Not settings to connect to found");
         }
 
-        let event_handlers = guarded.event_handlers.clone();
         for conn_ctx in &mut guarded.conn_ctxs {
             if conn_ctx.connection.is_some() {
                 let address = &conn_ctx.conn_settings.url;
@@ -106,12 +90,8 @@ impl ConnMngMultiple {
             let conn_settings = conn_ctx.conn_settings.clone();
             let weak_spawner = conn_ctx.abortable_system.weak_spawner();
             let self_clone = self.clone();
-            let event_handlers = event_handlers.clone();
-            let event_sender = event_sender.clone();
             self.0.abortable_system.weak_spawner().spawn(async move {
-                let _ = self_clone
-                    .connect_to(conn_settings, event_handlers, weak_spawner, event_sender)
-                    .await;
+                let _ = self_clone.connect_to(conn_settings, weak_spawner).await;
             });
         }
         Ok(())
@@ -145,7 +125,7 @@ impl ConnMngMultiple {
         spawner.spawn(Box::new(
             async move {
                 debug!("Suspend server: {}, for: {} seconds", address, suspend_timeout_sec);
-                tokio::time::sleep(Duration::from_secs(suspend_timeout_sec)).await;
+                Timer::sleep(suspend_timeout_sec as f64).await;
                 let _ = self.resume_server(address).await;
             }
             .boxed(),
@@ -158,15 +138,10 @@ impl ConnMngMultiple {
 
         let (_, conn_ctx) = Self::get_conn_ctx(&guard, &address)?;
         let conn_settings = conn_ctx.conn_settings.clone();
-        let event_handlers = guard.event_handlers.clone();
         let conn_spawner = conn_ctx.abortable_system.weak_spawner();
         drop(guard);
 
-        if let Err(err) = self
-            .clone()
-            .connect_to(conn_settings, event_handlers, conn_spawner, self.0.event_sender.clone())
-            .await
-        {
+        if let Err(err) = self.clone().connect_to(conn_settings, conn_spawner).await {
             error!("Failed to resume: {}", err);
             self.suspend_server(address.clone())
                 .await
@@ -237,17 +212,9 @@ impl ConnMngMultiple {
             .ok_or_else(|| format!("Unknown destination address {}", address))
     }
 
-    async fn connect_to(
-        self,
-        conn_settings: ElectrumConnSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
-        weak_spawner: WeakSpawner,
-        event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-        //conn_ready_receiver: async_oneshot::Receiver<()>,
-    ) -> Result<(), String> {
+    async fn connect_to(self, conn_settings: ElectrumConnSettings, weak_spawner: WeakSpawner) -> Result<(), String> {
         let (conn, mut conn_ready_receiver) =
-        //let conn = 
-                    spawn_electrum(&conn_settings, event_handlers, weak_spawner.clone(), self.0.event_sender.clone())?;
+            spawn_electrum(&conn_settings, weak_spawner.clone(), self.0.event_sender.clone())?;
         Self::register_connection(&mut self.0.guarded.lock().await, conn)?;
         let timeout_sec = conn_settings.timeout_sec.unwrap_or(DEFAULT_CONN_TIMEOUT_SEC);
         let address = conn_settings.url.clone();
@@ -258,7 +225,7 @@ impl ConnMngMultiple {
                 .await
                 .map_err(|err| ERRL!("Failed to suspend server: {}, error: {}", address, err))
             },
-            _ = conn_ready_receiver.next().fuse() => Ok(()) // TODO: handle cancelled state
+            _ = conn_ready_receiver => Ok(()) // TODO: handle cancelled state
         }
     }
 
@@ -276,7 +243,6 @@ impl ConnMngMultipleImpl {
     pub(super) fn new(
         servers: Vec<ElectrumConnSettings>,
         abortable_system: AbortableQueue,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
         event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
     ) -> ConnMngMultipleImpl {
         let mut connections: Vec<ElectrumConnCtx> = vec![];
@@ -294,11 +260,7 @@ impl ConnMngMultipleImpl {
         ConnMngMultipleImpl {
             abortable_system,
             event_sender,
-            guarded: AsyncMutex::new(ConnMngMultipleState {
-                event_handlers,
-
-                conn_ctxs: connections,
-            }),
+            guarded: AsyncMutex::new(ConnMngMultipleState { conn_ctxs: connections }),
         }
     }
 
@@ -343,4 +305,6 @@ impl ConnMngMultipleImpl {
         conn_ctx.abortable_system.abort_all().map_err(|err| err.to_string())?;
         Ok(())
     }
+
+    async fn is_connections_pool_empty(&self) -> bool { self.guarded.lock().await.conn_ctxs.is_empty() }
 }

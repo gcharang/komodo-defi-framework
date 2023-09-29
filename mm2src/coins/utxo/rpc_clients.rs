@@ -18,7 +18,6 @@ use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, SpawnFu
 use common::jsonrpc_client::{JsonRpcBatchClient, JsonRpcBatchResponse, JsonRpcClient, JsonRpcError, JsonRpcErrorType,
                              JsonRpcId, JsonRpcMultiClient, JsonRpcRemoteAddr, JsonRpcRequest, JsonRpcRequestEnum,
                              JsonRpcResponse, JsonRpcResponseEnum, JsonRpcResponseFut, RpcRes};
-use common::log::LogOnError;
 use common::log::{debug, error, info, warn};
 use common::{median, now_float, now_ms, now_sec, small_rng, OrdRange};
 use derive_more::Display;
@@ -30,7 +29,7 @@ use futures::lock::Mutex as AsyncMutex;
 use futures::{select, StreamExt};
 use futures01::future::select_ok;
 use futures01::sync::mpsc;
-use futures01::{Future, Oneshot, Sink, Stream};
+use futures01::{Future, Sink, Stream};
 use http::Uri;
 use itertools::Itertools;
 use keys::hash::H256;
@@ -39,7 +38,6 @@ use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigInt, MmNumber};
 use mm2_rpc::data::legacy::{ElectrumProtocol, Priority};
 #[cfg(test)] use mocktopus::macros::*;
-use parking_lot::Mutex;
 use rand::seq::SliceRandom;
 use rpc::v1::types::{Bytes as BytesJson, Transaction as RpcTransaction, H256 as H256Json};
 use serde_json::{self as json, Value as Json};
@@ -58,7 +56,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 
 use common::custom_futures::select_ok_sequential;
@@ -708,7 +706,7 @@ impl JsonRpcClient for NativeClientImpl {
         let request_body =
             try_f!(json::to_string(&request).map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string())));
         // measure now only body length, because the `hyper` crate doesn't allow to get total HTTP packet length
-        self.event_handlers.on_outgoing_request(request_body.as_bytes());
+        self.event_handlers.on_outgoing_request(request_body.len());
 
         let uri = self.uri.clone();
         let auth = self.auth.clone();
@@ -724,7 +722,7 @@ impl JsonRpcClient for NativeClientImpl {
             move |result| -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
                 let res = result.map_err(|e| e.into_inner())?;
                 // measure now only body length, because the `hyper` crate doesn't allow to get total HTTP packet length
-                event_handles.on_incoming_response(&res.2);
+                event_handles.on_incoming_response(res.2.len());
 
                 let body =
                     std::str::from_utf8(&res.2).map_err(|e| JsonRpcErrorType::parse_error(&uri, e.to_string()))?;
@@ -1458,11 +1456,9 @@ fn addr_to_socket_addr(input: &str) -> Result<SocketAddr, String> {
 #[cfg(not(target_arch = "wasm32"))]
 fn spawn_electrum(
     conn_settings: &ElectrumConnSettings,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
     spawner: WeakSpawner,
     event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-) -> Result<(ElectrumConnection, futures::channel::mpsc::Receiver<()>), String> {
-    //) -> Result<ElectrumConnection, String> {
+) -> Result<(ElectrumConnection, async_oneshot::Receiver<()>), String> {
     let config = match conn_settings.protocol {
         ElectrumProtocol::TCP => ElectrumConfig::TCP,
         ElectrumProtocol::SSL => {
@@ -1485,7 +1481,6 @@ fn spawn_electrum(
     Ok(electrum_connect(
         conn_settings.url.clone(),
         config,
-        event_handlers,
         spawner,
         event_sender,
     ))
@@ -1496,9 +1491,9 @@ fn spawn_electrum(
 #[cfg(target_arch = "wasm32")]
 fn spawn_electrum(
     conn_settings: &ElectrumConnSettings,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
-    abortable_system: AbortableQueue,
-) -> Result<(ElectrumConnection, Arc<Notify>), String> {
+    spawner: WeakSpawner,
+    event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
+) -> Result<(ElectrumConnection, async_oneshot::Receiver<()>), String> {
     let mut url = conn_settings.url.clone();
     let uri: Uri = try_s!(conn_settings.url.parse());
 
@@ -1525,7 +1520,12 @@ fn spawn_electrum(
         },
     };
 
-    Ok(electrum_connect(url, config, event_handlers, abortable_system))
+    Ok(electrum_connect(
+        conn_settings.url.clone(),
+        config,
+        spawner,
+        event_sender,
+    ))
 }
 
 /// Represents the active Electrum connection to selected address
@@ -1622,7 +1622,6 @@ impl<K: Clone + Eq + std::hash::Hash, V: Clone> ConcurrentRequestMap<K, V> {
 }
 
 pub struct ElectrumClientImpl {
-    weak_self: Mutex<Option<Weak<ElectrumClientImpl>>>,
     client_name: String,
     coin_ticker: String,
     conn_mng: Arc<dyn ConnMngTrait + Send + Sync + 'static>,
@@ -1634,59 +1633,10 @@ pub struct ElectrumClientImpl {
     block_headers_storage: BlockHeaderStorage,
     negotiate_version: bool,
     abortable_system: AbortableQueue,
-    event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
 }
 
 impl Debug for ElectrumClientImpl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { f.write_str("electrum_client_impl") }
-}
-
-impl RpcTransportEventHandler for ElectrumClientImpl {
-    fn debug_info(&self) -> String { String::default() }
-
-    fn on_outgoing_request(&self, _data: &[u8]) {}
-
-    fn on_incoming_response(&self, _data: &[u8]) {}
-
-    fn on_connected(&self, address: String) -> Result<(), String> {
-        debug!(
-            "electrum_client_impl on connected to address: {}. Spawning service futures",
-            address
-        );
-        //
-        // let weak_self = {
-        //     self.weak_self
-        //         .lock()
-        //         .as_ref()
-        //         .ok_or_else(|| ERRL!("Failed to process on_connected, weak_self is not set"))?
-        //         .clone()
-        // };
-        // let client_name = self.client_name.clone();
-        // let conn_mng = self.conn_mng.clone();
-        // let negotiate_version = self.negotiate_version;
-        // let fut = async move {
-        //     if !negotiate_version || check_electrum_server_version(weak_self, client_name, address.to_string()).await {
-        //         if let Err(err) = connected_notify.send().map_err(|err| {
-        //             ERRL!(
-        //                 "Failed to notify that address is ready(connected or validated): {}, error: {:?}",
-        //                 address,
-        //                 err
-        //             )
-        //         }) {
-        //             error!("{}", err);
-        //         }
-        //     } else if let Err(err) = conn_mng.connect().await {
-        //         error!("Failed to reconnect: {}", err);
-        //     }
-        // };
-        // conn_spawner.spawn(fut);
-        Ok(())
-    }
-
-    fn on_disconnected(&self, address: &str) -> Result<(), String> {
-        self.conn_mng.on_disconnected(address);
-        Ok(())
-    }
 }
 
 async fn electrum_request_multi(
@@ -1774,12 +1724,6 @@ async fn electrum_request_to(
 }
 
 impl ElectrumClientImpl {
-    pub fn set_weak(&self, self_weak: Weak<ElectrumClientImpl>) { self.weak_self.lock().replace(self_weak); }
-
-    pub async fn register(&self, handler: RpcTransportEventHandlerShared) {
-        self.conn_mng.set_rpc_enent_handler(handler.clone()).await;
-    }
-
     pub async fn connect(&self) -> Result<(), String> {
         debug!("electrum_client_impl connect");
         self.conn_mng.connect().await
@@ -1829,14 +1773,20 @@ impl Deref for ElectrumClient {
     fn deref(&self) -> &ElectrumClientImpl { &self.client_impl }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(super) enum ElectrumClientEvent {
     Connected {
         address: String,
-        conn_ready_notifier: futures::channel::mpsc::Sender<()>,
+        conn_ready_notifier: async_oneshot::Sender<()>,
     },
     Disconnected {
         address: String,
+    },
+    OutgoingRequest {
+        data_len: usize,
+    },
+    IncomingResponse {
+        data_len: usize,
     },
 }
 
@@ -1886,7 +1836,6 @@ impl ElectrumClient {
         let client = ElectrumClient {
             client_impl: Arc::new(ElectrumClientImpl::try_new(
                 client_settings,
-                event_handlers.clone(),
                 block_headers_storage,
                 abortable_system,
                 sender,
@@ -1917,6 +1866,8 @@ impl ElectrumClient {
                     let _ = event_handlers.on_disconnected(&address);
                     info!("Disconnected")
                 },
+                ElectrumClientEvent::IncomingResponse { data_len } => event_handlers.on_incoming_response(data_len),
+                ElectrumClientEvent::OutgoingRequest { data_len } => event_handlers.on_outgoing_request(data_len),
             }
         }
     }
@@ -1936,7 +1887,7 @@ impl ElectrumClient {
         }
     }
 
-    async fn on_connected(&self, address: &str, mut conn_ready_notifier: futures::channel::mpsc::Sender<()>) {
+    async fn on_connected(&self, address: &str, conn_ready_notifier: async_oneshot::Sender<()>) {
         debug!(
             "electrum_client_impl on connected to address: {}. Spawning service futures",
             address
@@ -1947,8 +1898,8 @@ impl ElectrumClient {
         let negotiate_version = self.negotiate_version;
 
         if !negotiate_version || check_electrum_server_version(self, client_name, address.to_string()).await {
-            if let Err(err) = conn_ready_notifier.try_send(()) {
-                error!("Failed to notify connection is ready: {}, {}", address, err);
+            if conn_ready_notifier.send(()).is_err() {
+                error!("Failed to notify connection is ready: {}", address);
             }
         } else if let Err(err) = conn_mng.connect().await {
             error!("Failed to reconnect: {}, {}", address, err);
@@ -2594,11 +2545,8 @@ trait ConnMngTrait: Debug {
     async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>>;
     async fn get_conn_by_address(&self, address: &str) -> Result<Arc<AsyncMutex<ElectrumConnection>>, String>;
     async fn connect(&self) -> Result<(), String>;
-
     async fn is_connected(&self) -> bool;
     async fn remove_server(&self, address: &str) -> Result<(), String>;
-    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared);
-
     async fn rotate_servers(&self, no_of_rotations: usize);
     async fn is_connections_pool_empty(&self) -> bool;
     fn on_disconnected(&self, address: &str);
@@ -2613,9 +2561,6 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
     async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
     async fn is_connected(&self) -> bool { self.deref().is_connected().await }
     async fn remove_server(&self, address: &str) -> Result<(), String> { self.deref().remove_server(address).await }
-    async fn set_rpc_enent_handler(&self, handler: RpcTransportEventHandlerShared) {
-        self.deref().set_rpc_enent_handler(handler).await;
-    }
     async fn rotate_servers(&self, no_of_rotations: usize) { self.deref().rotate_servers(no_of_rotations).await }
     async fn is_connections_pool_empty(&self) -> bool { self.deref().is_connections_pool_empty().await }
     fn on_disconnected(&self, address: &str) { self.deref().on_disconnected(address) }
@@ -2625,7 +2570,6 @@ impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
 impl ElectrumClientImpl {
     pub(super) fn try_new(
         client_settings: ElectrumClientSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
         block_headers_storage: BlockHeaderStorage,
         abortable_system: AbortableQueue,
         event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
@@ -2640,20 +2584,17 @@ impl ElectrumClientImpl {
             ConnMngPolicy::Selective => Arc::new(ConnMngSelective(Arc::new(ConnMngSelectiveImpl::try_new(
                 servers,
                 conn_mng_abortable_system,
-                event_handlers,
-                event_sender.clone(),
+                event_sender,
             )?))),
             ConnMngPolicy::Multiple => Arc::new(ConnMngMultiple(Arc::new(ConnMngMultipleImpl::new(
                 servers,
                 conn_mng_abortable_system,
-                event_handlers,
-                event_sender.clone(),
+                event_sender,
             )))),
         };
 
         let protocol_version = OrdRange::new(1.2, 1.4).unwrap();
         Ok(ElectrumClientImpl {
-            weak_self: Mutex::default(),
             client_name: client_settings.client_name,
             coin_ticker: client_settings.coin_ticker,
             conn_mng,
@@ -2665,14 +2606,12 @@ impl ElectrumClientImpl {
             block_headers_storage,
             negotiate_version: client_settings.negotiate_version,
             abortable_system,
-            event_sender,
         })
     }
 
     #[cfg(test)]
     pub(super) fn with_protocol_version(
         client_settings: ElectrumClientSettings,
-        event_handlers: Vec<RpcTransportEventHandlerShared>,
         protocol_version: OrdRange<f32>,
         block_headers_storage: BlockHeaderStorage,
         abortable_system: AbortableQueue,
@@ -2680,14 +2619,8 @@ impl ElectrumClientImpl {
     ) -> ElectrumClientImpl {
         ElectrumClientImpl {
             protocol_version,
-            ..ElectrumClientImpl::try_new(
-                client_settings,
-                event_handlers,
-                block_headers_storage,
-                abortable_system,
-                event_sender,
-            )
-            .expect("Expected electrum_client_impl constructed without a problem")
+            ..ElectrumClientImpl::try_new(client_settings, block_headers_storage, abortable_system, event_sender)
+                .expect("Expected electrum_client_impl constructed without a problem")
         }
     }
 }
@@ -2770,19 +2703,6 @@ fn increase_delay(delay: &AtomicU64) {
     if delay.load(AtomicOrdering::Relaxed) < 60 {
         delay.fetch_add(5, AtomicOrdering::Relaxed);
     }
-}
-
-macro_rules! try_loop {
-    ($e:expr, $addr: ident, $delay: ident) => {
-        match $e {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{:?} error {:?}", $addr, e);
-                increase_delay(&$delay);
-                continue;
-            },
-        }
-    };
 }
 
 /// The enum wrapping possible variants of underlying Streams
@@ -2883,163 +2803,179 @@ lazy_static! {
     static ref UNSAFE_TLS_CONFIG: Arc<ClientConfig> = rustls_client_config(true);
 }
 
+macro_rules! try_loop {
+    ($e:expr, $addr: ident, $delay: ident) => {
+        match $e {
+            Ok(res) => res,
+            Err(e) => {
+                error!("{:?} error {:?}", $addr, e);
+                increase_delay(&$delay);
+                continue;
+            },
+        }
+    };
+}
+
+macro_rules! handle_connect_err {
+    ($e:expr, $addr: ident) => {
+        match $e {
+            Ok(res) => res,
+            Err(e) => {
+                error!("{}", ERRL!("{:?} error {:?}", $addr, e));
+                return;
+            },
+        }
+    };
+}
+
 #[cfg(not(target_arch = "wasm32"))]
-async fn connect_loop(
+async fn connect_impl<Spawner: SpawnFuture>(
     config: ElectrumConfig,
     addr: String,
     responses: JsonRpcPendingRequestsShared,
     connection_tx: Arc<AsyncMutex<Option<mpsc::Sender<Vec<u8>>>>>,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
-    spawner: WeakSpawner,
     event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-    conn_ready_notifier: futures::channel::mpsc::Sender<()>,
+    conn_ready_notifier: async_oneshot::Sender<()>,
+    _spawner: Spawner,
 ) {
     let delay = Arc::new(AtomicU64::new(0));
 
-    loop {
-        let current_delay = delay.load(AtomicOrdering::Relaxed);
-        if current_delay > 0 {
-            Timer::sleep(current_delay as f64).await;
-        };
+    let current_delay = delay.load(AtomicOrdering::Relaxed);
+    if current_delay > 0 {
+        Timer::sleep(current_delay as f64).await;
+    };
 
-        let socket_addr = try_loop!(addr_to_socket_addr(&addr), addr, delay);
+    let socket_addr = handle_connect_err!(addr_to_socket_addr(&addr), addr);
 
-        let connect_f = match config.clone() {
-            ElectrumConfig::TCP => Either::Left(TcpStream::connect(&socket_addr).map_ok(ElectrumStream::Tcp)),
-            ElectrumConfig::SSL {
-                dns_name,
-                skip_validation,
-            } => {
-                let tls_connector = if skip_validation {
-                    TlsConnector::from(UNSAFE_TLS_CONFIG.clone())
-                } else {
-                    TlsConnector::from(SAFE_TLS_CONFIG.clone())
-                };
-
-                Either::Right(TcpStream::connect(&socket_addr).and_then(move |stream| {
-                    // Can use `unwrap` cause `dns_name` is pre-checked.
-                    let dns = ServerName::try_from(dns_name.as_str())
-                        .map_err(|e| format!("{:?}", e))
-                        .unwrap();
-                    tls_connector.connect(dns, stream).map_ok(ElectrumStream::Tls)
-                }))
-            },
-        };
-
-        let stream = try_loop!(connect_f.await, addr, delay);
-        try_loop!(stream.as_ref().set_nodelay(true), addr, delay);
-        info!("Electrum client connected to {}", addr);
-        if let Err(err) = event_sender.unbounded_send(ElectrumClientEvent::Connected {
-            address: addr.clone(),
-            conn_ready_notifier: conn_ready_notifier.clone(),
-        }) {
-            error!(
-                "{}",
-                ERRL!("Failed to send event adress connected: {}, error: {}", addr, err)
-            );
-            return;
-        };
-
-        let last_chunk = Arc::new(AtomicU64::new(now_ms()));
-        let mut last_chunk_f = electrum_last_chunk_loop(last_chunk.clone()).boxed().fuse();
-
-        let (tx, rx) = mpsc::channel(0);
-        // the place connection is getting connected
-        *connection_tx.lock().await = Some(tx);
-        let rx = rx_to_stream(rx).inspect(|data| {
-            // measure the length of each sent packet
-            event_handlers.on_outgoing_request(data);
-        });
-
-        let (read, mut write) = tokio::io::split(stream);
-        let recv_f = {
-            let delay = delay.clone();
-            let addr = addr.clone();
-            let responses = responses.clone();
-            let event_handlers = event_handlers.clone();
-            async move {
-                let mut buffer = String::with_capacity(1024);
-                let mut buf_reader = BufReader::new(read);
-                loop {
-                    match buf_reader.read_line(&mut buffer).await {
-                        Ok(c) => {
-                            if c == 0 {
-                                info!("EOF from {}", addr);
-                                break;
-                            }
-                            // reset the delay if we've connected successfully and only if we received some data from connection
-                            delay.store(0, AtomicOrdering::Relaxed);
-                        },
-                        Err(e) => {
-                            error!("Error on read {} from {}", e, addr);
-                            break;
-                        },
-                    };
-                    // measure the length of each incoming packet
-                    event_handlers.on_incoming_response(buffer.as_bytes());
-                    last_chunk.store(now_ms(), AtomicOrdering::Relaxed);
-
-                    electrum_process_chunk(buffer.as_bytes(), &responses).await;
-                    buffer.clear();
-                }
-            }
-        };
-        let mut recv_f = Box::pin(recv_f).fuse();
-
-        let send_f = {
-            let addr = addr.clone();
-            let mut rx = rx.compat();
-            async move {
-                while let Some(Ok(bytes)) = rx.next().await {
-                    if let Err(e) = write.write_all(&bytes).await {
-                        error!("Write error {} to {}", e, addr);
-                    }
-                }
-            }
-        };
-        let mut send_f = Box::pin(send_f).fuse();
-        macro_rules! reset_tx_and_continue {
-            () => {
-                info!("{} connection dropped", addr);
-                //event_handlers.on_disconnected(&addr).error_log();
-
-                if let Err(err) = event_sender.unbounded_send(ElectrumClientEvent::Disconnected {
-                    address: addr.clone(),
-                }) {
-                    error!(
-                        "{}",
-                        ERRL!(
-                            "Failed to send event address disconnected: {}, error: {}",
-                            addr,
-                            err
-                        )
-                    );
-                    return;
-                };
-
-                *connection_tx.lock().await = None;
-                break;
+    let connect_f = match config.clone() {
+        ElectrumConfig::TCP => Either::Left(TcpStream::connect(&socket_addr).map_ok(ElectrumStream::Tcp)),
+        ElectrumConfig::SSL {
+            dns_name,
+            skip_validation,
+        } => {
+            let tls_connector = if skip_validation {
+                TlsConnector::from(UNSAFE_TLS_CONFIG.clone())
+            } else {
+                TlsConnector::from(SAFE_TLS_CONFIG.clone())
             };
-        }
 
-        select! {
-            _last_chunk = last_chunk_f => { reset_tx_and_continue!(); },
-            _recv = recv_f => { reset_tx_and_continue!(); },
-            _send = send_f => { reset_tx_and_continue!(); },
+            Either::Right(TcpStream::connect(&socket_addr).and_then(move |stream| {
+                // Can use `unwrap` cause `dns_name` is pre-checked.
+                let dns = ServerName::try_from(dns_name.as_str())
+                    .map_err(|e| format!("{:?}", e))
+                    .unwrap();
+                tls_connector.connect(dns, stream).map_ok(ElectrumStream::Tls)
+            }))
+        },
+    };
+
+    let stream = handle_connect_err!(connect_f.await, addr);
+    handle_connect_err!(stream.as_ref().set_nodelay(true), addr);
+    info!("Electrum client connected to {}", addr);
+    handle_connect_err!(
+        event_sender.unbounded_send(ElectrumClientEvent::Connected {
+            address: addr.clone(),
+            conn_ready_notifier,
+        }),
+        addr
+    );
+
+    let last_chunk = Arc::new(AtomicU64::new(now_ms()));
+    let mut last_chunk_f = electrum_last_chunk_loop(last_chunk.clone()).boxed().fuse();
+
+    let (tx, rx) = mpsc::channel(0);
+    // the place connection is getting connected
+    *connection_tx.lock().await = Some(tx);
+    let rx = rx_to_stream(rx).inspect(|data| {
+        // measure the length of each sent packet
+        handle_connect_err!(
+            event_sender.unbounded_send(ElectrumClientEvent::OutgoingRequest { data_len: data.len() }),
+            addr
+        );
+    });
+
+    let (read, mut write) = tokio::io::split(stream);
+    let recv_f = {
+        let delay = delay.clone();
+        let addr = addr.clone();
+        let responses = responses.clone();
+        let event_sender = event_sender.clone();
+        async move {
+            let mut buffer = String::with_capacity(1024);
+            let mut buf_reader = BufReader::new(read);
+            loop {
+                match buf_reader.read_line(&mut buffer).await {
+                    Ok(c) => {
+                        if c == 0 {
+                            info!("EOF from {}", addr);
+                            break;
+                        }
+                        // reset the delay if we've connected successfully and only if we received some data from connection
+                        delay.store(0, AtomicOrdering::Relaxed);
+                    },
+                    Err(e) => {
+                        error!("Error on read {} from {}", e, addr);
+                        break;
+                    },
+                };
+                // measure the length of each incoming packet
+                handle_connect_err!(
+                    event_sender.unbounded_send(ElectrumClientEvent::IncomingResponse { data_len: buffer.len() }),
+                    addr
+                );
+                last_chunk.store(now_ms(), AtomicOrdering::Relaxed);
+
+                electrum_process_chunk(buffer.as_bytes(), &responses).await;
+                buffer.clear();
+            }
         }
+    };
+    let mut recv_f = Box::pin(recv_f).fuse();
+
+    let send_f = {
+        let addr = addr.clone();
+        let mut rx = rx.compat();
+        async move {
+            while let Some(Ok(bytes)) = rx.next().await {
+                if let Err(e) = write.write_all(&bytes).await {
+                    error!("Write error {} to {}", e, addr);
+                }
+            }
+        }
+    };
+    let mut send_f = Box::pin(send_f).fuse();
+    macro_rules! reset_tx {
+        () => {
+            info!("{} connection dropped", addr);
+            //event_handlers.on_disconnected(&addr).error_log();
+            *connection_tx.lock().await = None;
+
+            handle_connect_err!(
+                event_sender.unbounded_send(ElectrumClientEvent::Disconnected {
+                    address: addr.clone(),
+                }),
+                addr
+            );
+        };
+    }
+
+    select! {
+        _last_chunk = last_chunk_f => { reset_tx!(); },
+        _recv = recv_f => { reset_tx!(); },
+        _send = send_f => { reset_tx!(); },
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn connect_loop<Spawner: SpawnFuture>(
+async fn connect_impl<Spawner: SpawnFuture>(
     _config: ElectrumConfig,
     addr: String,
     responses: JsonRpcPendingRequestsShared,
     connection_tx: Arc<AsyncMutex<Option<mpsc::Sender<Vec<u8>>>>>,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
+    event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
+    conn_ready_notifier: async_oneshot::Sender<()>,
     spawner: Spawner,
-    notifier: Arc<Notify>,
-) -> Result<(), ()> {
+) {
     use std::sync::atomic::AtomicUsize;
 
     lazy_static! {
@@ -3048,92 +2984,96 @@ async fn connect_loop<Spawner: SpawnFuture>(
 
     use mm2_net::wasm_ws::ws_transport;
 
-    let delay = Arc::new(AtomicU64::new(0));
-    loop {
-        let current_delay = delay.load(AtomicOrdering::Relaxed);
-        if current_delay > 0 {
-            Timer::sleep(current_delay as f64).await;
-        }
+    let conn_idx = CONN_IDX.fetch_add(1, AtomicOrdering::Relaxed);
+    let (mut transport_tx, mut transport_rx) = handle_connect_err!(ws_transport(conn_idx, &addr, &spawner).await, addr);
 
-        let conn_idx = CONN_IDX.fetch_add(1, AtomicOrdering::Relaxed);
-        let (mut transport_tx, mut transport_rx) =
-            try_loop!(ws_transport(conn_idx, &addr, &spawner).await, addr, delay);
+    info!("Electrum client connected to {}", addr);
+    handle_connect_err!(
+        event_sender.unbounded_send(ElectrumClientEvent::Connected {
+            address: addr.clone(),
+            conn_ready_notifier,
+        }),
+        addr
+    );
 
-        info!("Electrum client connected to {}", addr);
-        try_loop!(event_handlers.on_connected(addr.clone()), addr, delay);
+    let last_chunk = Arc::new(AtomicU64::new(now_ms()));
+    let mut last_chunk_fut = electrum_last_chunk_loop(last_chunk.clone()).boxed().fuse();
 
-        let last_chunk = Arc::new(AtomicU64::new(now_ms()));
-        let mut last_chunk_fut = electrum_last_chunk_loop(last_chunk.clone()).boxed().fuse();
+    let (outgoing_tx, outgoing_rx) = mpsc::channel(0);
+    *connection_tx.lock().await = Some(outgoing_tx);
 
-        let (outgoing_tx, outgoing_rx) = mpsc::channel(0);
-        *connection_tx.lock().await = Some(outgoing_tx);
-
-        let incoming_fut = {
-            let delay = delay.clone();
-            let addr = addr.clone();
-            let responses = responses.clone();
-            let event_handlers = event_handlers.clone();
-            async move {
-                while let Some(incoming_res) = transport_rx.next().await {
-                    last_chunk.store(now_ms(), AtomicOrdering::Relaxed);
-                    match incoming_res {
-                        Ok(incoming_json) => {
-                            // reset the delay if we've connected successfully and only if we received some data from connection
-                            delay.store(0, AtomicOrdering::Relaxed);
-                            // measure the length of each incoming packet
-                            let incoming_str = incoming_json.to_string();
-                            event_handlers.on_incoming_response(incoming_str.as_bytes());
-
-                            electrum_process_json(incoming_json, &responses).await;
-                        },
-                        Err(e) => {
-                            error!("{} error: {:?}", addr, e);
-                        },
-                    }
+    let incoming_fut = {
+        let addr = addr.clone();
+        let responses = responses.clone();
+        let event_sender = event_sender.clone();
+        async move {
+            while let Some(incoming_res) = transport_rx.next().await {
+                last_chunk.store(now_ms(), AtomicOrdering::Relaxed);
+                match incoming_res {
+                    Ok(incoming_json) => {
+                        // measure the length of each incoming packet
+                        let incoming_str = incoming_json.to_string();
+                        handle_connect_err!(
+                            event_sender.unbounded_send(ElectrumClientEvent::IncomingResponse {
+                                data_len: incoming_str.len()
+                            }),
+                            addr
+                        );
+                        electrum_process_json(incoming_json, &responses).await;
+                    },
+                    Err(e) => {
+                        error!("{} error: {:?}", addr, e);
+                    },
                 }
             }
-        };
-        let mut incoming_fut = Box::pin(incoming_fut).fuse();
+        }
+    };
+    let mut incoming_fut = Box::pin(incoming_fut).fuse();
 
-        let outgoing_fut = {
-            let addr = addr.clone();
-            let mut outgoing_rx = rx_to_stream(outgoing_rx).compat();
-            let event_handlers = event_handlers.clone();
-            async move {
-                while let Some(Ok(data)) = outgoing_rx.next().await {
-                    let raw_json: Json = match json::from_slice(&data) {
-                        Ok(js) => js,
-                        Err(e) => {
-                            error!("Error {} deserializing the outgoing data: {:?}", e, data);
-                            continue;
-                        },
-                    };
-                    // measure the length of each sent packet
-                    event_handlers.on_outgoing_request(&data);
+    let outgoing_fut = {
+        let addr = addr.clone();
+        let mut outgoing_rx = rx_to_stream(outgoing_rx).compat();
+        let event_sender = event_sender.clone();
+        async move {
+            while let Some(Ok(data)) = outgoing_rx.next().await {
+                let raw_json: Json = match json::from_slice(&data) {
+                    Ok(js) => js,
+                    Err(e) => {
+                        error!("Error {} deserializing the outgoing data: {:?}", e, data);
+                        continue;
+                    },
+                };
+                // measure the length of each sent packet
+                handle_connect_err!(
+                    event_sender.unbounded_send(ElectrumClientEvent::OutgoingRequest { data_len: data.len() }),
+                    addr
+                );
 
-                    if let Err(e) = transport_tx.send(raw_json).await {
-                        error!("Error sending to {}: {:?}", addr, e);
-                    }
+                if let Err(e) = transport_tx.send(raw_json).await {
+                    error!("Error sending to {}: {:?}", addr, e);
                 }
             }
+        }
+    };
+    let mut outgoing_fut = Box::pin(outgoing_fut).fuse();
+
+    macro_rules! reset_tx_and_continue {
+        () => {
+            info!("{} connection dropped", addr);
+            *connection_tx.lock().await = None;
+            handle_connect_err!(
+                event_sender.unbounded_send(ElectrumClientEvent::Disconnected {
+                    address: addr.clone(),
+                }),
+                addr
+            );
         };
-        let mut outgoing_fut = Box::pin(outgoing_fut).fuse();
+    }
 
-        macro_rules! reset_tx_and_continue {
-            () => {
-                info!("{} connection dropped", addr);
-                *connection_tx.lock().await = None;
-                event_handlers.on_disconnected(&addr, spawner.clone());
-                increase_delay(&delay);
-                break;
-            };
-        }
-
-        select! {
-            _last_chunk = last_chunk_fut => { reset_tx_and_continue!(); },
-            _incoming = incoming_fut => { reset_tx_and_continue!(); },
-            _outgoing = outgoing_fut => { reset_tx_and_continue!(); },
-        }
+    select! {
+        _last_chunk = last_chunk_fut => { reset_tx_and_continue!(); },
+        _incoming = incoming_fut => { reset_tx_and_continue!(); },
+        _outgoing = outgoing_fut => { reset_tx_and_continue!(); },
     }
 }
 
@@ -3143,24 +3083,22 @@ async fn connect_loop<Spawner: SpawnFuture>(
 fn electrum_connect(
     addr: String,
     config: ElectrumConfig,
-    event_handlers: Vec<RpcTransportEventHandlerShared>,
     spawner: WeakSpawner,
     event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-) -> (ElectrumConnection, futures::channel::mpsc::Receiver<()>) {
+) -> (ElectrumConnection, async_oneshot::Receiver<()>) {
     //) -> ElectrumConnection {
     let responses = Arc::new(AsyncMutex::new(JsonRpcPendingRequests::default()));
     let tx = Arc::new(AsyncMutex::new(None));
 
-    let (conn_ready_sender, conn_ready_receiver) = futures::channel::mpsc::channel::<()>(1);
-    let fut = connect_loop(
+    let (conn_ready_sender, conn_ready_receiver) = async_oneshot::channel::<()>();
+    let fut = connect_impl(
         config.clone(),
         addr.clone(),
         responses.clone(),
         tx.clone(),
-        event_handlers,
-        spawner.clone(),
         event_sender,
         conn_ready_sender,
+        spawner.clone(),
     );
     //.then(|_| futures::future::ready(()));
 
