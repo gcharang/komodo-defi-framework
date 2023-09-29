@@ -56,7 +56,9 @@ impl ConnMngTrait for ConnMngSelective {
             }
             debug!("Primary electrum nodes to connect: {:?}", guard.queue.primary);
             debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
-            if let Some((conn_settings, weak_spawner)) = ConnMngSelectiveImpl::get_settings_to_connect(&guard).await {
+            if let Some((conn_settings, weak_spawner)) =
+                ConnMngSelectiveImpl::fetch_next_connection_settings(&guard).await
+            {
                 Some((conn_settings, weak_spawner))
             } else {
                 warn!("Failed to connect, no connection settings found");
@@ -185,7 +187,7 @@ impl ConnMngSelectiveImpl {
         })
     }
 
-    async fn get_settings_to_connect(
+    async fn fetch_next_connection_settings(
         guard: &MutexGuard<'_, ConnMngSelectiveState>,
     ) -> Option<(ElectrumConnSettings, WeakSpawner)> {
         let mut iter = guard.queue.primary.iter().chain(guard.queue.backup.iter());
