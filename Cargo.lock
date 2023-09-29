@@ -1035,6 +1035,7 @@ dependencies = [
  "mm2_net",
  "mm2_number",
  "mm2_rpc",
+ "mm2_state_machine",
  "mm2_test_helpers",
  "mocktopus",
  "num-traits",
@@ -4092,7 +4093,7 @@ dependencies = [
 
 [[package]]
 name = "mm2_bin_lib"
-version = "1.0.7-beta"
+version = "1.1.0-beta"
 dependencies = [
  "chrono",
  "common",
@@ -4311,12 +4312,15 @@ dependencies = [
  "mm2_net",
  "mm2_number",
  "mm2_rpc",
+ "mm2_state_machine",
  "mm2_test_helpers",
  "mocktopus",
  "num-traits",
  "parity-util-mem",
  "parking_lot 0.12.0",
  "primitives",
+ "prost",
+ "prost-build",
  "rand 0.6.5",
  "rand 0.7.3",
  "rcgen",
@@ -4415,6 +4419,7 @@ dependencies = [
  "mm2_core",
  "mm2_err_handle",
  "mm2_event_stream",
+ "mm2_state_machine",
  "mocktopus",
  "parking_lot 0.12.0",
  "prost",
@@ -4460,6 +4465,15 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid 1.2.2",
+]
+
+[[package]]
+name = "mm2_state_machine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common",
+ "futures 0.3.15",
 ]
 
 [[package]]
