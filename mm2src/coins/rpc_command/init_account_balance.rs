@@ -117,7 +117,7 @@ pub async fn cancel_account_balance(
 pub mod common_impl {
     use super::*;
     use crate::coin_balance::HDWalletBalanceOps;
-    use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
+    use crate::hd_wallet::{HDAccountOps, HDCoinAddress, HDWalletOps};
     use crate::{CoinBalance, CoinWithDerivationMethod};
     use crypto::RpcDerivationPath;
     use std::fmt;
@@ -128,7 +128,7 @@ pub mod common_impl {
     ) -> MmResult<HDAccountBalance, HDAccountBalanceRpcError>
     where
         Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display + Clone,
+        HDCoinAddress<Coin>: fmt::Display + Clone,
     {
         let account_id = params.account_index;
         let hd_account = coin

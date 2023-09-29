@@ -220,7 +220,8 @@ use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetail
           GetEthAddressError, SignedEthTx};
 
 pub mod hd_wallet;
-use hd_wallet::{HDAccountAddressId, HDAddress};
+use hd_wallet::{AccountUpdatingError, AddressDerivingError, HDAccountAddressId, HDCoinAddress, HDWalletAddress,
+                HDWalletCoinOps, HDWalletOps};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
@@ -287,7 +288,6 @@ pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 
 pub mod z_coin;
-use crate::hd_wallet::{HDWalletCoinOps, HDWalletOps};
 use z_coin::{ZCoin, ZcoinProtocolInfo};
 
 pub type TransactionFut = Box<dyn Future<Item = TransactionEnum, Error = TransactionErr> + Send>;
@@ -1351,16 +1351,6 @@ pub struct WithdrawSenderAddress<Address, Pubkey> {
     derivation_path: Option<DerivationPath>,
 }
 
-impl<Address, Pubkey> From<HDAddress<Address, Pubkey>> for WithdrawSenderAddress<Address, Pubkey> {
-    fn from(addr: HDAddress<Address, Pubkey>) -> Self {
-        WithdrawSenderAddress {
-            address: addr.address,
-            pubkey: addr.pubkey,
-            derivation_path: Some(addr.derivation_path),
-        }
-    }
-}
-
 /// Rename to `GetWithdrawSenderAddresses` when withdraw supports multiple `from` addresses.
 #[async_trait]
 pub trait GetWithdrawSenderAddress {
@@ -1884,6 +1874,23 @@ pub enum GetNonZeroBalance {
     BalanceIsZero,
 }
 
+impl From<AddressDerivingError> for BalanceError {
+    fn from(e: AddressDerivingError) -> Self { BalanceError::Internal(e.to_string()) }
+}
+
+impl From<AccountUpdatingError> for BalanceError {
+    fn from(e: AccountUpdatingError) -> Self {
+        let error = e.to_string();
+        match e {
+            AccountUpdatingError::AddressLimitReached { .. } | AccountUpdatingError::InvalidBip44Chain(_) => {
+                // Account updating is expected to be called after `address_id` and `chain` validation.
+                BalanceError::Internal(format!("Unexpected internal error: {}", error))
+            },
+            AccountUpdatingError::WalletStorageError(_) => BalanceError::WalletStorageError(error),
+        }
+    }
+}
+
 impl From<BalanceError> for GetNonZeroBalance {
     fn from(e: BalanceError) -> Self { GetNonZeroBalance::MyBalanceError(e) }
 }
@@ -2254,6 +2261,17 @@ impl HttpStatusCode for WithdrawError {
             WithdrawError::Transport(_) | WithdrawError::InternalError(_) | WithdrawError::DbError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             },
+        }
+    }
+}
+
+impl From<AddressDerivingError> for WithdrawError {
+    fn from(e: AddressDerivingError) -> Self {
+        match e {
+            AddressDerivingError::InvalidBip44Chain { .. } | AddressDerivingError::Bip32Error(_) => {
+                WithdrawError::UnexpectedFromAddress(e.to_string())
+            },
+            AddressDerivingError::Internal(internal) => WithdrawError::InternalError(internal),
         }
     }
 }
@@ -3169,7 +3187,8 @@ impl PrivKeyBuildPolicy {
 #[derive(Debug)]
 pub enum DerivationMethod<Address, HDWallet>
 where
-    HDWallet: HDWalletOps<Address = Address>,
+    HDWallet: HDWalletOps,
+    HDWalletAddress<HDWallet>: Into<Address>,
 {
     /// Represents the use of a single, static address for transactions and operations.
     SingleAddress(Address),
@@ -3184,12 +3203,13 @@ where
 impl<Address, HDWallet> DerivationMethod<Address, HDWallet>
 where
     Address: Clone,
-    HDWallet: HDWalletOps<Address = Address>,
+    HDWallet: HDWalletOps,
+    HDWalletAddress<HDWallet>: Into<Address>,
 {
     pub async fn single_addr(&self) -> Option<Address> {
         match self {
             DerivationMethod::SingleAddress(my_address) => Some(my_address.clone()),
-            DerivationMethod::HDWallet(hd_wallet) => hd_wallet.get_enabled_address().await,
+            DerivationMethod::HDWallet(hd_wallet) => hd_wallet.get_enabled_address().await.map(|addr| addr.into()),
         }
     }
 
@@ -3238,7 +3258,7 @@ pub trait CoinWithDerivationMethod: HDWalletCoinOps {
     ///
     /// Implementors should return the specific `DerivationMethod` that the coin utilizes,
     /// either `SingleAddress` for a static address approach or `HDWallet` for an HD wallet strategy.
-    fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet>;
+    fn derivation_method(&self) -> &DerivationMethod<HDCoinAddress<Self>, Self::HDWallet>;
     /// Checks if the coin uses the HD wallet strategy for address derivation.
     ///
     /// This is a utility function that returns `true` if the coin's derivation method is `HDWallet` and

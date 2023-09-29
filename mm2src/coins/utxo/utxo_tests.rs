@@ -1,8 +1,8 @@
 use super::*;
 use crate::coin_balance::HDAddressBalance;
 use crate::coin_errors::ValidatePaymentError;
-use crate::hd_wallet::{HDAccountsMap, HDConfirmAddress, HDConfirmAddressError, HDWalletMockStorage,
-                       HDWalletStorageInternalOps, MockableConfirmAddress};
+use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex, HDAddressesCache, HDConfirmAddress, HDConfirmAddressError,
+                       HDWalletMockStorage, HDWalletStorageInternalOps, MockableConfirmAddress};
 use crate::my_tx_history_v2::for_tests::init_storage_for;
 use crate::my_tx_history_v2::CoinWithTxHistoryV2;
 use crate::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps, HDAccountBalanceResponse};
@@ -3956,7 +3956,7 @@ fn test_get_new_address() {
         }
     });
 
-    MockableConfirmAddress::confirm_utxo_address
+    MockableConfirmAddress::confirm_address
         .mock_safe(move |_, _, _, _| MockResult::Return(Box::pin(futures::future::ok(()))));
 
     // This mock is required just not to fail on [`UtxoAddressScanner::init`].
@@ -4093,9 +4093,9 @@ fn test_get_new_address() {
     block_on(coin.get_new_address_rpc(params, &confirm_address)).unwrap();
     unsafe { assert_eq!(CHECKED_ADDRESSES, EXPECTED_CHECKED_ADDRESSES) };
 
-    // Check if `get_new_address_rpc` fails on the `HDAddressConfirm::confirm_utxo_address` error.
+    // Check if `get_new_address_rpc` fails on the `HDAddressConfirm::confirm_address` error.
 
-    MockableConfirmAddress::confirm_utxo_address.mock_safe(move |_, _, _, _| {
+    MockableConfirmAddress::confirm_address.mock_safe(move |_, _, _, _| {
         MockResult::Return(Box::pin(futures::future::ready(MmError::err(
             HDConfirmAddressError::HwContextNotInitialized,
         ))))

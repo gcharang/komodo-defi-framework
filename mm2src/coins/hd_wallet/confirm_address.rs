@@ -58,9 +58,9 @@ pub(crate) trait ConfirmAddressStatus: Sized {
 #[async_trait]
 pub trait HDConfirmAddress: Sync {
     /// Asks the user to confirm if the given `expected_address` is the same as on the HW display.
-    async fn confirm_utxo_address(
+    async fn confirm_address(
         &self,
-        trezor_utxo_coin: String,
+        trezor_coin: String,
         derivation_path: DerivationPath,
         expected_address: String,
     ) -> MmResult<(), HDConfirmAddressError>;
@@ -81,7 +81,7 @@ where
     Task::InProgressStatus: ConfirmAddressStatus,
     Task::UserAction: TryIntoUserAction + Send,
 {
-    async fn confirm_utxo_address(
+    async fn confirm_address(
         &self,
         trezor_utxo_coin: String,
         derivation_path: DerivationPath,
@@ -172,7 +172,7 @@ pub(crate) mod for_tests {
     #[async_trait]
     #[mockable]
     impl HDConfirmAddress for MockableConfirmAddress {
-        async fn confirm_utxo_address(
+        async fn confirm_address(
             &self,
             _trezor_utxo_coin: String,
             _derivation_path: DerivationPath,

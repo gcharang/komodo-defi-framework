@@ -1,5 +1,5 @@
-use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddress, HDAddressId, HDWalletCoinOps, HDWalletOps,
-                       HDXPubExtractor, NewAccountCreatingError, NewAddressDerivingError};
+use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddressId, HDAddressOps, HDCoinAddress, HDCoinHDAccount,
+                       HDWalletCoinOps, HDWalletOps, HDXPubExtractor, NewAccountCreatingError, NewAddressDerivingError};
 use crate::{BalanceError, BalanceResult, CoinBalance, CoinWithDerivationMethod, DerivationMethod, MarketCoinOps};
 use async_trait::async_trait;
 use common::log::{debug, info};
@@ -13,6 +13,7 @@ use std::ops::Range;
 use std::{fmt, iter};
 
 pub type AddressIdRange = Range<u32>;
+pub(crate) type HDBalanceAddress<T> = <<T as HDWalletBalanceOps>::HDAddressScanner as HDAddressBalanceScanner>::Address;
 
 pub enum EnableCoinBalanceError {
     NewAddressDerivingError(NewAddressDerivingError),
@@ -119,7 +120,7 @@ pub trait CoinBalanceReportOps {
 impl<Coin> CoinBalanceReportOps for Coin
 where
     Coin: CoinWithDerivationMethod + HDWalletBalanceOps + MarketCoinOps + Sync,
-    <Coin as HDWalletCoinOps>::Address: fmt::Display + Sync,
+    HDCoinAddress<Coin>: fmt::Display + Sync,
 {
     async fn coin_balance_report(&self) -> BalanceResult<CoinBalanceReport> {
         match self.derivation_method() {
@@ -158,7 +159,7 @@ pub trait EnableCoinBalanceOps {
 impl<Coin> EnableCoinBalanceOps for Coin
 where
     Coin: CoinWithDerivationMethod + HDWalletBalanceOps + MarketCoinOps + Sync,
-    <Coin as HDWalletCoinOps>::Address: fmt::Display + Sync,
+    HDCoinAddress<Coin>: fmt::Display + Sync,
 {
     async fn enable_coin_balance<XPubExtractor>(
         &self,
@@ -191,7 +192,7 @@ where
 
 #[async_trait]
 pub trait HDWalletBalanceOps: HDWalletCoinOps {
-    type HDAddressScanner: HDAddressBalanceScanner<Address = Self::Address>;
+    type HDAddressScanner: HDAddressBalanceScanner<Address = HDCoinAddress<Self>> + Sync;
 
     async fn produce_hd_address_scanner(&self) -> BalanceResult<Self::HDAddressScanner>;
 
@@ -213,7 +214,7 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
     async fn scan_for_new_addresses(
         &self,
         hd_wallet: &Self::HDWallet,
-        hd_account: &mut Self::HDAccount,
+        hd_account: &mut HDCoinHDAccount<Self>,
         address_scanner: &Self::HDAddressScanner,
         gap_limit: u32,
     ) -> BalanceResult<Vec<HDAddressBalance>>;
@@ -243,17 +244,20 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
     }
 
     /// Requests balances of every known addresses of the given `hd_account`.
-    async fn all_known_addresses_balances(&self, hd_account: &Self::HDAccount) -> BalanceResult<Vec<HDAddressBalance>>;
+    async fn all_known_addresses_balances(
+        &self,
+        hd_account: &HDCoinHDAccount<Self>,
+    ) -> BalanceResult<Vec<HDAddressBalance>>;
 
     /// Requests balances of known addresses of the given `address_ids` addresses at the specified `chain`.
     async fn known_addresses_balances_with_ids<Ids>(
         &self,
-        hd_account: &Self::HDAccount,
+        hd_account: &HDCoinHDAccount<Self>,
         chain: Bip44Chain,
         address_ids: Ids,
     ) -> BalanceResult<Vec<HDAddressBalance>>
     where
-        Self::Address: fmt::Display + Clone,
+        HDCoinAddress<Self>: fmt::Display + Clone,
         Ids: Iterator<Item = u32> + Send,
     {
         let address_ids = address_ids.map(|address_id| HDAddressId { chain, address_id });
@@ -263,13 +267,7 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
             .derive_addresses(hd_account, address_ids)
             .await?
             .into_iter()
-            .map(
-                |HDAddress {
-                     address,
-                     derivation_path,
-                     ..
-                 }| (address, derivation_path),
-            )
+            .map(|hd_address| (hd_address.address().clone(), hd_address.derivation_path().clone()))
             .unzip();
 
         let balances = self
@@ -293,20 +291,20 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
     /// Requests balance of the given `address`.
     /// This function is expected to be more efficient than ['HDWalletBalanceOps::is_address_used'] in most cases
     /// since many of RPC clients allow us to request the address balance without the history.
-    async fn known_address_balance(&self, address: &Self::Address) -> BalanceResult<CoinBalance>;
+    async fn known_address_balance(&self, address: &HDBalanceAddress<Self>) -> BalanceResult<CoinBalance>;
 
     /// Requests balances of the given `addresses`.
     /// The pairs `(Address, CoinBalance)` are guaranteed to be in the same order in which they were requested.
     async fn known_addresses_balances(
         &self,
-        addresses: Vec<Self::Address>,
-    ) -> BalanceResult<Vec<(Self::Address, CoinBalance)>>;
+        addresses: Vec<HDBalanceAddress<Self>>,
+    ) -> BalanceResult<Vec<(HDBalanceAddress<Self>, CoinBalance)>>;
 
     /// Checks if the address has been used by the user by checking if the transaction history of the given `address` is not empty.
     /// Please note the function can return zero balance even if the address has been used before.
     async fn is_address_used(
         &self,
-        address: &Self::Address,
+        address: &HDBalanceAddress<Self>,
         address_scanner: &Self::HDAddressScanner,
     ) -> BalanceResult<AddressBalanceStatus<CoinBalance>> {
         if !address_scanner.is_address_used(address).await? {
@@ -320,8 +318,8 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
 
 #[async_trait]
 #[cfg_attr(test, mockable)]
-pub trait HDAddressBalanceScanner: Sync {
-    type Address;
+pub trait HDAddressBalanceScanner {
+    type Address: Send + Sync;
 
     async fn is_address_used(&self, address: &Self::Address) -> BalanceResult<bool>;
 }
@@ -333,12 +331,12 @@ pub enum AddressBalanceStatus<Balance> {
 
 pub mod common_impl {
     use super::*;
-    use crate::hd_wallet::{HDAccountOps, HDWalletOps};
+    use crate::hd_wallet::{HDAccountOps, HDAddressOps, HDWalletOps};
 
     pub(crate) async fn enable_hd_account<Coin>(
         coin: &Coin,
         hd_wallet: &Coin::HDWallet,
-        hd_account: &mut Coin::HDAccount,
+        hd_account: &mut HDCoinHDAccount<Coin>,
         chain: Bip44Chain,
         address_scanner: &Coin::HDAddressScanner,
         scan_new_addresses: bool,
@@ -346,7 +344,7 @@ pub mod common_impl {
     ) -> MmResult<HDAccountBalance, EnableCoinBalanceError>
     where
         Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
-        Coin::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
     {
         let gap_limit = hd_wallet.gap_limit();
         let mut addresses = coin.all_known_addresses_balances(hd_account).await?;
@@ -383,7 +381,7 @@ pub mod common_impl {
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
         Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
-        Coin::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
         XPubExtractor: HDXPubExtractor + Send,
     {
         let mut accounts = hd_wallet.get_accounts_mut().await;
@@ -460,16 +458,16 @@ pub mod common_impl {
     async fn gen_new_addresses<Coin>(
         coin: &Coin,
         hd_wallet: &Coin::HDWallet,
-        hd_account: &mut Coin::HDAccount,
+        hd_account: &mut HDCoinHDAccount<Coin>,
         chain: Bip44Chain,
         result_addresses: &mut Vec<HDAddressBalance>,
         min_addresses_number: u32,
     ) -> MmResult<(), EnableCoinBalanceError>
     where
         Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
-        Coin::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
     {
-        let max_addresses_number = hd_wallet.address_limit();
+        let max_addresses_number = hd_account.address_limit();
         if min_addresses_number >= max_addresses_number {
             return MmError::err(EnableCoinBalanceError::NewAddressDerivingError(
                 NewAddressDerivingError::AddressLimitReached { max_addresses_number },
@@ -491,19 +489,15 @@ pub mod common_impl {
         let mut new_addresses = Vec::with_capacity(to_generate);
         let mut addresses_to_request = Vec::with_capacity(to_generate);
         for _ in 0..to_generate {
-            let HDAddress {
-                address,
-                derivation_path,
-                ..
-            } = coin.generate_new_address(hd_wallet, hd_account, chain).await?;
+            let hd_address = coin.generate_new_address(hd_wallet, hd_account, chain).await?;
 
             new_addresses.push(HDAddressBalance {
-                address: address.to_string(),
-                derivation_path: RpcDerivationPath(derivation_path),
+                address: hd_address.address().to_string(),
+                derivation_path: RpcDerivationPath(hd_address.derivation_path().clone()),
                 chain,
                 balance: CoinBalance::default(),
             });
-            addresses_to_request.push(address);
+            addresses_to_request.push(hd_address.address().clone());
         }
 
         let to_extend = coin

@@ -2,10 +2,9 @@ use super::*;
 use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
-use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, ExtractExtendedPubkey, HDAccountMut,
-                       HDAccountsMap, HDConfirmAddress, HDExtractPubkeyError, HDWalletCoinWithStorageOps,
-                       HDWalletStorageResult, HDXPubExtractor, NewAccountCreatingError, NewAddressDeriveConfirmError,
-                       NewAddressDerivingError};
+use crate::hd_wallet::{AccountUpdatingError, ExtractExtendedPubkey, HDAccountMut, HDAddressesCache, HDCoinAddress,
+                       HDCoinHDAccount, HDExtractPubkeyError, HDWalletCoinWithStorageOps, HDXPubExtractor,
+                       NewAccountCreatingError, NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
@@ -33,7 +32,7 @@ use chain::constants::SEQUENCE_FINAL;
 use chain::{OutPoint, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
-use common::log::{error, warn};
+use common::log::error;
 use crypto::{Bip32DerPathOps, Bip44Chain, RpcDerivationPath};
 use futures::compat::Future01CompatExt;
 use futures::future::{FutureExt, TryFutureExt};
@@ -103,142 +102,36 @@ pub async fn get_tx_fee(coin: &UtxoCoinFields) -> UtxoRpcResult<ActualTxFee> {
     }
 }
 
-fn derive_address_with_cache<T>(
+pub(crate) fn address_from_extended_pubkey<T>(
     coin: &T,
-    hd_account: &UtxoHDAccount,
-    hd_addresses_cache: &mut HashMap<HDAddressId, UtxoHDAddress>,
-    hd_address_id: HDAddressId,
-) -> AddressDerivingResult<UtxoHDAddress>
+    extended_pubkey: &Secp256k1ExtendedPublicKey,
+    derivation_path: DerivationPath,
+) -> UtxoHDAddress
 where
     T: UtxoCommonOps,
 {
-    // Check if the given HD address has been derived already.
-    if let Some(hd_address) = hd_addresses_cache.get(&hd_address_id) {
-        return Ok(hd_address.clone());
-    }
+    let pubkey = Public::Compressed(H264::from(extended_pubkey.public_key().serialize()));
+    let address = coin.address_from_pubkey(&pubkey);
 
-    let change_child = hd_address_id.chain.to_child_number();
-    let address_id_child = ChildNumber::from(hd_address_id.address_id);
-
-    let derived_pubkey = hd_account
-        .extended_pubkey
-        .derive_child(change_child)?
-        .derive_child(address_id_child)?;
-    let address = coin.address_from_extended_pubkey(&derived_pubkey);
-    let pubkey = Public::Compressed(H264::from(derived_pubkey.public_key().serialize()));
-
-    let mut derivation_path = hd_account.account_derivation_path.to_derivation_path();
-    derivation_path.push(change_child);
-    derivation_path.push(address_id_child);
-
-    let hd_address = HDAddress {
+    UtxoHDAddress {
         address,
         pubkey,
         derivation_path,
-    };
-
-    // Cache the derived `hd_address`.
-    hd_addresses_cache.insert(hd_address_id, hd_address.clone());
-    Ok(hd_address)
-}
-
-/// [`HDWalletCoinOps::derive_addresses`] native implementation.
-///
-/// # Important
-///
-/// The [`HDAddressesCache::cache`] mutex is locked once for the entire duration of this function.
-#[cfg(not(target_arch = "wasm32"))]
-pub async fn derive_addresses<T, Ids>(
-    coin: &T,
-    hd_account: &UtxoHDAccount,
-    address_ids: Ids,
-) -> AddressDerivingResult<Vec<UtxoHDAddress>>
-where
-    T: UtxoCommonOps,
-    Ids: Iterator<Item = HDAddressId>,
-{
-    let mut hd_addresses_cache = hd_account.derived_addresses.lock().await;
-    address_ids
-        .map(|hd_address_id| derive_address_with_cache(coin, hd_account, &mut hd_addresses_cache, hd_address_id))
-        .collect()
-}
-
-/// [`HDWalletCoinOps::derive_addresses`] WASM implementation.
-///
-/// # Important
-///
-/// This function locks [`HDAddressesCache::cache`] mutex at each iteration.
-///
-/// # Performance
-///
-/// Locking the [`HDAddressesCache::cache`] mutex at each iteration may significantly degrade performance.
-/// But this is required at least for now due the facts that:
-/// 1) mm2 runs in the same thread as `KomodoPlatform/air_dex` runs;
-/// 2) [`ExtendedPublicKey::derive_child`] is a synchronous operation, and it takes a long time.
-/// So we need to periodically invoke Javascript runtime to handle UI events and other asynchronous tasks.
-#[cfg(target_arch = "wasm32")]
-pub async fn derive_addresses<T, Ids>(
-    coin: &T,
-    hd_account: &UtxoHDAccount,
-    address_ids: Ids,
-) -> AddressDerivingResult<Vec<UtxoHDAddress>>
-where
-    T: UtxoCommonOps,
-    Ids: Iterator<Item = HDAddressId>,
-{
-    let mut result = Vec::new();
-    for hd_address_id in address_ids {
-        let mut hd_addresses_cache = hd_account.derived_addresses.lock().await;
-
-        let hd_address = derive_address_with_cache(coin, hd_account, &mut hd_addresses_cache, hd_address_id)?;
-        result.push(hd_address);
     }
-
-    Ok(result)
 }
 
-pub async fn generate_and_confirm_new_address<Coin, ConfirmAddress>(
-    coin: &Coin,
-    hd_wallet: &Coin::HDWallet,
-    hd_account: &mut Coin::HDAccount,
-    chain: Bip44Chain,
-    confirm_address: &ConfirmAddress,
-) -> MmResult<HDAddress<Coin::Address, Coin::Pubkey>, NewAddressDeriveConfirmError>
+pub(crate) fn trezor_coin<Coin>(coin: &Coin) -> MmResult<String, NewAddressDeriveConfirmError>
 where
-    Coin: HDWalletCoinWithStorageOps<Address = Address, HDWallet = UtxoHDWallet, HDAccount = UtxoHDAccount>
-        + AsRef<UtxoCoinFields>
-        + Sync,
-    ConfirmAddress: HDConfirmAddress,
+    Coin: AsRef<UtxoCoinFields>,
 {
-    use crate::hd_wallet::inner_impl;
-
-    let inner_impl::NewAddress {
-        address,
-        new_known_addresses_number,
-    } = inner_impl::generate_new_address_immutable(coin, hd_wallet, hd_account, chain).await?;
-
-    let trezor_coin = coin.as_ref().conf.trezor_coin.clone().or_mm_err(|| {
+    coin.as_ref().conf.trezor_coin.clone().or_mm_err(|| {
         let ticker = &coin.as_ref().conf.ticker;
         let error = format!("'{ticker}' coin must contain the 'trezor_coin' field in the coins config");
         NewAddressDeriveConfirmError::DeriveError(NewAddressDerivingError::Internal(error))
-    })?;
-    let expected_address = address.address.to_string();
-    // Ask the user to confirm if the given `expected_address` is the same as on the HW display.
-    confirm_address
-        .confirm_utxo_address(trezor_coin, address.derivation_path.clone(), expected_address)
-        .await?;
-
-    let actual_known_addresses_number = hd_account.known_addresses_number(chain)?;
-    // Check if the actual `known_addresses_number` hasn't been changed while we waited for the user confirmation.
-    // If the actual value is greater than the new one, we don't need to update.
-    if actual_known_addresses_number < new_known_addresses_number {
-        coin.set_known_addresses_number(hd_wallet, hd_account, chain, new_known_addresses_number)
-            .await?;
-    }
-
-    Ok(address)
+    })
 }
 
+// Todo: Move this to hd_wallet mod and make it generic
 pub async fn create_new_account<'a, Coin, XPubExtractor>(
     coin: &Coin,
     hd_wallet: &'a UtxoHDWallet,
@@ -247,7 +140,7 @@ pub async fn create_new_account<'a, Coin, XPubExtractor>(
 ) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreatingError>
 where
     Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey>
-        + HDWalletCoinWithStorageOps<HDWallet = UtxoHDWallet, HDAccount = UtxoHDAccount>
+        + HDWalletCoinWithStorageOps<HDWallet = UtxoHDWallet>
         + Sync,
     XPubExtractor: HDXPubExtractor + Send,
 {
@@ -308,32 +201,33 @@ where
     }))
 }
 
+// Todo: Move this to hd_wallet mod and make it generic
 pub async fn set_known_addresses_number<T>(
     coin: &T,
-    hd_wallet: &UtxoHDWallet,
-    hd_account: &mut UtxoHDAccount,
+    hd_wallet: &T::HDWallet,
+    hd_account: &mut HDCoinHDAccount<T>,
     chain: Bip44Chain,
     new_known_addresses_number: u32,
 ) -> MmResult<(), AccountUpdatingError>
 where
-    T: HDWalletCoinWithStorageOps<HDWallet = UtxoHDWallet, HDAccount = UtxoHDAccount> + Sync,
+    T: HDWalletCoinWithStorageOps + Sync,
 {
-    let max_addresses_number = hd_wallet.address_limit();
+    let max_addresses_number = hd_account.address_limit();
     if new_known_addresses_number >= max_addresses_number {
         return MmError::err(AccountUpdatingError::AddressLimitReached { max_addresses_number });
     }
     match chain {
         Bip44Chain::External => {
-            coin.update_external_addresses_number(hd_wallet, hd_account.account_id, new_known_addresses_number)
-                .await?;
-            hd_account.external_addresses_number = new_known_addresses_number;
+            coin.update_external_addresses_number(hd_wallet, hd_account.account_id(), new_known_addresses_number)
+                .await?
         },
         Bip44Chain::Internal => {
-            coin.update_internal_addresses_number(hd_wallet, hd_account.account_id, new_known_addresses_number)
-                .await?;
-            hd_account.internal_addresses_number = new_known_addresses_number;
+            coin.update_internal_addresses_number(hd_wallet, hd_account.account_id(), new_known_addresses_number)
+                .await?
         },
     }
+    hd_account.set_known_addresses_number(chain, new_known_addresses_number);
+
     Ok(())
 }
 
@@ -347,13 +241,13 @@ where
 pub async fn scan_for_new_addresses<T>(
     coin: &T,
     hd_wallet: &T::HDWallet,
-    hd_account: &mut T::HDAccount,
+    hd_account: &mut HDCoinHDAccount<T>,
     address_scanner: &T::HDAddressScanner,
     gap_limit: u32,
 ) -> BalanceResult<Vec<HDAddressBalance>>
 where
     T: HDWalletBalanceOps + Sync,
-    T::Address: std::fmt::Display,
+    HDCoinAddress<T>: std::fmt::Display,
 {
     let mut addresses = scan_for_new_addresses_impl(
         coin,
@@ -384,14 +278,14 @@ where
 pub async fn scan_for_new_addresses_impl<T>(
     coin: &T,
     hd_wallet: &T::HDWallet,
-    hd_account: &mut T::HDAccount,
+    hd_account: &mut HDCoinHDAccount<T>,
     address_scanner: &T::HDAddressScanner,
     chain: Bip44Chain,
     gap_limit: u32,
 ) -> BalanceResult<Vec<HDAddressBalance>>
 where
     T: HDWalletBalanceOps + Sync,
-    T::Address: std::fmt::Display,
+    HDCoinAddress<T>: std::fmt::Display,
 {
     let mut balances = Vec::with_capacity(gap_limit as usize);
 
@@ -402,15 +296,13 @@ where
         .mm_err(|e| BalanceError::Internal(e.to_string()))?;
 
     let mut unused_addresses_counter = 0;
-    let max_addresses_number = hd_wallet.address_limit();
+    let max_addresses_number = hd_account.address_limit();
     while checking_address_id < max_addresses_number && unused_addresses_counter <= gap_limit {
-        let HDAddress {
-            address: checking_address,
-            derivation_path: checking_address_der_path,
-            ..
-        } = coin.derive_address(hd_account, chain, checking_address_id).await?;
+        let hd_address = coin.derive_address(hd_account, chain, checking_address_id).await?;
+        let checking_address = hd_address.address();
+        let checking_address_der_path = hd_address.derivation_path();
 
-        match coin.is_address_used(&checking_address, address_scanner).await? {
+        match coin.is_address_used(checking_address, address_scanner).await? {
             // We found a non-empty address, so we have to fill up the balance list
             // with zeros starting from `last_non_empty_address_id = checking_address_id - unused_addresses_counter`.
             AddressBalanceStatus::Used(non_empty_balance) => {
@@ -425,8 +317,8 @@ where
                         .await?
                         .into_iter()
                         .map(|empty_address| HDAddressBalance {
-                            address: empty_address.address.to_string(),
-                            derivation_path: RpcDerivationPath(empty_address.derivation_path),
+                            address: empty_address.address().to_string(),
+                            derivation_path: RpcDerivationPath(empty_address.derivation_path().clone()),
                             chain,
                             balance: CoinBalance::default(),
                         });
@@ -435,7 +327,7 @@ where
                 // Then push this non-empty address.
                 balances.push(HDAddressBalance {
                     address: checking_address.to_string(),
-                    derivation_path: RpcDerivationPath(checking_address_der_path),
+                    derivation_path: RpcDerivationPath(checking_address_der_path.clone()),
                     chain,
                     balance: non_empty_balance,
                 });
@@ -461,11 +353,11 @@ where
 
 pub async fn all_known_addresses_balances<T>(
     coin: &T,
-    hd_account: &T::HDAccount,
+    hd_account: &HDCoinHDAccount<T>,
 ) -> BalanceResult<Vec<HDAddressBalance>>
 where
     T: HDWalletBalanceOps + Sync,
-    T::Address: std::fmt::Display + Clone,
+    HDCoinAddress<T>: std::fmt::Display + Clone,
 {
     let external_addresses = hd_account
         .known_addresses_number(Bip44Chain::External)
@@ -485,29 +377,6 @@ where
     );
 
     Ok(balances)
-}
-
-pub async fn load_hd_accounts_from_storage(
-    hd_wallet_storage: &HDWalletCoinStorage,
-    derivation_path: &StandardHDPathToCoin,
-) -> HDWalletStorageResult<HDAccountsMap<UtxoHDAccount>> {
-    let accounts = hd_wallet_storage.load_all_accounts().await?;
-    let res: HDWalletStorageResult<HDAccountsMap<UtxoHDAccount>> = accounts
-        .iter()
-        .map(|account_info| {
-            let account = UtxoHDAccount::try_from_storage_item(derivation_path, account_info)?;
-            Ok((account.account_id, account))
-        })
-        .collect();
-    match res {
-        Ok(accounts) => Ok(accounts),
-        Err(e) if e.get_inner().is_deserializing_err() => {
-            warn!("Error loading HD accounts from the storage: '{}'. Clear accounts", e);
-            hd_wallet_storage.clear_accounts().await?;
-            Ok(HDAccountsMap::new())
-        },
-        Err(e) => Err(e),
-    }
 }
 
 /// Requests balance of the given `address`.
@@ -2760,7 +2629,7 @@ pub async fn get_withdraw_from_address<T>(
     req: &WithdrawRequest,
 ) -> MmResult<WithdrawSenderAddress<Address, Public>, WithdrawError>
 where
-    T: CoinWithDerivationMethod + HDWalletCoinOps<Address = Address, Pubkey = Public> + UtxoCommonOps,
+    T: CoinWithDerivationMethod + HDWalletCoinOps<HDWallet = UtxoHDWallet> + UtxoCommonOps,
 {
     match coin.derivation_method() {
         DerivationMethod::SingleAddress(my_address) => get_withdraw_iguana_sender(coin, req, my_address),
@@ -2788,13 +2657,14 @@ pub fn get_withdraw_iguana_sender<T: UtxoCommonOps>(
     })
 }
 
+// Todo: Move this to hd_wallet mod and make it generic
 pub async fn get_withdraw_hd_sender<T>(
     coin: &T,
     req: &WithdrawRequest,
-    hd_wallet: &T::HDWallet,
+    hd_wallet: &UtxoHDWallet,
 ) -> MmResult<WithdrawSenderAddress<Address, Public>, WithdrawError>
 where
-    T: HDWalletCoinOps<Address = Address, Pubkey = Public> + Sync,
+    T: HDWalletCoinOps<HDWallet = UtxoHDWallet> + Sync,
 {
     let HDAccountAddressId {
         account_id,
@@ -2817,11 +2687,15 @@ where
         // If [`HDWalletCoinOps::derive_address`] succeeds, [`HDAccountOps::is_address_activated`] shouldn't fails with an `InvalidBip44ChainError`.
         .mm_err(|e| WithdrawError::InternalError(e.to_string()))?;
     if !is_address_activated {
-        let error = format!("'{}' address is not activated", hd_address.address);
+        let error = format!("'{}' address is not activated", hd_address.address());
         return MmError::err(WithdrawError::UnexpectedFromAddress(error));
     }
 
-    Ok(WithdrawSenderAddress::from(hd_address))
+    Ok(WithdrawSenderAddress {
+        address: hd_address.address().clone(),
+        pubkey: *hd_address.pubkey(),
+        derivation_path: Some(hd_address.derivation_path().clone()),
+    })
 }
 
 pub fn decimals(coin: &UtxoCoinFields) -> u8 { coin.decimals }

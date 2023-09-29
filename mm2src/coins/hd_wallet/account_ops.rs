@@ -1,43 +1,6 @@
-use super::HDWalletStorageError;
-use crate::BalanceError;
-use crypto::{Bip44Chain, DerivationPath};
-use derive_more::Display;
+use super::{HDAddressOps, HDAddressesCache, InvalidBip44ChainError};
+use crypto::{Bip44Chain, DerivationPath, Secp256k1ExtendedPublicKey};
 use mm2_err_handle::prelude::*;
-
-/// Currently, we suppose that ETH/ERC20/QRC20 don't have [`Bip44Chain::Internal`] addresses.
-#[derive(Display)]
-#[display(fmt = "Coin doesn't support the given BIP44 chain: {:?}", chain)]
-pub struct InvalidBip44ChainError {
-    pub chain: Bip44Chain,
-}
-
-#[derive(Display)]
-pub enum AccountUpdatingError {
-    AddressLimitReached { max_addresses_number: u32 },
-    InvalidBip44Chain(InvalidBip44ChainError),
-    WalletStorageError(HDWalletStorageError),
-}
-
-impl From<InvalidBip44ChainError> for AccountUpdatingError {
-    fn from(e: InvalidBip44ChainError) -> Self { AccountUpdatingError::InvalidBip44Chain(e) }
-}
-
-impl From<HDWalletStorageError> for AccountUpdatingError {
-    fn from(e: HDWalletStorageError) -> Self { AccountUpdatingError::WalletStorageError(e) }
-}
-
-impl From<AccountUpdatingError> for BalanceError {
-    fn from(e: AccountUpdatingError) -> Self {
-        let error = e.to_string();
-        match e {
-            AccountUpdatingError::AddressLimitReached { .. } | AccountUpdatingError::InvalidBip44Chain(_) => {
-                // Account updating is expected to be called after `address_id` and `chain` validation.
-                BalanceError::Internal(format!("Unexpected internal error: {}", error))
-            },
-            AccountUpdatingError::WalletStorageError(_) => BalanceError::WalletStorageError(error),
-        }
-    }
-}
 
 /// `HDAccountOps` Trait
 ///
@@ -48,7 +11,17 @@ impl From<AccountUpdatingError> for BalanceError {
 /// with each account having multiple chains (often representing internal and external addresses).
 ///
 /// Implementors of this trait provide details about such HD account like its specific derivation path, known addresses, and its index.
-pub trait HDAccountOps: Send + Sync {
+pub trait HDAccountOps {
+    type HDAddress: HDAddressOps + Clone + Send;
+
+    /// Provides the limit on the number of addresses that can be added to an account.
+    ///
+    /// # Returns
+    ///
+    /// A `u32` value indicating the maximum number of addresses.
+    /// The default is given by `DEFAULT_ADDRESS_LIMIT`.
+    fn address_limit(&self) -> u32;
+
     /// Returns the number of known addresses of this account.
     ///
     /// # Parameters
@@ -60,6 +33,14 @@ pub trait HDAccountOps: Send + Sync {
     /// A result containing a `u32` that represents the number of known addresses
     /// or an `InvalidBip44ChainError` if the coin doesn't support the given `chain`.
     fn known_addresses_number(&self, chain: Bip44Chain) -> MmResult<u32, InvalidBip44ChainError>;
+
+    /// Sets the number of known addresses of this account.
+    ///
+    /// # Parameters
+    ///
+    /// * `chain`: The `Bip44Chain` representing the BIP44 chain of the addresses.
+    /// * `new_known_addresses_number`: The new number of known addresses.
+    fn set_known_addresses_number(&mut self, chain: Bip44Chain, new_known_addresses_number: u32);
 
     /// Fetches the derivation path associated with this account.
     ///
@@ -99,8 +80,19 @@ pub trait HDAccountOps: Send + Sync {
     /// println!("Is address 5 activated? {}", is_activated);
     /// # }
     /// ```
-    fn is_address_activated(&self, chain: Bip44Chain, address_id: u32) -> MmResult<bool, InvalidBip44ChainError> {
-        let is_activated = address_id < self.known_addresses_number(chain)?;
-        Ok(is_activated)
-    }
+    fn is_address_activated(&self, chain: Bip44Chain, address_id: u32) -> MmResult<bool, InvalidBip44ChainError>;
+
+    /// Fetches the derived addresses from cache.
+    ///
+    /// # Returns
+    ///
+    /// A `HDAddressesCache` containing the derived addresses.
+    fn derived_addresses(&self) -> &HDAddressesCache<Self::HDAddress>;
+
+    /// Fetches the extended public key associated with this account.
+    ///
+    /// # Returns
+    ///
+    /// A `Secp256k1ExtendedPublicKey` type representing the extended public key.
+    fn extended_pubkey(&self) -> &Secp256k1ExtendedPublicKey;
 }

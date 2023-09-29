@@ -1,7 +1,7 @@
 use super::*;
 use crate::coin_errors::MyAddressError;
-use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, ExtractExtendedPubkey, HDAccountMut,
-                       HDConfirmAddress, HDExtractPubkeyError, HDWalletCoinWithStorageOps, HDXPubExtractor,
+use crate::hd_wallet::{AccountUpdatingError, ExtractExtendedPubkey, HDAccountMut, HDCoinAddress, HDCoinHDAccount,
+                       HDCoinHDAddress, HDExtractPubkeyError, HDWalletCoinWithStorageOps, HDXPubExtractor,
                        NewAccountCreatingError, NewAddressDeriveConfirmError};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxDetailsBuilder,
                               TxHistoryStorage};
@@ -1332,7 +1332,7 @@ impl GetWithdrawSenderAddress for BchCoin {
 }
 
 impl CoinWithDerivationMethod for BchCoin {
-    fn derivation_method(&self) -> &DerivationMethod<Self::Address, Self::HDWallet> {
+    fn derivation_method(&self) -> &DerivationMethod<HDCoinAddress<Self>, Self::HDWallet> {
         utxo_common::derivation_method(self.as_ref())
     }
 }
@@ -1355,33 +1355,14 @@ impl ExtractExtendedPubkey for BchCoin {
 
 #[async_trait]
 impl HDWalletCoinOps for BchCoin {
-    type Address = Address;
-    type Pubkey = Public;
     type HDWallet = UtxoHDWallet;
-    type HDAccount = UtxoHDAccount;
 
-    async fn derive_addresses<Ids>(
+    fn address_from_extended_pubkey(
         &self,
-        hd_account: &Self::HDAccount,
-        address_ids: Ids,
-    ) -> AddressDerivingResult<Vec<HDAddress<Self::Address, Self::Pubkey>>>
-    where
-        Ids: Iterator<Item = HDAddressId> + Send,
-    {
-        utxo_common::derive_addresses(self, hd_account, address_ids).await
-    }
-
-    async fn generate_and_confirm_new_address<ConfirmAddress>(
-        &self,
-        hd_wallet: &Self::HDWallet,
-        hd_account: &mut Self::HDAccount,
-        chain: Bip44Chain,
-        confirm_address: &ConfirmAddress,
-    ) -> MmResult<HDAddress<Self::Address, Self::Pubkey>, NewAddressDeriveConfirmError>
-    where
-        ConfirmAddress: HDConfirmAddress,
-    {
-        utxo_common::generate_and_confirm_new_address(self, hd_wallet, hd_account, chain, confirm_address).await
+        extended_pubkey: &Secp256k1ExtendedPublicKey,
+        derivation_path: DerivationPath,
+    ) -> HDCoinHDAddress<Self> {
+        utxo_common::address_from_extended_pubkey(self, extended_pubkey, derivation_path)
     }
 
     async fn create_new_account<'a, XPubExtractor>(
@@ -1389,7 +1370,7 @@ impl HDWalletCoinOps for BchCoin {
         hd_wallet: &'a Self::HDWallet,
         xpub_extractor: Option<XPubExtractor>,
         account_id: Option<u32>,
-    ) -> MmResult<HDAccountMut<'a, Self::HDAccount>, NewAccountCreatingError>
+    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreatingError>
     where
         XPubExtractor: HDXPubExtractor + Send,
     {
@@ -1399,12 +1380,14 @@ impl HDWalletCoinOps for BchCoin {
     async fn set_known_addresses_number(
         &self,
         hd_wallet: &Self::HDWallet,
-        hd_account: &mut Self::HDAccount,
+        hd_account: &mut HDCoinHDAccount<Self>,
         chain: Bip44Chain,
         new_known_addresses_number: u32,
     ) -> MmResult<(), AccountUpdatingError> {
         utxo_common::set_known_addresses_number(self, hd_wallet, hd_account, chain, new_known_addresses_number).await
     }
+
+    fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError> { utxo_common::trezor_coin(self) }
 }
 
 impl HDWalletCoinWithStorageOps for BchCoin {

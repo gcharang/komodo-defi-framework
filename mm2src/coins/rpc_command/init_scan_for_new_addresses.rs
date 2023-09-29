@@ -129,7 +129,7 @@ pub async fn cancel_scan_for_new_addresses(
 pub mod common_impl {
     use super::*;
     use crate::coin_balance::HDWalletBalanceOps;
-    use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
+    use crate::hd_wallet::{HDAccountOps, HDCoinAddress, HDWalletOps};
     use crate::CoinWithDerivationMethod;
     use std::fmt;
     use std::ops::DerefMut;
@@ -140,7 +140,7 @@ pub mod common_impl {
     ) -> MmResult<ScanAddressesResponse, HDAccountBalanceRpcError>
     where
         Coin: CoinWithDerivationMethod + HDWalletBalanceOps + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 

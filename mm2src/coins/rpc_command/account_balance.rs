@@ -1,5 +1,4 @@
 use crate::coin_balance::HDAddressBalance;
-use crate::hd_wallet::HDWalletCoinOps;
 use crate::rpc_command::hd_account_balance_rpc_error::HDAccountBalanceRpcError;
 use crate::{lp_coinfind_or_err, CoinBalance, CoinWithDerivationMethod, MmCoinEnum};
 use async_trait::async_trait;
@@ -62,7 +61,7 @@ pub async fn account_balance(
 pub mod common_impl {
     use super::*;
     use crate::coin_balance::HDWalletBalanceOps;
-    use crate::hd_wallet::{HDAccountOps, HDWalletOps};
+    use crate::hd_wallet::{HDAccountOps, HDCoinAddress, HDWalletOps};
     use common::calc_total_pages;
 
     pub async fn account_balance_rpc<Coin>(
@@ -71,7 +70,7 @@ pub mod common_impl {
     ) -> MmResult<HDAccountBalanceResponse, HDAccountBalanceRpcError>
     where
         Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display + Clone,
+        HDCoinAddress<Coin>: fmt::Display + Clone,
     {
         let account_id = params.account_index;
         let hd_account = coin

@@ -378,7 +378,7 @@ pub async fn cancel_get_new_address(
 pub(crate) mod common_impl {
     use super::*;
     use crate::coin_balance::{HDAddressBalanceScanner, HDWalletBalanceOps};
-    use crate::hd_wallet::{HDAccountOps, HDAddress, HDWalletCoinOps, HDWalletOps};
+    use crate::hd_wallet::{HDAccountOps, HDAddressOps, HDCoinAddress, HDCoinHDAccount, HDWalletOps};
     use crate::CoinWithDerivationMethod;
     use crypto::RpcDerivationPath;
     use std::fmt;
@@ -391,7 +391,7 @@ pub(crate) mod common_impl {
     ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
     where
         Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Sync + Send,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -405,21 +405,17 @@ pub(crate) mod common_impl {
         let gap_limit = params.gap_limit.unwrap_or_else(|| hd_wallet.gap_limit());
 
         // Check if we can generate new address.
-        check_if_can_get_new_address(coin, hd_wallet, &hd_account, chain, gap_limit).await?;
+        check_if_can_get_new_address(coin, &hd_account, chain, gap_limit).await?;
 
-        let HDAddress {
-            address,
-            derivation_path,
-            ..
-        } = coin
+        let hd_address = coin
             .generate_new_address(hd_wallet, hd_account.deref_mut(), chain)
             .await?;
-        let balance = coin.known_address_balance(&address).await?;
+        let balance = coin.known_address_balance(hd_address.address()).await?;
 
         Ok(GetNewAddressResponse {
             new_address: HDAddressBalance {
-                address: address.to_string(),
-                derivation_path: RpcDerivationPath(derivation_path),
+                address: hd_address.address().to_string(),
+                derivation_path: RpcDerivationPath(hd_address.derivation_path().clone()),
                 chain,
                 balance,
             },
@@ -434,7 +430,7 @@ pub(crate) mod common_impl {
     where
         ConfirmAddress: HDConfirmAddress,
         Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Send + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -448,21 +444,17 @@ pub(crate) mod common_impl {
         let gap_limit = params.gap_limit.unwrap_or_else(|| hd_wallet.gap_limit());
 
         // Check if we can generate new address.
-        check_if_can_get_new_address(coin, hd_wallet, &hd_account, chain, gap_limit).await?;
+        check_if_can_get_new_address(coin, &hd_account, chain, gap_limit).await?;
 
-        let HDAddress {
-            address,
-            derivation_path,
-            ..
-        } = coin
+        let hd_address = coin
             .generate_and_confirm_new_address(hd_wallet, &mut hd_account, chain, confirm_address)
             .await?;
 
-        let balance = coin.known_address_balance(&address).await?;
+        let balance = coin.known_address_balance(hd_address.address()).await?;
         Ok(GetNewAddressResponse {
             new_address: HDAddressBalance {
-                address: address.to_string(),
-                derivation_path: RpcDerivationPath(derivation_path),
+                address: hd_address.address().to_string(),
+                derivation_path: RpcDerivationPath(hd_address.derivation_path().clone()),
                 chain,
                 balance,
             },
@@ -471,21 +463,20 @@ pub(crate) mod common_impl {
 
     async fn check_if_can_get_new_address<Coin>(
         coin: &Coin,
-        hd_wallet: &Coin::HDWallet,
-        hd_account: &Coin::HDAccount,
+        hd_account: &HDCoinHDAccount<Coin>,
         chain: Bip44Chain,
         gap_limit: u32,
     ) -> MmResult<(), GetNewAddressRpcError>
     where
         Coin: HDWalletBalanceOps + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display,
+        HDCoinAddress<Coin>: fmt::Display,
     {
         let known_addresses_number = hd_account.known_addresses_number(chain)?;
         if known_addresses_number == 0 || gap_limit > known_addresses_number {
             return Ok(());
         }
 
-        let max_addresses_number = hd_wallet.address_limit();
+        let max_addresses_number = hd_account.address_limit();
         if known_addresses_number >= max_addresses_number {
             return MmError::err(GetNewAddressRpcError::AddressLimitReached { max_addresses_number });
         }
@@ -497,8 +488,8 @@ pub(crate) mod common_impl {
         let last_address_id = known_addresses_number - 1;
 
         for address_id in (0..=last_address_id).rev() {
-            let HDAddress { address, .. } = coin.derive_address(hd_account, chain, address_id).await?;
-            if address_scanner.is_address_used(&address).await? {
+            let hd_address = coin.derive_address(hd_account, chain, address_id).await?;
+            if address_scanner.is_address_used(hd_address.address()).await? {
                 return Ok(());
             }
 

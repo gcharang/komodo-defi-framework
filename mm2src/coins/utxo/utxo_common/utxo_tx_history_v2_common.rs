@@ -1,5 +1,5 @@
 use crate::coin_balance::CoinBalanceReportOps;
-use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
+use crate::hd_wallet::{HDAccountOps, HDAddressOps, HDCoinAddress, HDWalletCoinOps, HDWalletOps};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, DisplayAddress, MyTxHistoryErrorV2, MyTxHistoryTarget,
                               TxDetailsBuilder, TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
@@ -7,7 +7,7 @@ use crate::utxo::rpc_clients::{electrum_script_hash, ElectrumClient, NativeClien
 use crate::utxo::utxo_common::{big_decimal_from_sat, HISTORY_TOO_LARGE_ERROR};
 use crate::utxo::utxo_tx_history_v2::{UtxoMyAddressesHistoryError, UtxoTxDetailsError, UtxoTxDetailsParams,
                                       UtxoTxHistoryOps};
-use crate::utxo::{output_script, RequestTxHistoryResult, UtxoCoinFields, UtxoCommonOps, UtxoHDAccount};
+use crate::utxo::{output_script, RequestTxHistoryResult, UtxoCoinFields, UtxoCommonOps, UtxoHDWallet};
 use crate::{big_decimal_from_sat_unsigned, compare_transactions, BalanceResult, CoinWithDerivationMethod,
             DerivationMethod, HDAccountAddressId, MarketCoinOps, NumConversError, TransactionDetails, TxFeeDetails,
             TxIdHeight, UtxoFeeDetails, UtxoTx};
@@ -37,7 +37,7 @@ pub async fn get_tx_history_filters<Coin>(
 ) -> MmResult<GetTxHistoryFilters, MyTxHistoryErrorV2>
 where
     Coin: CoinWithDerivationMethod + MarketCoinOps + Sync,
-    <Coin as HDWalletCoinOps>::Address: DisplayAddress,
+    HDCoinAddress<Coin>: DisplayAddress,
 {
     match (coin.derivation_method(), target) {
         (DerivationMethod::SingleAddress(_), MyTxHistoryTarget::Iguana) => {
@@ -72,7 +72,7 @@ async fn get_tx_history_filters_for_hd_account<Coin>(
 ) -> MmResult<GetTxHistoryFilters, MyTxHistoryErrorV2>
 where
     Coin: HDWalletCoinOps + Sync,
-    Coin::Address: DisplayAddress,
+    HDCoinAddress<Coin>: DisplayAddress,
 {
     let hd_account = hd_wallet
         .get_account(account_id)
@@ -85,7 +85,7 @@ where
     let addresses_iter = external_addresses
         .into_iter()
         .chain(internal_addresses)
-        .map(|hd_address| DisplayAddress::display_address(&hd_address.address));
+        .map(|hd_address| DisplayAddress::display_address(hd_address.address()));
     Ok(GetTxHistoryFilters::for_addresses(addresses_iter))
 }
 
@@ -97,7 +97,7 @@ async fn get_tx_history_filters_for_hd_address<Coin>(
 ) -> MmResult<GetTxHistoryFilters, MyTxHistoryErrorV2>
 where
     Coin: HDWalletCoinOps + Sync,
-    Coin::Address: DisplayAddress,
+    HDCoinAddress<Coin>: DisplayAddress,
 {
     let hd_account = hd_wallet
         .get_account(hd_address_id.account_id)
@@ -116,13 +116,13 @@ where
     let hd_address = coin
         .derive_address(&hd_account, hd_address_id.chain, hd_address_id.address_id)
         .await?;
-    Ok(GetTxHistoryFilters::for_address(hd_address.address.display_address()))
+    Ok(GetTxHistoryFilters::for_address(hd_address.address().display_address()))
 }
 
 /// [`UtxoTxHistoryOps::my_addresses`] implementation.
 pub async fn my_addresses<Coin>(coin: &Coin) -> MmResult<HashSet<Address>, UtxoMyAddressesHistoryError>
 where
-    Coin: HDWalletCoinOps<Address = Address, HDAccount = UtxoHDAccount> + UtxoCommonOps,
+    Coin: HDWalletCoinOps<HDWallet = UtxoHDWallet> + UtxoCommonOps,
 {
     const ADDRESSES_CAPACITY: usize = 60;
 
@@ -139,7 +139,7 @@ where
                 let addresses_it = external_addresses
                     .into_iter()
                     .chain(internal_addresses)
-                    .map(|hd_address| hd_address.address);
+                    .map(|hd_address| hd_address.address().clone());
                 all_addresses.extend(addresses_it);
             }
 
