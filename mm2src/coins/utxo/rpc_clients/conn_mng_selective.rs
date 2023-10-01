@@ -12,8 +12,9 @@ use common::executor::{AbortableSystem, SpawnFuture, Timer};
 use common::log::{debug, error, info, warn};
 use mm2_rpc::data::legacy::Priority;
 
-use super::{spawn_electrum, ConnMngTrait, ElectrumClientEvent, ElectrumConnSettings, ElectrumConnection,
-            DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
+use super::conn_mng_common::ConnMngTrait;
+use super::{spawn_electrum, ElectrumClientEvent, ElectrumConnSettings, ElectrumConnection, DEFAULT_CONN_TIMEOUT_SEC,
+            SUSPEND_TIMEOUT_INIT_SEC};
 
 #[derive(Debug)]
 pub struct ConnMngSelectiveImpl {

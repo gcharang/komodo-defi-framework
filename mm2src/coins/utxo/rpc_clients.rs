@@ -1,6 +1,7 @@
 #![cfg_attr(target_arch = "wasm32", allow(unused_macros))]
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
+#[path = "rpc_clients/conn_mng_common.rs"] mod conn_mng_common;
 #[path = "rpc_clients/conn_mng_multiple.rs"]
 mod conn_mng_multiple;
 #[path = "rpc_clients/conn_mng_selective.rs"]
@@ -61,6 +62,7 @@ use std::time::Duration;
 
 use common::custom_futures::select_ok_sequential;
 use common::executor::abortable_queue::WeakSpawner;
+use conn_mng_common::ConnMngTrait;
 use conn_mng_multiple::{ConnMngMultiple, ConnMngMultipleImpl};
 use conn_mng_selective::{ConnMngSelective, ConnMngSelectiveImpl};
 use mm2_core::ConnMngPolicy;
@@ -2538,33 +2540,6 @@ impl UtxoRpcClientOps for ElectrumClient {
     async fn get_block_timestamp(&self, height: u64) -> Result<u64, MmError<GetBlockHeaderError>> {
         Ok(self.block_header_from_storage_or_rpc(height).await?.time as u64)
     }
-}
-
-/// Trait
-#[async_trait]
-trait ConnMngTrait: Debug {
-    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>>;
-    async fn get_conn_by_address(&self, address: &str) -> Result<Arc<AsyncMutex<ElectrumConnection>>, String>;
-    async fn connect(&self) -> Result<(), String>;
-    async fn is_connected(&self) -> bool;
-    async fn remove_server(&self, address: &str) -> Result<(), String>;
-    async fn rotate_servers(&self, no_of_rotations: usize);
-    async fn is_connections_pool_empty(&self) -> bool;
-    fn on_disconnected(&self, address: &str);
-}
-
-#[async_trait]
-impl ConnMngTrait for Arc<dyn ConnMngTrait + Send + Sync> {
-    async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> { self.deref().get_conn().await }
-    async fn get_conn_by_address(&self, address: &str) -> Result<Arc<AsyncMutex<ElectrumConnection>>, String> {
-        self.deref().get_conn_by_address(address).await
-    }
-    async fn connect(&self) -> Result<(), String> { self.deref().connect().await }
-    async fn is_connected(&self) -> bool { self.deref().is_connected().await }
-    async fn remove_server(&self, address: &str) -> Result<(), String> { self.deref().remove_server(address).await }
-    async fn rotate_servers(&self, no_of_rotations: usize) { self.deref().rotate_servers(no_of_rotations).await }
-    async fn is_connections_pool_empty(&self) -> bool { self.deref().is_connections_pool_empty().await }
-    fn on_disconnected(&self, address: &str) { self.deref().on_disconnected(address) }
 }
 
 #[cfg_attr(test, mockable)]
