@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use core::time::Duration;
-use futures::lock::MutexGuard;
+use futures::lock::{Mutex as AsyncMutex, MutexGuard};
 use futures::{select, FutureExt};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -10,7 +10,6 @@ use common::executor::{AbortableSystem, SpawnFuture, Timer};
 use common::log::{debug, error, info, warn};
 
 use super::{ConnMngTrait, ElectrumConnSettings, ElectrumConnection, DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
-use crate::hd_wallet::AsyncMutex;
 use crate::utxo::rpc_clients::{spawn_electrum, ElectrumClientEvent};
 
 #[derive(Clone, Debug)]
