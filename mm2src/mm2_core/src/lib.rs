@@ -24,7 +24,7 @@ impl DbNamespaceId {
     }
 }
 
-#[derive(Clone, Deserialize, Display, Serialize)]
+#[derive(Clone, Debug, Deserialize, Display, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnMngPolicy {
     Multiple,

@@ -111,7 +111,7 @@ impl ConnMngMultiple {
         )?;
 
         let suspend_timeout_sec = Self::get_suspend_timeout(&guard, &address).await?;
-        Self::duplicate_suspend_timeout(&mut guard, &address).await?;
+        Self::duplicate_suspend_timeout(&mut guard, &address)?;
         drop(guard);
 
         self.clone().spawn_resume_server(address, suspend_timeout_sec);
@@ -173,18 +173,30 @@ impl ConnMngMultiple {
         Self::get_conn_ctx(state, address).map(|(_, conn_ctx)| conn_ctx.suspend_timeout_sec)
     }
 
-    async fn duplicate_suspend_timeout(
+    fn duplicate_suspend_timeout(
         state: &mut MutexGuard<'_, ConnMngMultipleState>,
         address: &str,
     ) -> Result<(), String> {
-        let (_, conn_ctx) = Self::get_conn_ctx_mut(state, address)?;
-        let suspend_timeout = &mut conn_ctx.suspend_timeout_sec;
-        let new_timeout = *suspend_timeout * 2;
+        Self::set_suspend_timeout(state, address, |origin| origin.checked_mul(2).unwrap_or(u64::MAX))
+    }
+
+    fn reset_suspend_timeout(state: &mut MutexGuard<'_, ConnMngMultipleState>, address: &str) -> Result<(), String> {
+        Self::set_suspend_timeout(state, address, |_| SUSPEND_TIMEOUT_INIT_SEC)
+    }
+
+    fn set_suspend_timeout<F: Fn(u64) -> u64>(
+        state: &mut MutexGuard<'_, ConnMngMultipleState>,
+        address: &str,
+        method: F,
+    ) -> Result<(), String> {
+        let conn_ctx = Self::get_conn_ctx_mut(state, address)?;
+        let suspend_timeout = &mut conn_ctx.1.suspend_timeout_sec;
+        let new_value = method(*suspend_timeout);
         debug!(
-            "Duplicate suspend timeout for address: {} from: {} to: {}",
-            address, suspend_timeout, new_timeout
+            "Set supsend timeout for address: {} - from: {} to the value: {}",
+            address, suspend_timeout, new_value
         );
-        *suspend_timeout = new_timeout;
+        *suspend_timeout = new_value;
         Ok(())
     }
 
@@ -225,7 +237,10 @@ impl ConnMngMultiple {
                 .await
                 .map_err(|err| ERRL!("Failed to suspend server: {}, error: {}", address, err))
             },
-            _ = conn_ready_receiver => Ok(()) // TODO: handle cancelled state
+            _ = conn_ready_receiver => {
+                ConnMngMultiple::reset_suspend_timeout(&mut self.0.guarded.lock().await, &address)?;
+                Ok(())
+            }
         }
     }
 

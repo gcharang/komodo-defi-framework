@@ -1816,6 +1816,7 @@ impl JsonRpcMultiClient for ElectrumClient {
     }
 }
 
+#[derive(Debug)]
 pub(super) struct ElectrumClientSettings {
     pub(super) client_name: String,
     pub(super) servers: Vec<ElectrumConnSettings>,
@@ -2577,6 +2578,7 @@ impl ElectrumClientImpl {
         let conn_mng_abortable_system = abortable_system
             .create_subsystem()
             .map_err(|err| ERRL!("Failed to create conn_mng abortable_system: {}", err))?;
+        debug!("Init conn_mng with settings: {:?}", client_settings);
         let mut rng = small_rng();
         let mut servers = client_settings.servers;
         servers.as_mut_slice().shuffle(&mut rng);

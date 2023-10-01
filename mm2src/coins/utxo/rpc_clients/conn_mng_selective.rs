@@ -299,7 +299,7 @@ impl ConnMngSelective {
         )?;
 
         let suspend_timeout_sec = Self::get_suspend_timeout(&guard, &address).await?;
-        Self::duplicate_suspend_timeout(&mut guard, &address).await?;
+        Self::duplicate_suspend_timeout(&mut guard, &address)?;
         drop(guard);
 
         self.clone().spawn_resume_server(address, suspend_timeout_sec);
@@ -420,35 +420,33 @@ impl ConnMngSelective {
             })
     }
 
-    async fn duplicate_suspend_timeout(
+    fn duplicate_suspend_timeout(
         state: &mut MutexGuard<'_, ConnMngSelectiveState>,
         address: &str,
+    ) -> Result<(), String> {
+        Self::set_suspend_timeout(state, address, |origin| origin.checked_mul(2).unwrap_or(u64::MAX))
+    }
+
+    fn reset_suspend_timeout(state: &mut MutexGuard<'_, ConnMngSelectiveState>, address: &str) -> Result<(), String> {
+        Self::set_suspend_timeout(state, address, |_| SUSPEND_TIMEOUT_INIT_SEC)
+    }
+
+    fn set_suspend_timeout<F: Fn(u64) -> u64>(
+        state: &mut MutexGuard<'_, ConnMngSelectiveState>,
+        address: &str,
+        method: F,
     ) -> Result<(), String> {
         let suspend_timeout = &mut state
             .conn_ctxs
             .get_mut(address)
-            .ok_or_else(|| ERRL!("Failed to duplicate suspend_timeout for address: {}, no entry", address))?
+            .ok_or_else(|| ERRL!("Failed to set suspend_timeout for address: {}, no entry", address))?
             .suspend_timeout_sec;
-        let new_timeout = *suspend_timeout * 2;
+        let new_value = method(*suspend_timeout);
         debug!(
-            "Duplicate suspend timeout for address: {} from: {} to: {}",
-            address, suspend_timeout, new_timeout
+            "Set supsend timeout for address: {} - from: {} to the value: {}",
+            address, suspend_timeout, new_value
         );
-        *suspend_timeout = new_timeout;
-        Ok(())
-    }
-
-    fn reset_suspend_timeout(state: &mut MutexGuard<'_, ConnMngSelectiveState>, address: &str) -> Result<(), String> {
-        let suspend_timeout = &mut state
-            .conn_ctxs
-            .get_mut(address)
-            .ok_or_else(|| ERRL!("Failed to duplicate suspend_timeout for address: {}, no entry", address))?
-            .suspend_timeout_sec;
-        debug!(
-            "Reset supsend timeout for address: {} from: {} to the initial value: {}",
-            address, suspend_timeout, SUSPEND_TIMEOUT_INIT_SEC
-        );
-        *suspend_timeout = SUSPEND_TIMEOUT_INIT_SEC;
+        *suspend_timeout = new_value;
         Ok(())
     }
 
