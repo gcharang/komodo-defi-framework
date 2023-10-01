@@ -31,6 +31,7 @@ use futures::{select, StreamExt};
 use futures01::future::select_ok;
 use futures01::sync::mpsc;
 use futures01::{Future, Sink, Stream};
+use http::uri::InvalidUri;
 use http::Uri;
 use itertools::Itertools;
 use keys::hash::H256;
@@ -62,7 +63,7 @@ use std::time::Duration;
 
 use common::custom_futures::select_ok_sequential;
 use common::executor::abortable_queue::WeakSpawner;
-use conn_mng_common::ConnMngTrait;
+use conn_mng_common::{ConnMngError, ConnMngTrait};
 use conn_mng_multiple::{ConnMngMultiple, ConnMngMultipleImpl};
 use conn_mng_selective::{ConnMngSelective, ConnMngSelectiveImpl};
 use mm2_core::ConnMngPolicy;
@@ -1460,15 +1461,21 @@ fn spawn_electrum(
     conn_settings: &ElectrumConnSettings,
     spawner: WeakSpawner,
     event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-) -> Result<(ElectrumConnection, async_oneshot::Receiver<()>), String> {
+) -> Result<(ElectrumConnection, async_oneshot::Receiver<()>), ConnMngError> {
     let config = match conn_settings.protocol {
         ElectrumProtocol::TCP => ElectrumConfig::TCP,
         ElectrumProtocol::SSL => {
-            let uri: Uri = try_s!(conn_settings.url.parse());
-            let host = uri
-                .host()
-                .ok_or(ERRL!("Couldn't retrieve host from addr {}", conn_settings.url))?;
-            try_s!(DnsNameRef::try_from_ascii_str(host));
+            let uri: Uri = conn_settings.url.parse().map_err(|err: InvalidUri| {
+                ConnMngError::ConnectingError(conn_settings.url.to_string(), err.to_string())
+            })?;
+            let host = uri.host().ok_or_else(|| {
+                ConnMngError::ConnectingError(
+                    conn_settings.url.to_string(),
+                    "Couldn't retrieve host from addr".to_string(),
+                )
+            })?;
+            DnsNameRef::try_from_ascii_str(host)
+                .map_err(|err| ConnMngError::ConnectingError(conn_settings.url.clone(), err.to_string()))?;
 
             ElectrumConfig::SSL {
                 dns_name: host.into(),
@@ -1476,7 +1483,10 @@ fn spawn_electrum(
             }
         },
         ElectrumProtocol::WS | ElectrumProtocol::WSS => {
-            return ERR!("'ws' and 'wss' protocols are not supported yet. Consider using 'TCP' or 'SSL'")
+            return Err(ConnMngError::ConnectingError(
+                conn_settings.url.clone(),
+                "'ws' and 'wss' protocols are not supported yet. Consider using 'TCP' or 'SSL'".to_string(),
+            ));
         },
     };
 
@@ -1495,17 +1505,21 @@ fn spawn_electrum(
     conn_settings: &ElectrumConnSettings,
     spawner: WeakSpawner,
     event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
-) -> Result<(ElectrumConnection, async_oneshot::Receiver<()>), String> {
+) -> Result<(ElectrumConnection, async_oneshot::Receiver<()>), ConnMngError> {
     let mut url = conn_settings.url.clone();
-    let uri: Uri = try_s!(conn_settings.url.parse());
+    let uri: Uri = conn_settings
+        .url
+        .parse()
+        .map_err(|err: InvalidUri| ConnMngError::ConnectingError(url.clone(), err.to_string()))?;
 
     if uri.scheme().is_some() {
-        return ERR!(
+        return Err(ConnMngError::ConnectingError(
+            url,
             "There has not to be a scheme in the url: {}. \
             'ws://' scheme is used by default. \
-            Consider using 'protocol: \"WSS\"' in the electrum request to switch to the 'wss://' scheme.",
-            url
-        );
+            Consider using 'protocol: \"WSS\"' in the electrum request to switch to the 'wss://' scheme."
+                .to_string(),
+        ));
     }
 
     let config = match conn_settings.protocol {
@@ -1518,7 +1532,10 @@ fn spawn_electrum(
             ElectrumConfig::WSS
         },
         ElectrumProtocol::TCP | ElectrumProtocol::SSL => {
-            return ERR!("'TCP' and 'SSL' are not supported in a browser. Please use 'WS' or 'WSS' protocols");
+            return Err(ConnMngError::ConnectingError(
+                url,
+                "'TCP' and 'SSL' are not supported in a browser. Please use 'WS' or 'WSS' protocols".to_string(),
+            ));
         },
     };
 
@@ -1699,7 +1716,7 @@ async fn electrum_request_to(
 ) -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
     let (tx, responses) = {
         let conn = client.conn_mng.get_conn_by_address(to_addr.as_ref()).await;
-        let conn = conn.map_err(JsonRpcErrorType::Internal)?;
+        let conn = conn.map_err(|err| JsonRpcErrorType::Internal(err.to_string()))?;
         let guard = conn.lock().await;
         let connection: &ElectrumConnection = guard.deref();
 
@@ -1728,12 +1745,15 @@ async fn electrum_request_to(
 impl ElectrumClientImpl {
     pub async fn connect(&self) -> Result<(), String> {
         debug!("electrum_client_impl connect");
-        self.conn_mng.connect().await
+        self.conn_mng.connect().await.map_err(|err| err.to_string())
     }
 
     /// Remove an Electrum connection and stop corresponding spawned actor.
     pub async fn remove_server(&self, server_addr: &str) -> Result<(), String> {
-        self.conn_mng.remove_server(server_addr).await
+        self.conn_mng
+            .remove_server(server_addr)
+            .await
+            .map_err(|err| err.to_string())
     }
 
     /// Moves the Electrum servers that fail in a multi request to the end.
@@ -1751,7 +1771,11 @@ impl ElectrumClientImpl {
             "Set protocol version for electrum server: {}, version: {}",
             server_addr, version
         );
-        let conn = self.conn_mng.get_conn_by_address(server_addr).await?;
+        let conn = self
+            .conn_mng
+            .get_conn_by_address(server_addr)
+            .await
+            .map_err(|err| err.to_string())?;
         conn.lock().await.set_protocol_version(version).await;
         Ok(())
     }
@@ -3044,7 +3068,6 @@ fn electrum_connect(
     spawner: WeakSpawner,
     event_sender: futures::channel::mpsc::UnboundedSender<ElectrumClientEvent>,
 ) -> (ElectrumConnection, async_oneshot::Receiver<()>) {
-    //) -> ElectrumConnection {
     let responses = Arc::new(AsyncMutex::new(JsonRpcPendingRequests::default()));
     let tx = Arc::new(AsyncMutex::new(None));
 
@@ -3058,7 +3081,6 @@ fn electrum_connect(
         conn_ready_sender,
         spawner.clone(),
     );
-    //.then(|_| futures::future::ready(()));
 
     spawner.spawn(fut);
     (
