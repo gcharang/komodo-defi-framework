@@ -124,7 +124,7 @@ impl ConnMngSelective {
         debug!("Backup electrum nodes to connect: {:?}", guard.queue.backup);
         let mut iter = guard.queue.primary.iter().chain(guard.queue.backup.iter());
         let addr = iter.next()?.clone();
-        if let Some(conn_ctx) = guard.conn_ctxs.get(&addr) {
+        if let Ok(conn_ctx) = Self::get_conn_ctx(&guard, &addr) {
             Some((
                 conn_ctx.conn_settings.clone(),
                 conn_ctx.abortable_system.weak_spawner(),
@@ -148,13 +148,7 @@ impl ConnMngSelective {
             }
         }
 
-        match &guard
-            .conn_ctxs
-            .get(&address)
-            .ok_or_else(|| ERRL!("Failed to get conn_ctx for address: {}", address))?
-            .conn_settings
-            .priority
-        {
+        match Self::get_conn_ctx(&guard, &address)?.conn_settings.priority {
             Priority::Primary => {
                 guard.queue.primary.pop_front();
             },
@@ -194,21 +188,15 @@ impl ConnMngSelective {
     async fn resume_server(self, address: String) -> Result<(), String> {
         debug!("Resume address: {}", address);
         let mut guard = self.0.guarded.lock().await;
-        let priority = guard
-            .conn_ctxs
-            .get(&address)
-            .ok_or_else(|| format!("Failed to resume server, not conn_ctx found for: {}", address))?
-            .conn_settings
-            .priority
-            .clone();
+        let priority = Self::get_conn_ctx(&guard, &address)?.conn_settings.priority.clone();
         match priority {
             Priority::Primary => guard.queue.primary.push_back(address.clone()),
             Priority::Secondary => guard.queue.backup.push_back(address.clone()),
         }
-        let conn_ctx = guard.conn_ctxs.get(&address).expect("");
 
         if let Some(active) = guard.active.clone() {
-            let active_ctx = guard.conn_ctxs.get(&active).expect("");
+            let conn_ctx = Self::get_conn_ctx(&guard, &address)?;
+            let active_ctx = Self::get_conn_ctx(&guard, &active)?;
             let active_priority = &active_ctx.conn_settings.priority;
             if let (Priority::Secondary, Priority::Primary) = (active_priority, priority) {
                 let conn_settings = conn_ctx.conn_settings.clone();
@@ -247,7 +235,7 @@ impl ConnMngSelective {
     ) -> Result<(), String> {
         debug!("Reset connection context for: {}", address);
 
-        let mut conn_ctx = state.conn_ctxs.get_mut(address).expect("TODO");
+        let conn_ctx = Self::get_conn_ctx_mut(state, address)?;
         conn_ctx.abortable_system.abort_all().map_err(|err| {
             ERRL!(
                 "Failed to abort on electrum connection related spawner: {}, error: {:?}",
@@ -264,32 +252,13 @@ impl ConnMngSelective {
         state: &mut MutexGuard<'_, ConnMngSelectiveState>,
         conn: ElectrumConnection,
     ) -> Result<(), String> {
-        state
-            .conn_ctxs
-            .get_mut(&conn.addr)
-            .ok_or_else(|| {
-                format!(
-                    "Failed to get connection ctx to replace established conn for: {}",
-                    conn.addr
-                )
-            })?
-            .connection
-            .replace(Arc::new(AsyncMutex::new(conn)));
+        let conn_ctx = Self::get_conn_ctx_mut(state, &conn.addr)?;
+        conn_ctx.connection.replace(Arc::new(AsyncMutex::new(conn)));
         Ok(())
     }
 
     async fn get_suspend_timeout(state: &MutexGuard<'_, ConnMngSelectiveState>, address: &str) -> Result<u64, String> {
-        state
-            .conn_ctxs
-            .get(address)
-            .map(|ctx| ctx.suspend_timeout_sec)
-            .ok_or_else(|| {
-                ERRL!(
-                    "Failed to get suspend_timeout for address: {}, use default value: {}",
-                    SUSPEND_TIMEOUT_INIT_SEC,
-                    address
-                )
-            })
+        Self::get_conn_ctx(state, address).map(|ctx| ctx.suspend_timeout_sec)
     }
 
     fn duplicate_suspend_timeout(
@@ -308,11 +277,8 @@ impl ConnMngSelective {
         address: &str,
         method: F,
     ) -> Result<(), String> {
-        let suspend_timeout = &mut state
-            .conn_ctxs
-            .get_mut(address)
-            .ok_or_else(|| ERRL!("Failed to set suspend_timeout for address: {}, no entry", address))?
-            .suspend_timeout_sec;
+        let conn_ctx = Self::get_conn_ctx_mut(state, address)?;
+        let suspend_timeout = &mut conn_ctx.suspend_timeout_sec;
         let new_value = method(*suspend_timeout);
         debug!(
             "Set supsend timeout for address: {} - from: {} to the value: {}",
@@ -339,6 +305,26 @@ impl ConnMngSelective {
             },
             _ = conn_ready_receiver => Ok(()) // TODO: handle cancelled
         }
+    }
+
+    fn get_conn_ctx<'a>(
+        state: &'a MutexGuard<'a, ConnMngSelectiveState>,
+        address: &str,
+    ) -> Result<&'a ElectrumConnCtx, String> {
+        state
+            .conn_ctxs
+            .get(address)
+            .ok_or_else(|| ERRL!("Unknown address: {}", address))
+    }
+
+    fn get_conn_ctx_mut<'a, 'b>(
+        state: &'a mut MutexGuard<'b, ConnMngSelectiveState>,
+        address: &'_ str,
+    ) -> Result<&'a mut ElectrumConnCtx, String> {
+        state
+            .conn_ctxs
+            .get_mut(address)
+            .ok_or_else(|| ERRL!("Unknown address: {}", address))
     }
 }
 
@@ -420,9 +406,12 @@ impl ConnMngSelectiveImpl {
             return vec![];
         };
 
-        let Some(conn_ctx) = guard.conn_ctxs.get(&address) else {
-            error!("Failed to get conn_ctx for address: {}", address);
-            return vec![];
+        let conn_ctx = match ConnMngSelective::get_conn_ctx(&guard, &address) {
+            Ok(conn_ctx) => conn_ctx,
+            Err(err) => {
+                error!("{}", err);
+                return vec![];
+            },
         };
 
         if let Some(conn) = conn_ctx.connection.clone() {

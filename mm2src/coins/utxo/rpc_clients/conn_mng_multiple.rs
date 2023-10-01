@@ -208,7 +208,7 @@ impl ConnMngMultiple {
             .iter()
             .enumerate()
             .find(|(_, c)| c.conn_settings.url == address)
-            .ok_or_else(|| format!("Unknown destination address {}", address))
+            .ok_or_else(|| format!("Unknown address {}", address))
     }
 
     fn get_conn_ctx_mut<'a, 'b>(
@@ -220,7 +220,7 @@ impl ConnMngMultiple {
             .iter_mut()
             .enumerate()
             .find(|(_, ctx)| ctx.conn_settings.url == address)
-            .ok_or_else(|| format!("Unknown destination address {}", address))
+            .ok_or_else(|| format!("Unknown address {}", address))
     }
 
     async fn connect_to(self, conn_settings: ElectrumConnSettings, weak_spawner: WeakSpawner) -> Result<(), String> {
