@@ -771,7 +771,7 @@ async fn trade_base_rel_electrum(
         log!("Bob log path: {}", mm_bob.log_path.display())
     }
 
-    Timer::sleep(1.).await;
+    Timer::sleep(2.).await;
 
     let alice_conf = Mm2TestConfForSwap::alice_conf_with_policy(&alice_priv_key_policy, &coins, &mm_bob.my_seed_addr());
     let mut mm_alice = MarketMakerIt::start_async(alice_conf.conf, alice_conf.rpc_password, None)
@@ -783,6 +783,8 @@ async fn trade_base_rel_electrum(
     {
         log!("Alice log path: {}", mm_alice.log_path.display())
     }
+
+    Timer::sleep(2.).await;
 
     #[cfg(all(feature = "zhtlc-native-tests", not(target_arch = "wasm32")))]
     {
@@ -1328,7 +1330,7 @@ fn test_withdraw_legacy() {
     let alice_passphrase = var("ALICE_PASSPHRASE")
         .ok()
         .or(alice_file_passphrase)
-        .expect("No ALICE_PASSPHRASE or .env.client/PASSPHRASE");
+        .expect("No ALICE_PASSPHRASE or .env.client/ALICE_PASSPHRASE");
 
     let coins = json!([
         {"coin":"RICK","asset":"RICK","rpcport":8923,"txversion":4,"overwintered":1,"txfee":1000,"protocol":{"type":"UTXO"}},
@@ -1735,6 +1737,7 @@ fn test_cancel_order() {
         None,
     )
     .unwrap();
+    thread::sleep(Duration::from_secs(2));
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     log!("Bob log path: {}", mm_bob.log_path.display());
     // Enable coins on Bob side. Print the replies in case we need the "address".
@@ -1773,6 +1776,7 @@ fn test_cancel_order() {
         None,
     )
     .unwrap();
+    thread::sleep(Duration::from_secs(2));
 
     let (_alice_dump_log, _alice_dump_dashboard) = mm_alice.mm_dump();
     log!("Alice log path: {}", mm_alice.log_path.display());
@@ -2535,7 +2539,7 @@ fn setprice_buy_sell_too_low_volume() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_fill_or_kill_taker_order_should_not_transform_to_maker() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -2603,7 +2607,7 @@ fn test_fill_or_kill_taker_order_should_not_transform_to_maker() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_gtc_taker_order_should_transform_to_maker() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -2676,7 +2680,7 @@ fn test_gtc_taker_order_should_transform_to_maker() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_set_price_must_save_order_to_db() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -2729,7 +2733,7 @@ fn test_set_price_must_save_order_to_db() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_set_price_response_format() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -3881,7 +3885,7 @@ fn test_validateaddress() {
     let bob_passphrase = var("BOB_PASSPHRASE")
         .ok()
         .or(bob_file_passphrase)
-        .expect("No BOB_PASSPHRASE or .env.seed/PASSPHRASE");
+        .expect("No BOB_PASSPHRASE or .env.seed/BOB_PASSPHRASE");
 
     let mm = MarketMakerIt::start(
         json!({
@@ -4835,7 +4839,7 @@ fn test_tx_history_tbtc_non_segwit() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_buy_conf_settings() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address":ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
@@ -4908,7 +4912,7 @@ fn test_buy_conf_settings() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_buy_response_format() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -4958,7 +4962,7 @@ fn test_buy_response_format() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_sell_response_format() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -5008,7 +5012,7 @@ fn test_sell_response_format() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_my_orders_response_format() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -5168,7 +5172,7 @@ fn test_my_orders_after_matched() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_sell_conf_settings() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address": ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
@@ -5241,7 +5245,7 @@ fn test_sell_conf_settings() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_set_price_conf_settings() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(),
     {"coin":"JST","name":"jst","protocol":{"type":"ERC20","protocol_data":{"platform":"ETH","contract_address": ETH_DEV_TOKEN_CONTRACT}},"required_confirmations":2},]);
@@ -5314,7 +5318,7 @@ fn test_set_price_conf_settings() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_update_maker_order() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json! ([
         {"coin":"RICK","asset":"RICK","required_confirmations":0,"txversion":4,"overwintered":1,"protocol":{"type":"UTXO"}},
@@ -5454,7 +5458,7 @@ fn test_update_maker_order() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_update_maker_order_fail() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json! ([
         {"coin":"RICK","asset":"RICK","required_confirmations":0,"txversion":4,"overwintered":1,"protocol":{"type":"UTXO"}},
@@ -5987,7 +5991,7 @@ fn test_orderbook_is_mine_orders() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_sell_min_volume() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -6060,7 +6064,7 @@ fn test_sell_min_volume() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_sell_min_volume_dust() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json! ([
         {"coin":"RICK","asset":"RICK","dust":10000000,"required_confirmations":0,"txversion":4,"overwintered":1,"protocol":{"type":"UTXO"}},
@@ -6111,7 +6115,7 @@ fn test_sell_min_volume_dust() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_setprice_min_volume_dust() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json! ([
         {"coin":"RICK","asset":"RICK","dust":10000000,"required_confirmations":0,"txversion":4,"overwintered":1,"protocol":{"type":"UTXO"}},
@@ -6159,7 +6163,7 @@ fn test_setprice_min_volume_dust() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_buy_min_volume() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
@@ -6180,6 +6184,7 @@ fn test_buy_min_volume() {
         None,
     )
     .unwrap();
+    thread::sleep(Duration::from_secs(2));
 
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     log!("Bob log path: {}", mm_bob.log_path.display());
@@ -6368,7 +6373,7 @@ fn test_orderbook_depth() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_mm2_db_migration() {
-    let bob_passphrase = get_passphrase(&".env.client", "BOB_PASSPHRASE").unwrap();
+    let bob_passphrase = get_passphrase(&".env.seed", "BOB_PASSPHRASE").unwrap();
 
     let coins = json!([rick_conf(), morty_conf(), eth_testnet_conf(), eth_jst_testnet_conf(),]);
 
