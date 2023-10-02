@@ -1,7 +1,7 @@
 use super::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountMut, HDAccountOps,
             HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress, HDWalletOps, HDXPubExtractor, NewAccountCreatingError,
             NewAddressDeriveConfirmError, NewAddressDerivingError};
-use crate::hd_wallet::HDAddressOps;
+use crate::hd_wallet::{HDAddressOps, HDWalletStorageOps};
 use async_trait::async_trait;
 use bip32::{ChildNumber, DerivationPath};
 use crypto::{Bip44Chain, Secp256k1ExtendedPublicKey};
@@ -20,7 +20,7 @@ pub struct HDAddressId {
 #[async_trait]
 pub trait HDWalletCoinOps {
     /// The type representing the HD Wallet operations associated with this coin.
-    type HDWallet: HDWalletOps + Send + Sync;
+    type HDWallet: HDWalletOps + HDWalletStorageOps + Send + Sync;
     fn address_from_extended_pubkey(
         &self,
         extended_pubkey: &Secp256k1ExtendedPublicKey,
@@ -281,7 +281,27 @@ pub trait HDWalletCoinOps {
         hd_account: &mut HDCoinHDAccount<Self>,
         chain: Bip44Chain,
         new_known_addresses_number: u32,
-    ) -> MmResult<(), AccountUpdatingError>;
+    ) -> MmResult<(), AccountUpdatingError> {
+        let max_addresses_number = hd_account.address_limit();
+        if new_known_addresses_number >= max_addresses_number {
+            return MmError::err(AccountUpdatingError::AddressLimitReached { max_addresses_number });
+        }
+        match chain {
+            Bip44Chain::External => {
+                hd_wallet
+                    .update_external_addresses_number(hd_account.account_id(), new_known_addresses_number)
+                    .await?
+            },
+            Bip44Chain::Internal => {
+                hd_wallet
+                    .update_internal_addresses_number(hd_account.account_id(), new_known_addresses_number)
+                    .await?
+            },
+        }
+        hd_account.set_known_addresses_number(chain, new_known_addresses_number);
+
+        Ok(())
+    }
 
     // Todo: Maybe make a trait specifically for HW wallets that is a superset of HDWalletCoinOps
     // Todo: Use an error type that is specific to this function

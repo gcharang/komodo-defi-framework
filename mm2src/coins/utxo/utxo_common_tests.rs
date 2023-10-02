@@ -1,5 +1,5 @@
 use super::*;
-use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex, HDAddressesCache};
+use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex, HDAddressesCache, HDWalletCoinStorage};
 use crate::my_tx_history_v2::{my_tx_history_v2_impl, CoinWithTxHistoryV2, MyTxHistoryDetails, MyTxHistoryRequestV2,
                               MyTxHistoryResponseV2, MyTxHistoryTarget};
 use crate::tx_history_storage::TxHistoryStorageBuilder;

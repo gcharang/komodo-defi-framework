@@ -2,9 +2,9 @@ use super::*;
 use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
-use crate::hd_wallet::{AccountUpdatingError, ExtractExtendedPubkey, HDAccountMut, HDAddressesCache, HDCoinAddress,
-                       HDCoinHDAccount, HDExtractPubkeyError, HDWalletCoinWithStorageOps, HDXPubExtractor,
-                       NewAccountCreatingError, NewAddressDeriveConfirmError, NewAddressDerivingError};
+use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDAddressesCache, HDCoinAddress, HDCoinHDAccount,
+                       HDExtractPubkeyError, HDWalletStorageOps, HDXPubExtractor, NewAccountCreatingError,
+                       NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
@@ -139,9 +139,7 @@ pub async fn create_new_account<'a, Coin, XPubExtractor>(
     account_id: Option<u32>,
 ) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreatingError>
 where
-    Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey>
-        + HDWalletCoinWithStorageOps<HDWallet = UtxoHDWallet>
-        + Sync,
+    Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey> + Sync,
     XPubExtractor: HDXPubExtractor + Send,
 {
     const INIT_ACCOUNT_ID: u32 = 0;
@@ -190,8 +188,7 @@ where
         return MmError::err(NewAccountCreatingError::Internal(error));
     }
 
-    coin.upload_new_account(hd_wallet, new_account.to_storage_item())
-        .await?;
+    hd_wallet.upload_new_account(new_account.to_storage_item()).await?;
 
     Ok(AsyncMutexGuard::map(accounts, |accounts| {
         accounts
@@ -199,36 +196,6 @@ where
             // the `entry` method should return [`Entry::Vacant`] due to the checks above
             .or_insert(new_account)
     }))
-}
-
-// Todo: Move this to hd_wallet mod and make it generic
-pub async fn set_known_addresses_number<T>(
-    coin: &T,
-    hd_wallet: &T::HDWallet,
-    hd_account: &mut HDCoinHDAccount<T>,
-    chain: Bip44Chain,
-    new_known_addresses_number: u32,
-) -> MmResult<(), AccountUpdatingError>
-where
-    T: HDWalletCoinWithStorageOps + Sync,
-{
-    let max_addresses_number = hd_account.address_limit();
-    if new_known_addresses_number >= max_addresses_number {
-        return MmError::err(AccountUpdatingError::AddressLimitReached { max_addresses_number });
-    }
-    match chain {
-        Bip44Chain::External => {
-            coin.update_external_addresses_number(hd_wallet, hd_account.account_id(), new_known_addresses_number)
-                .await?
-        },
-        Bip44Chain::Internal => {
-            coin.update_internal_addresses_number(hd_wallet, hd_account.account_id(), new_known_addresses_number)
-                .await?
-        },
-    }
-    hd_account.set_known_addresses_number(chain, new_known_addresses_number);
-
-    Ok(())
 }
 
 pub async fn produce_hd_address_scanner<T>(coin: &T) -> BalanceResult<UtxoAddressScanner>

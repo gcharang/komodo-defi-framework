@@ -39,8 +39,7 @@ mod storage;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use storage::HDWalletDb;
 #[cfg(test)] pub(crate) use storage::HDWalletMockStorage;
-pub use storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletCoinWithStorageOps, HDWalletId,
-                  HDWalletStorageError};
+pub use storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletId, HDWalletStorageError, HDWalletStorageOps};
 pub(crate) use storage::{HDWalletStorageInternalOps, HDWalletStorageResult};
 
 mod wallet_ops;
@@ -343,6 +342,14 @@ where
 
         address
     }
+}
+
+#[async_trait]
+impl<HDAccount> HDWalletStorageOps for HDWallet<HDAccount>
+where
+    HDAccount: HDAccountOps + Clone + Send + Sync,
+{
+    fn hd_wallet_storage(&self) -> &HDWalletCoinStorage { &self.hd_wallet_storage }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

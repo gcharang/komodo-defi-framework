@@ -2,9 +2,9 @@ use super::*;
 use crate::coin_balance::{self, EnableCoinBalanceError, EnabledCoinBalanceParams, HDAccountBalance, HDAddressBalance,
                           HDBalanceAddress, HDWalletBalance, HDWalletBalanceOps};
 use crate::coin_errors::MyAddressError;
-use crate::hd_wallet::{AccountUpdatingError, ExtractExtendedPubkey, HDAccountMut, HDCoinAddress, HDCoinHDAccount,
-                       HDCoinHDAddress, HDConfirmAddress, HDExtractPubkeyError, HDWalletCoinWithStorageOps,
-                       HDXPubExtractor, NewAccountCreatingError, NewAddressDeriveConfirmError};
+use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress,
+                       HDConfirmAddress, HDExtractPubkeyError, HDXPubExtractor, NewAccountCreatingError,
+                       NewAddressDeriveConfirmError};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxHistoryStorage};
 use crate::rpc_command::account_balance::{self, AccountBalanceParams, AccountBalanceRpcOps, HDAccountBalanceResponse};
 use crate::rpc_command::get_new_address::{self, GetNewAddressParams, GetNewAddressResponse, GetNewAddressRpcError,
@@ -33,7 +33,6 @@ use crate::{CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, CoinWithDeriva
             WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
             WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut, WithdrawSenderAddress};
 use common::executor::{AbortableSystem, AbortedError};
-use crypto::Bip44Chain;
 use futures::{FutureExt, TryFutureExt};
 use mm2_metrics::MetricsArc;
 use mm2_number::MmNumber;
@@ -886,16 +885,6 @@ impl HDWalletCoinOps for UtxoStandardCoin {
         utxo_common::create_new_account(self, hd_wallet, xpub_extractor, account_id).await
     }
 
-    async fn set_known_addresses_number(
-        &self,
-        hd_wallet: &Self::HDWallet,
-        hd_account: &mut HDCoinHDAccount<Self>,
-        chain: Bip44Chain,
-        new_known_addresses_number: u32,
-    ) -> MmResult<(), AccountUpdatingError> {
-        utxo_common::set_known_addresses_number(self, hd_wallet, hd_account, chain, new_known_addresses_number).await
-    }
-
     fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError> { utxo_common::trezor_coin(self) }
 }
 
@@ -967,12 +956,6 @@ impl HDWalletBalanceOps for UtxoStandardCoin {
         addresses: Vec<HDBalanceAddress<Self>>,
     ) -> BalanceResult<Vec<(HDBalanceAddress<Self>, CoinBalance)>> {
         utxo_common::addresses_balances(self, addresses).await
-    }
-}
-
-impl HDWalletCoinWithStorageOps for UtxoStandardCoin {
-    fn hd_wallet_storage<'a>(&self, hd_wallet: &'a Self::HDWallet) -> &'a HDWalletCoinStorage {
-        &hd_wallet.hd_wallet_storage
     }
 }
 
