@@ -94,7 +94,9 @@ impl<'a> WalletDbShared {
         })
     }
 
-    pub async fn is_tx_imported(&self, _tx_id: TxId) -> bool { todo!() }
+    pub async fn is_tx_imported(&self, tx_id: TxId) -> MmResult<bool, ZcoinStorageError> {
+        self.db.is_tx_imported(tx_id).await
+    }
 }
 
 pub struct WalletDbInner(pub IndexedDb);
@@ -151,6 +153,24 @@ impl<'a> WalletIndexedDb {
             .get_or_initialize()
             .await
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
+    }
+
+    pub async fn is_tx_imported(&self, tx_id: TxId) -> MmResult<bool, ZcoinStorageError> {
+        let locked_db = self.lock_db().await?;
+        let db_transaction = locked_db.get_inner().transaction().await?;
+
+        // Recall where we synced up to previously.
+        let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
+        let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
+            .with_value(&self.ticker)?
+            .with_value(tx_id.0.to_vec())?;
+        let maybe_tx = tx_table.get_items_by_multi_index(index_keys).await?;
+
+        if !maybe_tx.is_empty() {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     pub(crate) async fn init_accounts_table(

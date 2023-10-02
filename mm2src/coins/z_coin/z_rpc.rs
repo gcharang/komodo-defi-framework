@@ -430,16 +430,18 @@ pub(super) async fn init_light_client<'a>(
 
     // Get min_height in blocks_db and rewind blocks_db to 0 if sync_height != min_height
     let min_height = blocks_db.get_earliest_block().await?;
-    if sync_height != min_height as u64 {
-        // let user know we're clearing cache and resyncing from new provided height.
-        if min_height > 0 {
-            info!("Older/Newer sync height detected!, rewinding blocks_db to new height: {sync_height:?}");
-        }
-        blocks_db
-            .rewind_to_height(u32::MIN)
-            .await
-            .map_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-    };
+    if !continue_from_prev_sync && (sync_height != min_height as u64) {
+        if sync_height != min_height as u64 {
+            // let user know we're clearing cache and resyncing from new provided height.
+            if min_height > 0 {
+                info!("Older/Newer sync height detected!, rewinding blocks_db to new height: {sync_height:?}");
+            }
+            blocks_db
+                .rewind_to_height(u32::MIN)
+                .await
+                .map_err(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+        };
+    }
 
     let sync_handle = SaplingSyncLoopHandle {
         coin,
@@ -838,10 +840,12 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
 
         if let Some(tx_id) = sync_handle.watch_for_tx {
             let walletdb = &sync_handle.wallet_db;
-            if !walletdb.is_tx_imported(tx_id).await {
-                info!("Tx {} is not imported yet", tx_id);
-                Timer::sleep(10.).await;
-                continue;
+            if let Ok(is_tx_imported) = walletdb.is_tx_imported(tx_id).await {
+                if !is_tx_imported {
+                    info!("Tx {} is not imported yet", tx_id);
+                    Timer::sleep(10.).await;
+                    continue;
+                }
             }
             sync_handle.watch_for_tx = None;
         }
