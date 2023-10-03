@@ -1557,14 +1557,6 @@ pub struct ElectrumConnection {
     responses: JsonRpcPendingRequestsShared,
     /// Selected protocol version. The value is initialized after the server.version RPC call.
     protocol_version: AsyncMutex<Option<f32>>,
-    // /// This spawner is used to spawn Electrum's related futures that should be aborted on coin deactivation.
-    // /// and on [`MmArc::stop`].
-    // /// This field is not used directly, but it holds all abort handles of futures spawned at `electrum_connect`.
-    // ///
-    // /// Please also note that this abortable system is a subsystem of [`ElectrumClientImpl::abortable_system`].
-    // /// For more info see [`ElectrumClientImpl::add_server`].
-    // _abortable_system: AbortableQueue,
-    //    verified: Arc<Notify>,
 }
 
 impl ElectrumConnection {
