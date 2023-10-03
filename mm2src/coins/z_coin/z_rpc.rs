@@ -94,12 +94,8 @@ pub trait ZRpcOps {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-type RpcClientsType = CompactTxStreamerClient<Channel>;
-#[cfg(target_arch = "wasm32")]
-type RpcClientsType = CompactTxStreamerClient<WasmClient>;
-
 pub struct LightRpcClient {
-    rpc_clients: AsyncMutex<Vec<RpcClientsType>>,
+    rpc_clients: AsyncMutex<Vec<CompactTxStreamerClient<Channel>>>,
 }
 
 /// Attempt to create a new client by connecting to a given endpoint.
@@ -113,9 +109,10 @@ where
     Ok(CompactTxStreamerClient::new(conn))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl RpcCommonOps for LightRpcClient {
-    type RpcClient = RpcClientsType;
+    type RpcClient = CompactTxStreamerClient<Channel>;
     type Error = MmError<UpdateBlocksCacheErr>;
 
     async fn get_live_client(&self) -> Result<Self::RpcClient, Self::Error> {
@@ -414,9 +411,9 @@ pub(super) async fn init_light_client<'a>(
         );
 
         cfg_wasm32!(
-            let client = WasmClient::new(uri.to_string());
-            let client = CompactTxStreamerClient::new(client.intoo());
-        );
+        //            let client = WasmClient::new(uri.to_string());
+        //            let client = CompactTxStreamerClient::new(client.intoo());
+                );
 
         rpc_clients.push(client);
     }

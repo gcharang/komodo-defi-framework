@@ -105,6 +105,7 @@ pub use z_coin_errors::*;
 pub mod storage;
 #[cfg(all(test, feature = "zhtlc-native-tests"))]
 mod z_coin_native_tests;
+#[cfg(target_arch = "wasm32")] pub mod z_wasm_transport;
 
 /// `ZP2SHSpendError` compatible `TransactionErr` handling macro.
 macro_rules! try_ztx_s {
@@ -774,7 +775,7 @@ pub enum SyncStartPoint {
     Date(u64),
     /// Synchronize from a specific block height.
     Height(u64),
-    /// Synchronize from the earliest available data(`sapling_activation_height` from coin config).
+    /// Synchronize from the earliest available data(sapling_activation_height from coin config).
     Earliest,
 }
 
