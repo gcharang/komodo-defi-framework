@@ -44,6 +44,14 @@ struct ConnMngSelectiveQueue {
     backup: VecDeque<String>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ConnMngSelective(pub Arc<ConnMngSelectiveImpl>);
+
+struct ConnectingAtomicCtx {
+    conn_mng: ConnMngSelective,
+    mng_spawner: WeakSpawner,
+}
+
 #[async_trait]
 impl ConnMngTrait for ConnMngSelective {
     async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>> { self.0.get_conn().await }
@@ -429,14 +437,6 @@ impl ConnMngSelectiveImpl {
             .clone()
             .ok_or_else(|| ConnMngError::NotConnected(address.to_string()))
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct ConnMngSelective(pub Arc<ConnMngSelectiveImpl>);
-
-struct ConnectingAtomicCtx {
-    conn_mng: ConnMngSelective,
-    mng_spawner: WeakSpawner,
 }
 
 impl ConnectingAtomicCtx {
