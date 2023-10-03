@@ -1,18 +1,20 @@
 use super::*;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::utxo::rpc_clients::UnspentInfo;
 use crate::{TxFeeDetails, WaitForHTLCTxSpendArgs};
-#[cfg(not(target_arch = "wasm32"))] use chain::OutPoint;
 use common::{block_on, wait_until_sec, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::Secp256k1Secret;
 use itertools::Itertools;
 use mm2_core::mm_ctx::MmCtxBuilder;
 use mm2_number::bigdecimal::Zero;
-#[cfg(not(target_arch = "wasm32"))]
-use mocktopus::mocking::{MockResult, Mockable};
 use rpc::v1::types::ToTxHash;
 use std::convert::TryFrom;
 use std::mem::discriminant;
+
+cfg_native!(
+    use crate::utxo::rpc_clients::UnspentInfo;
+
+    use mocktopus::mocking::{MockResult, Mockable};
+    use chain::OutPoint;
+);
 
 const EXPECTED_TX_FEE: i64 = 1000;
 const CONTRACT_CALL_GAS_FEE: i64 = (QRC20_GAS_LIMIT_DEFAULT * QRC20_GAS_PRICE_DEFAULT) as i64;

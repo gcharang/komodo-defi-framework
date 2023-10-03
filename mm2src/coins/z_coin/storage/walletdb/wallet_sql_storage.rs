@@ -108,10 +108,11 @@ impl<'a> WalletDbShared {
         async_blocking(move || {
             let conn = db.lock().unwrap();
             const QUERY: &str = "SELECT EXISTS (SELECT 1 FROM transactions WHERE txid = ?1);";
-            match query_single_row(conn.sql_conn(), QUERY, [tx_id.0.to_vec()], |row| row.get::<_, i64>(0)) {
-                Ok(Some(_)) => Ok(true),
-                Ok(None) | Err(_) => Ok(false),
-            }
+            Ok(
+                query_single_row(conn.sql_conn(), QUERY, [tx_id.0.to_vec()], |row| row.get::<_, i64>(0))
+                    .map(|v| v.is_some())
+                    .unwrap_or_default(),
+            )
         })
         .await
     }

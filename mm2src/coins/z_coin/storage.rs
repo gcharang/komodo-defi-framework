@@ -1,5 +1,4 @@
-use crate::z_coin::ValidateBlocksError;
-use crate::z_coin::ZcoinConsensusParams;
+use crate::z_coin::{ValidateBlocksError, ZcoinConsensusParams};
 
 pub mod blockdb;
 pub use blockdb::*;
@@ -73,12 +72,10 @@ pub async fn validate_chain(
             *prev_height + 1,
             current_height,
         ))
+    } else if prev_hash.is_none() || (prev_hash.as_ref() == Some(&block.prev_hash())) {
+        Ok(())
     } else {
-        match prev_hash {
-            None => Ok(()),
-            Some(ref h) if h == &block.prev_hash() => Ok(()),
-            Some(_) => Err(ValidateBlocksError::prev_hash_mismatch(current_height)),
-        }
+        Err(ValidateBlocksError::prev_hash_mismatch(current_height))
     }?;
 
     *prev_height = current_height;
