@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::ElectrumConnection;
 
-/// Trait that provides a common interface to get an `ElectrumConnection` from the `ElectrumClient` instance
+/// Trait provides a common interface to get an `ElectrumConnection` from the `ElectrumClient` instance
 #[async_trait]
 pub(super) trait ConnMngTrait: Debug {
     async fn get_conn(&self) -> Vec<Arc<AsyncMutex<ElectrumConnection>>>;

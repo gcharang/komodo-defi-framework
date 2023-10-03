@@ -2665,7 +2665,6 @@ async fn electrum_process_json(raw_json: Json, arc: &JsonRpcPendingRequestsShare
 async fn electrum_process_chunk(chunk: &[u8], arc: &JsonRpcPendingRequestsShared) {
     // we should split the received chunk because we can get several responses in 1 chunk.
     let split = chunk.split(|item| *item == b'\n');
-    // TODO: what if data is not completely received? In this case data could be lost - it presumably should be fixed
 
     for chunk in split {
         // split returns empty slice if it ends with separator which is our case
