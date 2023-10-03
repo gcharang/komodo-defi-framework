@@ -7,22 +7,9 @@ mod conn_mng_multiple;
 #[path = "rpc_clients/conn_mng_selective.rs"]
 mod conn_mng_selective;
 
-use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
-use crate::utxo::{output_script, sat_from_big_decimal, GetBlockHeaderError, GetConfirmedTxError, GetTxError,
-                  GetTxHeightError};
-use crate::{big_decimal_from_sat_unsigned, NumConversError, RpcTransportEventHandler, RpcTransportEventHandlerShared};
 use async_trait::async_trait;
 use chain::{BlockHeader, BlockHeaderBits, BlockHeaderNonce, OutPoint, Transaction as UtxoTx};
-use common::custom_futures::timeout::FutureTimerExt;
-use common::custom_iter::{CollectInto, TryIntoGroupMap};
-use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, SpawnFuture, Timer};
-use common::jsonrpc_client::{JsonRpcBatchClient, JsonRpcBatchResponse, JsonRpcClient, JsonRpcError, JsonRpcErrorType,
-                             JsonRpcId, JsonRpcMultiClient, JsonRpcRemoteAddr, JsonRpcRequest, JsonRpcRequestEnum,
-                             JsonRpcResponse, JsonRpcResponseEnum, JsonRpcResponseFut, RpcRes};
-use common::log::{debug, error, info, warn};
-use common::{median, now_float, now_ms, now_sec, small_rng, OrdRange};
 use derive_more::Display;
-
 use futures::channel::oneshot as async_oneshot;
 use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::future::{join_all, FutureExt, TryFutureExt};
@@ -36,9 +23,6 @@ use http::Uri;
 use itertools::Itertools;
 use keys::hash::H256;
 use keys::{Address, Type as ScriptType};
-use mm2_err_handle::prelude::*;
-use mm2_number::{BigDecimal, BigInt, MmNumber};
-use mm2_rpc::data::legacy::{ElectrumProtocol, Priority};
 #[cfg(test)] use mocktopus::macros::*;
 use rand::seq::SliceRandom;
 use rpc::v1::types::{Bytes as BytesJson, Transaction as RpcTransaction, H256 as H256Json};
@@ -61,12 +45,27 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::custom_futures::select_ok_sequential;
-use common::executor::abortable_queue::WeakSpawner;
+use common::custom_futures::{select_ok_sequential, timeout::FutureTimerExt};
+use common::custom_iter::{CollectInto, TryIntoGroupMap};
+use common::executor::{abortable_queue::AbortableQueue, abortable_queue::WeakSpawner, AbortableSystem, SpawnFuture,
+                       Timer};
+use common::jsonrpc_client::{JsonRpcBatchClient, JsonRpcBatchResponse, JsonRpcClient, JsonRpcError, JsonRpcErrorType,
+                             JsonRpcId, JsonRpcMultiClient, JsonRpcRemoteAddr, JsonRpcRequest, JsonRpcRequestEnum,
+                             JsonRpcResponse, JsonRpcResponseEnum, JsonRpcResponseFut, RpcRes};
+use common::log::{debug, error, info, warn};
+use common::{median, now_float, now_ms, now_sec, small_rng, OrdRange};
 use conn_mng_common::{ConnMngError, ConnMngTrait};
 use conn_mng_multiple::{ConnMngMultiple, ConnMngMultipleImpl};
 use conn_mng_selective::{ConnMngSelective, ConnMngSelectiveImpl};
 use mm2_core::ConnMngPolicy;
+use mm2_err_handle::prelude::*;
+use mm2_number::{BigDecimal, BigInt, MmNumber};
+use mm2_rpc::data::legacy::{ElectrumProtocol, Priority};
+
+use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
+use crate::utxo::{output_script, sat_from_big_decimal, GetBlockHeaderError, GetConfirmedTxError, GetTxError,
+                  GetTxHeightError};
+use crate::{big_decimal_from_sat_unsigned, NumConversError, RpcTransportEventHandler, RpcTransportEventHandlerShared};
 
 cfg_native! {
     use futures::future::Either;
