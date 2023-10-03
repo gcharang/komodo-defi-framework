@@ -7,6 +7,7 @@ use crate::nft::storage::db_test_helpers::{init_nft_history_storage, init_nft_li
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps, RemoveNftResult};
 use crate::nft::{check_moralis_ipfs_bafy, get_domain_from_url, process_metadata_for_spam_link,
                  process_text_for_spam_link};
+use common::cross_test;
 use ethereum_types::Address;
 use mm2_net::transport::send_post_request_to_uri;
 use mm2_number::BigDecimal;
@@ -28,18 +29,6 @@ common::cfg_wasm32! {
     use wasm_bindgen_test::*;
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
     use mm2_net::wasm_http::send_request_to_uri;
-}
-
-macro_rules! cross_test {
-    ($test_name:ident, $test_code:block) => {
-        #[cfg(not(target_arch = "wasm32"))]
-        #[tokio::test(flavor = "multi_thread")]
-        async fn $test_name() { $test_code }
-
-        #[cfg(target_arch = "wasm32")]
-        #[wasm_bindgen_test]
-        async fn $test_name() { $test_code }
-    };
 }
 
 cross_test!(test_moralis_ipfs_bafy, {
