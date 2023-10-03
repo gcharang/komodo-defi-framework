@@ -3091,9 +3091,13 @@ pub type RpcTransportEventHandlerShared = Arc<dyn RpcTransportEventHandler + Sen
 /// Common methods to measure the outgoing requests and incoming responses statistics.
 pub trait RpcTransportEventHandler {
     fn debug_info(&self) -> String;
+
     fn on_outgoing_request(&self, data_len: usize);
+
     fn on_incoming_response(&self, data_len: usize);
+
     fn on_connected(&self, address: String) -> Result<(), String>;
+
     fn on_disconnected(&self, address: &str) -> Result<(), String>;
 }
 
@@ -3101,7 +3105,6 @@ impl fmt::Debug for dyn RpcTransportEventHandler + Send + Sync {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.debug_info()) }
 }
 
-#[async_trait]
 impl RpcTransportEventHandler for RpcTransportEventHandlerShared {
     fn debug_info(&self) -> String { self.deref().debug_info() }
 
