@@ -277,7 +277,7 @@ pub fn broadcast_swap_msg_every_delayed<T: 'static + Serialize + Clone + Send>(
 pub fn broadcast_swap_message<T: Serialize>(ctx: &MmArc, topic: String, msg: T, p2p_privkey: &Option<KeyPair>) {
     let (p2p_private, from) = p2p_private_and_peer_id_to_broadcast(ctx, p2p_privkey.as_ref());
     let encoded_msg = encode_and_sign(&msg, &p2p_private).unwrap();
-    broadcast_p2p_msg(ctx, vec![topic], encoded_msg, from);
+    broadcast_p2p_msg(ctx, topic, encoded_msg, from);
 }
 
 /// Broadcast the tx message once
@@ -288,7 +288,7 @@ pub fn broadcast_p2p_tx_msg(ctx: &MmArc, topic: String, msg: &TransactionEnum, p
 
     let (p2p_private, from) = p2p_private_and_peer_id_to_broadcast(ctx, p2p_privkey.as_ref());
     let encoded_msg = encode_and_sign(&msg.tx_hex(), &p2p_private).unwrap();
-    broadcast_p2p_msg(ctx, vec![topic], encoded_msg, from);
+    broadcast_p2p_msg(ctx, topic, encoded_msg, from);
 }
 
 pub async fn process_swap_msg(ctx: MmArc, topic: &str, msg: &[u8]) -> P2PRequestResult<()> {
@@ -714,17 +714,6 @@ pub fn lp_atomic_locktime(maker_coin: &str, taker_coin: &str, version: AtomicLoc
     }
 }
 
-pub fn dex_fee_threshold(min_tx_amount: MmNumber) -> MmNumber {
-    // Todo: This should be reduced for lightning swaps.
-    // 0.0001
-    let min_fee = MmNumber::from((1, 10000));
-    if min_fee < min_tx_amount {
-        min_tx_amount
-    } else {
-        min_fee
-    }
-}
-
 fn dex_fee_rate(base: &str, rel: &str) -> MmNumber {
     let fee_discount_tickers: &[&str] = if var("MYCOIN_FEE_DISCOUNT").is_ok() {
         &["KMD", "MYCOIN"]
@@ -739,11 +728,11 @@ fn dex_fee_rate(base: &str, rel: &str) -> MmNumber {
     }
 }
 
-pub fn dex_fee_amount(base: &str, rel: &str, trade_amount: &MmNumber, dex_fee_threshold: &MmNumber) -> MmNumber {
+pub fn dex_fee_amount(base: &str, rel: &str, trade_amount: &MmNumber, min_tx_amount: &MmNumber) -> MmNumber {
     let rate = dex_fee_rate(base, rel);
     let fee_amount = trade_amount * &rate;
-    if &fee_amount < dex_fee_threshold {
-        dex_fee_threshold.clone()
+    if &fee_amount < min_tx_amount {
+        min_tx_amount.clone()
     } else {
         fee_amount
     }
@@ -752,8 +741,7 @@ pub fn dex_fee_amount(base: &str, rel: &str, trade_amount: &MmNumber, dex_fee_th
 /// Calculates DEX fee with a threshold based on min tx amount of the taker coin.
 pub fn dex_fee_amount_from_taker_coin(taker_coin: &dyn MmCoin, maker_coin: &str, trade_amount: &MmNumber) -> MmNumber {
     let min_tx_amount = MmNumber::from(taker_coin.min_tx_amount());
-    let dex_fee_threshold = dex_fee_threshold(min_tx_amount);
-    dex_fee_amount(taker_coin.ticker(), maker_coin, trade_amount, &dex_fee_threshold)
+    dex_fee_amount(taker_coin.ticker(), maker_coin, trade_amount, &min_tx_amount)
 }
 
 #[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]
@@ -1072,7 +1060,7 @@ async fn broadcast_my_swap_status(ctx: &MmArc, uuid: Uuid) -> Result<(), String>
         data: status,
     };
     let msg = json::to_vec(&status).expect("Swap status ser should never fail");
-    broadcast_p2p_msg(ctx, vec![swap_topic(&uuid)], msg, None);
+    broadcast_p2p_msg(ctx, swap_topic(&uuid), msg, None);
     Ok(())
 }
 
@@ -1487,7 +1475,7 @@ pub fn broadcast_swap_v2_message<T: prost::Message>(
         signature: signature.serialize_compact().into(),
         payload: encoded_msg,
     };
-    broadcast_p2p_msg(ctx, vec![topic], signed_message.encode_to_vec(), from);
+    broadcast_p2p_msg(ctx, topic, signed_message.encode_to_vec(), from);
 }
 
 /// Spawns the loop that broadcasts message every `interval` seconds returning the AbortOnDropHandle
@@ -1600,34 +1588,34 @@ mod lp_swap_tests {
 
     #[test]
     fn test_dex_fee_amount() {
-        let dex_fee_threshold = MmNumber::from("0.0001");
+        let min_tx_amount = MmNumber::from("0.0001");
 
         let base = "BTC";
         let rel = "ETH";
         let amount = 1.into();
-        let actual_fee = dex_fee_amount(base, rel, &amount, &dex_fee_threshold);
+        let actual_fee = dex_fee_amount(base, rel, &amount, &min_tx_amount);
         let expected_fee = amount / 777u64.into();
         assert_eq!(expected_fee, actual_fee);
 
         let base = "KMD";
         let rel = "ETH";
         let amount = 1.into();
-        let actual_fee = dex_fee_amount(base, rel, &amount, &dex_fee_threshold);
+        let actual_fee = dex_fee_amount(base, rel, &amount, &min_tx_amount);
         let expected_fee = amount * (9, 7770).into();
         assert_eq!(expected_fee, actual_fee);
 
         let base = "BTC";
         let rel = "KMD";
         let amount = 1.into();
-        let actual_fee = dex_fee_amount(base, rel, &amount, &dex_fee_threshold);
+        let actual_fee = dex_fee_amount(base, rel, &amount, &min_tx_amount);
         let expected_fee = amount * (9, 7770).into();
         assert_eq!(expected_fee, actual_fee);
 
         let base = "BTC";
         let rel = "KMD";
         let amount: MmNumber = "0.001".parse::<BigDecimal>().unwrap().into();
-        let actual_fee = dex_fee_amount(base, rel, &amount, &dex_fee_threshold);
-        assert_eq!(dex_fee_threshold, actual_fee);
+        let actual_fee = dex_fee_amount(base, rel, &amount, &min_tx_amount);
+        assert_eq!(min_tx_amount, actual_fee);
     }
 
     #[test]
