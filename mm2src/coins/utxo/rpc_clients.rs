@@ -2173,7 +2173,6 @@ impl ElectrumClient {
 }
 
 async fn check_electrum_server_version(client: &ElectrumClient, client_name: String, electrum_addr: String) -> bool {
-    // client.remove_server() is called too often
     async fn remove_server(client: &ElectrumClient, electrum_addr: String) {
         if let Err(e) = client.remove_server(&electrum_addr).await {
             error!("Error on remove server: {}", e);
