@@ -1563,10 +1563,6 @@ impl ElectrumConnection {
     async fn is_connected(&self) -> bool { self.tx.lock().await.is_some() }
 
     async fn set_protocol_version(&self, version: f32) { self.protocol_version.lock().await.replace(version); }
-
-    //async fn reset_protocol_version(&self) { *self.protocol_version.lock().await = None; }
-
-    // async fn is_protocol_version_verified(&self) -> bool { self.protocol_version.lock().await.is_some() }
 }
 
 #[derive(Debug)]
@@ -1671,7 +1667,7 @@ async fn electrum_request_multi(
             )
             .map(|response| (JsonRpcRemoteAddr(connection_addr), response));
             futures.push(fut)
-        };
+        }
     }
     drop(connections);
 
