@@ -2196,7 +2196,6 @@ async fn check_electrum_server_version(client: &ElectrumClient, client_name: Str
         },
     };
 
-    // check if the version is allowed
     let actual_version = match version.protocol_version.parse::<f32>() {
         Ok(v) => v,
         Err(e) => {
