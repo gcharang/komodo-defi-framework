@@ -1324,7 +1324,6 @@ struct ElectrumProtoVerifier {
     on_event_tx: UnboundedSender<ElectrumProtoVerifierEvent>,
 }
 
-#[async_trait]
 impl RpcTransportEventHandler for ElectrumProtoVerifier {
     fn debug_info(&self) -> String { "ElectrumProtoVerifier".into() }
 

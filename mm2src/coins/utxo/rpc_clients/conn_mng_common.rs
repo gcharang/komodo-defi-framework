@@ -50,3 +50,7 @@ pub(super) enum ConnMngError {
     #[display(fmt = "No settings to connect to found")]
     SettingsNotSet,
 }
+
+/// This timeout implies both connecting and verifying phases time
+pub const DEFAULT_CONN_TIMEOUT_SEC: u64 = 20;
+pub const SUSPEND_TIMEOUT_INIT_SEC: u64 = 30;

@@ -9,9 +9,9 @@ use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
 use common::executor::{AbortableSystem, SpawnFuture, Timer};
 use common::log::{debug, error, info, warn};
 
-use super::conn_mng_common::{ConnMngError, ConnMngTrait};
-use super::{ElectrumConnSettings, ElectrumConnection, DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
-use crate::utxo::rpc_clients::{spawn_electrum, ElectrumClientEvent};
+use super::conn_mng_common::{ConnMngError, ConnMngTrait, DEFAULT_CONN_TIMEOUT_SEC, SUSPEND_TIMEOUT_INIT_SEC};
+use super::{spawn_electrum, ElectrumClientEvent};
+use super::{ElectrumConnSettings, ElectrumConnection};
 
 #[derive(Clone, Debug)]
 pub struct ConnMngMultiple(pub Arc<ConnMngMultipleImpl>);

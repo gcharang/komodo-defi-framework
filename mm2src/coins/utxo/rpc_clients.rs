@@ -89,9 +89,6 @@ cfg_native! {
 pub const NO_TX_ERROR_CODE: &str = "'code': -5";
 const RESPONSE_TOO_LARGE_CODE: i16 = -32600;
 const TX_NOT_FOUND_RETRIES: u8 = 10;
-/// This timeout implies both connecting and verifying phases time
-const DEFAULT_CONN_TIMEOUT_SEC: u64 = 20;
-const SUSPEND_TIMEOUT_INIT_SEC: u64 = 30;
 
 pub type AddressesByLabelResult = HashMap<String, AddressPurpose>;
 pub type JsonRpcPendingRequestsShared = Arc<AsyncMutex<JsonRpcPendingRequests>>;
