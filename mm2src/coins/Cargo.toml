@@ -140,8 +140,8 @@ lightning-net-tokio = "0.0.113"
 rust-ini = { version = "0.13" }
 rustls = { version = "0.20", features = ["dangerous_configuration"] }
 secp256k1v24 = { version = "0.24", package = "secp256k1" }
-tokio = { version = "1.20" }
 tendermint-config = { version = "0.23.7", default-features = false }
+tokio = { version = "1.20" }
 tokio-rustls = { version = "0.23" }
 tonic = { version = "0.7", features = ["tls", "tls-webpki-roots", "compression"] }
 webpki-roots = { version = "0.22" }
