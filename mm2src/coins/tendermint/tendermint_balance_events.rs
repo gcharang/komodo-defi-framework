@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use common::{executor::{AbortSettings, SpawnAbortable},
              http_uri_to_ws_address, log};
 use futures_util::{SinkExt, StreamExt};
+use jsonrpc_core::MethodCall;
+use jsonrpc_core::{Id as RpcId, Params as RpcParams, Value as RpcValue, Version as RpcVersion};
 use mm2_event_stream::{behaviour::EventBehaviour, Event, EventStreamConfiguration};
 use mm2_number::BigDecimal;
 use std::collections::HashMap;
@@ -15,16 +17,17 @@ impl EventBehaviour for TendermintCoin {
 
     async fn handle(self, _interval: f64) {
         fn generate_subscription_query(query_filter: String) -> String {
-            let q = json!({
-                "jsonrpc": "2.0",
-                "method": "subscribe",
-                "id": 0,
-                "params": {
-                    "query": query_filter
-                }
-            });
+            let mut params = serde_json::Map::with_capacity(1);
+            params.insert("query".to_owned(), RpcValue::String(query_filter));
 
-            q.to_string()
+            let q = MethodCall {
+                id: RpcId::Num(0),
+                jsonrpc: Some(RpcVersion::V2),
+                method: "subscribe".to_owned(),
+                params: RpcParams::Map(params),
+            };
+
+            serde_json::to_string(&q).expect("This should never happen")
         }
 
         let account_id = self.account_id.to_string();
