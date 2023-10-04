@@ -81,6 +81,9 @@ impl EventBehaviour for TendermintCoin {
                     _ => continue,
                 };
 
+                // Here, we receive raw data from the socket.
+                // To examine this data, you can use tools like wscat/websocat or visit
+                // https://pastebin.pl/view/499cbf2c for sample data.
                 if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&msg) {
                     let transfers: Vec<String> =
                         serde_json::from_value(json_val["result"]["events"]["transfer.amount"].clone())
