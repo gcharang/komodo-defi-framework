@@ -10,7 +10,7 @@ use common::log::info;
 use common::now_sec;
 use crypto::trezor::{TrezorError, TrezorProcessingError};
 use crypto::{from_hw_error, CryptoCtx, CryptoCtxError, DerivationPath, HwError, HwProcessingError, HwRpcError};
-use keys::{AddressHashEnum, KeyPair, Private, Public as PublicKey, Type as ScriptType};
+use keys::{AddressFormat, AddressHashEnum, KeyPair, Private, Public as PublicKey, Type as ScriptType};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use rpc::v1::types::ToTxHash;
@@ -275,11 +275,21 @@ where
         let mut sign_params = UtxoSignTxParamsBuilder::new();
 
         // TODO refactor [`UtxoTxBuilder::build`] to return `SpendingInputInfo` and `SendingOutputInfo` within `AdditionalTxData`.
-        sign_params.add_inputs_infos(unsigned_tx.inputs.iter().map(|_input| SpendingInputInfo::P2PKH {
-            address_derivation_path: self.from_derivation_path.clone(),
-            address_pubkey: self.from_pubkey,
-        }));
-
+        sign_params.add_inputs_infos(
+            unsigned_tx
+                .inputs
+                .iter()
+                .map(|_input| match self.from_address.addr_format {
+                    AddressFormat::Segwit => SpendingInputInfo::P2WPKH {
+                        address_derivation_path: self.from_derivation_path.clone(),
+                        address_pubkey: self.from_pubkey,
+                    },
+                    _ => SpendingInputInfo::P2PKH {
+                        address_derivation_path: self.from_derivation_path.clone(),
+                        address_pubkey: self.from_pubkey,
+                    },
+                }),
+        );
         sign_params.add_outputs_infos(once(SendingOutputInfo {
             destination_address: OutputDestination::plain(self.req.to.clone()),
         }));
@@ -289,7 +299,10 @@ where
             // There is a change output.
             2 => {
                 sign_params.add_outputs_infos(once(SendingOutputInfo {
-                    destination_address: OutputDestination::change(self.from_derivation_path.clone()),
+                    destination_address: OutputDestination::change(
+                        self.from_derivation_path.clone(),
+                        self.from_address.addr_format.clone(),
+                    ),
                 }));
             },
             unexpected => {

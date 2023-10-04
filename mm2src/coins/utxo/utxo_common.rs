@@ -929,7 +929,12 @@ impl<'a, T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps> UtxoTxBuilder<'a, T> {
             .from
             .clone()
             .or_mm_err(|| GenerateTxError::Internal("'from' address is not specified".to_owned()))?;
-        let change_script_pubkey = output_script(&from, ScriptType::P2PKH).to_bytes();
+        let change_dest_type = if from.addr_format == UtxoAddressFormat::Segwit {
+            ScriptType::P2WPKH
+        } else {
+            ScriptType::P2PKH
+        };
+        let change_script_pubkey = output_script(&from, change_dest_type).to_bytes();
 
         let actual_tx_fee = match self.fee {
             Some(fee) => fee,

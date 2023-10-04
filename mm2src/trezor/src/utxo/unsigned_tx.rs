@@ -37,6 +37,8 @@ pub enum TrezorOutputScriptType {
     PayToAddress,
     /// OP_RETURN.
     PayToOpReturn,
+    /// pay to witness v0, used for the change
+    PayToWitness,
 }
 
 impl From<TrezorOutputScriptType> for proto_bitcoin::OutputScriptType {
@@ -44,6 +46,7 @@ impl From<TrezorOutputScriptType> for proto_bitcoin::OutputScriptType {
         match script {
             TrezorOutputScriptType::PayToAddress => proto_bitcoin::OutputScriptType::Paytoaddress,
             TrezorOutputScriptType::PayToOpReturn => proto_bitcoin::OutputScriptType::Paytoopreturn,
+            TrezorOutputScriptType::PayToWitness => proto_bitcoin::OutputScriptType::Paytowitness,
         }
     }
 }
