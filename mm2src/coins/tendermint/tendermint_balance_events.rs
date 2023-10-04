@@ -146,14 +146,15 @@ impl EventBehaviour for TendermintCoin {
     fn spawn_if_active(self, config: &EventStreamConfiguration) {
         if let Some(event) = config.get_event(Self::EVENT_NAME) {
             log::info!(
-                "{} event is activated. `stream_interval_seconds`({}) has no effect for this event.",
+                "{} event is activated for {}. `stream_interval_seconds`({}) has no effect on this.",
                 Self::EVENT_NAME,
+                self.ticker(),
                 event.stream_interval_seconds
             );
 
             let fut = self.clone().handle(event.stream_interval_seconds);
             let settings =
-                AbortSettings::info_on_abort(format!("Balance streaming stopped for {}", self.ticker().to_owned()));
+                AbortSettings::info_on_abort(format!("{} event is stopped for {}.", Self::EVENT_NAME, self.ticker()));
             self.spawner().spawn_with_settings(fut, settings);
         }
     }
