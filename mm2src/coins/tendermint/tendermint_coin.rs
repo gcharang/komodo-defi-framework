@@ -142,7 +142,7 @@ pub struct TendermintProtocolInfo {
 #[derive(Clone)]
 pub struct ActivatedTokenInfo {
     pub(crate) decimals: u8,
-    pub(crate) denom: Denom,
+    pub ticker: String,
 }
 
 pub struct TendermintConf {
@@ -442,14 +442,14 @@ impl TendermintCommons for TendermintCoin {
         let ibc_assets_info = self.tokens_info.lock().clone();
 
         let mut requests = Vec::new();
-        for (ticker, info) in ibc_assets_info {
+        for (denom, info) in ibc_assets_info {
             let fut = async move {
                 let balance_denom = self
-                    .account_balance_for_denom(&self.account_id, info.denom.to_string())
+                    .account_balance_for_denom(&self.account_id, denom)
                     .await
                     .map_err(|e| e.into_inner())?;
                 let balance_decimal = big_decimal_from_sat_unsigned(balance_denom, info.decimals);
-                Ok::<_, TendermintCoinRpcError>((ticker.clone(), balance_decimal))
+                Ok::<_, TendermintCoinRpcError>((info.ticker, balance_decimal))
             };
             requests.push(fut);
         }
@@ -1180,7 +1180,7 @@ impl TendermintCoin {
     pub fn add_activated_token_info(&self, ticker: String, decimals: u8, denom: Denom) {
         self.tokens_info
             .lock()
-            .insert(ticker, ActivatedTokenInfo { decimals, denom });
+            .insert(denom.to_string(), ActivatedTokenInfo { decimals, ticker });
     }
 
     fn estimate_blocks_from_duration(&self, duration: u64) -> i64 {
@@ -1825,16 +1825,14 @@ impl TendermintCoin {
     }
 
     pub(crate) fn active_ticker_and_decimals_from_denom(&self, denom: &str) -> Option<(String, u8)> {
-        if self.denom.to_string() == denom {
+        if self.denom.as_ref() == denom {
             return Some((self.ticker.clone(), self.decimals));
         }
 
         let tokens = self.tokens_info.lock();
 
-        for (ticker, token) in &*tokens {
-            if token.denom.to_string() == denom {
-                return Some((ticker.to_owned(), token.decimals));
-            }
+        if let Some(token_info) = tokens.get(denom) {
+            return Some((token_info.ticker.to_owned(), token_info.decimals));
         }
 
         None

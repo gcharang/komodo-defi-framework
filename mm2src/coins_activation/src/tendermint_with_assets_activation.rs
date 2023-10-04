@@ -233,7 +233,14 @@ impl PlatformWithTokensActivationOps for TendermintCoin {
                 current_block,
                 balance: None,
                 tokens_balances: None,
-                tokens_tickers: Some(self.tokens_info.lock().clone().into_keys().collect()),
+                tokens_tickers: Some(
+                    self.tokens_info
+                        .lock()
+                        .clone()
+                        .into_values()
+                        .map(|t| t.ticker)
+                        .collect(),
+                ),
             });
         }
 

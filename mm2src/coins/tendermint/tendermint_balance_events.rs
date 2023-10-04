@@ -72,7 +72,7 @@ impl EventBehaviour for TendermintCoin {
                     Ok(tokio_tungstenite_wasm::Message::Text(data)) => data.clone(),
                     Ok(tokio_tungstenite_wasm::Message::Close(_)) => break,
                     Err(err) => {
-                        log::error!("{err}");
+                        log::error!("Server returned an unknown message type - {err}");
                         break;
                     },
                     _ => continue,
