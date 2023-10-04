@@ -1125,6 +1125,7 @@ dependencies = [
  "lightning-invoice",
  "mm2_core",
  "mm2_err_handle",
+ "mm2_event_stream",
  "mm2_metamask",
  "mm2_metrics",
  "mm2_number",

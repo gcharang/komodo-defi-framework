@@ -5,7 +5,6 @@ use super::iris::htlc::{IrisHtlc, MsgClaimHtlc, MsgCreateHtlc, HTLC_STATE_COMPLE
                         HTLC_STATE_REFUNDED};
 use super::iris::htlc_proto::{CreateHtlcProtoRep, QueryHtlcRequestProto, QueryHtlcResponseProto};
 use super::rpc::*;
-use crate::coin_balance_event::COIN_BALANCE_EVENT_TAG;
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::rpc_command::tendermint::{IBCChainRegistriesResponse, IBCChainRegistriesResult, IBCChainsRequestError,
                                      IBCTransferChannel, IBCTransferChannelTag, IBCTransferChannelsRequest,
@@ -35,8 +34,8 @@ use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem};
 use common::executor::{AbortedError, Timer};
-use common::log::{debug, error, warn};
-use common::{get_utc_timestamp, http_uri_to_ws_address, now_sec, Future01CompatExt, DEX_FEE_ADDR_PUBKEY};
+use common::log::{debug, warn};
+use common::{get_utc_timestamp, now_sec, Future01CompatExt, DEX_FEE_ADDR_PUBKEY};
 use cosmrs::bank::MsgSend;
 use cosmrs::crypto::secp256k1::SigningKey;
 use cosmrs::proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
@@ -58,13 +57,11 @@ use futures::future::try_join_all;
 use futures::lock::Mutex as AsyncMutex;
 use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
-use futures_util::{SinkExt, StreamExt};
 use hex::FromHexError;
 use itertools::Itertools;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use mm2_event_stream::Event;
 use mm2_git::{FileMetadata, GitController, GithubClient, RepositoryOperations, GITHUB_API_URI};
 use mm2_number::MmNumber;
 use parking_lot::Mutex as PaMutex;
@@ -240,6 +237,7 @@ pub struct TendermintCoinImpl {
     pub(crate) history_sync_state: Mutex<HistorySyncState>,
     client: TendermintRpcClient,
     chain_registry_name: Option<String>,
+    pub(crate) ctx: MmArc,
 }
 
 #[derive(Clone)]
@@ -547,6 +545,7 @@ impl TendermintCoin {
             history_sync_state: Mutex::new(history_sync_state),
             client: TendermintRpcClient(AsyncMutex::new(client_impl)),
             chain_registry_name: protocol_info.chain_registry_name,
+            ctx: ctx.clone(),
         })))
     }
 
@@ -1825,7 +1824,7 @@ impl TendermintCoin {
         }
     }
 
-    fn active_ticker_and_decimals_from_denom(&self, denom: &str) -> Option<(String, u8)> {
+    pub(crate) fn active_ticker_and_decimals_from_denom(&self, denom: &str) -> Option<(String, u8)> {
         if self.denom.to_string() == denom {
             return Some((self.ticker.clone(), self.decimals));
         }
@@ -2214,128 +2213,6 @@ impl MmCoin for TendermintCoin {
     fn on_disabled(&self) -> Result<(), AbortedError> { AbortableSystem::abort_all(&self.abortable_system) }
 
     fn on_token_deactivated(&self, _ticker: &str) {}
-
-    async fn handle_balance_stream(self, ctx: MmArc) {
-        fn generate_subscription_query(query_filter: String) -> String {
-            let q = json!({
-                "jsonrpc": "2.0",
-                "method": "subscribe",
-                "id": 0,
-                "params": {
-                    "query": query_filter
-                }
-            });
-
-            q.to_string()
-        }
-
-        let account_id = self.account_id.to_string();
-        let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
-
-        let receiver_q = generate_subscription_query(format!("coin_received.receiver = '{}'", account_id));
-        let receiver_q = tokio_tungstenite_wasm::Message::Text(receiver_q);
-
-        let spender_q = generate_subscription_query(format!("coin_spent.spender = '{}'", account_id));
-        let spender_q = tokio_tungstenite_wasm::Message::Text(spender_q);
-
-        loop {
-            let node_uri = match self.rpc_client().await {
-                Ok(client) => client.uri(),
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                },
-            };
-
-            let socket_address = format!("{}/{}", http_uri_to_ws_address(node_uri), "websocket");
-
-            let mut wsocket = match tokio_tungstenite_wasm::connect(socket_address).await {
-                Ok(ws) => ws,
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                },
-            };
-
-            // Filter received TX events
-            if let Err(e) = wsocket.send(receiver_q.clone()).await {
-                error!("{e}");
-                continue;
-            }
-
-            // Filter spent TX events
-            if let Err(e) = wsocket.send(spender_q.clone()).await {
-                error!("{e}");
-                continue;
-            }
-
-            while let Some(message) = wsocket.next().await {
-                let msg = match message {
-                    Ok(tokio_tungstenite_wasm::Message::Text(data)) => data.clone(),
-                    Ok(tokio_tungstenite_wasm::Message::Close(_)) => break,
-                    Err(err) => {
-                        error!("{err}");
-                        break;
-                    },
-                    _ => continue,
-                };
-
-                if let Ok(json_val) = json::from_str::<json::Value>(&msg) {
-                    let transfers: Vec<String> =
-                        json::from_value(json_val["result"]["events"]["transfer.amount"].clone()).unwrap_or_default();
-
-                    let mut denoms: Vec<String> = transfers
-                        .iter()
-                        .map(|t| {
-                            let amount: String = t.chars().take_while(|c| c.is_numeric()).collect();
-                            let denom = &t[amount.len()..];
-                            denom.to_owned()
-                        })
-                        .collect();
-
-                    denoms.dedup();
-                    drop_mutability!(denoms);
-
-                    for denom in denoms {
-                        if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom) {
-                            let balance_denom = match self.account_balance_for_denom(&self.account_id, denom).await {
-                                Ok(balance_denom) => balance_denom,
-                                Err(e) => {
-                                    error!("{e}");
-                                    continue;
-                                },
-                            };
-
-                            let balance_decimal = big_decimal_from_sat_unsigned(balance_denom, decimals);
-
-                            // Only broadcast when balance is changed
-                            let mut broadcast = false;
-                            if let Some(balance) = current_balances.get_mut(&ticker) {
-                                if *balance != balance_decimal {
-                                    *balance = balance_decimal.clone();
-                                    broadcast = true;
-                                }
-                            } else {
-                                current_balances.insert(ticker.clone(), balance_decimal.clone());
-                                broadcast = true;
-                            }
-
-                            if broadcast {
-                                let payload = json!({
-                                    "ticker": ticker,
-                                    "balance": { "spendable": balance_decimal, "unspendable": BigDecimal::default() }
-                                });
-
-                                ctx.stream_channel_controller
-                                    .broadcast(Event::new(COIN_BALANCE_EVENT_TAG.to_string(), payload.to_string()))
-                                    .await;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 impl MarketCoinOps for TendermintCoin {

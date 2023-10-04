@@ -570,6 +570,4 @@ impl MmCoin for SplToken {
     fn on_disabled(&self) -> Result<(), AbortedError> { self.conf.abortable_system.abort_all() }
 
     fn on_token_deactivated(&self, _ticker: &str) {}
-
-    async fn handle_balance_stream(self, _ctx: MmArc) { todo!() }
 }

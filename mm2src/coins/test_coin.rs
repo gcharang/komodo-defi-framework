@@ -380,8 +380,6 @@ impl MmCoin for TestCoin {
     fn on_disabled(&self) -> Result<(), AbortedError> { Ok(()) }
 
     fn on_token_deactivated(&self, _ticker: &str) { () }
-
-    async fn handle_balance_stream(self, _ctx: MmArc) { todo!() }
 }
 
 #[async_trait]

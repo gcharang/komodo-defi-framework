@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use bitcrypto::sha256;
 use common::executor::abortable_queue::AbortableQueue;
 use common::executor::{AbortableSystem, AbortedError};
-use common::log::{debug, warn};
+use common::log::warn;
 use common::Future01CompatExt;
 use cosmrs::{bank::MsgSend,
              tx::{Fee, Msg},
@@ -874,8 +874,4 @@ impl MmCoin for TendermintToken {
     fn on_disabled(&self) -> Result<(), AbortedError> { self.abortable_system.abort_all() }
 
     fn on_token_deactivated(&self, _ticker: &str) {}
-
-    async fn handle_balance_stream(self, _ctx: MmArc) {
-        debug!("`fn handle_balance_stream` has no effect on Cosmos tokens.")
-    }
 }

@@ -250,8 +250,6 @@ pub use test_coin::TestCoin;
 
 pub mod tx_history_storage;
 
-pub mod coin_balance_event;
-
 #[doc(hidden)]
 #[allow(unused_variables)]
 #[cfg(all(
@@ -2578,9 +2576,6 @@ pub trait MmCoin:
 
     /// For Handling the removal/deactivation of token on platform coin deactivation.
     fn on_token_deactivated(&self, ticker: &str);
-
-    // Handler for coin balance streaming continuously to the thread/stream channels
-    async fn handle_balance_stream(self, ctx: MmArc);
 }
 
 /// The coin futures spawner. It's used to spawn futures that can be aborted immediately or after a timeout
