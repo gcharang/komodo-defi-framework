@@ -2136,11 +2136,13 @@ impl MarketCoinOps for EthCoin {
         }
     }
 
+    #[inline]
     fn min_tx_amount(&self) -> BigDecimal { BigDecimal::from(0) }
 
+    #[inline]
     fn min_trading_vol(&self) -> MmNumber {
-        let pow = self.decimals / 3;
-        MmNumber::from(1) / MmNumber::from(10u64.pow(pow as u32))
+        let pow = self.decimals as u32;
+        MmNumber::from(1) / MmNumber::from(10u64.pow(pow))
     }
 
     fn is_trezor(&self) -> bool { self.priv_key_policy.is_trezor() }

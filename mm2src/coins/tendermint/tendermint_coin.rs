@@ -2388,9 +2388,11 @@ impl MarketCoinOps for TendermintCoin {
             .to_string())
     }
 
+    #[inline]
     fn min_tx_amount(&self) -> BigDecimal { big_decimal_from_sat(MIN_TX_SATOSHIS, self.decimals) }
 
-    fn min_trading_vol(&self) -> MmNumber { MmNumber::from("0.00777") }
+    #[inline]
+    fn min_trading_vol(&self) -> MmNumber { self.min_tx_amount().into() }
 
     fn is_trezor(&self) -> bool { self.priv_key_policy.is_trezor() }
 }
