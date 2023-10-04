@@ -147,7 +147,6 @@ impl<'a> WalletIndexedDb {
         Ok(db)
     }
 
-    #[allow(unused)]
     async fn lock_db(&self) -> WalletDbRes<WalletDbInnerLocked<'_>> {
         self.db
             .get_or_initialize()
@@ -159,7 +158,6 @@ impl<'a> WalletIndexedDb {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
 
-        // Recall where we synced up to previously.
         let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
         let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
             .with_value(&self.ticker)?
@@ -285,6 +283,7 @@ impl WalletIndexedDb {
 
         let mut encoded_tree = Vec::new();
         commitment_tree.write(&mut encoded_tree).unwrap();
+
         let hash = &block_hash.0[..];
         let block = WalletDbBlocksTable {
             height: u32::from(block_height),
@@ -297,11 +296,11 @@ impl WalletIndexedDb {
         let index_keys = MultiIndex::new(WalletDbBlocksTable::TICKER_HEIGHT_INDEX)
             .with_value(&ticker)?
             .with_value(u32::from(block_height))?;
-        walletdb_blocks_table
-            .replace_item_by_unique_multi_index(index_keys, &block)
-            .await?;
 
-        Ok(())
+        Ok(walletdb_blocks_table
+            .replace_item_by_unique_multi_index(index_keys, &block)
+            .await
+            .map(|_| ())?)
     }
 
     pub async fn get_balance(&self, account: AccountId) -> MmResult<Amount, ZcoinStorageError> {
@@ -380,9 +379,11 @@ impl WalletIndexedDb {
         let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
             .with_value(&ticker)?
             .with_value(txid)?;
-        let id = tx_table.replace_item_by_unique_multi_index(index_keys, &new_tx).await?;
 
-        Ok(id.into())
+        Ok(tx_table
+            .replace_item_by_unique_multi_index(index_keys, &new_tx)
+            .await?
+            .into())
     }
 
     pub async fn put_tx_meta<N>(&self, tx: &WalletTx<N>, height: BlockHeight) -> MmResult<i64, ZcoinStorageError> {
@@ -424,9 +425,11 @@ impl WalletIndexedDb {
         let index_keys = MultiIndex::new(WalletDbTransactionsTable::TICKER_TXID_INDEX)
             .with_value(&ticker)?
             .with_value(txid)?;
-        let id = tx_table.replace_item_by_unique_multi_index(index_keys, &new_tx).await?;
 
-        Ok(id.into())
+        Ok(tx_table
+            .replace_item_by_unique_multi_index(index_keys, &new_tx)
+            .await?
+            .into())
     }
 
     pub async fn mark_spent(&self, tx_ref: i64, nf: &Nullifier) -> MmResult<(), ZcoinStorageError> {
@@ -552,9 +555,8 @@ impl WalletIndexedDb {
             witness: encoded,
             ticker,
         };
-        witness_table.add_item(&witness).await?;
 
-        Ok(())
+        Ok(witness_table.add_item(&witness).await.map(|_| ())?)
     }
 
     pub async fn prune_witnesses(&self, below_height: BlockHeight) -> MmResult<(), ZcoinStorageError> {
@@ -699,11 +701,11 @@ impl WalletIndexedDb {
             .with_value(&ticker)?
             .with_value(tx_ref)?
             .with_value(output_index)?;
-        sent_note_table
-            .replace_item_by_unique_multi_index(index_keys, &new_note)
-            .await?;
 
-        Ok(())
+        Ok(sent_note_table
+            .replace_item_by_unique_multi_index(index_keys, &new_note)
+            .await
+            .map(|_| ())?)
     }
 
     /// Asynchronously rewinds the storage to a specified block height, effectively
@@ -1189,6 +1191,24 @@ impl WalletRead for WalletIndexedDb {
         target_value: Amount,
         anchor_height: BlockHeight,
     ) -> Result<Vec<SpendableNote>, Self::Error> {
+        // The goal of this SQL statement is to select the oldest notes until the required
+        // value has been reached, and then fetch the witnesses at the desired height for the
+        // selected notes. This is achieved in several steps:
+        //
+        // 1) Use a window function to create a view of all notes, ordered from oldest to
+        //    newest, with an additional column containing a running sum:
+        //    - Unspent notes accumulate the values of all unspent notes in that note's
+        //      account, up to itself.
+        //    - Spent notes accumulate the values of all notes in the transaction they were
+        //      spent in, up to itself.
+        //
+        // 2) Select all unspent notes in the desired account, along with their running sum.
+        //
+        // 3) Select all notes for which the running sum was less than the required value, as
+        //    well as a single note for which the sum was greater than or equal to the
+        //    required value, bringing the sum of all selected notes across the threshold.
+        //
+        // 4) Match the selected notes against the witnesses at the desired height.
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -1242,12 +1262,12 @@ impl WalletRead for WalletIndexedDb {
         let mut unspent_notes = vec![];
         for (id, value, note, sum) in &final_note {
             if **sum < i64::from(target_value) {
-                unspent_notes.push((*id, *value, note.clone(), *sum))
+                unspent_notes.push((*id, *value, *note, *sum))
             }
         }
 
         if let Some(note) = final_note.iter().find(|(_, _, _, sum)| **sum >= target_value.into()) {
-            unspent_notes.push(note.clone());
+            unspent_notes.push(*note);
         };
 
         // Step 4: Get witnesses for selected notes
