@@ -1,5 +1,5 @@
 use crate::coin_balance::HDAccountBalance;
-use crate::hd_wallet::{HDExtractPubkeyError, HDXPubExtractor, NewAccountCreatingError, RpcTaskXPubExtractor};
+use crate::hd_wallet::{HDExtractPubkeyError, HDXPubExtractor, NewAccountCreationError, RpcTaskXPubExtractor};
 use crate::{lp_coinfind_or_err, BalanceError, CoinBalance, CoinFindError, CoinWithDerivationMethod, CoinsContext,
             MarketCoinOps, MmCoinEnum, UnexpectedDerivationMethod};
 use async_trait::async_trait;
@@ -77,24 +77,24 @@ impl From<UnexpectedDerivationMethod> for CreateAccountRpcError {
     }
 }
 
-impl From<NewAccountCreatingError> for CreateAccountRpcError {
-    fn from(e: NewAccountCreatingError) -> Self {
+impl From<NewAccountCreationError> for CreateAccountRpcError {
+    fn from(e: NewAccountCreationError) -> Self {
         match e {
-            NewAccountCreatingError::HwContextNotInitialized => CreateAccountRpcError::HwContextNotInitialized,
-            NewAccountCreatingError::HDWalletUnavailable => CreateAccountRpcError::CoinIsActivatedNotWithHDWallet,
-            NewAccountCreatingError::CoinDoesntSupportTrezor => {
+            NewAccountCreationError::HwContextNotInitialized => CreateAccountRpcError::HwContextNotInitialized,
+            NewAccountCreationError::HDWalletUnavailable => CreateAccountRpcError::CoinIsActivatedNotWithHDWallet,
+            NewAccountCreationError::CoinDoesntSupportTrezor => {
                 CreateAccountRpcError::Internal("Coin must support Trezor at this point".to_string())
             },
-            NewAccountCreatingError::RpcTaskError(rpc) => CreateAccountRpcError::from(rpc),
-            NewAccountCreatingError::HardwareWalletError(hw) => CreateAccountRpcError::from(hw),
-            NewAccountCreatingError::AccountLimitReached { max_accounts_number } => {
+            NewAccountCreationError::RpcTaskError(rpc) => CreateAccountRpcError::from(rpc),
+            NewAccountCreationError::HardwareWalletError(hw) => CreateAccountRpcError::from(hw),
+            NewAccountCreationError::AccountLimitReached { max_accounts_number } => {
                 CreateAccountRpcError::AccountLimitReached { max_accounts_number }
             },
-            NewAccountCreatingError::ErrorSavingAccountToStorage(e) => {
+            NewAccountCreationError::ErrorSavingAccountToStorage(e) => {
                 let error = format!("Error uploading HD account info to the storage: {}", e);
                 CreateAccountRpcError::WalletStorageError(error)
             },
-            NewAccountCreatingError::Internal(internal) => CreateAccountRpcError::Internal(internal),
+            NewAccountCreationError::Internal(internal) => CreateAccountRpcError::Internal(internal),
         }
     }
 }
@@ -113,7 +113,7 @@ impl From<BalanceError> for CreateAccountRpcError {
 }
 
 impl From<HDExtractPubkeyError> for CreateAccountRpcError {
-    fn from(e: HDExtractPubkeyError) -> Self { CreateAccountRpcError::from(NewAccountCreatingError::from(e)) }
+    fn from(e: HDExtractPubkeyError) -> Self { CreateAccountRpcError::from(NewAccountCreationError::from(e)) }
 }
 
 impl From<RpcTaskError> for CreateAccountRpcError {

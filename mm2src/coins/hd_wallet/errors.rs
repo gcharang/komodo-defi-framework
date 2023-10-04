@@ -92,7 +92,7 @@ impl From<InvalidBip44ChainError> for NewAddressDeriveConfirmError {
 }
 
 #[derive(Display)]
-pub enum NewAccountCreatingError {
+pub enum NewAccountCreationError {
     #[display(fmt = "Hardware Wallet context is not initialized")]
     HwContextNotInitialized,
     #[display(fmt = "HD wallet is unavailable")]
@@ -113,21 +113,21 @@ pub enum NewAccountCreatingError {
     Internal(String),
 }
 
-impl From<Bip32DerPathError> for NewAccountCreatingError {
+impl From<Bip32DerPathError> for NewAccountCreationError {
     fn from(e: Bip32DerPathError) -> Self {
-        NewAccountCreatingError::Internal(StandardHDPathError::from(e).to_string())
+        NewAccountCreationError::Internal(StandardHDPathError::from(e).to_string())
     }
 }
 
-impl From<HDWalletStorageError> for NewAccountCreatingError {
+impl From<HDWalletStorageError> for NewAccountCreationError {
     fn from(e: HDWalletStorageError) -> Self {
         match e {
             HDWalletStorageError::ErrorSaving(e) | HDWalletStorageError::ErrorSerializing(e) => {
-                NewAccountCreatingError::ErrorSavingAccountToStorage(e)
+                NewAccountCreationError::ErrorSavingAccountToStorage(e)
             },
-            HDWalletStorageError::HDWalletUnavailable => NewAccountCreatingError::HDWalletUnavailable,
-            HDWalletStorageError::Internal(internal) => NewAccountCreatingError::Internal(internal),
-            other => NewAccountCreatingError::Internal(other.to_string()),
+            HDWalletStorageError::HDWalletUnavailable => NewAccountCreationError::HDWalletUnavailable,
+            HDWalletStorageError::Internal(internal) => NewAccountCreationError::Internal(internal),
+            other => NewAccountCreationError::Internal(other.to_string()),
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::coin_balance::{self, EnableCoinBalanceError, EnabledCoinBalanceParams
                           HDBalanceAddress, HDWalletBalance, HDWalletBalanceOps};
 use crate::coin_errors::MyAddressError;
 use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress,
-                       HDConfirmAddress, HDExtractPubkeyError, HDXPubExtractor, NewAccountCreatingError,
+                       HDConfirmAddress, HDExtractPubkeyError, HDXPubExtractor, NewAccountCreationError,
                        NewAddressDeriveConfirmError};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxHistoryStorage};
 use crate::rpc_command::account_balance::{self, AccountBalanceParams, AccountBalanceRpcOps, HDAccountBalanceResponse};
@@ -1060,7 +1060,7 @@ impl HDWalletCoinOps for QtumCoin {
         hd_wallet: &'a Self::HDWallet,
         xpub_extractor: Option<XPubExtractor>,
         account_id: Option<u32>,
-    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreatingError>
+    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreationError>
     where
         XPubExtractor: HDXPubExtractor + Send,
     {

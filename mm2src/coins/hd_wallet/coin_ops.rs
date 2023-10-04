@@ -1,5 +1,5 @@
 use super::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountMut, HDAccountOps,
-            HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress, HDWalletOps, HDXPubExtractor, NewAccountCreatingError,
+            HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress, HDWalletOps, HDXPubExtractor, NewAccountCreationError,
             NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::hd_wallet::{HDAddressOps, HDWalletStorageOps};
 use async_trait::async_trait;
@@ -260,7 +260,7 @@ pub trait HDWalletCoinOps {
         hd_wallet: &'a Self::HDWallet,
         xpub_extractor: Option<XPubExtractor>,
         account_id: Option<u32>,
-    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreatingError>
+    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreationError>
     where
         XPubExtractor: HDXPubExtractor + Send;
 

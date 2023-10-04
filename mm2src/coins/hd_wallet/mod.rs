@@ -29,7 +29,7 @@ pub(crate) use confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
 pub use confirm_address::{HDConfirmAddress, HDConfirmAddressError};
 
 mod errors;
-pub use errors::{AccountUpdatingError, AddressDerivingError, InvalidBip44ChainError, NewAccountCreatingError,
+pub use errors::{AccountUpdatingError, AddressDerivingError, InvalidBip44ChainError, NewAccountCreationError,
                  NewAddressDeriveConfirmError, NewAddressDerivingError};
 
 mod pubkey;

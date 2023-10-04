@@ -1,7 +1,7 @@
 use super::*;
 use crate::coin_errors::MyAddressError;
 use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress,
-                       HDExtractPubkeyError, HDXPubExtractor, NewAccountCreatingError, NewAddressDeriveConfirmError};
+                       HDExtractPubkeyError, HDXPubExtractor, NewAccountCreationError, NewAddressDeriveConfirmError};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxDetailsBuilder,
                               TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
@@ -1369,7 +1369,7 @@ impl HDWalletCoinOps for BchCoin {
         hd_wallet: &'a Self::HDWallet,
         xpub_extractor: Option<XPubExtractor>,
         account_id: Option<u32>,
-    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreatingError>
+    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreationError>
     where
         XPubExtractor: HDXPubExtractor + Send,
     {

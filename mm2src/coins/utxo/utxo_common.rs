@@ -3,7 +3,7 @@ use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanc
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
 use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDAddressesCache, HDCoinAddress, HDCoinHDAccount,
-                       HDExtractPubkeyError, HDWalletStorageOps, HDXPubExtractor, NewAccountCreatingError,
+                       HDExtractPubkeyError, HDWalletStorageOps, HDXPubExtractor, NewAccountCreationError,
                        NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
@@ -137,7 +137,7 @@ pub async fn create_new_account<'a, Coin, XPubExtractor>(
     hd_wallet: &'a UtxoHDWallet,
     xpub_extractor: Option<XPubExtractor>,
     account_id: Option<u32>,
-) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreatingError>
+) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreationError>
 where
     Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey> + Sync,
     XPubExtractor: HDXPubExtractor + Send,
@@ -157,12 +157,12 @@ where
     };
     let max_accounts_number = hd_wallet.account_limit();
     if new_account_id >= max_accounts_number {
-        return MmError::err(NewAccountCreatingError::AccountLimitReached { max_accounts_number });
+        return MmError::err(NewAccountCreationError::AccountLimitReached { max_accounts_number });
     }
 
     let account_child_hardened = true;
     let account_child = ChildNumber::new(new_account_id, account_child_hardened)
-        .map_to_mm(|e| NewAccountCreatingError::Internal(e.to_string()))?;
+        .map_to_mm(|e| NewAccountCreationError::Internal(e.to_string()))?;
 
     let account_derivation_path: StandardHDPathToAccount = hd_wallet.derivation_path.derive(account_child)?;
     let account_pubkey = coin
@@ -185,7 +185,7 @@ where
             "Account '{}' has been activated while we proceed the 'create_new_account' function",
             new_account_id
         );
-        return MmError::err(NewAccountCreatingError::Internal(error));
+        return MmError::err(NewAccountCreationError::Internal(error));
     }
 
     hd_wallet.upload_new_account(new_account.to_storage_item()).await?;

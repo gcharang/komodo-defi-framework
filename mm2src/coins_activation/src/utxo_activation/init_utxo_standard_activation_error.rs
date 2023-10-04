@@ -1,6 +1,6 @@
 use crate::standalone_coin::InitStandaloneCoinError;
 use coins::coin_balance::EnableCoinBalanceError;
-use coins::hd_wallet::{NewAccountCreatingError, NewAddressDerivingError};
+use coins::hd_wallet::{NewAccountCreationError, NewAddressDerivingError};
 use coins::tx_history_storage::CreateTxHistoryStorageError;
 use coins::utxo::utxo_builder::UtxoCoinBuildError;
 use coins::{BalanceError, RegisterCoinError};
@@ -95,11 +95,11 @@ impl InitUtxoStandardError {
         }
     }
 
-    fn from_new_account_err(new_acc_err: NewAccountCreatingError, ticker: String) -> Self {
+    fn from_new_account_err(new_acc_err: NewAccountCreationError, ticker: String) -> Self {
         match new_acc_err {
-            NewAccountCreatingError::RpcTaskError(rpc) => Self::from(rpc),
-            NewAccountCreatingError::HardwareWalletError(hw_err) => Self::from_hw_err(hw_err, ticker),
-            NewAccountCreatingError::Internal(internal) => InitUtxoStandardError::Internal(internal),
+            NewAccountCreationError::RpcTaskError(rpc) => Self::from(rpc),
+            NewAccountCreationError::HardwareWalletError(hw_err) => Self::from_hw_err(hw_err, ticker),
+            NewAccountCreationError::Internal(internal) => InitUtxoStandardError::Internal(internal),
             other => InitUtxoStandardError::CoinCreationError {
                 ticker,
                 error: other.to_string(),

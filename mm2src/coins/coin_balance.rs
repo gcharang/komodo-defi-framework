@@ -1,5 +1,5 @@
 use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddressId, HDAddressOps, HDCoinAddress, HDCoinHDAccount,
-                       HDWalletCoinOps, HDWalletOps, HDXPubExtractor, NewAccountCreatingError, NewAddressDerivingError};
+                       HDWalletCoinOps, HDWalletOps, HDXPubExtractor, NewAccountCreationError, NewAddressDerivingError};
 use crate::{BalanceError, BalanceResult, CoinBalance, CoinWithDerivationMethod, DerivationMethod, MarketCoinOps};
 use async_trait::async_trait;
 use common::log::{debug, info};
@@ -17,7 +17,7 @@ pub(crate) type HDBalanceAddress<T> = <<T as HDWalletBalanceOps>::HDAddressScann
 
 pub enum EnableCoinBalanceError {
     NewAddressDerivingError(NewAddressDerivingError),
-    NewAccountCreatingError(NewAccountCreatingError),
+    NewAccountCreatingError(NewAccountCreationError),
     BalanceError(BalanceError),
 }
 
@@ -25,8 +25,8 @@ impl From<NewAddressDerivingError> for EnableCoinBalanceError {
     fn from(e: NewAddressDerivingError) -> Self { EnableCoinBalanceError::NewAddressDerivingError(e) }
 }
 
-impl From<NewAccountCreatingError> for EnableCoinBalanceError {
-    fn from(e: NewAccountCreatingError) -> Self { EnableCoinBalanceError::NewAccountCreatingError(e) }
+impl From<NewAccountCreationError> for EnableCoinBalanceError {
+    fn from(e: NewAccountCreationError) -> Self { EnableCoinBalanceError::NewAccountCreatingError(e) }
 }
 
 impl From<BalanceError> for EnableCoinBalanceError {

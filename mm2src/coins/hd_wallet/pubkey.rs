@@ -1,4 +1,4 @@
-use super::NewAccountCreatingError;
+use super::NewAccountCreationError;
 use async_trait::async_trait;
 use crypto::hw_rpc_task::HwConnectStatuses;
 use crypto::trezor::trezor_rpc_task::{TrezorRpcTaskProcessor, TryIntoUserAction};
@@ -56,17 +56,17 @@ impl From<XpubError> for HDExtractPubkeyError {
     fn from(e: XpubError) -> Self { HDExtractPubkeyError::InvalidXpub(e.to_string()) }
 }
 
-impl From<HDExtractPubkeyError> for NewAccountCreatingError {
+impl From<HDExtractPubkeyError> for NewAccountCreationError {
     fn from(e: HDExtractPubkeyError) -> Self {
         match e {
-            HDExtractPubkeyError::HwContextNotInitialized => NewAccountCreatingError::HwContextNotInitialized,
-            HDExtractPubkeyError::CoinDoesntSupportTrezor => NewAccountCreatingError::CoinDoesntSupportTrezor,
-            HDExtractPubkeyError::RpcTaskError(rpc) => NewAccountCreatingError::RpcTaskError(rpc),
-            HDExtractPubkeyError::HardwareWalletError(hw) => NewAccountCreatingError::HardwareWalletError(hw),
+            HDExtractPubkeyError::HwContextNotInitialized => NewAccountCreationError::HwContextNotInitialized,
+            HDExtractPubkeyError::CoinDoesntSupportTrezor => NewAccountCreationError::CoinDoesntSupportTrezor,
+            HDExtractPubkeyError::RpcTaskError(rpc) => NewAccountCreationError::RpcTaskError(rpc),
+            HDExtractPubkeyError::HardwareWalletError(hw) => NewAccountCreationError::HardwareWalletError(hw),
             HDExtractPubkeyError::InvalidXpub(xpub) => {
-                NewAccountCreatingError::HardwareWalletError(HwError::InvalidXpub(xpub))
+                NewAccountCreationError::HardwareWalletError(HwError::InvalidXpub(xpub))
             },
-            HDExtractPubkeyError::Internal(internal) => NewAccountCreatingError::Internal(internal),
+            HDExtractPubkeyError::Internal(internal) => NewAccountCreationError::Internal(internal),
         }
     }
 }
