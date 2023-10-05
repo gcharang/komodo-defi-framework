@@ -65,11 +65,11 @@ pub trait TableSignature: DeserializeOwned + Serialize + 'static {
     fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()>;
 }
 
-/// A trait representing the operations essential for initializing an IndexedDb instance.
+/// Essential operations for initializing an IndexedDb instance.
 #[async_trait]
 pub trait DbInstance: Sized {
     /// Returns the static name of the database.
-    fn db_name() -> &'static str;
+    const DB_NAME: &'static str;
 
     /// Initialize the database with the provided identifier.
     /// This method ensures that the database is properly set up with the correct version
@@ -94,7 +94,7 @@ impl DbIdentifier {
         DbIdentifier {
             namespace_id,
             wallet_rmd160,
-            db_name: Db::db_name(),
+            db_name: Db::DB_NAME,
         }
     }
 

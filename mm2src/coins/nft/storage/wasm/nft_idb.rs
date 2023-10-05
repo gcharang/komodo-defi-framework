@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use mm2_db::indexed_db::InitDbResult;
 use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbLocked, IndexedDb, IndexedDbBuilder};
 
-const DB_NAME: &str = "nft_cache";
 const DB_VERSION: u32 = 1;
 
 /// Represents a locked instance of the `NftCacheIDB` database.
@@ -24,7 +23,7 @@ pub struct NftCacheIDB {
 
 #[async_trait]
 impl DbInstance for NftCacheIDB {
-    fn db_name() -> &'static str { DB_NAME }
+    const DB_NAME: &'static str = "nft_cache";
 
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
         let inner = IndexedDbBuilder::new(db_id)
