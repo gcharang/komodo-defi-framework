@@ -83,7 +83,7 @@ impl MarketCoinOps for TestCoin {
     fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send> { unimplemented!() }
 
     #[inline(always)]
-    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult { unimplemented!() }
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> RawTransactionResult { unimplemented!() }
 
     fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
         unimplemented!()

@@ -582,7 +582,7 @@ impl MarketCoinOps for TendermintToken {
     }
 
     #[inline(always)]
-    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> RawTransactionResult {
         MmError::err(RawTransactionError::NotImplemented {
             coin: self.ticker().to_string(),
         })

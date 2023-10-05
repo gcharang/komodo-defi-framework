@@ -30,7 +30,7 @@ use coins::utxo::qtum::QtumCoin;
 use coins::utxo::slp::SlpToken;
 use coins::utxo::utxo_standard::UtxoStandardCoin;
 use coins::{add_delegation, get_my_address, get_raw_transaction, get_staking_infos, nft, remove_delegation,
-            sign_eth_transaction, sign_message, sign_raw_transaction, verify_message, withdraw};
+            sign_message, sign_raw_transaction, verify_message, withdraw};
 #[cfg(all(
     feature = "enable-solana",
     not(target_os = "ios"),
@@ -185,8 +185,6 @@ async fn dispatcher_v2(request: MmRpcRequest, ctx: MmArc) -> DispatcherResult<Re
         "remove_node_from_version_stat" => handle_mmrpc(ctx, request, remove_node_from_version_stat).await,
         "sign_message" => handle_mmrpc(ctx, request, sign_message).await,
         "sign_raw_transaction" => handle_mmrpc(ctx, request, sign_raw_transaction).await,
-        #[cfg(not(target_arch = "wasm32"))]
-        "sign_eth_transaction" => handle_mmrpc(ctx, request, sign_eth_transaction).await,
         "start_simple_market_maker_bot" => handle_mmrpc(ctx, request, start_simple_market_maker_bot).await,
         "start_version_stat_collection" => handle_mmrpc(ctx, request, start_version_stat_collection).await,
         "stop_simple_market_maker_bot" => handle_mmrpc(ctx, request, stop_simple_market_maker_bot).await,

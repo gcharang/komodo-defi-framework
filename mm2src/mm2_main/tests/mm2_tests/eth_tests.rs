@@ -198,13 +198,16 @@ async fn call_sign_eth_transaction(mm: &MarketMakerIt, platform_coin: &str) -> J
     let signed_tx = mm
         .rpc(&json!({
         "userpass": mm.userpass,
-        "method": "sign_eth_transaction",
+        "method": "sign_raw_transaction",
         "mmrpc": "2.0",
         "params": {
                 "coin": platform_coin,
-                "to": "0x7Bc1bBDD6A0a722fC9bffC49c921B685ECB84b94".to_string(),
-                "value": "0x1000",
-                "gas_limit": "21000"
+                "type": "ETH",
+                "tx": {
+                    "to": "0x7Bc1bBDD6A0a722fC9bffC49c921B685ECB84b94".to_string(),
+                    "value": "0x1000",
+                    "gas_limit": "21000"
+                }
             }
         }))
         .await
@@ -212,7 +215,7 @@ async fn call_sign_eth_transaction(mm: &MarketMakerIt, platform_coin: &str) -> J
     assert_eq!(
         signed_tx.0,
         StatusCode::OK,
-        "'sign_eth_transaction' failed: {}",
+        "'sign_raw_transaction' failed: {}",
         signed_tx.1
     );
     Json::from_str(&signed_tx.1).unwrap()

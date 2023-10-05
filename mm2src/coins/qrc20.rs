@@ -1264,7 +1264,7 @@ impl MarketCoinOps for Qrc20Coin {
     }
 
     #[inline(always)]
-    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> RawTransactionResult {
         utxo_common::sign_raw_tx(self, args).await
     }
 

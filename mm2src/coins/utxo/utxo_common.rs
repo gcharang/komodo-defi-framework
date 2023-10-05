@@ -3045,7 +3045,20 @@ async fn get_unspents_for_inputs(
 pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
     coin: &T,
     args: &SignRawTransactionRequest,
-) -> SignRawTransactionResult {
+) -> RawTransactionResult {
+    if let SignRawTransactionEnum::UTXO(utxo_args) = &args.tx {
+        sign_raw_utxo_tx(coin, utxo_args).await
+    } else {
+        MmError::err(RawTransactionError::InvalidParam("utxo type expected".to_string()))
+    }
+}
+
+/// Takes args with a raw transaction in hexadecimal format and previous transactions data as input
+/// Returns signed tx in hexadecimal format
+async fn sign_raw_utxo_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
+    coin: &T,
+    args: &SignUtxoTransactionParams,
+) -> RawTransactionResult {
     let tx_bytes =
         hex::decode(args.tx_hex.as_bytes()).map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
     let tx: UtxoTx = deserialize(tx_bytes.as_slice()).map_to_mm(|e| RawTransactionError::DecodeError(e.to_string()))?;
@@ -3137,7 +3150,7 @@ pub async fn sign_raw_tx<T: AsRef<UtxoCoinFields> + UtxoTxGenerationOps>(
     .map_err(|err| RawTransactionError::SigningError(err.to_string()))?;
 
     let tx_signed_bytes = serialize_with_flags(&tx_signed, SERIALIZE_TRANSACTION_WITNESS);
-    Ok(SignRawTransactionResponse {
+    Ok(RawTransactionRes {
         tx_hex: tx_signed_bytes.into(),
     })
 }

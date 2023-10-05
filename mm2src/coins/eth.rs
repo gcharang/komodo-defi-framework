@@ -89,18 +89,17 @@ use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut,
             PrivKeyBuildPolicy, PrivKeyPolicyNotAllowed, RawTransactionError, RawTransactionFut,
             RawTransactionRequest, RawTransactionRes, RawTransactionResult, RefundError, RefundPaymentArgs,
             RefundResult, RewardTarget, RpcClientType, RpcTransportEventHandler, RpcTransportEventHandlerShared,
-            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignEthTransactionRequest,
-            SignEthTransactionResponse, SignEthTransactionResult, SignRawTransactionRequest, SignRawTransactionResult,
-            SignatureError, SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee,
-            TradePreimageError, TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction,
-            TransactionDetails, TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
-            UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
-            ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, VerificationError,
-            VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
-            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
-            WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest, WithdrawResult, EARLY_CONFIRMATION_ERR_LOG,
-            INVALID_CONTRACT_ADDRESS_ERR_LOG, INVALID_PAYMENT_STATE_ERR_LOG, INVALID_RECEIVER_ERR_LOG,
-            INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG};
+            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignEthTransactionParams,
+            SignRawTransactionEnum, SignRawTransactionRequest, SignatureError, SignatureResult, SpendPaymentArgs,
+            SwapOps, TakerSwapMakerCoin, TradeFee, TradePreimageError, TradePreimageFut, TradePreimageResult,
+            TradePreimageValue, Transaction, TransactionDetails, TransactionEnum, TransactionErr, TransactionFut,
+            TransactionType, TxMarshalingErr, UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs,
+            ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut,
+            ValidatePaymentInput, VerificationError, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps,
+            WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
+            WatcherValidateTakerFeeInput, WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest, WithdrawResult,
+            EARLY_CONFIRMATION_ERR_LOG, INVALID_CONTRACT_ADDRESS_ERR_LOG, INVALID_PAYMENT_STATE_ERR_LOG,
+            INVALID_RECEIVER_ERR_LOG, INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG};
 pub use rlp;
 
 #[cfg(test)] mod eth_tests;
@@ -2171,12 +2170,12 @@ impl MarketCoinOps for EthCoin {
         )
     }
 
-    /// Stub for sign utxo tx
-    #[inline(always)]
-    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
-        MmError::err(RawTransactionError::NotImplemented {
-            coin: self.ticker().to_string(),
-        })
+    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> RawTransactionResult {
+        if let SignRawTransactionEnum::ETH(eth_args) = &args.tx {
+            sign_raw_eth_tx(self, eth_args).await
+        } else {
+            MmError::err(RawTransactionError::InvalidParam("eth type expected".to_string()))
+        }
     }
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
@@ -2536,11 +2535,10 @@ async fn sign_and_send_transaction_with_metamask(
 }
 
 /// Sign eth transaction
-pub async fn sign_eth_tx(coin: &EthCoin, args: &SignEthTransactionRequest) -> SignEthTransactionResult {
+async fn sign_raw_eth_tx(coin: &EthCoin, args: &SignEthTransactionParams) -> RawTransactionResult {
     let ctx = MmArc::from_weak(&coin.ctx)
         .ok_or("!ctx")
         .map_to_mm(|err| RawTransactionError::TransactionError(err.to_string()))?;
-    //let coin = self.clone();
     let value = args.value.unwrap_or_else(|| U256::from(0));
     let action = if let Some(to) = &args.to {
         Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
@@ -2548,7 +2546,6 @@ pub async fn sign_eth_tx(coin: &EthCoin, args: &SignEthTransactionRequest) -> Si
         Create
     };
     let data = args.data.clone().unwrap_or_default();
-    let gas_limit = args.gas_limit;
     match coin.priv_key_policy {
         // TODO: use zeroise for privkey
         EthPrivKeyPolicy::Iguana(ref key_pair)
@@ -2556,9 +2553,9 @@ pub async fn sign_eth_tx(coin: &EthCoin, args: &SignEthTransactionRequest) -> Si
             activated_key: ref key_pair,
             ..
         } => {
-            return sign_transaction_with_keypair(ctx, coin, key_pair, value, action, data, gas_limit)
+            return sign_transaction_with_keypair(ctx, coin, key_pair, value, action, data, args.gas_limit)
                 .await
-                .map(|(signed_tx, _)| SignEthTransactionResponse {
+                .map(|(signed_tx, _)| RawTransactionRes {
                     tx_hex: signed_tx.tx_hex().into(),
                 })
                 .map_to_mm(|err| RawTransactionError::TransactionError(err.get_plain_text_format()));

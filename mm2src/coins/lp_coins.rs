@@ -214,9 +214,9 @@ use coin_errors::{MyAddressError, ValidatePaymentError, ValidatePaymentFut};
 pub mod coins_tests;
 
 pub mod eth;
+use eth::GetValidEthWithdrawAddError;
 use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetailsErr, EthTxFeeDetails,
           GetEthAddressError, SignedEthTx};
-use eth::{sign_eth_tx, GetValidEthWithdrawAddError};
 use ethereum_types::U256;
 
 pub mod hd_confirm_address;
@@ -313,8 +313,6 @@ pub type TxHistoryResult<T> = Result<T, MmError<TxHistoryError>>;
 pub type RawTransactionResult = Result<RawTransactionRes, MmError<RawTransactionError>>;
 pub type RawTransactionFut<'a> =
     Box<dyn Future<Item = RawTransactionRes, Error = MmError<RawTransactionError>> + Send + 'a>;
-pub type SignRawTransactionResult = Result<SignRawTransactionResponse, MmError<RawTransactionError>>;
-pub type SignEthTransactionResult = Result<SignEthTransactionResponse, MmError<RawTransactionError>>;
 pub type RefundResult<T> = Result<T, MmError<RefundError>>;
 /// Helper type used for swap transactions' spend preimage generation result
 pub type GenPreimageResult<Coin> = MmResult<TxPreimageWithSig<Coin>, TxGenError>;
@@ -439,44 +437,33 @@ pub struct RawTransactionRes {
 #[derive(Clone, Debug, Deserialize)]
 pub struct PrevTxns {
     /// transaction hash
-    pub tx_hash: String,
+    tx_hash: String,
     /// transaction output index
-    pub index: u32,
+    index: u32,
     /// transaction output script pub key
-    pub script_pub_key: String,
+    script_pub_key: String,
     // TODO: implement if needed:
     // redeem script for P2SH script pubkey
     // pub redeem_script: Option<String>,
     /// transaction output amount
-    pub amount: BigDecimal,
+    amount: BigDecimal,
 }
 
-/// RPC request with unsigned utxo transaction and params for signing
+/// sign_raw_transaction RPC request's params for signing raw utxo transactions
 #[derive(Clone, Debug, Deserialize)]
-pub struct SignRawTransactionRequest {
-    /// coin ticker name
-    pub coin: String,
+pub struct SignUtxoTransactionParams {
     /// unsigned utxo transaction in hex
-    pub tx_hex: String,
+    tx_hex: String,
     /// optional data of previous transactions referred by unsigned transaction inputs
-    pub prev_txns: Option<Vec<PrevTxns>>,
-    // TODO: add if needed:
+    prev_txns: Option<Vec<PrevTxns>>,
+    // TODO: add if needed for utxo:
     // pub sighash_type: Option<String>, optional signature hash type, one of values: NONE, SINGLE, ALL, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY, ALL|ANYONECANPAY (if not set 'ALL' is used)
     // pub branch_id: Option<u32>, zcash or komodo optional consensus branch id, used for signing transactions ahead of current height
 }
 
-/// RPC response with signed utxo transaction
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct SignRawTransactionResponse {
-    /// Raw bytes of signed transaction in hexadecimal string which is the response from the sign_raw_transaction request
-    pub tx_hex: BytesJson,
-}
-
-/// RPC request with unsigned eth transaction and params for signing
+/// sign_raw_transaction RPC request's params for signing raw eth transactions
 #[derive(Clone, Debug, Deserialize)]
-pub struct SignEthTransactionRequest {
-    /// Coin ticker name
-    pub coin: String,
+pub struct SignEthTransactionParams {
     /// Eth transfer value
     value: Option<U256>,
     /// Eth to address
@@ -487,11 +474,19 @@ pub struct SignEthTransactionRequest {
     gas_limit: U256,
 }
 
-/// RPC response with signed eth transaction
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct SignEthTransactionResponse {
-    /// Raw bytes of signed transaction in hexadecimal string which is the response from the sign_eth_transaction request
-    pub tx_hex: BytesJson,
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "type", content = "tx")]
+pub enum SignRawTransactionEnum {
+    UTXO(SignUtxoTransactionParams),
+    ETH(SignEthTransactionParams),
+}
+
+/// sign_raw_transaction RPC request
+#[derive(Clone, Debug, Deserialize)]
+pub struct SignRawTransactionRequest {
+    coin: String,
+    #[serde(flatten)]
+    tx: SignRawTransactionEnum,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1522,7 +1517,7 @@ pub trait MarketCoinOps {
     fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send>;
 
     /// Signs raw utxo transaction in hexadecimal format as input and returns signed transaction in hexadecimal format
-    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> SignRawTransactionResult;
+    async fn sign_raw_tx(&self, args: &SignRawTransactionRequest) -> RawTransactionResult;
 
     fn wait_for_confirmations(&self, input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send>;
 
@@ -3957,21 +3952,9 @@ pub async fn verify_message(ctx: MmArc, req: VerificationRequest) -> Verificatio
     Ok(VerificationResponse { is_valid })
 }
 
-pub async fn sign_raw_transaction(ctx: MmArc, req: SignRawTransactionRequest) -> SignRawTransactionResult {
+pub async fn sign_raw_transaction(ctx: MmArc, req: SignRawTransactionRequest) -> RawTransactionResult {
     let coin = lp_coinfind_or_err(&ctx, &req.coin).await?;
     coin.sign_raw_tx(&req).await
-}
-
-pub async fn sign_eth_transaction(ctx: MmArc, req: SignEthTransactionRequest) -> SignEthTransactionResult {
-    let coin = lp_coinfind_or_err(&ctx, &req.coin).await?;
-    match coin {
-        MmCoinEnum::EthCoin(eth_coin) => sign_eth_tx(&eth_coin, &req).await,
-        _ => {
-            return MmError::err(RawTransactionError::NotImplemented {
-                coin: coin.ticker().to_string(),
-            })
-        },
-    }
 }
 
 pub async fn remove_delegation(ctx: MmArc, req: RemoveDelegateRequest) -> DelegationResult {

@@ -18,11 +18,11 @@ use crate::utxo::{sat_from_big_decimal, utxo_common, BlockchainNetwork};
 use crate::{BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, CoinFutSpawner, ConfirmPaymentInput, DexFee,
             FeeApproxStage, FoundSwapTxSpend, HistorySyncState, MakerSwapTakerCoin, MarketCoinOps, MmCoin, MmCoinEnum,
             NegotiateSwapContractAddrErr, PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr,
-            RawTransactionError, RawTransactionFut, RawTransactionRequest, RefundError, RefundPaymentArgs,
-            RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs,
-            SignRawTransactionRequest, SignRawTransactionResult, SignatureError, SignatureResult, SpendPaymentArgs,
-            SwapOps, TakerSwapMakerCoin, TradeFee, TradePreimageFut, TradePreimageResult, TradePreimageValue,
-            Transaction, TransactionEnum, TransactionErr, TransactionFut, TransactionResult, TxMarshalingErr,
+            RawTransactionError, RawTransactionFut, RawTransactionRequest, RawTransactionResult, RefundError,
+            RefundPaymentArgs, RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
+            SendPaymentArgs, SignRawTransactionRequest, SignatureError, SignatureResult, SpendPaymentArgs, SwapOps,
+            TakerSwapMakerCoin, TradeFee, TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction,
+            TransactionEnum, TransactionErr, TransactionFut, TransactionResult, TxMarshalingErr,
             UnexpectedDerivationMethod, UtxoStandardCoin, ValidateAddressResult, ValidateFeeArgs,
             ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut,
             ValidatePaymentInput, ValidateWatcherSpendInput, VerificationError, VerificationResult,
@@ -1108,7 +1108,7 @@ impl MarketCoinOps for LightningCoin {
     }
 
     #[inline(always)]
-    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> SignRawTransactionResult {
+    async fn sign_raw_tx(&self, _args: &SignRawTransactionRequest) -> RawTransactionResult {
         MmError::err(RawTransactionError::NotImplemented {
             coin: self.ticker().to_string(),
         })
