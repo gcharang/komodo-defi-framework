@@ -158,10 +158,7 @@ cross_test!(test_camo, {
 cross_test!(test_add_get_nfts, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -178,10 +175,7 @@ cross_test!(test_add_get_nfts, {
 cross_test!(test_last_nft_block, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -196,10 +190,7 @@ cross_test!(test_last_nft_block, {
 cross_test!(test_nft_list, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -218,10 +209,7 @@ cross_test!(test_nft_list, {
 cross_test!(test_remove_nft, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -246,10 +234,7 @@ cross_test!(test_remove_nft, {
 cross_test!(test_nft_amount, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let mut nft = nft();
     storage
@@ -291,10 +276,7 @@ cross_test!(test_nft_amount, {
 cross_test!(test_refresh_metadata, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let new_symbol = "NEW_SYMBOL";
     let mut nft = nft();
@@ -314,10 +296,7 @@ cross_test!(test_refresh_metadata, {
 cross_test!(test_update_nft_spam_by_token_address, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -338,10 +317,7 @@ cross_test!(test_update_nft_spam_by_token_address, {
 cross_test!(test_exclude_nft_spam, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -360,10 +336,7 @@ cross_test!(test_exclude_nft_spam, {
 cross_test!(test_get_animation_external_domains, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -377,10 +350,7 @@ cross_test!(test_get_animation_external_domains, {
 cross_test!(test_update_nft_phishing_by_domain, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -408,10 +378,7 @@ cross_test!(test_update_nft_phishing_by_domain, {
 cross_test!(test_exclude_nft_phishing_spam, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftListStorageOps::init(&storage, &chain).await.unwrap();
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
@@ -435,10 +402,7 @@ cross_test!(test_exclude_nft_phishing_spam, {
 cross_test!(test_add_get_transfers, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -465,10 +429,7 @@ cross_test!(test_add_get_transfers, {
 cross_test!(test_last_transfer_block, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -483,10 +444,7 @@ cross_test!(test_last_transfer_block, {
 cross_test!(test_transfer_history, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -505,10 +463,7 @@ cross_test!(test_transfer_history, {
 cross_test!(test_transfer_history_filters, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -570,10 +525,7 @@ cross_test!(test_transfer_history_filters, {
 cross_test!(test_get_update_transfer_meta, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -608,10 +560,7 @@ cross_test!(test_get_update_transfer_meta, {
 cross_test!(test_update_transfer_spam_by_token_address, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -632,10 +581,7 @@ cross_test!(test_update_transfer_spam_by_token_address, {
 cross_test!(test_get_token_addresses, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -647,10 +593,7 @@ cross_test!(test_get_token_addresses, {
 cross_test!(test_exclude_transfer_spam, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -673,10 +616,7 @@ cross_test!(test_exclude_transfer_spam, {
 cross_test!(test_get_domains, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -690,10 +630,7 @@ cross_test!(test_get_domains, {
 cross_test!(test_update_transfer_phishing_by_domain, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
@@ -721,10 +658,7 @@ cross_test!(test_update_transfer_phishing_by_domain, {
 cross_test!(test_exclude_transfer_phishing_spam, {
     let chain = Chain::Bsc;
     let nft_ctx = get_nft_ctx(&chain).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage().unwrap();
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await.unwrap();
+    let storage = nft_ctx.lock_db().await.unwrap();
     NftTransferHistoryStorageOps::init(&storage, &chain).await.unwrap();
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
