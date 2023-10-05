@@ -410,11 +410,12 @@ pub(crate) mod common_impl {
         let hd_address = coin
             .generate_new_address(hd_wallet, hd_account.deref_mut(), chain)
             .await?;
-        let balance = coin.known_address_balance(hd_address.address()).await?;
+        let address = hd_address.address();
+        let balance = coin.known_address_balance(&address).await?;
 
         Ok(GetNewAddressResponse {
             new_address: HDAddressBalance {
-                address: hd_address.address().to_string(),
+                address: address.to_string(),
                 derivation_path: RpcDerivationPath(hd_address.derivation_path().clone()),
                 chain,
                 balance,
@@ -449,11 +450,12 @@ pub(crate) mod common_impl {
         let hd_address = coin
             .generate_and_confirm_new_address(hd_wallet, &mut hd_account, chain, confirm_address)
             .await?;
+        let address = hd_address.address();
+        let balance = coin.known_address_balance(&address).await?;
 
-        let balance = coin.known_address_balance(hd_address.address()).await?;
         Ok(GetNewAddressResponse {
             new_address: HDAddressBalance {
-                address: hd_address.address().to_string(),
+                address: address.to_string(),
                 derivation_path: RpcDerivationPath(hd_address.derivation_path().clone()),
                 chain,
                 balance,
@@ -488,8 +490,8 @@ pub(crate) mod common_impl {
         let last_address_id = known_addresses_number - 1;
 
         for address_id in (0..=last_address_id).rev() {
-            let hd_address = coin.derive_address(hd_account, chain, address_id).await?;
-            if address_scanner.is_address_used(hd_address.address()).await? {
+            let address = coin.derive_address(hd_account, chain, address_id).await?.address();
+            if address_scanner.is_address_used(&address).await? {
                 return Ok(());
             }
 

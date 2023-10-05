@@ -269,7 +269,7 @@ where
         let checking_address = hd_address.address();
         let checking_address_der_path = hd_address.derivation_path();
 
-        match coin.is_address_used(checking_address, address_scanner).await? {
+        match coin.is_address_used(&checking_address, address_scanner).await? {
             // We found a non-empty address, so we have to fill up the balance list
             // with zeros starting from `last_non_empty_address_id = checking_address_id - unused_addresses_counter`.
             AddressBalanceStatus::Used(non_empty_balance) => {
@@ -2647,19 +2647,21 @@ where
         .get_account(account_id)
         .await
         .or_mm_err(|| WithdrawError::UnknownAccount { account_id })?;
-    let hd_address = coin.derive_address(&hd_account, chain, address_id).await?;
 
     let is_address_activated = hd_account
         .is_address_activated(chain, address_id)
         // If [`HDWalletCoinOps::derive_address`] succeeds, [`HDAccountOps::is_address_activated`] shouldn't fails with an `InvalidBip44ChainError`.
         .mm_err(|e| WithdrawError::InternalError(e.to_string()))?;
+
+    let hd_address = coin.derive_address(&hd_account, chain, address_id).await?;
+    let address = hd_address.address();
     if !is_address_activated {
-        let error = format!("'{}' address is not activated", hd_address.address());
+        let error = format!("'{}' address is not activated", address);
         return MmError::err(WithdrawError::UnexpectedFromAddress(error));
     }
 
     Ok(WithdrawSenderAddress {
-        address: hd_address.address().clone(),
+        address,
         pubkey: *hd_address.pubkey(),
         derivation_path: Some(hd_address.derivation_path().clone()),
     })

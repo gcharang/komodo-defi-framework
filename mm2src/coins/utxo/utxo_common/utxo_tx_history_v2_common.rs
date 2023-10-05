@@ -85,7 +85,7 @@ where
     let addresses_iter = external_addresses
         .into_iter()
         .chain(internal_addresses)
-        .map(|hd_address| DisplayAddress::display_address(hd_address.address()));
+        .map(|hd_address| DisplayAddress::display_address(&hd_address.address()));
     Ok(GetTxHistoryFilters::for_addresses(addresses_iter))
 }
 
@@ -139,7 +139,7 @@ where
                 let addresses_it = external_addresses
                     .into_iter()
                     .chain(internal_addresses)
-                    .map(|hd_address| hd_address.address().clone());
+                    .map(|hd_address| hd_address.address());
                 all_addresses.extend(addresses_it);
             }
 

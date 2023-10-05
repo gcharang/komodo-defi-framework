@@ -77,7 +77,7 @@ where
     type Address = Address;
     type Pubkey = Pubkey;
 
-    fn address(&self) -> &Self::Address { &self.address }
+    fn address(&self) -> Self::Address { self.address.clone() }
 
     fn pubkey(&self) -> &Self::Pubkey { &self.pubkey }
 
@@ -338,7 +338,7 @@ where
             .lock()
             .await
             .get(&hd_address_id)
-            .map(|addr| addr.address().clone());
+            .map(|addr| addr.address());
 
         address
     }

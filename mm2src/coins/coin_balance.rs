@@ -267,7 +267,7 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
             .derive_addresses(hd_account, address_ids)
             .await?
             .into_iter()
-            .map(|hd_address| (hd_address.address().clone(), hd_address.derivation_path().clone()))
+            .map(|hd_address| (hd_address.address(), hd_address.derivation_path().clone()))
             .unzip();
 
         let balances = self
