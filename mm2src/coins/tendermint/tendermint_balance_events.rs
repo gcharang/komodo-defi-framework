@@ -6,7 +6,7 @@ use jsonrpc_core::MethodCall;
 use jsonrpc_core::{Id as RpcId, Params as RpcParams, Value as RpcValue, Version as RpcVersion};
 use mm2_event_stream::{behaviour::EventBehaviour, Event, EventStreamConfiguration};
 use mm2_number::BigDecimal;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::TendermintCoin;
 use crate::{tendermint::TendermintCommons, utxo::utxo_common::big_decimal_from_sat_unsigned, MarketCoinOps, MmCoin};
@@ -89,7 +89,7 @@ impl EventBehaviour for TendermintCoin {
                         serde_json::from_value(json_val["result"]["events"]["transfer.amount"].clone())
                             .unwrap_or_default();
 
-                    let mut denoms: Vec<String> = transfers
+                    let denoms: HashSet<String> = transfers
                         .iter()
                         .map(|t| {
                             let amount: String = t.chars().take_while(|c| c.is_numeric()).collect();
@@ -97,9 +97,6 @@ impl EventBehaviour for TendermintCoin {
                             denom.to_owned()
                         })
                         .collect();
-
-                    denoms.dedup();
-                    drop_mutability!(denoms);
 
                     for denom in denoms {
                         if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom) {
