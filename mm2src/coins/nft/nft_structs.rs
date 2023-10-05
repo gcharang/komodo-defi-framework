@@ -20,9 +20,6 @@ use std::sync::Arc;
 use url::Url;
 
 use crate::nft::nft_errors::{LockDBError, ParseChainTypeError};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::nft::storage::sql_storage::AsyncSqlWrapper;
-
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 
 #[cfg(target_arch = "wasm32")]
@@ -642,11 +639,11 @@ impl From<Nft> for TransferMeta {
 pub(crate) struct NftCtx {
     /// An asynchronous mutex to guard against concurrent NFT operations, ensuring data consistency.
     pub(crate) guard: Arc<AsyncMutex<()>>,
-    #[cfg(target_arch = "wasm32")]
     /// Platform-specific database for caching NFT data.
+    #[cfg(target_arch = "wasm32")]
     pub(crate) nft_cache_db: SharedDb<NftCacheIDB>,
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) nft_cache_db: Arc<AsyncConnection>,
+    pub(crate) nft_cache_db: Arc<AsyncMutex<AsyncConnection>>,
 }
 
 impl NftCtx {
@@ -677,15 +674,14 @@ impl NftCtx {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn get_storage(
+    pub(crate) async fn lock_db(
         &self,
     ) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
-        let async_db = self.nft_cache_db.clone();
-        Ok(AsyncSqlWrapper::new(async_db))
+        Ok(self.nft_cache_db.lock().await)
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) async fn get_storage(
+    pub(crate) async fn lock_db(
         &self,
     ) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
         let locked_db = self

@@ -76,10 +76,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage()?;
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await?;
+    let storage = nft_ctx.lock_db().await?;
     for chain in req.chains.iter() {
         if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
@@ -119,10 +116,7 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage()?;
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await?;
+    let storage = nft_ctx.lock_db().await?;
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
         NftListStorageOps::init(&storage, &req.chain).await?;
     }
@@ -164,10 +158,7 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage()?;
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await?;
+    let storage = nft_ctx.lock_db().await?;
     for chain in req.chains.iter() {
         if !NftTransferHistoryStorageOps::is_initialized(&storage, chain).await? {
             NftTransferHistoryStorageOps::init(&storage, chain).await?;
@@ -203,10 +194,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage()?;
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await?;
+    let storage = nft_ctx.lock_db().await?;
     for chain in req.chains.iter() {
         let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
 
@@ -391,10 +379,7 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage()?;
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await?;
+    let storage = nft_ctx.lock_db().await?;
     let token_address_str = eth_addr_to_hex(&req.token_address);
     let moralis_meta = match get_moralis_metadata(
         token_address_str.clone(),
@@ -1100,10 +1085,7 @@ pub(crate) async fn find_wallet_nft_amount(
     let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let storage = nft_ctx.get_storage()?;
-    #[cfg(target_arch = "wasm32")]
-    let storage = nft_ctx.get_storage().await?;
+    let storage = nft_ctx.lock_db().await?;
     if !NftListStorageOps::is_initialized(&storage, chain).await? {
         NftListStorageOps::init(&storage, chain).await?;
     }

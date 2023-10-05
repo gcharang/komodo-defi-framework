@@ -6,8 +6,6 @@ use std::path::Path;
 use std::thread;
 use tokio::sync::oneshot::{self};
 
-const BUG_TEXT: &str = "bug in tokio-rusqlite, please report";
-
 /// Represents the errors specific for this library.
 #[derive(Debug)]
 pub enum AsyncConnError {
@@ -81,9 +79,7 @@ impl AsyncConnection {
     /// string or if the underlying SQLite open call fails.
     pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref().to_owned();
-        start(move || rusqlite::Connection::open(path))
-            .await
-            .map_err(AsyncConnError::Rusqlite)
+        start(move || rusqlite::Connection::open(path)).await
     }
 
     /// Open a new AsyncConnection to an in-memory SQLite database.
@@ -91,11 +87,7 @@ impl AsyncConnection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite open call fails.
-    pub async fn open_in_memory() -> Result<Self> {
-        start(rusqlite::Connection::open_in_memory)
-            .await
-            .map_err(AsyncConnError::Rusqlite)
-    }
+    pub async fn open_in_memory() -> Result<Self> { start(rusqlite::Connection::open_in_memory).await }
 
     /// Open a new AsyncConnection to a SQLite database.
     ///
@@ -108,9 +100,7 @@ impl AsyncConnection {
     /// string or if the underlying SQLite open call fails.
     pub async fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Self> {
         let path = path.as_ref().to_owned();
-        start(move || rusqlite::Connection::open_with_flags(path, flags))
-            .await
-            .map_err(AsyncConnError::Rusqlite)
+        start(move || rusqlite::Connection::open_with_flags(path, flags)).await
     }
 
     /// Open a new AsyncConnection to a SQLite database using the specific flags
@@ -126,9 +116,7 @@ impl AsyncConnection {
     pub async fn open_with_flags_and_vfs<P: AsRef<Path>>(path: P, flags: OpenFlags, vfs: &str) -> Result<Self> {
         let path = path.as_ref().to_owned();
         let vfs = vfs.to_owned();
-        start(move || rusqlite::Connection::open_with_flags_and_vfs(path, flags, &vfs))
-            .await
-            .map_err(AsyncConnError::Rusqlite)
+        start(move || rusqlite::Connection::open_with_flags_and_vfs(path, flags, &vfs)).await
     }
 
     /// Open a new AsyncConnection to an in-memory SQLite database.
@@ -140,9 +128,7 @@ impl AsyncConnection {
     ///
     /// Will return `Err` if the underlying SQLite open call fails.
     pub async fn open_in_memory_with_flags(flags: OpenFlags) -> Result<Self> {
-        start(move || rusqlite::Connection::open_in_memory_with_flags(flags))
-            .await
-            .map_err(AsyncConnError::Rusqlite)
+        start(move || rusqlite::Connection::open_in_memory_with_flags(flags)).await
     }
 
     /// Open a new connection to an in-memory SQLite database using the
@@ -157,9 +143,7 @@ impl AsyncConnection {
     /// string or if the underlying SQLite open call fails.
     pub async fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Self> {
         let vfs = vfs.to_owned();
-        start(move || rusqlite::Connection::open_in_memory_with_flags_and_vfs(flags, &vfs))
-            .await
-            .map_err(AsyncConnError::Rusqlite)
+        start(move || rusqlite::Connection::open_in_memory_with_flags_and_vfs(flags, &vfs)).await
     }
 
     /// Call a function in background thread and get the result
@@ -207,7 +191,7 @@ impl AsyncConnection {
             })))
             .expect("database connection should be open");
 
-        receiver.await.expect(BUG_TEXT)
+        receiver.await.expect("Bug occurred, please report")
     }
 
     /// Close the database AsyncConnection.
@@ -247,10 +231,10 @@ impl AsyncConnection {
 }
 
 impl Debug for AsyncConnection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_struct("Connection").finish() }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_struct("AsyncConnection").finish() }
 }
 
-async fn start<F>(open: F) -> rusqlite::Result<AsyncConnection>
+async fn start<F>(open: F) -> Result<AsyncConnection>
 where
     F: FnOnce() -> rusqlite::Result<rusqlite::Connection> + Send + 'static,
 {
@@ -278,12 +262,18 @@ where
 
                     match result {
                         Ok(v) => {
-                            s.send(Ok(v)).expect(BUG_TEXT);
+                            if s.send(Ok(v)).is_err() {
+                                // terminate the thread
+                                return;
+                            }
                             break;
                         },
                         Err((c, e)) => {
                             conn = c;
-                            s.send(Err(e)).expect(BUG_TEXT);
+                            if s.send(Err(e)).is_err() {
+                                // terminate the thread
+                                return;
+                            }
                         },
                     }
                 },
@@ -293,6 +283,11 @@ where
 
     result_receiver
         .await
-        .expect(BUG_TEXT)
+        .map_err(|_| {
+            AsyncConnError::Other(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to receive connection result",
+            )))
+        })
         .map(|_| AsyncConnection { sender })
 }
