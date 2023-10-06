@@ -179,7 +179,7 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
     ) -> UtxoCoinBuildResult<UtxoCoinFields> {
         let conf = UtxoConfBuilder::new(self.conf(), self.activation_params(), self.ticker()).build()?;
 
-        let path_to_address = self.activation_params().path_to_address.clone();
+        let path_to_address = self.activation_params().path_to_address;
         let path_to_coin = conf
             .derivation_path
             .as_ref()

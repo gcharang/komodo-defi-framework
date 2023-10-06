@@ -17,7 +17,7 @@ pub(crate) type HDBalanceAddress<T> = <<T as HDWalletBalanceOps>::HDAddressScann
 
 pub enum EnableCoinBalanceError {
     NewAddressDerivingError(NewAddressDerivingError),
-    NewAccountCreatingError(NewAccountCreationError),
+    NewAccountCreationError(NewAccountCreationError),
     BalanceError(BalanceError),
 }
 
@@ -26,7 +26,7 @@ impl From<NewAddressDerivingError> for EnableCoinBalanceError {
 }
 
 impl From<NewAccountCreationError> for EnableCoinBalanceError {
-    fn from(e: NewAccountCreationError) -> Self { EnableCoinBalanceError::NewAccountCreatingError(e) }
+    fn from(e: NewAccountCreationError) -> Self { EnableCoinBalanceError::NewAccountCreationError(e) }
 }
 
 impl From<BalanceError> for EnableCoinBalanceError {

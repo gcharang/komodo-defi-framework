@@ -318,21 +318,12 @@ where
     }
 
     async fn get_enabled_address(&self) -> Option<HDWalletAddress<Self>> {
-        let enabled_address = match self.enabled_address.clone() {
-            Some(id) => id,
-            None => return None,
-        };
-
-        let account = match self.get_account(enabled_address.account_id).await {
-            Some(account) => account,
-            None => return None,
-        };
-
+        let enabled_address = self.enabled_address?;
+        let account = self.get_account(enabled_address.account_id).await?;
         let hd_address_id = HDAddressId {
             chain: enabled_address.chain,
             address_id: enabled_address.address_id,
         };
-
         let address = account
             .derived_addresses()
             .lock()
@@ -352,7 +343,7 @@ where
     fn hd_wallet_storage(&self) -> &HDWalletCoinStorage { &self.hd_wallet_storage }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct HDAccountAddressId {
     pub account_id: u32,
     pub chain: Bip44Chain,
@@ -388,7 +379,6 @@ impl HDAccountAddressId {
         account_der_path.push(ChildNumber::new(self.account_id, true)?);
         account_der_path.push(self.chain.to_child_number());
         account_der_path.push(ChildNumber::new(self.address_id, false)?);
-        drop_mutability!(account_der_path);
 
         Ok(account_der_path)
     }

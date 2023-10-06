@@ -83,7 +83,7 @@ impl InitUtxoStandardError {
             EnableCoinBalanceError::NewAddressDerivingError(addr) => {
                 Self::from_new_address_deriving_error(addr, ticker)
             },
-            EnableCoinBalanceError::NewAccountCreatingError(acc) => Self::from_new_account_err(acc, ticker),
+            EnableCoinBalanceError::NewAccountCreationError(acc) => Self::from_new_account_err(acc, ticker),
             EnableCoinBalanceError::BalanceError(balance) => Self::from_balance_err(balance, ticker),
         }
     }

@@ -1379,7 +1379,7 @@ impl WithdrawFrom {
     #[allow(clippy::result_large_err)]
     pub fn to_address_path(&self, expected_coin_type: u32) -> Result<HDAccountAddressId, MmError<WithdrawError>> {
         match self {
-            WithdrawFrom::AddressId(address_id) => Ok(address_id.clone()),
+            WithdrawFrom::AddressId(address_id) => Ok(*address_id),
             WithdrawFrom::DerivationPath { derivation_path } => {
                 let derivation_path = StandardHDPath::from_str(derivation_path)
                     .map_to_mm(StandardHDPathError::from)
