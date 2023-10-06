@@ -5,7 +5,8 @@ use crypto::StandardHDCoinAddress;
 use mm2_core::mm_ctx::MmArc;
 use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
-use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, morty_conf, rick_conf, start_swaps,
+use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, enable_tendermint,
+                                  iris_nimda_testnet_conf, iris_testnet_conf, morty_conf, rick_conf, start_swaps,
                                   test_qrc20_history_impl, wait_for_swaps_finish_and_check_status, MarketMakerIt,
                                   Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK};
 use mm2_test_helpers::get_passphrase;
@@ -28,7 +29,12 @@ async fn test_mm2_stops_impl(
     volume: f64,
     stop_timeout_ms: u64,
 ) {
-    let coins = json!([rick_conf(), morty_conf()]);
+    let coins = json!([
+        rick_conf(),
+        morty_conf(),
+        iris_testnet_conf(),
+        iris_nimda_testnet_conf()
+    ]);
 
     let bob_passphrase = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
     let alice_passphrase = get_passphrase!(".env.client", "ALICE_PASSPHRASE").unwrap();
@@ -60,6 +66,16 @@ async fn test_mm2_stops_impl(
 
     let rc = enable_electrum_json(&mm_alice, MORTY, true, morty_electrums(), None).await;
     log!("enable MORTY (bob): {:?}", rc);
+
+    let rc = enable_tendermint(
+        &mm_alice,
+        "IRIS-TEST",
+        &["IRIS-NIMDA"],
+        &["http://34.80.202.172:26657"],
+        false,
+    )
+    .await;
+    log!("enable IRIS-TEST (alice): {:?}", rc);
 
     start_swaps(&mut mm_bob, &mut mm_alice, pairs, maker_price, taker_price, volume).await;
 
