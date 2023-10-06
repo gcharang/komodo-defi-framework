@@ -6,21 +6,18 @@ use std::path::Path;
 use std::thread;
 use tokio::sync::oneshot::{self};
 
-/// Represents the errors specific for this library.
+/// Represents the errors specific for AsyncConnection.
 #[derive(Debug)]
 pub enum AsyncConnError {
     /// The connection to the SQLite has been closed and cannot be queried any more.
     ConnectionClosed,
-
-    /// An error occured while closing the SQLite connection.
+    /// An error occurred while closing the SQLite connection.
     /// This `Error` variant contains the [`AsyncConnection`], which can be used to retry the close operation
-    /// and the underlying [`SqlError`] that made it impossile to close the database.
+    /// and the underlying [`SqlError`] that made it impossible to close the database.
     Close((AsyncConnection, SqlError)),
-
-    /// A `Rusqlite` error occured.
+    /// A `Rusqlite` error occurred.
     Rusqlite(SqlError),
-
-    /// An application-specific error occured.
+    /// An application-specific error occurred.
     Other(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 

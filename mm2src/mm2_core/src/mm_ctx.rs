@@ -26,7 +26,9 @@ cfg_wasm32! {
 }
 
 cfg_native! {
+    use db_common::async_sql_conn::AsyncConnection;
     use db_common::sqlite::rusqlite::Connection;
+    use futures::lock::Mutex as AsyncMutex;
     use futures_rustls::webpki::DNSNameRef;
     use mm2_metrics::prometheus;
     use mm2_metrics::MmMetricsError;
@@ -34,8 +36,6 @@ cfg_native! {
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
     use std::sync::MutexGuard;
-    use db_common::async_sql_conn::AsyncConnection;
-    use futures::lock::Mutex as AsyncMutex;
 }
 
 /// Default interval to export and record metrics to log.
@@ -131,6 +131,7 @@ pub struct MmCtx {
     pub db_namespace: DbNamespaceId,
     /// The context belonging to the `nft` mod: `NftCtx`.
     pub nft_ctx: Mutex<Option<Arc<dyn Any + 'static + Send + Sync>>>,
+    /// asynchronous handle for rusqlite connection.
     #[cfg(not(target_arch = "wasm32"))]
     pub async_sqlite_connection: Constructible<Arc<AsyncMutex<AsyncConnection>>>,
 }
