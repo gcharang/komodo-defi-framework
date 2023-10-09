@@ -12,7 +12,6 @@ pub enum Error {
     InvalidPrivate,
     InvalidAddress,
     FailedKeyGeneration,
-    InvalidPrefixes,
 }
 
 impl fmt::Display for Error {
@@ -27,7 +26,6 @@ impl fmt::Display for Error {
             Error::InvalidPrivate => "Invalid Private",
             Error::InvalidAddress => "Invalid Address",
             Error::FailedKeyGeneration => "Key generation failed",
-            Error::InvalidPrefixes => "Invalid Prefixes",
         };
 
         msg.fmt(f)
