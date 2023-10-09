@@ -14,7 +14,7 @@ use common::jsonrpc_client::JsonRpcErrorType;
 use common::PagingOptionsEnum;
 use crypto::privkey::key_pair_from_seed;
 use itertools::Itertools;
-#[cfg(test)] use keys::prefixes::*;
+use keys::prefixes::*;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::num::NonZeroUsize;
 use std::time::Duration;
