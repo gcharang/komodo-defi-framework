@@ -204,8 +204,7 @@ where
     let key_pair = priv_key_policy.activated_key_or_err()?;
     let addr_format = builder.address_format()?;
     let my_address = Address {
-        prefix: conf.pub_addr_prefix,
-        t_addr_prefix: conf.pub_t_addr_prefix,
+        prefixes: conf.address_prefixes.p2pkh.clone(),
         hash: AddressHashEnum::AddressHash(key_pair.public().address_hash()),
         checksum_type: conf.checksum_type,
         hrp: conf.bech32_hrp.clone(),

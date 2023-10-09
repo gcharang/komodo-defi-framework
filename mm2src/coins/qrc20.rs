@@ -743,8 +743,7 @@ impl UtxoCommonOps for Qrc20Coin {
         let conf = &self.utxo.conf;
         utxo_common::address_from_pubkey(
             pubkey,
-            conf.pub_addr_prefix,
-            conf.pub_t_addr_prefix,
+            conf.address_prefixes.p2pkh.clone(),
             conf.checksum_type,
             conf.bech32_hrp.clone(),
             self.addr_format().clone(),
@@ -1519,14 +1518,8 @@ pub struct Qrc20FeeDetails {
 }
 
 async fn qrc20_withdraw(coin: Qrc20Coin, req: WithdrawRequest) -> WithdrawResult {
-    let to_addr = UtxoAddress::from_legacyaddress(
-        &req.to,
-        coin.as_ref().conf.pub_addr_prefix,
-        coin.as_ref().conf.pub_t_addr_prefix,
-        coin.as_ref().conf.p2sh_addr_prefix,
-        coin.as_ref().conf.p2sh_t_addr_prefix,
-    )
-    .map_to_mm(WithdrawError::InvalidAddress)?;
+    let to_addr = UtxoAddress::from_legacyaddress(&req.to, &coin.as_ref().conf.address_prefixes)
+        .map_to_mm(WithdrawError::InvalidAddress)?;
     let conf = &coin.utxo.conf;
     if to_addr.script_type != AddressScriptType::P2PKH {
         let error = "QRC20 can be sent to P2PKH addresses only".to_owned();

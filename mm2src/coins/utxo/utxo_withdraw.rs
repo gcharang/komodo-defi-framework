@@ -432,8 +432,7 @@ where
                     .clone()
                     .addr_format;
                 let my_address = Address {
-                    prefix: coin.as_ref().conf.pub_addr_prefix,
-                    t_addr_prefix: coin.as_ref().conf.pub_t_addr_prefix,
+                    prefixes: coin.as_ref().conf.address_prefixes.p2pkh.clone(),
                     hash: AddressHashEnum::AddressHash(key_pair.public().address_hash()),
                     checksum_type: coin.as_ref().conf.checksum_type,
                     hrp: coin.as_ref().conf.bech32_hrp.clone(),

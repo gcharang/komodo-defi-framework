@@ -252,8 +252,7 @@ impl BchDockerOps {
             let key_pair = KeyPair::random_compressed();
             let address_hash = key_pair.public().address_hash();
             let address = Address {
-                prefix: self.coin.as_ref().conf.pub_addr_prefix,
-                t_addr_prefix: self.coin.as_ref().conf.pub_t_addr_prefix,
+                prefixes: self.coin.as_ref().conf.address_prefixes.p2pkh.clone(),
                 hrp: None,
                 hash: address_hash.into(),
                 checksum_type: Default::default(),
@@ -992,9 +991,8 @@ pub fn get_balance(mm: &MarketMakerIt, coin: &str) -> BalanceResponse {
 
 pub fn utxo_burn_address() -> Address {
     Address {
-        prefix: 60,
+        prefixes: [60].into(),
         hash: AddressHashEnum::default_address_hash(),
-        t_addr_prefix: 0,
         checksum_type: ChecksumType::DSHA256,
         hrp: None,
         addr_format: UtxoAddressFormat::Standard,

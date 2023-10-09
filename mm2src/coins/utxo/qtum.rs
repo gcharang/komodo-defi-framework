@@ -111,13 +111,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
 
     /// Try to parse address from either wallet (UTXO) format or contract format.
     fn utxo_address_from_any_format(&self, from: &str) -> Result<Address, String> {
-        let utxo_err = match Address::from_legacyaddress(
-            from,
-            self.as_ref().conf.pub_addr_prefix,
-            self.as_ref().conf.pub_t_addr_prefix,
-            self.as_ref().conf.p2sh_addr_prefix,
-            self.as_ref().conf.p2sh_t_addr_prefix,
-        ) {
+        let utxo_err = match Address::from_legacyaddress(from, &self.as_ref().conf.address_prefixes) {
             Ok(addr) => {
                 if addr.script_type == AddressScriptType::P2PKH {
                     return Ok(addr);
@@ -126,12 +120,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
             },
             Err(e) => e,
         };
-        let utxo_segwit_err = match Address::from_segwitaddress(
-            from,
-            self.as_ref().conf.checksum_type,
-            self.as_ref().conf.pub_addr_prefix,
-            self.as_ref().conf.pub_t_addr_prefix,
-        ) {
+        let utxo_segwit_err = match Address::from_segwitaddress(from, self.as_ref().conf.checksum_type) {
             Ok(addr) => {
                 let is_segwit =
                     addr.hrp.is_some() && addr.hrp == self.as_ref().conf.bech32_hrp && self.as_ref().conf.segwit;
@@ -157,8 +146,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
     fn utxo_addr_from_contract_addr(&self, address: H160) -> Address {
         let utxo = self.as_ref();
         Address {
-            prefix: utxo.conf.pub_addr_prefix,
-            t_addr_prefix: utxo.conf.pub_t_addr_prefix,
+            prefixes: utxo.conf.address_prefixes.p2pkh.clone(),
             hash: AddressHashEnum::AddressHash(address.0.into()),
             checksum_type: utxo.conf.checksum_type,
             hrp: utxo.conf.bech32_hrp.clone(),
@@ -175,8 +163,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
     fn utxo_address_from_contract_addr(&self, address: H160) -> Address {
         let utxo = self.as_ref();
         Address {
-            prefix: utxo.conf.pub_addr_prefix,
-            t_addr_prefix: utxo.conf.pub_t_addr_prefix,
+            prefixes: utxo.conf.address_prefixes.p2pkh.clone(),
             hash: AddressHashEnum::AddressHash(address.0.into()),
             checksum_type: utxo.conf.checksum_type,
             hrp: utxo.conf.bech32_hrp.clone(),
@@ -189,8 +176,7 @@ pub trait QtumBasedCoin: UtxoCommonOps + MarketCoinOps {
         let utxo = self.as_ref();
         let qtum_address = try_s!(utxo_common::address_from_raw_pubkey(
             pubkey,
-            utxo.conf.pub_addr_prefix,
-            utxo.conf.pub_t_addr_prefix,
+            utxo.conf.address_prefixes.p2pkh.clone(),
             utxo.conf.checksum_type,
             utxo.conf.bech32_hrp.clone(),
             self.addr_format().clone()
@@ -497,8 +483,7 @@ impl UtxoCommonOps for QtumCoin {
         let conf = &self.utxo_arc.conf;
         utxo_common::address_from_pubkey(
             pubkey,
-            conf.pub_addr_prefix,
-            conf.pub_t_addr_prefix,
+            conf.address_prefixes.p2pkh.clone(),
             conf.checksum_type,
             conf.bech32_hrp.clone(),
             self.addr_format().clone(),

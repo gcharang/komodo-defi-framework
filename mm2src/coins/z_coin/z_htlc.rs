@@ -47,8 +47,7 @@ pub async fn z_send_htlc(
     let payment_script = payment_script(time_lock, secret_hash, my_pub, other_pub);
     let script_hash = dhash160(&payment_script);
     let htlc_address = Address {
-        prefix: coin.utxo_arc.conf.p2sh_addr_prefix,
-        t_addr_prefix: coin.utxo_arc.conf.p2sh_t_addr_prefix,
+        prefixes: coin.utxo_arc.conf.address_prefixes.p2sh.clone(),
         hash: script_hash.into(),
         checksum_type: coin.utxo_arc.conf.checksum_type,
         addr_format: UtxoAddressFormat::Standard,

@@ -193,6 +193,10 @@ fn decode_contract_number(source: &[u8]) -> Result<i64, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
+    use keys::prefixes::QRC20_PREFIXES;
+
     use super::*;
 
     #[test]
@@ -246,8 +250,11 @@ mod tests {
     fn test_extract_contract_call() {
         let script: Script = "5403a02526012844a9059cbb0000000000000000000000000240b898276ad2cc0d2fe6f527e8e31104e7fde3000000000000000000000000000000000000000000000000000000003b9aca0014d362e096e873eb7907e205fadc6175c6fec7bc44c2".into();
 
-        let to_addr: UtxoAddress =
-            UtxoAddress::from_legacyaddress("qHmJ3KA6ZAjR9wGjpFASn4gtUSeFAqdZgs", 120, 0, 50, 0).unwrap();
+        let to_addr: UtxoAddress = UtxoAddress::from_legacyaddress(
+            "qHmJ3KA6ZAjR9wGjpFASn4gtUSeFAqdZgs",
+            &QRC20_PREFIXES.try_into().unwrap(),
+        )
+        .unwrap();
         let to_addr = qtum::contract_addr_from_utxo_addr(to_addr).unwrap();
         let amount: U256 = 1000000000.into();
         let function = eth::ERC20_CONTRACT.function("transfer").unwrap();

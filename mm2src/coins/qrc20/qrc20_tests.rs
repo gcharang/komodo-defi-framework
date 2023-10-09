@@ -67,9 +67,8 @@ fn test_withdraw_to_p2sh_address_should_fail() {
     let (_, coin) = qrc20_coin_for_test(priv_key, None);
 
     let p2sh_address = Address {
-        prefix: coin.as_ref().conf.p2sh_addr_prefix,
+        prefixes: coin.as_ref().conf.address_prefixes.p2sh.clone(),
         hash: coin.as_ref().derivation_method.unwrap_single_addr().hash.clone(),
-        t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
         checksum_type: coin.as_ref().derivation_method.unwrap_single_addr().checksum_type,
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Standard,
@@ -152,7 +151,11 @@ fn test_validate_maker_payment() {
 
     assert_eq!(
         *coin.utxo.derivation_method.unwrap_single_addr(),
-        Address::from_legacyaddress("qUX9FGHubczidVjWPCUWuwCUJWpkAtGCgf", 120, 0, 50, 0).unwrap()
+        Address::from_legacyaddress(
+            "qUX9FGHubczidVjWPCUWuwCUJWpkAtGCgf",
+            &coin.as_ref().conf.address_prefixes
+        )
+        .unwrap()
     );
 
     // tx_hash: 016a59dd2b181b3906b0f0333d5c7561dacb332dc99ac39679a591e523f2c49a
@@ -251,7 +254,11 @@ fn test_wait_for_confirmations_excepted() {
 
     assert_eq!(
         *coin.utxo.derivation_method.unwrap_single_addr(),
-        Address::from_legacyaddress("qUX9FGHubczidVjWPCUWuwCUJWpkAtGCgf", 120, 0, 50, 0).unwrap()
+        Address::from_legacyaddress(
+            "qUX9FGHubczidVjWPCUWuwCUJWpkAtGCgf",
+            &coin.as_ref().conf.address_prefixes
+        )
+        .unwrap()
     );
 
     // tx_hash: 35e03bc529528a853ee75dde28f27eec8ed7b152b6af7ab6dfa5d55ea46f25ac
@@ -559,8 +566,11 @@ fn test_generate_token_transfer_script_pubkey() {
         gas_price,
     };
 
-    let to_addr: UtxoAddress =
-        UtxoAddress::from_legacyaddress("qHmJ3KA6ZAjR9wGjpFASn4gtUSeFAqdZgs", 120, 0, 50, 0).unwrap();
+    let to_addr: UtxoAddress = UtxoAddress::from_legacyaddress(
+        "qHmJ3KA6ZAjR9wGjpFASn4gtUSeFAqdZgs",
+        &coin.as_ref().conf.address_prefixes,
+    )
+    .unwrap();
     let to_addr = qtum::contract_addr_from_utxo_addr(to_addr).unwrap();
     let amount: U256 = 1000000000.into();
     let actual = coin.transfer_output(to_addr, amount, gas_limit, gas_price).unwrap();

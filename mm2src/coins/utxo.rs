@@ -60,9 +60,9 @@ use futures::compat::Future01CompatExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use futures01::Future;
 use keys::bytes::Bytes;
-use keys::Signature;
-pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, KeyPair, Private, Public, Secret, LegacyAddress,
-               Type as ScriptType};
+use keys::NetworkAddressPrefixes;
+pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, AddressPrefixes, AddressScriptType,
+               KeyPair, LegacyAddress, Private, Public, Secret, Type as ScriptType};
 #[cfg(not(target_arch = "wasm32"))]
 use lightning_invoice::Currency as LightningCurrency;
 use mm2_core::mm_ctx::MmArc;
@@ -494,11 +494,8 @@ pub struct UtxoCoinConf {
     pub ticker: String,
     /// https://en.bitcoin.it/wiki/List_of_address_prefixes
     /// https://github.com/jl777/coins/blob/master/coins
-    pub pub_addr_prefix: u8,
-    pub p2sh_addr_prefix: u8,
     pub wif_prefix: u8,
-    pub pub_t_addr_prefix: u8,
-    pub p2sh_t_addr_prefix: u8,
+    pub address_prefixes: NetworkAddressPrefixes,
     pub sign_message_prefix: Option<String>,
     // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#Segwit_address_format
     pub bech32_hrp: Option<String>,
@@ -1924,8 +1921,7 @@ pub fn address_by_conf_and_pubkey_str(
     let hash = dhash160(&pubkey_bytes);
 
     let address = Address {
-        prefix: utxo_conf.pub_addr_prefix,
-        t_addr_prefix: utxo_conf.pub_t_addr_prefix,
+        prefixes: utxo_conf.address_prefixes.p2pkh,
         hash: hash.into(),
         checksum_type: utxo_conf.checksum_type,
         hrp: utxo_conf.bech32_hrp,

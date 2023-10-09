@@ -12,6 +12,7 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 
 mod address;
+mod address_prefixes;
 mod cashaddress;
 mod display;
 mod error;
@@ -26,6 +27,8 @@ mod signature;
 pub use primitives::{bytes, hash};
 
 pub use address::{Address, AddressFormat, AddressScriptType};
+pub use address_prefixes::prefixes;
+pub use address_prefixes::{AddressPrefixes, NetworkAddressPrefixes};
 pub use cashaddress::{CashAddrType, CashAddress, NetworkPrefix};
 pub use display::DisplayLayout;
 pub use error::Error;

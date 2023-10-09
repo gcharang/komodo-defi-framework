@@ -612,9 +612,11 @@ pub fn is_witness_commitment_script(script: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
     use super::{Script, ScriptAddress, ScriptType};
     use crypto::ChecksumType;
-    use keys::{Address, Public};
+    use keys::{prefixes::BTC_PREFIXES, Address, Public};
     use {Builder, Error, Opcode};
 
     /// Maximum number of bytes pushable to the stack
@@ -790,9 +792,10 @@ OP_ADD
 
     #[test]
     fn test_extract_destinations_pub_key_hash() {
-        let address = Address::from_legacyaddress("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S", 0, 0, 5, 0)
-            .unwrap()
-            .hash;
+        let address =
+            Address::from_legacyaddress("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S", &BTC_PREFIXES.try_into().unwrap())
+                .unwrap()
+                .hash;
         let script = Builder::build_p2pkh(&address);
         assert_eq!(script.script_type(), ScriptType::PubKeyHash);
         assert_eq!(
@@ -803,9 +806,10 @@ OP_ADD
 
     #[test]
     fn test_extract_destinations_script_hash() {
-        let address = Address::from_legacyaddress("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S", 0, 0, 5, 0)
-            .unwrap()
-            .hash;
+        let address =
+            Address::from_legacyaddress("13NMTpfNVVJQTNH4spP4UeqBGqLdqDo27S", &BTC_PREFIXES.try_into().unwrap())
+                .unwrap()
+                .hash;
         let script = Builder::build_p2sh(&address);
         assert_eq!(script.script_type(), ScriptType::ScriptHash);
         assert_eq!(
@@ -816,14 +820,9 @@ OP_ADD
 
     #[test]
     fn test_extract_destinations_witness_pub_key_hash() {
-        let address = Address::from_segwitaddress(
-            "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
-            ChecksumType::DSHA256,
-            0,
-            0,
-        )
-        .unwrap()
-        .hash;
+        let address = Address::from_segwitaddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", ChecksumType::DSHA256)
+            .unwrap()
+            .hash;
         let script = Builder::build_witness_script(&address);
         assert_eq!(script.script_type(), ScriptType::WitnessKey);
         assert_eq!(
@@ -837,8 +836,6 @@ OP_ADD
         let address = Address::from_segwitaddress(
             "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3",
             ChecksumType::DSHA256,
-            0,
-            0,
         )
         .unwrap()
         .hash;

@@ -14,6 +14,7 @@ use common::jsonrpc_client::JsonRpcErrorType;
 use common::PagingOptionsEnum;
 use crypto::privkey::key_pair_from_seed;
 use itertools::Itertools;
+#[cfg(test)] use keys::prefixes::*;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::num::NonZeroUsize;
 use std::time::Duration;
@@ -62,9 +63,12 @@ pub(super) fn utxo_coin_fields_for_test(
     };
     let key_pair = key_pair_from_seed(&seed).unwrap();
     let my_address = Address {
-        prefix: 60,
+        prefixes: if is_segwit_coin {
+            AddressPrefixes::default()
+        } else {
+            [60].into()
+        },
         hash: key_pair.public().address_hash().into(),
-        t_addr_prefix: 0,
         checksum_type,
         hrp: if is_segwit_coin {
             Some(TEST_COIN_HRP.to_string())
@@ -103,10 +107,10 @@ pub(super) fn utxo_coin_fields_for_test(
             tx_version: 4,
             default_address_format: UtxoAddressFormat::Standard,
             asset_chain: true,
-            p2sh_addr_prefix: 85,
-            p2sh_t_addr_prefix: 0,
-            pub_addr_prefix: 60,
-            pub_t_addr_prefix: 0,
+            address_prefixes: NetworkAddressPrefixes {
+                p2pkh: [60].into(),
+                p2sh: [85].into(),
+            },
             sign_message_prefix: Some(String::from("Komodo Signed Message:\n")),
             bech32_hrp,
             ticker: TEST_COIN_NAME.into(),
@@ -199,28 +203,32 @@ pub(super) fn get_morty_hd_transactions_ordered(tx_hashes: &[&str]) -> Vec<Trans
 
 pub(super) async fn test_electrum_display_balances(rpc_client: &ElectrumClient) {
     let addresses = vec![
-        Address::from_legacyaddress("RG278CfeNPFtNztFZQir8cgdWexVhViYVy", 60, 0, 85, 0).unwrap(),
-        Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", 60, 0, 85, 0).unwrap(),
-        Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", 60, 0, 85, 0).unwrap(),
-        Address::from_legacyaddress("RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF", 60, 0, 85, 0).unwrap(),
+        Address::from_legacyaddress("RG278CfeNPFtNztFZQir8cgdWexVhViYVy", &KMD_PREFIXES.try_into().unwrap()).unwrap(),
+        Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", &KMD_PREFIXES.try_into().unwrap()).unwrap(),
+        Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", &KMD_PREFIXES.try_into().unwrap()).unwrap(),
+        Address::from_legacyaddress("RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF", &KMD_PREFIXES.try_into().unwrap()).unwrap(),
     ];
     let actual = rpc_client.display_balances(addresses, 8).compat().await.unwrap();
 
     let expected: Vec<(Address, BigDecimal)> = vec![
         (
-            Address::from_legacyaddress("RG278CfeNPFtNztFZQir8cgdWexVhViYVy", 60, 0, 85, 0).unwrap(),
+            Address::from_legacyaddress("RG278CfeNPFtNztFZQir8cgdWexVhViYVy", &KMD_PREFIXES.try_into().unwrap())
+                .unwrap(),
             BigDecimal::try_from(5.77699).unwrap(),
         ),
         (
-            Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", 60, 0, 85, 0).unwrap(),
+            Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", &KMD_PREFIXES.try_into().unwrap())
+                .unwrap(),
             BigDecimal::from(3.33),
         ),
         (
-            Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", 60, 0, 85, 0).unwrap(),
+            Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", &KMD_PREFIXES.try_into().unwrap())
+                .unwrap(),
             BigDecimal::try_from(0.77699).unwrap(),
         ),
         (
-            Address::from_legacyaddress("RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF", 60, 0, 85, 0).unwrap(),
+            Address::from_legacyaddress("RQHn9VPHBqNjYwyKfJbZCiaxVrWPKGQjeF", &KMD_PREFIXES.try_into().unwrap())
+                .unwrap(),
             BigDecimal::try_from(16.55398).unwrap(),
         ),
     ];

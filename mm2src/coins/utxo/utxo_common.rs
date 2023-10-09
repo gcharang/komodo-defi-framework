@@ -627,28 +627,33 @@ pub fn addresses_from_script<T: UtxoCommonOps>(coin: &T, script: &Script) -> Res
     let addresses = destinations
         .into_iter()
         .map(|dst| {
-            let (prefix, t_addr_prefix, addr_format, script_type) = match dst.kind {
+            let (prefixes, addr_format, script_type) = match dst.kind {
                 AddressScriptType::P2PKH => (
-                    conf.pub_addr_prefix,
-                    conf.pub_t_addr_prefix,
+                    conf.address_prefixes.p2pkh.clone(),
                     coin.addr_format_for_standard_scripts(),
                     AddressScriptType::P2PKH,
                 ),
                 AddressScriptType::P2SH => (
-                    conf.p2sh_addr_prefix,
-                    conf.p2sh_t_addr_prefix,
+                    conf.address_prefixes.p2sh.clone(),
                     coin.addr_format_for_standard_scripts(),
                     AddressScriptType::P2SH,
                 ),
-                AddressScriptType::P2WPKH => (0, 0, UtxoAddressFormat::Segwit, AddressScriptType::P2WPKH),
-                AddressScriptType::P2WSH => (0, 0, UtxoAddressFormat::Segwit, AddressScriptType::P2WSH),
+                AddressScriptType::P2WPKH => (
+                    AddressPrefixes::default(),
+                    UtxoAddressFormat::Segwit,
+                    AddressScriptType::P2WPKH,
+                ),
+                AddressScriptType::P2WSH => (
+                    AddressPrefixes::default(),
+                    UtxoAddressFormat::Segwit,
+                    AddressScriptType::P2WSH,
+                ),
             };
-
+            println!("prefixes={:?}", prefixes);
             Address {
                 hash: dst.hash,
                 checksum_type: conf.checksum_type,
-                prefix,
-                t_addr_prefix,
+                prefixes,
                 hrp: conf.bech32_hrp.clone(),
                 addr_format,
                 script_type,
@@ -673,34 +678,17 @@ where
 pub fn address_from_str_unchecked(coin: &UtxoCoinFields, address: &str) -> MmResult<Address, AddrFromStrError> {
     let mut errors = Vec::with_capacity(3);
 
-    match Address::from_legacyaddress(
-        address,
-        coin.conf.pub_addr_prefix,
-        coin.conf.pub_t_addr_prefix,
-        coin.conf.p2sh_addr_prefix,
-        coin.conf.p2sh_t_addr_prefix,
-    ) {
+    match Address::from_legacyaddress(address, &coin.conf.address_prefixes) {
         Ok(legacy) => return Ok(legacy),
         Err(e) => errors.push(e),
     };
 
-    match Address::from_segwitaddress(
-        address,
-        coin.conf.checksum_type,
-        coin.conf.pub_addr_prefix,
-        coin.conf.pub_t_addr_prefix,
-    ) {
+    match Address::from_segwitaddress(address, coin.conf.checksum_type) {
         Ok(segwit) => return Ok(segwit),
         Err(e) => errors.push(e),
     }
 
-    match Address::from_cashaddress(
-        address,
-        coin.conf.checksum_type,
-        coin.conf.pub_addr_prefix,
-        coin.conf.p2sh_addr_prefix,
-        coin.conf.pub_t_addr_prefix,
-    ) {
+    match Address::from_cashaddress(address, coin.conf.checksum_type, &coin.conf.address_prefixes) {
         Ok(cashaddress) => return Ok(cashaddress),
         Err(e) => errors.push(e),
     }
@@ -1500,8 +1488,7 @@ async fn gen_taker_payment_spend_preimage<T: UtxoCommonOps>(
 
     let dex_fee_address = address_from_raw_pubkey(
         args.dex_fee_pub,
-        coin.as_ref().conf.pub_addr_prefix,
-        coin.as_ref().conf.pub_t_addr_prefix,
+        coin.as_ref().conf.address_prefixes.p2pkh.clone(),
         coin.as_ref().conf.checksum_type,
         coin.as_ref().conf.bech32_hrp.clone(),
         coin.addr_format().clone(),
@@ -1637,7 +1624,7 @@ pub async fn sign_and_broadcast_taker_payment_spend<T: UtxoCommonOps>(
     let maker_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err());
     let maker_output = TransactionOutput {
         value: maker_sat - miner_fee,
-        script_pubkey: output_script(maker_address, ScriptType::P2PKH).to_bytes(),
+        script_pubkey: output_script(maker_address).to_bytes(),
     };
     signer.outputs.push(maker_output);
     drop_mutability!(signer);
@@ -1683,8 +1670,7 @@ where
 {
     let address = try_tx_fus!(address_from_raw_pubkey(
         fee_pub_key,
-        coin.as_ref().conf.pub_addr_prefix,
-        coin.as_ref().conf.pub_t_addr_prefix,
+        coin.as_ref().conf.address_prefixes.p2pkh.clone(),
         coin.as_ref().conf.checksum_type,
         coin.as_ref().conf.bech32_hrp.clone(),
         coin.addr_format().clone(),
@@ -2301,8 +2287,7 @@ pub fn watcher_validate_taker_fee<T: UtxoCommonOps>(
 
             let address = address_from_raw_pubkey(
                 &fee_addr,
-                coin.as_ref().conf.pub_addr_prefix,
-                coin.as_ref().conf.pub_t_addr_prefix,
+                coin.as_ref().conf.address_prefixes.p2pkh.clone(),
                 coin.as_ref().conf.checksum_type,
                 coin.as_ref().conf.bech32_hrp.clone(),
                 coin.addr_format().clone(),
@@ -2345,8 +2330,7 @@ pub fn validate_fee<T: UtxoCommonOps>(
     let amount = amount.clone();
     let address = try_f!(address_from_raw_pubkey(
         fee_addr,
-        coin.as_ref().conf.pub_addr_prefix,
-        coin.as_ref().conf.pub_t_addr_prefix,
+        coin.as_ref().conf.address_prefixes.p2pkh.clone(),
         coin.as_ref().conf.checksum_type,
         coin.as_ref().conf.bech32_hrp.clone(),
         coin.addr_format().clone(),
@@ -2616,8 +2600,7 @@ pub fn check_if_my_payment_sent<T: UtxoCommonOps + SwapOps>(
             },
             UtxoRpcClientEnum::Native(client) => {
                 let target_addr = Address {
-                    t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
-                    prefix: coin.as_ref().conf.p2sh_addr_prefix,
+                    prefixes: coin.as_ref().conf.address_prefixes.p2sh.clone(),
                     hash: hash.into(),
                     checksum_type: coin.as_ref().conf.checksum_type,
                     hrp: coin.as_ref().conf.bech32_hrp.clone(),
@@ -3126,11 +3109,7 @@ pub fn convert_to_address<T: UtxoCommonOps>(coin: &T, from: &str, to_address_for
             }
         },
         UtxoAddressFormat::CashAddress { network, .. } => Ok(try_s!(from_address
-            .to_cashaddress(
-                &network,
-                coin.as_ref().conf.pub_addr_prefix,
-                coin.as_ref().conf.p2sh_addr_prefix
-            )
+            .to_cashaddress(&network, &coin.as_ref().conf.address_prefixes,)
             .and_then(|cashaddress| cashaddress.encode()))),
     }
 }
@@ -3147,10 +3126,8 @@ pub fn validate_address<T: UtxoCommonOps>(coin: &T, address: &str) -> ValidateAd
         },
     };
 
-    let is_p2pkh = address.prefix == coin.as_ref().conf.pub_addr_prefix
-        && address.t_addr_prefix == coin.as_ref().conf.pub_t_addr_prefix;
-    let is_p2sh = address.prefix == coin.as_ref().conf.p2sh_addr_prefix
-        && address.t_addr_prefix == coin.as_ref().conf.p2sh_t_addr_prefix;
+    let is_p2pkh = address.prefixes == coin.as_ref().conf.address_prefixes.p2pkh;
+    let is_p2sh = address.prefixes == coin.as_ref().conf.address_prefixes.p2sh;
     let is_segwit = address.hrp.is_some() && address.hrp == coin.as_ref().conf.bech32_hrp && coin.as_ref().conf.segwit;
 
     if is_p2pkh || is_p2sh || is_segwit {
@@ -4276,15 +4253,13 @@ pub fn big_decimal_from_sat_unsigned(satoshis: u64, decimals: u8) -> BigDecimal 
 
 pub fn address_from_raw_pubkey(
     pub_key: &[u8],
-    prefix: u8,
-    t_addr_prefix: u8,
+    prefixes: AddressPrefixes,
     checksum_type: ChecksumType,
     hrp: Option<String>,
     addr_format: UtxoAddressFormat,
 ) -> Result<Address, String> {
     Ok(Address {
-        t_addr_prefix,
-        prefix,
+        prefixes,
         hash: try_s!(Public::from_slice(pub_key)).address_hash().into(),
         checksum_type,
         hrp,
@@ -4295,15 +4270,13 @@ pub fn address_from_raw_pubkey(
 
 pub fn address_from_pubkey(
     pub_key: &Public,
-    prefix: u8,
-    t_addr_prefix: u8,
+    prefixes: AddressPrefixes,
     checksum_type: ChecksumType,
     hrp: Option<String>,
     addr_format: UtxoAddressFormat,
 ) -> Address {
     Address {
-        t_addr_prefix,
-        prefix,
+        prefixes,
         hash: pub_key.address_hash().into(),
         checksum_type,
         hrp,
@@ -4525,8 +4498,7 @@ where
     let payment_address = Address {
         checksum_type: coin.as_ref().conf.checksum_type,
         hash: redeem_script_hash.into(),
-        prefix: coin.as_ref().conf.p2sh_addr_prefix,
-        t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
+        prefixes: coin.as_ref().conf.address_prefixes.p2sh.clone(),
         hrp: coin.as_ref().conf.bech32_hrp.clone(),
         addr_format: UtxoAddressFormat::Standard,
         script_type: AddressScriptType::P2SH,
@@ -4759,8 +4731,8 @@ where
         // Considering that legacy is supported with any configured formats
         // This can be changed depending on the coins implementation
         UtxoAddressFormat::Standard => {
-            let is_p2pkh = addr.prefix == conf.pub_addr_prefix && addr.t_addr_prefix == conf.pub_t_addr_prefix;
-            let is_p2sh = addr.prefix == conf.p2sh_addr_prefix && addr.t_addr_prefix == conf.p2sh_t_addr_prefix;
+            let is_p2pkh = addr.prefixes == conf.address_prefixes.p2pkh;
+            let is_p2sh = addr.prefixes == conf.address_prefixes.p2sh;
             if !is_p2pkh && !is_p2sh {
                 MmError::err(UnsupportedAddr::PrefixError(conf.ticker.clone()))
             } else {
