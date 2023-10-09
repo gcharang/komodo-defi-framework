@@ -118,17 +118,9 @@ where
         let coin = self.coin();
         let ticker = coin.as_ref().conf.ticker.clone();
         let decimals = coin.as_ref().decimals;
-        let conf = &self.coin().as_ref().conf;
         let req = self.request();
 
         let to = coin.address_from_str(&req.to)?;
-
-        let is_p2pkh = to.prefix == conf.pub_addr_prefix && to.t_addr_prefix == conf.pub_t_addr_prefix;
-        let is_p2sh = to.prefix == conf.p2sh_addr_prefix && to.t_addr_prefix == conf.p2sh_t_addr_prefix;
-
-        if !is_p2pkh && !is_p2sh {
-            return MmError::err(WithdrawError::InvalidAddress("Expected either P2PKH or P2SH".into()));
-        };
 
         // Generate unsigned transaction.
         self.on_generating_transaction()?;
