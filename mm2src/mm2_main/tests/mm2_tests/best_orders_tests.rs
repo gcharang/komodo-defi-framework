@@ -42,7 +42,7 @@ fn test_best_orders() {
     log!("Bob log path: {}", mm_bob.log_path.display());
 
     // Enable coins on Bob side. Print the replies in case we need the "address".
-    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES));
+    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None));
     log!("enable_coins (bob): {:?}", bob_coins);
     // issue sell request on Bob side by setting base/rel price
     log!("Issue bob sell requests");
@@ -207,7 +207,7 @@ fn test_best_orders_v2_by_number() {
     log!("Bob log path: {:?}", [mm_bob.log_path.display()]);
 
     // Enable coins on Bob side. Print the replies in case we need the "address".
-    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES));
+    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None));
     log!("enable_coins (bob) {:?}", [bob_coins]);
     // issue sell request on Bob side by setting base/rel price
     log!("Issue bob sell requests");
@@ -330,7 +330,7 @@ fn test_best_orders_v2_by_volume() {
     log!("Bob log path: {:?}", [mm_bob.log_path.display()]);
 
     // Enable coins on Bob side. Print the replies in case we need the "address".
-    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES));
+    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None));
     log!("enable_coins (bob): {:?}", [bob_coins]);
     // issue sell request on Bob side by setting base/rel price
     log!("Issue bob sell requests");
@@ -443,8 +443,9 @@ fn test_best_orders_v2_exclude_mine() {
         None,
     )
     .unwrap();
+    thread::sleep(Duration::from_secs(2));
 
-    let _ = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES));
+    let _ = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None));
     let bob_orders = [
         ("RICK", "MORTY", "0.9", "0.9", None),
         ("RICK", "MORTY", "0.8", "0.9", None),
@@ -468,7 +469,7 @@ fn test_best_orders_v2_exclude_mine() {
         assert!(status.is_success(), "!setprice: {}", data);
     }
 
-    let alice_passphrase = get_passphrase(&".env.seed", "ALICE_PASSPHRASE").unwrap();
+    let alice_passphrase = get_passphrase(&".env.client", "ALICE_PASSPHRASE").unwrap();
     let mm_alice = MarketMakerIt::start(
         json! ({
             "gui": "nogui",
@@ -484,8 +485,9 @@ fn test_best_orders_v2_exclude_mine() {
         None,
     )
     .unwrap();
+    thread::sleep(Duration::from_secs(2));
 
-    let _ = block_on(enable_coins_eth_electrum(&mm_alice, ETH_DEV_NODES));
+    let _ = block_on(enable_coins_eth_electrum(&mm_alice, ETH_DEV_NODES, None));
     let alice_orders = [("RICK", "MORTY", "0.85", "1", None)];
     let mut alice_order_ids = BTreeSet::<Uuid>::new();
     for (base, rel, price, volume, min_volume) in alice_orders.iter() {
@@ -504,6 +506,8 @@ fn test_best_orders_v2_exclude_mine() {
         alice_order_ids.insert(result.result.uuid);
         assert!(status.is_success(), "!setprice: {}", data);
     }
+    thread::sleep(Duration::from_secs(2));
+
     let response = block_on(best_orders_v2_by_number(&mm_alice, "RICK", "buy", 100, false));
     log!("all orders response: {response:?}");
     assert_eq!(response.result.orders.get("MORTY").unwrap().len(), 3);
@@ -703,7 +707,7 @@ fn test_best_orders_filter_response() {
     log!("Bob log path: {}", mm_bob.log_path.display());
 
     // Enable coins on Bob side. Print the replies in case we need the "address".
-    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES));
+    let bob_coins = block_on(enable_coins_eth_electrum(&mm_bob, ETH_DEV_NODES, None));
     log!("enable_coins (bob): {:?}", bob_coins);
     // issue sell request on Bob side by setting base/rel price
     log!("Issue bob sell requests");
@@ -992,10 +996,10 @@ fn best_orders_must_return_duplicate_for_orderbook_tickers() {
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     log!("Bob log path: {}", mm_bob.log_path.display());
 
-    let t_btc_bob = block_on(enable_electrum(&mm_bob, "tBTC", false, TBTC_ELECTRUMS));
+    let t_btc_bob = block_on(enable_electrum(&mm_bob, "tBTC", false, TBTC_ELECTRUMS, None));
     log!("Bob enable tBTC: {:?}", t_btc_bob);
 
-    let rick_bob = block_on(enable_electrum(&mm_bob, "RICK", false, RICK_ELECTRUM_ADDRS));
+    let rick_bob = block_on(enable_electrum(&mm_bob, "RICK", false, RICK_ELECTRUM_ADDRS, None));
     log!("Bob enable RICK: {:?}", rick_bob);
 
     // issue sell request on Bob side by setting base/rel price
@@ -1146,7 +1150,7 @@ fn zhtlc_best_orders() {
     log!("bob_zombie_cache_path {}", bob_zombie_cache_path.display());
     std::fs::copy("./mm2src/coins/for_tests/ZOMBIE_CACHE.db", bob_zombie_cache_path).unwrap();
 
-    block_on(enable_electrum_json(&mm_bob, "RICK", false, rick_electrums()));
+    block_on(enable_electrum_json(&mm_bob, "RICK", false, rick_electrums(), None));
     block_on(enable_z_coin(&mm_bob, "ZOMBIE"));
 
     let set_price_json = json!({

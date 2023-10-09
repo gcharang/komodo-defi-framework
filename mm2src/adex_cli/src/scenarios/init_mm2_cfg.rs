@@ -14,7 +14,7 @@ use super::inquire_extentions::{InquireOption, DEFAULT_DEFAULT_OPTION_BOOL_FORMA
 use crate::helpers;
 use crate::logging::error_anyhow;
 
-const DEFAULT_NET_ID: u16 = 7777;
+const DEFAULT_NET_ID: u16 = 8762;
 const DEFAULT_GID: &str = "adex-cli";
 const DEFAULT_OPTION_PLACEHOLDER: &str = "Tap enter to skip";
 const RPC_PORT_MIN: u16 = 1024;
@@ -51,7 +51,7 @@ struct Mm2Cfg {
     #[serde(skip_serializing_if = "Vec::<Ipv4Addr>::is_empty")]
     seednodes: Vec<Ipv4Addr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hd_account_id: Option<u64>,
+    enable_hd: Option<bool>,
 }
 
 impl Mm2Cfg {
@@ -68,7 +68,7 @@ impl Mm2Cfg {
             rpc_local_only: None,
             i_am_seed: None,
             seednodes: Vec::<Ipv4Addr>::new(),
-            hd_account_id: None,
+            enable_hd: None,
         }
     }
 
@@ -84,7 +84,7 @@ impl Mm2Cfg {
         self.inquire_rpc_local_only()?;
         self.inquire_i_am_a_seed()?;
         self.inquire_seednodes()?;
-        self.inquire_hd_account_id()?;
+        self.inquire_enable_hd()?;
         Ok(())
     }
 
@@ -128,7 +128,7 @@ impl Mm2Cfg {
     fn inquire_net_id(&mut self) -> Result<()> {
         self.netid = CustomType::<u16>::new("What is the network `mm2` is going to be a part, netid:")
                 .with_default(DEFAULT_NET_ID)
-                .with_help_message(r#"Network ID number, telling the AtomicDEX API which network to join. 7777 is the current main network, though alternative netids can be used for testing or "private" trades"#)
+                .with_help_message(r#"Network ID number, telling the AtomicDEX API which network to join. 8762 is the current main network, though alternative netids can be used for testing or "private" trades"#)
                 .with_placeholder(format!("{DEFAULT_NET_ID}").as_str())
                 .prompt()
                 .map_err(|error|
@@ -283,7 +283,7 @@ impl Mm2Cfg {
                 .with_formatter(DEFAULT_OPTION_BOOL_FORMATTER)
                 .with_default_value_formatter(DEFAULT_DEFAULT_OPTION_BOOL_FORMATTER)
                 .with_default(InquireOption::None)
-                .with_help_message("Runs AtomicDEX API as a seed node mode (acting as a relay for AtomicDEX API clients). Optional, defaults to false. Use of this mode is not reccomended on the main network (7777) as it could result in a pubkey ban if non-compliant. on alternative testing or private networks, at least one seed node is required to relay information to other AtomicDEX API clients using the same netID.")
+                .with_help_message("Runs AtomicDEX API as a seed node mode (acting as a relay for AtomicDEX API clients). Optional, defaults to false. Use of this mode is not reccomended on the main network (8762) as it could result in a pubkey ban if non-compliant. on alternative testing or private networks, at least one seed node is required to relay information to other AtomicDEX API clients using the same netID.")
                 .prompt()
                 .map_err(|error|
                     error_anyhow!("Failed to get i_am_a_seed: {error}")
@@ -311,13 +311,16 @@ impl Mm2Cfg {
     }
 
     #[inline]
-    fn inquire_hd_account_id(&mut self) -> Result<()> {
-        self.hd_account_id = CustomType::<InquireOption<u64>>::new("What is hd_account_id:")
-                .with_help_message(r#"Optional. If this value is set, the AtomicDEX-API will work in only the HD derivation mode, coins will need to have a coin derivation path entry in the coins file for activation. The hd_account_id value effectively takes its place in the full derivation as follows: m/44'/COIN_ID'/<hd_account_id>'/CHAIN/ADDRESS_ID"#)
-                .with_placeholder(DEFAULT_OPTION_PLACEHOLDER)
+    fn inquire_enable_hd(&mut self) -> Result<()> {
+        self.enable_hd = CustomType::<InquireOption<bool>>::new("What is enable_hd:")
+                .with_parser(OPTION_BOOL_PARSER)
+                .with_formatter(DEFAULT_OPTION_BOOL_FORMATTER)
+                .with_default_value_formatter(DEFAULT_DEFAULT_OPTION_BOOL_FORMATTER)
+                .with_default(InquireOption::None)
+                .with_help_message(r#"Optional. If this value is set, the Komodo DeFi API will work in HD wallet mode only, coins will need to have a coin derivation path entry in the coins file for activation. path_to_address `/account'/change/address_index` will have to be set in coins activation to change the default HD wallet address that is used in swaps for a coin in the full derivation path as follows: m/purpose'/coin_type/account'/change/address_index"#)
                 .prompt()
                 .map_err(|error|
-                    error_anyhow!("Failed to get hd_account_id: {}", error)
+                    error_anyhow!("Failed to get enable_hd: {}", error)
                 )?
                 .into();
         Ok(())

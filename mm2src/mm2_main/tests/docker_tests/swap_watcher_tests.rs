@@ -8,12 +8,12 @@ use coins::{ConfirmPaymentInput, FoundSwapTxSpend, MarketCoinOps, MmCoin, MmCoin
             WatcherValidateTakerFeeInput, EARLY_CONFIRMATION_ERR_LOG, INVALID_CONTRACT_ADDRESS_ERR_LOG,
             INVALID_PAYMENT_STATE_ERR_LOG, INVALID_RECEIVER_ERR_LOG, INVALID_REFUND_TX_ERR_LOG,
             INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
-use common::{block_on, now_sec_u32, wait_until_sec, DEX_FEE_ADDR_RAW_PUBKEY};
+use common::{block_on, now_sec, wait_until_sec, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::privkey::{key_pair_from_secret, key_pair_from_seed};
 use futures01::Future;
-use mm2_main::mm2::lp_swap::{dex_fee_amount, dex_fee_amount_from_taker_coin, dex_fee_threshold, get_payment_locktime,
-                             MakerSwap, MAKER_PAYMENT_SENT_LOG, MAKER_PAYMENT_SPEND_FOUND_LOG,
-                             MAKER_PAYMENT_SPEND_SENT_LOG, TAKER_PAYMENT_REFUND_SENT_LOG, WATCHER_MESSAGE_SENT_LOG};
+use mm2_main::mm2::lp_swap::{dex_fee_amount, dex_fee_amount_from_taker_coin, get_payment_locktime, MakerSwap,
+                             MAKER_PAYMENT_SENT_LOG, MAKER_PAYMENT_SPEND_FOUND_LOG, MAKER_PAYMENT_SPEND_SENT_LOG,
+                             TAKER_PAYMENT_REFUND_SENT_LOG, WATCHER_MESSAGE_SENT_LOG};
 use mm2_number::BigDecimal;
 use mm2_number::MmNumber;
 use mm2_test_helpers::for_tests::{enable_eth_coin, eth_jst_testnet_conf, eth_testnet_conf, mm_dump, my_balance,
@@ -50,7 +50,7 @@ struct BalanceResult {
 
 fn enable_coin(mm_node: &MarketMakerIt, coin: &str) {
     if coin == "MYCOIN" {
-        log!("{:?}", block_on(enable_native(mm_node, coin, &[])));
+        log!("{:?}", block_on(enable_native(mm_node, coin, &[], None)));
     } else {
         enable_eth(mm_node, coin);
     }
@@ -352,15 +352,10 @@ fn test_watcher_spends_maker_payment_eth_utxo() {
 
     let eth_volume = BigDecimal::from_str("0.01").unwrap();
     let mycoin_volume = BigDecimal::from_str("1").unwrap();
-    let dex_fee_threshold = dex_fee_threshold(BigDecimal::from_str("0.00001").unwrap().into());
+    let min_tx_amount = BigDecimal::from_str("0.00001").unwrap().into();
 
-    let dex_fee: BigDecimal = dex_fee_amount(
-        "MYCOIN",
-        "ETH",
-        &MmNumber::from(mycoin_volume.clone()),
-        &dex_fee_threshold,
-    )
-    .into();
+    let dex_fee: BigDecimal =
+        dex_fee_amount("MYCOIN", "ETH", &MmNumber::from(mycoin_volume.clone()), &min_tx_amount).into();
     let alice_mycoin_reward_sent = balances.alice_acoin_balance_before
         - balances.alice_acoin_balance_after.clone()
         - mycoin_volume.clone()
@@ -510,14 +505,9 @@ fn test_watcher_spends_maker_payment_erc20_utxo() {
     let mycoin_volume = BigDecimal::from_str("1").unwrap();
     let jst_volume = BigDecimal::from_str("1").unwrap();
 
-    let dex_fee_threshold = dex_fee_threshold(BigDecimal::from_str("0.00001").unwrap().into());
-    let dex_fee: BigDecimal = dex_fee_amount(
-        "MYCOIN",
-        "JST",
-        &MmNumber::from(mycoin_volume.clone()),
-        &dex_fee_threshold,
-    )
-    .into();
+    let min_tx_amount = BigDecimal::from_str("0.00001").unwrap().into();
+    let dex_fee: BigDecimal =
+        dex_fee_amount("MYCOIN", "JST", &MmNumber::from(mycoin_volume.clone()), &min_tx_amount).into();
     let alice_mycoin_reward_sent = balances.alice_acoin_balance_before
         - balances.alice_acoin_balance_after.clone()
         - mycoin_volume.clone()
@@ -773,11 +763,7 @@ fn test_watcher_validate_taker_fee_utxo() {
     let taker_pubkey = taker_coin.my_public_key().unwrap();
 
     let taker_amount = MmNumber::from((10, 1));
-    let fee_amount = dex_fee_amount_from_taker_coin(
-        &MmCoinEnum::UtxoCoin(taker_coin.clone()),
-        maker_coin.ticker(),
-        &taker_amount,
-    );
+    let fee_amount = dex_fee_amount_from_taker_coin(&taker_coin, maker_coin.ticker(), &taker_amount);
 
     let taker_fee = taker_coin
         .send_taker_fee(&DEX_FEE_ADDR_RAW_PUBKEY, fee_amount.into(), Uuid::new_v4().as_bytes())
@@ -899,7 +885,7 @@ fn test_watcher_validate_taker_fee_eth() {
     let taker_pubkey = taker_keypair.public();
 
     let taker_amount = MmNumber::from((1, 1));
-    let fee_amount = dex_fee_amount_from_taker_coin(&MmCoinEnum::EthCoin(taker_coin.clone()), "ETH", &taker_amount);
+    let fee_amount = dex_fee_amount_from_taker_coin(&taker_coin, "ETH", &taker_amount);
     let taker_fee = taker_coin
         .send_taker_fee(&DEX_FEE_ADDR_RAW_PUBKEY, fee_amount.into(), Uuid::new_v4().as_bytes())
         .wait()
@@ -1002,7 +988,7 @@ fn test_watcher_validate_taker_fee_erc20() {
     let taker_pubkey = taker_keypair.public();
 
     let taker_amount = MmNumber::from((1, 1));
-    let fee_amount = dex_fee_amount_from_taker_coin(&MmCoinEnum::EthCoin(taker_coin.clone()), "ETH", &taker_amount);
+    let fee_amount = dex_fee_amount_from_taker_coin(&taker_coin, "ETH", &taker_amount);
     let taker_fee = taker_coin
         .send_taker_fee(&DEX_FEE_ADDR_RAW_PUBKEY, fee_amount.into(), Uuid::new_v4().as_bytes())
         .wait()
@@ -1099,7 +1085,7 @@ fn test_watcher_validate_taker_payment_utxo() {
     let timeout = wait_until_sec(120); // timeout if test takes more than 120 seconds to run
     let time_lock_duration = get_payment_locktime();
     let wait_for_confirmation_until = wait_until_sec(time_lock_duration);
-    let time_lock = wait_for_confirmation_until as u32;
+    let time_lock = wait_for_confirmation_until;
 
     let (_ctx, taker_coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let taker_pubkey = taker_coin.my_public_key().unwrap();
@@ -1313,13 +1299,13 @@ fn test_watcher_validate_taker_payment_eth() {
     let taker_keypair = taker_coin.derive_htlc_key_pair(&[]);
     let taker_pub = taker_keypair.public();
 
-    let maker_seed = get_passphrase!(".env.client", "BOB_PASSPHRASE").unwrap();
+    let maker_seed = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
     let maker_keypair = key_pair_from_seed(&maker_seed).unwrap();
     let maker_pub = maker_keypair.public();
 
     let time_lock_duration = get_payment_locktime();
     let wait_for_confirmation_until = wait_until_sec(time_lock_duration);
-    let time_lock = wait_for_confirmation_until as u32;
+    let time_lock = wait_for_confirmation_until;
     let taker_amount = BigDecimal::from_str("0.01").unwrap();
     let maker_amount = BigDecimal::from_str("0.01").unwrap();
     let secret_hash = dhash160(&MakerSwap::generate_secret().unwrap());
@@ -1557,13 +1543,13 @@ fn test_watcher_validate_taker_payment_erc20() {
     let taker_keypair = taker_coin.derive_htlc_key_pair(&[]);
     let taker_pub = taker_keypair.public();
 
-    let maker_seed = get_passphrase!(".env.client", "BOB_PASSPHRASE").unwrap();
+    let maker_seed = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
     let maker_keypair = key_pair_from_seed(&maker_seed).unwrap();
     let maker_pub = maker_keypair.public();
 
     let time_lock_duration = get_payment_locktime();
     let wait_for_confirmation_until = wait_until_sec(time_lock_duration);
-    let time_lock = wait_for_confirmation_until as u32;
+    let time_lock = wait_for_confirmation_until;
 
     let secret_hash = dhash160(&MakerSwap::generate_secret().unwrap());
 
@@ -1801,7 +1787,7 @@ fn test_send_taker_payment_refund_preimage_utxo() {
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let taker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,

@@ -10,7 +10,6 @@ use coins::{CheckIfMyPaymentSentArgs, ConfirmPaymentInput, FeeApproxStage, Found
             RefundPaymentArgs, SearchForSwapTxSpendInput, SendPaymentArgs, SpendPaymentArgs, SwapOps,
             TradePreimageValue, TransactionEnum, ValidatePaymentInput, WaitForHTLCTxSpendArgs};
 use common::log::debug;
-use common::now_sec_u32;
 use common::{temp_dir, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::Secp256k1Secret;
 use ethereum_types::H160;
@@ -176,7 +175,7 @@ fn test_taker_spends_maker_payment() {
     assert_eq!(maker_old_balance, BigDecimal::from(10));
     assert_eq!(taker_old_balance, BigDecimal::from(1));
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let maker_pub = maker_coin.my_public_key().unwrap().to_vec();
     let taker_pub = taker_coin.my_public_key().unwrap().to_vec();
     let secret = &[1; 32];
@@ -281,7 +280,7 @@ fn test_maker_spends_taker_payment() {
     assert_eq!(maker_old_balance, BigDecimal::from(10));
     assert_eq!(taker_old_balance, BigDecimal::from(10));
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let maker_pub = maker_coin.my_public_key().unwrap().to_vec();
     let taker_pub = taker_coin.my_public_key().unwrap().to_vec();
     let secret = &[1; 32];
@@ -377,7 +376,7 @@ fn test_maker_refunds_payment() {
     let expected_balance = coin.my_spendable_balance().wait().unwrap();
     assert_eq!(expected_balance, BigDecimal::from(10));
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let taker_pub = hex::decode("022b00078841f37b5d30a6a1defb82b3af4d4e2d24dd4204d41f0c9ce1e875de1a").unwrap();
     let secret_hash = &[1; 20];
     let amount = BigDecimal::from_str("0.2").unwrap();
@@ -447,7 +446,7 @@ fn test_taker_refunds_payment() {
     let expected_balance = coin.my_spendable_balance().wait().unwrap();
     assert_eq!(expected_balance, BigDecimal::from(10));
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let maker_pub = hex::decode("022b00078841f37b5d30a6a1defb82b3af4d4e2d24dd4204d41f0c9ce1e875de1a").unwrap();
     let secret_hash = &[1; 20];
     let amount = BigDecimal::from_str("0.2").unwrap();
@@ -514,7 +513,7 @@ fn test_taker_refunds_payment() {
 #[test]
 fn test_check_if_my_payment_sent() {
     let (_ctx, coin, _priv_key) = generate_qrc20_coin_with_random_privkey("QICK", 20.into(), 10.into());
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let taker_pub = hex::decode("022b00078841f37b5d30a6a1defb82b3af4d4e2d24dd4204d41f0c9ce1e875de1a").unwrap();
     let secret_hash = &[1; 20];
     let amount = BigDecimal::from_str("0.2").unwrap();
@@ -569,7 +568,7 @@ fn test_search_for_swap_tx_spend_taker_spent() {
     let (_ctx, taker_coin, _priv_key) = generate_qrc20_coin_with_random_privkey("QICK", 20.into(), 1.into());
     let search_from_block = maker_coin.current_block().wait().expect("!current_block");
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let maker_pub = maker_coin.my_public_key().unwrap();
     let taker_pub = taker_coin.my_public_key().unwrap();
     let secret = &[1; 32];
@@ -652,7 +651,7 @@ fn test_search_for_swap_tx_spend_maker_refunded() {
     let (_ctx, maker_coin, _priv_key) = generate_qrc20_coin_with_random_privkey("QICK", 20.into(), 10.into());
     let search_from_block = maker_coin.current_block().wait().expect("!current_block");
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let taker_pub = hex::decode("022b00078841f37b5d30a6a1defb82b3af4d4e2d24dd4204d41f0c9ce1e875de1a").unwrap();
     let secret = &[1; 32];
     let secret_hash = &*dhash160(secret);
@@ -730,7 +729,7 @@ fn test_search_for_swap_tx_spend_not_spent() {
     let (_ctx, maker_coin, _priv_key) = generate_qrc20_coin_with_random_privkey("QICK", 20.into(), 10.into());
     let search_from_block = maker_coin.current_block().wait().expect("!current_block");
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let taker_pub = hex::decode("022b00078841f37b5d30a6a1defb82b3af4d4e2d24dd4204d41f0c9ce1e875de1a").unwrap();
     let secret = &[1; 32];
     let secret_hash = &*dhash160(secret);
@@ -786,7 +785,7 @@ fn test_wait_for_tx_spend() {
     let (_ctx, taker_coin, _priv_key) = generate_qrc20_coin_with_random_privkey("QICK", 20.into(), 1.into());
     let from_block = maker_coin.current_block().wait().expect("!current_block");
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let maker_pub = maker_coin.my_public_key().unwrap();
     let taker_pub = taker_coin.my_public_key().unwrap();
     let secret = &[1; 32];
@@ -934,7 +933,7 @@ fn test_check_balance_on_order_post_base_coin_locked() {
     let (_dump_log, _dump_dashboard) = mm_dump(&mm_bob.log_path);
     log!("Log path: {}", mm_bob.log_path.display());
     block_on(mm_bob.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
-    block_on(enable_native(&mm_bob, "MYCOIN", &[]));
+    block_on(enable_native(&mm_bob, "MYCOIN", &[], None));
     block_on(enable_qrc20_native(&mm_bob, "QICK"));
 
     // start alice
@@ -957,7 +956,7 @@ fn test_check_balance_on_order_post_base_coin_locked() {
     let (_dump_log, _dump_dashboard) = mm_dump(&mm_alice.log_path);
     log!("Log path: {}", mm_alice.log_path.display());
     block_on(mm_alice.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
-    block_on(enable_native(&mm_alice, "MYCOIN", &[]));
+    block_on(enable_native(&mm_alice, "MYCOIN", &[], None));
     block_on(enable_qrc20_native(&mm_alice, "QICK"));
 
     let rc = block_on(mm_alice.rpc(&json! ({
@@ -1033,11 +1032,11 @@ fn test_get_max_taker_vol_and_trade_with_dynamic_trade_fee(coin: QtumCoin, priv_
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[], None)));
 
     let qtum_balance = coin.my_spendable_balance().wait().expect("!my_balance");
-    let qtum_dex_fee_threshold = MmNumber::from("0.000728");
+    let qtum_min_tx_amount = MmNumber::from("0.000728");
 
     // - `max_possible = balance - locked_amount`, where `locked_amount = 0`
     // - `max_trade_fee = trade_fee(balance)`
@@ -1054,12 +1053,7 @@ fn test_get_max_taker_vol_and_trade_with_dynamic_trade_fee(coin: QtumCoin, priv_
     // - `max_possible_2 = balance - locked_amount - max_trade_fee`, where `locked_amount = 0`
     let max_possible_2 = &qtum_balance - &max_trade_fee;
     // - `max_dex_fee = dex_fee(max_possible_2)`
-    let max_dex_fee = dex_fee_amount(
-        "QTUM",
-        "MYCOIN",
-        &MmNumber::from(max_possible_2),
-        &qtum_dex_fee_threshold,
-    );
+    let max_dex_fee = dex_fee_amount("QTUM", "MYCOIN", &MmNumber::from(max_possible_2), &qtum_min_tx_amount);
     debug!("max_dex_fee: {:?}", max_dex_fee.to_fraction());
 
     // - `max_fee_to_send_taker_fee = fee_to_send_taker_fee(max_dex_fee)`
@@ -1074,11 +1068,11 @@ fn test_get_max_taker_vol_and_trade_with_dynamic_trade_fee(coin: QtumCoin, priv_
     // where `available = balance - locked_amount - max_trade_fee - max_fee_to_send_taker_fee`
     let available = &qtum_balance - &max_trade_fee - &max_fee_to_send_taker_fee;
     debug!("total_available: {}", available);
-    let min_tx_amount = qtum_dex_fee_threshold.clone();
+    let min_tx_amount = qtum_min_tx_amount.clone();
     let expected_max_taker_vol =
         max_taker_vol_from_available(MmNumber::from(available), "QTUM", "MYCOIN", &min_tx_amount)
             .expect("max_taker_vol_from_available");
-    let real_dex_fee = dex_fee_amount("QTUM", "MYCOIN", &expected_max_taker_vol, &qtum_dex_fee_threshold);
+    let real_dex_fee = dex_fee_amount("QTUM", "MYCOIN", &expected_max_taker_vol, &qtum_min_tx_amount);
     debug!("real_max_dex_fee: {:?}", real_dex_fee.to_fraction());
 
     // check if the actual max_taker_vol equals to the expected
@@ -1108,10 +1102,10 @@ fn test_get_max_taker_vol_and_trade_with_dynamic_trade_fee(coin: QtumCoin, priv_
 
     block_on(mm.stop()).unwrap();
 
-    let timelock = now_sec_u32() - 200;
+    let timelock = now_sec() - 200;
     let secret_hash = &[0; 20];
 
-    let dex_fee_amount = dex_fee_amount("QTUM", "MYCOIN", &expected_max_taker_vol, &qtum_dex_fee_threshold);
+    let dex_fee_amount = dex_fee_amount("QTUM", "MYCOIN", &expected_max_taker_vol, &qtum_min_tx_amount);
     let _taker_fee_tx = coin
         .send_taker_fee(&DEX_FEE_ADDR_RAW_PUBKEY, dex_fee_amount.to_decimal(), &[])
         .wait()
@@ -1219,8 +1213,8 @@ fn test_trade_preimage_not_sufficient_base_coin_balance_for_ticker() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "QICK", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "QICK", &[], None)));
 
     // txfee > 0, amount = 0.005 => required = txfee + amount > 0.005,
     // but balance = 0.005
@@ -1278,8 +1272,8 @@ fn test_trade_preimage_dynamic_fee_not_sufficient_balance() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[], None)));
 
     // txfee > 0, amount = 0.5 => required = txfee + amount > 0.5,
     // but balance = 0.5
@@ -1339,8 +1333,8 @@ fn test_trade_preimage_deduct_fee_from_output_failed() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[], None)));
 
     let rc = block_on(mm.rpc(&json!({
         "userpass": mm.userpass,
@@ -1398,7 +1392,7 @@ fn test_segwit_native_balance() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    let enable_res = block_on(enable_native(&mm, "QTUM", &[]));
+    let enable_res = block_on(enable_native(&mm, "QTUM", &[], None));
     let expected_balance: BigDecimal = "0.5".parse().unwrap();
     assert_eq!(enable_res.balance, expected_balance);
 
@@ -1444,7 +1438,7 @@ fn test_withdraw_and_send_from_segwit() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[], None)));
 
     // Send from Segwit Address to Segwit Address
     withdraw_and_send(&mm, "QTUM", "qcrt1q6pwxl4na4a363mgmrw8tjyppdcwuyfmat836dd", 0.2);
@@ -1492,7 +1486,7 @@ fn test_withdraw_and_send_legacy_to_segwit() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
     block_on(mm.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "QTUM", &[], None)));
 
     // Send from Legacy Address to Segwit Address
     withdraw_and_send(&mm, "QTUM", "qcrt1q6pwxl4na4a363mgmrw8tjyppdcwuyfmat836dd", 0.2);
@@ -1515,7 +1509,7 @@ fn test_search_for_segwit_swap_tx_spend_native_was_refunded_maker() {
     let (_ctx, coin, _) = generate_segwit_qtum_coin_with_random_privkey("QTUM", 1000u64.into(), Some(0));
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let maker_payment = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -1581,7 +1575,7 @@ fn test_search_for_segwit_swap_tx_spend_native_was_refunded_taker() {
     let (_ctx, coin, _) = generate_segwit_qtum_coin_with_random_privkey("QTUM", 1000u64.into(), Some(0));
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let taker_payment = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -1694,7 +1688,7 @@ fn segwit_address_in_the_orderbook() {
 
     fill_address(&coin, &segwit_addr, 1000.into(), 30);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     let rc = block_on(mm.rpc(&json! ({
         "userpass": mm.userpass,

@@ -42,7 +42,7 @@ use futures::future::join_all;
 use futures::TryFutureExt;
 use mm2_core::mm_ctx::MmCtxBuilder;
 use mm2_number::bigdecimal::{BigDecimal, Signed};
-use mm2_test_helpers::for_tests::{mm_ctx_with_custom_db, MORTY_ELECTRUM_ADDRS, RICK_ELECTRUM_ADDRS};
+use mm2_test_helpers::for_tests::{mm_ctx_with_custom_db, DOC_ELECTRUM_ADDRS, MORTY_ELECTRUM_ADDRS, RICK_ELECTRUM_ADDRS};
 use mocktopus::mocking::*;
 use rpc::v1::types::H256 as H256Json;
 use serialization::{deserialize, CoinVariant};
@@ -546,7 +546,7 @@ fn test_search_for_swap_tx_spend_electrum_was_refunded() {
 
     let search_input = SearchForSwapTxSpendInput {
         time_lock: 1591933469,
-        other_pub: coin.as_ref().priv_key_policy.key_pair_or_err().unwrap().public(),
+        other_pub: coin.as_ref().priv_key_policy.activated_key_or_err().unwrap().public(),
         secret_hash: &secret_hash,
         tx: &payment_tx_bytes,
         search_from_block: 0,
@@ -953,7 +953,7 @@ fn test_withdraw_rick_rewards_none() {
 #[test]
 fn test_utxo_lock() {
     // send several transactions concurrently to check that they are not using same inputs
-    let client = electrum_client_for_test(RICK_ELECTRUM_ADDRS);
+    let client = electrum_client_for_test(DOC_ELECTRUM_ADDRS);
     let coin = utxo_coin_for_test(client.into(), None, false);
     let output = TransactionOutput {
         value: 1000000,
@@ -3360,7 +3360,7 @@ fn test_split_qtum() {
     let coin = block_on(qtum_coin_with_priv_key(&ctx, "QTUM", &conf, &params, priv_key)).unwrap();
     let p2pkh_address = coin.as_ref().derivation_method.unwrap_single_addr();
     let script: Script = output_script(p2pkh_address, ScriptType::P2PKH);
-    let key_pair = coin.as_ref().priv_key_policy.key_pair_or_err().unwrap();
+    let key_pair = coin.as_ref().priv_key_policy.activated_key_or_err().unwrap();
     let (unspents, _) = block_on(coin.get_mature_unspent_ordered_list(p2pkh_address)).expect("Unspent list is empty");
     log!("Mature unspents vec = {:?}", unspents.mature);
     let outputs = vec![

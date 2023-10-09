@@ -1,7 +1,6 @@
 mod bch_and_slp_tests;
 mod best_orders_tests;
 mod eth_tests;
-mod iris_swap;
 mod lightning_tests;
 mod lp_bot_tests;
 mod mm2_tests_inner;
@@ -19,10 +18,12 @@ mod zhtlc_native_reexport {
 }
 
 #[cfg(all(feature = "zhtlc-native-tests", not(target_arch = "wasm32")))]
+use mm2_test_helpers::structs::ZCoinActivationResult;
+#[cfg(all(feature = "zhtlc-native-tests", not(target_arch = "wasm32")))]
 use zhtlc_native_reexport::*;
 
 #[cfg(all(feature = "zhtlc-native-tests", not(target_arch = "wasm32")))]
-async fn enable_z_coin(mm: &MarketMakerIt, coin: &str) -> CoinActivationResult {
+async fn enable_z_coin(mm: &MarketMakerIt, coin: &str) -> ZCoinActivationResult {
     let init = init_z_coin_native(mm, coin).await;
     let init: RpcV2Response<InitTaskResult> = serde_json::from_value(init).unwrap();
     let timeout = wait_until_ms(120000);

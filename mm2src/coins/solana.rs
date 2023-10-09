@@ -19,7 +19,7 @@ use base58::ToBase58;
 use bincode::{deserialize, serialize};
 use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, AbortedError};
 use common::{async_blocking, now_sec};
-use crypto::StandardHDPathToCoin;
+use crypto::{StandardHDCoinAddress, StandardHDPathToCoin};
 use derive_more::Display;
 use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
@@ -139,6 +139,8 @@ impl From<AccountError> for WithdrawError {
 pub struct SolanaActivationParams {
     confirmation_commitment: CommitmentLevel,
     client_url: String,
+    #[serde(default)]
+    path_to_address: StandardHDCoinAddress,
 }
 
 #[derive(Debug, Display)]
@@ -187,7 +189,7 @@ pub async fn solana_coin_with_policy(
         PrivKeyBuildPolicy::IguanaPrivKey(priv_key) => priv_key,
         PrivKeyBuildPolicy::GlobalHDAccount(global_hd) => {
             let derivation_path: StandardHDPathToCoin = try_s!(json::from_value(conf["derivation_path"].clone()));
-            try_s!(global_hd.derive_secp256k1_secret(&derivation_path))
+            try_s!(global_hd.derive_secp256k1_secret(&derivation_path, &params.path_to_address))
         },
         PrivKeyBuildPolicy::Trezor => return ERR!("{}", PrivKeyPolicyNotAllowed::HardwareWalletNotSupported),
     };
@@ -609,7 +611,7 @@ impl WatcherOps for SolanaCoin {
     fn create_maker_payment_spend_preimage(
         &self,
         _maker_payment_tx: &[u8],
-        _time_lock: u32,
+        _time_lock: u64,
         _maker_pub: &[u8],
         _secret_hash: &[u8],
         _swap_unique_data: &[u8],
@@ -624,7 +626,7 @@ impl WatcherOps for SolanaCoin {
     fn create_taker_payment_refund_preimage(
         &self,
         _taker_payment_tx: &[u8],
-        _time_lock: u32,
+        _time_lock: u64,
         _maker_pub: &[u8],
         _secret_hash: &[u8],
         _swap_contract_address: &Option<BytesJson>,

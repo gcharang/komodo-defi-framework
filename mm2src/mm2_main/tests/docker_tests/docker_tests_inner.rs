@@ -8,7 +8,7 @@ use coins::utxo::rpc_clients::UnspentInfo;
 use coins::utxo::{GetUtxoListOps, UtxoCommonOps};
 use coins::{ConfirmPaymentInput, FoundSwapTxSpend, MarketCoinOps, MmCoin, RefundPaymentArgs,
             SearchForSwapTxSpendInput, SendPaymentArgs, SpendPaymentArgs, SwapOps, TransactionEnum, WithdrawRequest};
-use common::{block_on, now_sec_u32, wait_until_sec};
+use common::{block_on, now_sec, wait_until_sec};
 use crypto::privkey::key_pair_from_seed;
 use futures01::Future;
 use mm2_number::{BigDecimal, MmNumber};
@@ -28,7 +28,7 @@ fn test_search_for_swap_tx_spend_native_was_refunded_taker() {
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let taker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -113,7 +113,7 @@ fn test_search_for_swap_tx_spend_native_was_refunded_maker() {
     let (_ctx, coin, _) = generate_utxo_coin_with_random_privkey("MYCOIN", 1000u64.into());
     let my_public_key = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -180,7 +180,7 @@ fn test_search_for_taker_swap_tx_spend_native_was_spent_by_maker() {
     let my_pubkey = coin.my_public_key().unwrap();
 
     let secret_hash = dhash160(&secret);
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let taker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
         time_lock,
@@ -250,7 +250,7 @@ fn test_search_for_maker_swap_tx_spend_native_was_spent_by_taker() {
     let secret = [0; 32];
     let my_pubkey = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let secret_hash = dhash160(&secret);
     let maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
@@ -322,7 +322,7 @@ fn test_one_hundred_maker_payments_in_a_row_native() {
     let secret = [0; 32];
     let my_pubkey = coin.my_public_key().unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let mut unspents = vec![];
     let mut sent_tx = vec![];
     for i in 0..100 {
@@ -395,8 +395,8 @@ fn order_should_be_cancelled_when_entire_balance_is_withdrawn() {
     )
     .unwrap();
     let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm_bob.log_path);
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -528,10 +528,10 @@ fn order_should_be_updated_when_balance_is_decreased_alice_subscribes_after_upda
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -661,10 +661,10 @@ fn order_should_be_updated_when_balance_is_decreased_alice_subscribes_before_upd
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -808,10 +808,10 @@ fn test_order_should_be_updated_when_matched_partially() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -913,10 +913,10 @@ fn test_match_and_trade_setprice_max() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -1016,10 +1016,10 @@ fn test_max_taker_vol_swap() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
     block_on(mm_alice.wait_for_log(22., |log| log.contains(">>>>>>>>> DEX stats "))).unwrap();
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let price = MmNumber::from((100, 1620));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -1132,10 +1132,10 @@ fn test_buy_when_coins_locked_by_other_swap() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -1225,10 +1225,10 @@ fn test_sell_when_coins_locked_by_other_swap() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -1301,8 +1301,8 @@ fn test_buy_max() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_alice.rpc(&json!({
         "userpass": mm_alice.userpass,
         "method": "buy",
@@ -1365,8 +1365,8 @@ fn test_maker_trade_preimage() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     let rc = block_on(mm.rpc(&json!({
         "userpass": mm.userpass,
@@ -1502,8 +1502,8 @@ fn test_taker_trade_preimage() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     // `max` field is not supported for `buy/sell` swap methods
     let rc = block_on(mm.rpc(&json!({
@@ -1643,8 +1643,8 @@ fn test_trade_preimage_not_sufficient_balance() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     fill_balance_functor(MmNumber::from("0.000015").to_decimal());
     // Try sell the max amount with the zero balance.
@@ -1762,8 +1762,8 @@ fn test_trade_preimage_additional_validation() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     // Price is too low
     let rc = block_on(mm.rpc(&json!({
@@ -1902,8 +1902,8 @@ fn test_trade_preimage_legacy() {
     .unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     let rc = block_on(mm.rpc(&json!({
         "userpass": mm.userpass,
@@ -1972,8 +1972,8 @@ fn test_get_max_taker_vol() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
     let rc = block_on(mm_alice.rpc(&json!({
         "userpass": mm_alice.userpass,
         "method": "max_taker_vol",
@@ -2005,8 +2005,8 @@ fn test_get_max_taker_vol() {
 
 // https://github.com/KomodoPlatform/atomicDEX-API/issues/733
 #[test]
-fn test_get_max_taker_vol_dex_fee_threshold() {
-    let (_ctx, _, alice_priv_key) = generate_utxo_coin_with_random_privkey("MYCOIN1", "0.05328455".parse().unwrap());
+fn test_get_max_taker_vol_dex_fee_min_tx_amount() {
+    let (_ctx, _, alice_priv_key) = generate_utxo_coin_with_random_privkey("MYCOIN1", "0.00532845".parse().unwrap());
     let coins = json!([mycoin_conf(10000), mycoin1_conf(10000)]);
     let mm_alice = MarketMakerIt::start(
         json!({
@@ -2024,8 +2024,8 @@ fn test_get_max_taker_vol_dex_fee_threshold() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
     let rc = block_on(mm_alice.rpc(&json!({
         "userpass": mm_alice.userpass,
         "method": "max_taker_vol",
@@ -2034,8 +2034,8 @@ fn test_get_max_taker_vol_dex_fee_threshold() {
     .unwrap();
     assert!(rc.0.is_success(), "!max_taker_vol: {}", rc.1);
     let json: Json = serde_json::from_str(&rc.1).unwrap();
-    // the result of equation x + 0.0001 (dex fee) + 0.0002 (miner fee * 2) = 0.05328455
-    assert_eq!(json["result"]["numer"], Json::from("1059691"));
+    // the result of equation x + 0.00001 (dex fee) + 0.0002 (miner fee * 2) = 0.00532845
+    assert_eq!(json["result"]["numer"], Json::from("102369"));
     assert_eq!(json["result"]["denom"], Json::from("20000000"));
 
     let rc = block_on(mm_alice.rpc(&json!({
@@ -2085,8 +2085,8 @@ fn test_get_max_taker_vol_dust_threshold() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     let rc = block_on(mm.rpc(&json!({
         "userpass": mm.userpass,
@@ -2136,13 +2136,19 @@ fn test_get_max_taker_vol_with_kmd() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    let electrum = block_on(enable_electrum(&mm_alice, "KMD", false, &[
-        "electrum1.cipig.net:10001",
-        "electrum2.cipig.net:10001",
-        "electrum3.cipig.net:10001",
-    ]));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    let electrum = block_on(enable_electrum(
+        &mm_alice,
+        "KMD",
+        false,
+        &[
+            "electrum1.cipig.net:10001",
+            "electrum2.cipig.net:10001",
+            "electrum3.cipig.net:10001",
+        ],
+        None,
+    ));
     log!("{:?}", electrum);
     let rc = block_on(mm_alice.rpc(&json!({
         "userpass": mm_alice.userpass,
@@ -2182,8 +2188,8 @@ fn test_get_max_maker_vol() {
     let mm = MarketMakerIt::start(conf.conf, conf.rpc_password, None).unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN1", &[], None)));
 
     // 1 - tx_fee
     let expected_volume = MmNumber::from("0.99999");
@@ -2208,7 +2214,7 @@ fn test_get_max_maker_vol_error() {
     let mm = MarketMakerIt::start(conf.conf, conf.rpc_password, None).unwrap();
     let (_dump_log, _dump_dashboard) = mm_dump(&mm.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     let actual_error = block_on(max_maker_vol(&mm, "MYCOIN")).unwrap_err::<max_maker_vol_error::NotSufficientBalance>();
     let expected_error = max_maker_vol_error::NotSufficientBalance {
@@ -2242,8 +2248,8 @@ fn test_set_price_max() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_alice.rpc(&json!({
         "userpass": mm_alice.userpass,
         "method": "setprice",
@@ -2313,10 +2319,10 @@ fn swaps_should_stop_on_stop_rpc() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -2384,8 +2390,8 @@ fn test_maker_order_should_kick_start_and_appear_in_orderbook_on_restart() {
     let mm_bob = MarketMakerIt::start(bob_conf.clone(), "pass".to_string(), None).unwrap();
     let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm_bob.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -2404,8 +2410,8 @@ fn test_maker_order_should_kick_start_and_appear_in_orderbook_on_restart() {
 
     let mm_bob_dup = MarketMakerIt::start(bob_conf, "pass".to_string(), None).unwrap();
     let (_bob_dup_dump_log, _bob_dup_dump_dashboard) = mm_dump(&mm_bob_dup.log_path);
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[], None)));
 
     thread::sleep(Duration::from_secs(2));
 
@@ -2441,8 +2447,8 @@ fn test_maker_order_should_not_kick_start_and_appear_in_orderbook_if_balance_is_
     let mm_bob = MarketMakerIt::start(bob_conf.clone(), "pass".to_string(), None).unwrap();
     let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm_bob.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "setprice",
@@ -2480,8 +2486,8 @@ fn test_maker_order_should_not_kick_start_and_appear_in_orderbook_if_balance_is_
 
     let mm_bob_dup = MarketMakerIt::start(bob_conf, "pass".to_string(), None).unwrap();
     let (_bob_dup_dump_log, _bob_dup_dump_dashboard) = mm_dump(&mm_bob_dup.log_path);
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[], None)));
 
     thread::sleep(Duration::from_secs(2));
 
@@ -2567,10 +2573,10 @@ fn test_maker_order_kick_start_should_trigger_subscription_and_match() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -2590,8 +2596,8 @@ fn test_maker_order_kick_start_should_trigger_subscription_and_match() {
 
     let mut mm_bob_dup = MarketMakerIt::start(bob_conf, "pass".to_string(), None).unwrap();
     let (_bob_dup_dump_log, _bob_dup_dump_dashboard) = mm_dump(&mm_bob_dup.log_path);
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[], None)));
 
     log!("Give restarted Bob 2 seconds to kickstart the order");
     thread::sleep(Duration::from_secs(2));
@@ -2664,12 +2670,12 @@ fn test_orders_should_match_on_both_nodes_with_same_priv() {
     .unwrap();
     let (_alice_2_dump_log, _alice_2_dump_dashboard) = mm_dump(&mm_alice_2.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice_1, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice_1, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice_2, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice_2, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_1, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_1, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_2, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_2, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -2751,10 +2757,10 @@ fn test_maker_and_taker_order_created_with_same_priv_should_not_match() {
     .unwrap();
     let (_alice_1_dump_log, _alice_1_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -2822,10 +2828,10 @@ fn test_taker_order_converted_to_maker_should_cancel_properly_when_matched() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
         "method": "sell",
@@ -3029,7 +3035,7 @@ fn test_withdraw_not_sufficient_balance() {
     )
     .unwrap();
     let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm.log_path);
-    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[])));
+    log!("{:?}", block_on(enable_native(&mm, "MYCOIN", &[], None)));
 
     // balance = 0, but amount = 1
     let amount = BigDecimal::from(1);
@@ -3148,12 +3154,12 @@ fn test_taker_should_match_with_best_price_buy() {
     .unwrap();
     let (_eve_dump_log, _eve_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -3281,12 +3287,12 @@ fn test_taker_should_match_with_best_price_sell() {
     .unwrap();
     let (_eve_dump_log, _eve_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_eve, "MYCOIN1", &[], None)));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -3403,10 +3409,10 @@ fn test_match_utxo_with_eth_taker_sell() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    block_on(enable_native(&mm_bob, "ETH", ETH_DEV_NODES));
-    block_on(enable_native(&mm_alice, "ETH", ETH_DEV_NODES));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    block_on(enable_native(&mm_bob, "ETH", ETH_DEV_NODES, None));
+    block_on(enable_native(&mm_alice, "ETH", ETH_DEV_NODES, None));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -3479,11 +3485,11 @@ fn test_match_utxo_with_eth_taker_buy() {
     .unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    block_on(enable_native(&mm_bob, "ETH", ETH_DEV_NODES));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    block_on(enable_native(&mm_bob, "ETH", ETH_DEV_NODES, None));
 
-    block_on(enable_native(&mm_alice, "ETH", ETH_DEV_NODES));
+    block_on(enable_native(&mm_alice, "ETH", ETH_DEV_NODES, None));
 
     let rc = block_on(mm_bob.rpc(&json!({
         "userpass": mm_bob.userpass,
@@ -3529,10 +3535,10 @@ fn test_locked_amount() {
     let mut mm_alice = MarketMakerIt::start(alice_conf.conf, alice_conf.rpc_password, None).unwrap();
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[])));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[])));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
 
     block_on(start_swaps(
         &mut mm_bob,
