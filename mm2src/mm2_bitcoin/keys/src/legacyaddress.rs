@@ -10,7 +10,7 @@ use crate::{address::detect_checksum, Error};
 
 /// Struct for legacy address representation.
 /// Note: LegacyAddress::from_str deserialization is added, which is used at least in the convertaddress rpc.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Default)]
 pub struct LegacyAddress {
     /// The prefixes of the address.
     pub prefixes: AddressPrefixes,
@@ -88,7 +88,7 @@ impl FromStr for LegacyAddress {
 }
 
 impl From<&'static str> for LegacyAddress {
-    fn from(s: &'static str) -> Self { s.parse().unwrap() } // TODO: dangerous unwrap?
+    fn from(s: &'static str) -> Self { s.parse().unwrap_or_default() }
 }
 
 impl fmt::Display for LegacyAddress {
