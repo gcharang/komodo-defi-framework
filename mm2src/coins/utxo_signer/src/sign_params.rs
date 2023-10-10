@@ -63,7 +63,7 @@ impl SendingOutputInfo {
             OutputDestination::Change { ref addr_format, .. } if *addr_format == AddressFormat::Segwit => {
                 TrezorOutputScriptType::PayToWitness
             },
-            _ => TrezorOutputScriptType::PayToAddress,
+            OutputDestination::Change { .. } | OutputDestination::Plain { .. } => TrezorOutputScriptType::PayToAddress,
         }
     }
 }

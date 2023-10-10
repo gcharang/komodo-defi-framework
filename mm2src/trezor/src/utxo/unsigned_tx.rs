@@ -33,11 +33,11 @@ impl From<TrezorInputScriptType> for proto_bitcoin::InputScriptType {
 
 #[derive(Clone, Copy)]
 pub enum TrezorOutputScriptType {
-    /// Used for all addresses (bitcoin, p2sh, witness).
+    /// Used for all addresses: bitcoin, p2sh, witness (except for the change output).
     PayToAddress,
     /// OP_RETURN.
     PayToOpReturn,
-    /// pay to witness v0, used for the change
+    /// pay to witness v0, used for the change output
     PayToWitness,
 }
 

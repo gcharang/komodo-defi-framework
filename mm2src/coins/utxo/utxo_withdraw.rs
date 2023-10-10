@@ -284,7 +284,7 @@ where
                         address_derivation_path: self.from_derivation_path.clone(),
                         address_pubkey: self.from_pubkey,
                     },
-                    _ => SpendingInputInfo::P2PKH {
+                    AddressFormat::Standard | AddressFormat::CashAddress { .. } => SpendingInputInfo::P2PKH {
                         address_derivation_path: self.from_derivation_path.clone(),
                         address_pubkey: self.from_pubkey,
                     },
