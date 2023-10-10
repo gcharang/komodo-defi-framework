@@ -7807,49 +7807,20 @@ fn test_sign_raw_transaction_rick() {
     use mm2_test_helpers::for_tests::test_sign_raw_transaction_rpc_helper;
 
     let bob_seed = "UvCjJf4dKSs2vFGVtCnUTAhR5FTZGdg43DDRa9s7s5DV1sSDX14g";
-    let coins = json!([
-        {
-            "coin":"RICK",
-            "asset":"RICK",
-            "rpcport":8923,
-            "txversion":4,
-            "overwintered":1,
-            "protocol":{"type":"UTXO"}
-        },
-        {
-            "coin":"MORTY",
-            "asset":"MORTY",
-            "rpcport":11608,
-            "txversion":4,
-            "overwintered":1,
-            "protocol":{"type":"UTXO"}
-        }
-    ]);
+    let coins = json!([rick_conf(), morty_conf()]);
+    let conf = Mm2TestConf::seednode(bob_seed, &coins);
 
     // start bob
-    let mm_bob = MarketMakerIt::start(
-        json! ({
-            "gui": "nogui",
-            "netid": 9998,
-            "myipaddr": env::var ("BOB_TRADE_IP") .ok(),
-            "rpcip": env::var ("BOB_TRADE_IP") .ok(),
-            "canbind": env::var ("BOB_TRADE_PORT") .ok().map (|s| s.parse::<i64>().unwrap()),
-            "passphrase": bob_seed.to_string(),
-            "coins": coins,
-            "rpc_password": "pass",
-            "i_am_seed": true,
-        }),
-        "pass".into(),
-        None,
-    )
-    .expect("MarketMakerIt must start okay");
+    let mm_bob = MarketMakerIt::start(conf.conf, conf.rpc_password, None).unwrap();
 
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     log!("Bob log path: {}", mm_bob.log_path.display());
     // Enable coins on Bob side. Print the replies in case we need the "address".
-    log!(
-        "enable_coins (bob): {:?}",
-        block_on(enable_coins_rick_morty_electrum(&mm_bob))
+    let coin_init_resp = block_on(enable_coins_rick_morty_electrum(&mm_bob));
+    assert_eq!(
+        coin_init_resp["RICK"].result, "success",
+        "enable_coins failed with {}",
+        coin_init_resp["RICK"].result
     );
 
     let response = block_on(test_sign_raw_transaction_rpc_helper(
@@ -7870,7 +7841,6 @@ fn test_sign_raw_transaction_rick() {
         }),
     ));
     assert_eq!(response["result"]["tx_hex"], Json::from("0400008085202f89015794e93fbec895035c5321ad5b8b3f9212c25694d9cc67de2093114ab4bd6953000000006a47304402204d5793070a4f35946a7be6df0ff5e6db4e8e50c37d515dc24e2a70481b0d58d102205c144d2a504d2e59ac939472d90f91927b013b8b799bfd5fab3b71fbbb0d3b970121022cd3021a2197361fb70b862c412bc8e44cff6951fa1de45ceabfdd9b4c520420ffffffff01605af405000000001976a914b506088aa2a3b4bb1da3a29bf00ce1a550ea1df988ac00000000c1d31e000000000000000000000000"));
-    //signed with Low R signature fn
 }
 
 #[test]
@@ -7879,69 +7849,28 @@ fn test_sign_raw_transaction_p2wpkh() {
     use mm2_test_helpers::for_tests::test_sign_raw_transaction_rpc_helper;
 
     let bob_seed = "cNPm5PHMLfc4WPvsbGCpNMfVcoueVNZwJeW4fEfW3QWf8QaAT2Hd";
-
-    let coins = json!([
-        {
-            "coin":"tBTC",
-            "name":"tbitcoin",
-            "fname":"tBitcoin",
-            "rpcport":18332,
-            "pubtype":111,
-            "p2shtype":196,
-            "wiftype":239,
-            "segwit":true,
-            "bech32_hrp":"tb",
-            "txfee":0,
-            "mm2":1,
-            "required_confirmations":0,
-            "protocol":{"type":"UTXO"},
-            "address_format":{"format":"segwit"},
-        }
-    ]);
+    let coin = tbtc_segwit_conf();
+    let conf = Mm2TestConf::seednode(bob_seed, &json!([coin]));
 
     // start bob
-    let mm_bob = MarketMakerIt::start(
-        json! ({
-            "gui": "nogui",
-            "netid": 9998,
-            "myipaddr": env::var ("BOB_TRADE_IP") .ok(),
-            "rpcip": env::var ("BOB_TRADE_IP") .ok(),
-            "canbind": env::var ("BOB_TRADE_PORT") .ok().map (|s| s.parse::<i64>().unwrap()),
-            "passphrase": bob_seed.to_string(),
-            "coins": coins,
-            "rpc_password": "pass",
-            "i_am_seed": true,
-        }),
-        "pass".into(),
-        None,
-    )
-    .expect("MarketMakerIt must start okay");
+    let mm_bob = MarketMakerIt::start(conf.conf, conf.rpc_password, None).unwrap();
 
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     log!("Bob log path: {}", mm_bob.log_path.display());
 
     // Enable coins on Bob side. Print the replies in case we need the "address".
-    let electrum = block_on(mm_bob.rpc(&json!({
-        "userpass": "pass",
-        "method": "electrum",
-        "coin": "tBTC",
-        "servers": [{"url":"electrum1.cipig.net:10068"},{"url":"electrum2.cipig.net:10068"},{"url":"electrum3.cipig.net:10068"}],
-        "address_format":{"format":"segwit"},
-        "mm2": 1,
-    }))).unwrap();
+    let coin_init_resp = block_on(enable_electrum(&mm_bob, "tBTC-Segwit", false, TBTC_ELECTRUMS, None));
     assert_eq!(
-        electrum.0,
-        StatusCode::OK,
-        "RPC «electrum» failed with {} {}",
-        electrum.0,
-        electrum.1
+        coin_init_resp.result, "success",
+        "enable_coins failed with {}",
+        coin_init_resp.result
     );
 
     let response = block_on(test_sign_raw_transaction_rpc_helper(
         &mm_bob,
         StatusCode::OK,
         &json!({
-            "coin": "tBTC",
+            "coin": "tBTC-Segwit",
             "type": "UTXO",
             "tx": {
                 "tx_hex": "02000000010d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb20100000000fdffffff01f40100000000000016001488accd2145b7232b958db5cdf09336ad619541e200000000",
@@ -7956,11 +7885,12 @@ fn test_sign_raw_transaction_p2wpkh() {
     ));
     assert_eq!(response["result"]["tx_hex"], Json::from("020000000001010d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb20100000000fdffffff01f40100000000000016001488accd2145b7232b958db5cdf09336ad619541e2024730440220156d185b3fb21725c040b7ddcf84bf862b46f079bb66067eef1941023b8451e602204d877ac51b74932dea34c20874fa8112b3636eb506ac429548f7c05fe54e3faf0121039ad38f67dbc22cf5a6bd48b26920d9fac71681836faf80a9a678ddbaa0fe92f800000000"));
 
+    // bad request: spend from two different addresses
     let response = block_on(test_sign_raw_transaction_rpc_helper(
         &mm_bob,
         StatusCode::BAD_REQUEST,
         &json!({
-            "coin": "tBTC",
+            "coin": "tBTC-Segwit",
             "type": "UTXO",
             "tx": {
                 "tx_hex": "02000000020d23d763f12d77a337cc16df2696ac3f48552dda373c9977fa1f5dd8d5025cb20100000000fdffffff257c76e76a42c6833d137230ce94c0300178f3f84bd1ef2d1f8fa53d062fc9960000000000fdffffff01f40100000000000016001488accd2145b7232b958db5cdf09336ad619541e200000000",
