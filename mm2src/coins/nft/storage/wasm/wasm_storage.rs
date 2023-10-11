@@ -126,275 +126,6 @@ impl NftTransferHistoryFilters {
     }
 }
 
-async fn update_transfer_phishing_for_index(
-    table: &DbTable<'_, NftTransferHistoryTable>,
-    chain: &str,
-    index: &str,
-    domain: &str,
-    possible_phishing: bool,
-) -> MmResult<(), WasmNftCacheError> {
-    let index_keys = MultiIndex::new(index).with_value(chain)?.with_value(domain)?;
-    let transfers_table = table.get_items_by_multi_index(index_keys).await?;
-    for (_item_id, item) in transfers_table.into_iter() {
-        let mut transfer = transfer_details_from_item(item)?;
-        transfer.possible_phishing = possible_phishing;
-        drop_mutability!(transfer);
-        let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
-        let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
-            .with_value(chain)?
-            .with_value(&transfer.common.transaction_hash)?
-            .with_value(transfer.common.log_index)?;
-        table
-            .replace_item_by_unique_multi_index(index_keys, &transfer_item)
-            .await?;
-    }
-    Ok(())
-}
-
-async fn update_nft_phishing_for_index(
-    table: &DbTable<'_, NftListTable>,
-    chain: &str,
-    index: &str,
-    domain: &str,
-    possible_phishing: bool,
-) -> MmResult<(), WasmNftCacheError> {
-    let index_keys = MultiIndex::new(index).with_value(chain)?.with_value(domain)?;
-    let nfts_table = table.get_items_by_multi_index(index_keys).await?;
-    for (_item_id, item) in nfts_table.into_iter() {
-        let mut nft = nft_details_from_item(item)?;
-        nft.possible_phishing = possible_phishing;
-        drop_mutability!(nft);
-        let nft_item = NftListTable::from_nft(&nft)?;
-        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
-            .with_value(chain)?
-            .with_value(eth_addr_to_hex(&nft.common.token_address))?
-            .with_value(nft.common.token_id.to_string())?;
-        table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
-    }
-    Ok(())
-}
-
-/// `get_last_block_from_table` function returns the highest block in the table related to certain blockchain type.
-async fn get_last_block_from_table(
-    chain: &Chain,
-    table: DbTable<'_, impl TableSignature + BlockNumberTable>,
-    cursor: &str,
-) -> MmResult<Option<u64>, WasmNftCacheError> {
-    let items = table
-        .cursor_builder()
-        .only("chain", chain.to_string())
-        .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-        // Sets lower and upper bounds for block_number field
-        .bound("block_number", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
-        // Opens a cursor by the specified index.
-        // In get_last_block_from_table case it is CHAIN_BLOCK_NUMBER_INDEX, as we need to search block_number for specific chain.
-        // Cursor returns values from the lowest to highest key indexes.
-        .open_cursor(cursor)
-        .await
-        .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-        .collect()
-        .await
-        .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
-
-    let maybe_item = items
-        .into_iter()
-        .last()
-        .map(|(_item_id, item)| {
-            item.get_block_number()
-                .to_u64()
-                .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))
-        })
-        .transpose()?;
-    Ok(maybe_item)
-}
-
-trait BlockNumberTable {
-    fn get_block_number(&self) -> &BeBigUint;
-}
-
-impl BlockNumberTable for NftListTable {
-    fn get_block_number(&self) -> &BeBigUint { &self.block_number }
-}
-
-impl BlockNumberTable for NftTransferHistoryTable {
-    fn get_block_number(&self) -> &BeBigUint { &self.block_number }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct NftListTable {
-    token_address: String,
-    token_id: String,
-    chain: String,
-    amount: String,
-    block_number: BeBigUint,
-    contract_type: ContractType,
-    possible_spam: bool,
-    possible_phishing: bool,
-    token_domain: Option<String>,
-    image_domain: Option<String>,
-    animation_domain: Option<String>,
-    external_domain: Option<String>,
-    details_json: Json,
-}
-
-impl NftListTable {
-    const CHAIN_ANIMATION_DOMAIN_INDEX: &str = "chain_animation_domain_index";
-    const CHAIN_EXTERNAL_DOMAIN_INDEX: &str = "chain_external_domain_index";
-
-    fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
-        let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
-        Ok(NftListTable {
-            token_address: eth_addr_to_hex(&nft.common.token_address),
-            token_id: nft.common.token_id.to_string(),
-            chain: nft.chain.to_string(),
-            amount: nft.common.amount.to_string(),
-            block_number: BeBigUint::from(nft.block_number),
-            contract_type: nft.contract_type,
-            possible_spam: nft.common.possible_spam,
-            possible_phishing: nft.possible_phishing,
-            token_domain: nft.common.token_domain.clone(),
-            image_domain: nft.uri_meta.image_domain.clone(),
-            animation_domain: nft.uri_meta.animation_domain.clone(),
-            external_domain: nft.uri_meta.external_domain.clone(),
-            details_json,
-        })
-    }
-}
-
-impl TableSignature for NftListTable {
-    fn table_name() -> &'static str { "nft_list_cache_table" }
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if is_initial_upgrade(old_version, new_version) {
-            let table = upgrader.create_table(Self::table_name())?;
-            table.create_multi_index(
-                CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
-                &["chain", "token_address", "token_id"],
-                true,
-            )?;
-            table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
-            table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
-            table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
-            table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
-            table.create_multi_index(
-                Self::CHAIN_ANIMATION_DOMAIN_INDEX,
-                &["chain", "animation_domain"],
-                false,
-            )?;
-            table.create_multi_index(Self::CHAIN_EXTERNAL_DOMAIN_INDEX, &["chain", "external_domain"], false)?;
-            table.create_index("chain", false)?;
-            table.create_index("block_number", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct NftTransferHistoryTable {
-    transaction_hash: String,
-    log_index: u32,
-    chain: String,
-    block_number: BeBigUint,
-    block_timestamp: BeBigUint,
-    contract_type: ContractType,
-    token_address: String,
-    token_id: String,
-    status: TransferStatus,
-    amount: String,
-    token_uri: Option<String>,
-    token_domain: Option<String>,
-    collection_name: Option<String>,
-    image_url: Option<String>,
-    image_domain: Option<String>,
-    token_name: Option<String>,
-    possible_spam: bool,
-    possible_phishing: bool,
-    details_json: Json,
-}
-
-impl NftTransferHistoryTable {
-    const CHAIN_TX_HASH_LOG_INDEX_INDEX: &str = "chain_tx_hash_log_index_index";
-
-    fn from_transfer_history(transfer: &NftTransferHistory) -> WasmNftCacheResult<NftTransferHistoryTable> {
-        let details_json =
-            json::to_value(transfer).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
-        Ok(NftTransferHistoryTable {
-            transaction_hash: transfer.common.transaction_hash.clone(),
-            log_index: transfer.common.log_index,
-            chain: transfer.chain.to_string(),
-            block_number: BeBigUint::from(transfer.block_number),
-            block_timestamp: BeBigUint::from(transfer.block_timestamp),
-            contract_type: transfer.contract_type,
-            token_address: eth_addr_to_hex(&transfer.common.token_address),
-            token_id: transfer.common.token_id.to_string(),
-            status: transfer.status,
-            amount: transfer.common.amount.to_string(),
-            token_uri: transfer.token_uri.clone(),
-            token_domain: transfer.token_domain.clone(),
-            collection_name: transfer.collection_name.clone(),
-            image_url: transfer.image_url.clone(),
-            image_domain: transfer.image_domain.clone(),
-            token_name: transfer.token_name.clone(),
-            possible_spam: transfer.common.possible_spam,
-            possible_phishing: transfer.possible_phishing,
-            details_json,
-        })
-    }
-}
-
-impl TableSignature for NftTransferHistoryTable {
-    fn table_name() -> &'static str { "nft_transfer_history_cache_table" }
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if is_initial_upgrade(old_version, new_version) {
-            let table = upgrader.create_table(Self::table_name())?;
-            table.create_multi_index(
-                CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
-                &["chain", "token_address", "token_id"],
-                false,
-            )?;
-            table.create_multi_index(
-                Self::CHAIN_TX_HASH_LOG_INDEX_INDEX,
-                &["chain", "transaction_hash", "log_index"],
-                true,
-            )?;
-            table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
-            table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
-            table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
-            table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
-            table.create_index("block_number", false)?;
-            table.create_index("chain", false)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct LastScannedBlockTable {
-    chain: String,
-    last_scanned_block: BeBigUint,
-}
-
-impl TableSignature for LastScannedBlockTable {
-    fn table_name() -> &'static str { "last_scanned_block_table" }
-
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if is_initial_upgrade(old_version, new_version) {
-            let table = upgrader.create_table(Self::table_name())?;
-            table.create_index("chain", true)?;
-        }
-        Ok(())
-    }
-}
-
-fn nft_details_from_item(item: NftListTable) -> WasmNftCacheResult<Nft> {
-    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
-}
-
-fn transfer_details_from_item(item: NftTransferHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
-    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
-}
-
 #[async_trait]
 impl NftListStorageOps for NftCacheIDBLocked<'_> {
     type Error = WasmNftCacheError;
@@ -989,4 +720,273 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
             .await?;
         Ok(())
     }
+}
+
+async fn update_transfer_phishing_for_index(
+    table: &DbTable<'_, NftTransferHistoryTable>,
+    chain: &str,
+    index: &str,
+    domain: &str,
+    possible_phishing: bool,
+) -> MmResult<(), WasmNftCacheError> {
+    let index_keys = MultiIndex::new(index).with_value(chain)?.with_value(domain)?;
+    let transfers_table = table.get_items_by_multi_index(index_keys).await?;
+    for (_item_id, item) in transfers_table.into_iter() {
+        let mut transfer = transfer_details_from_item(item)?;
+        transfer.possible_phishing = possible_phishing;
+        drop_mutability!(transfer);
+        let transfer_item = NftTransferHistoryTable::from_transfer_history(&transfer)?;
+        let index_keys = MultiIndex::new(NftTransferHistoryTable::CHAIN_TX_HASH_LOG_INDEX_INDEX)
+            .with_value(chain)?
+            .with_value(&transfer.common.transaction_hash)?
+            .with_value(transfer.common.log_index)?;
+        table
+            .replace_item_by_unique_multi_index(index_keys, &transfer_item)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn update_nft_phishing_for_index(
+    table: &DbTable<'_, NftListTable>,
+    chain: &str,
+    index: &str,
+    domain: &str,
+    possible_phishing: bool,
+) -> MmResult<(), WasmNftCacheError> {
+    let index_keys = MultiIndex::new(index).with_value(chain)?.with_value(domain)?;
+    let nfts_table = table.get_items_by_multi_index(index_keys).await?;
+    for (_item_id, item) in nfts_table.into_iter() {
+        let mut nft = nft_details_from_item(item)?;
+        nft.possible_phishing = possible_phishing;
+        drop_mutability!(nft);
+        let nft_item = NftListTable::from_nft(&nft)?;
+        let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
+            .with_value(chain)?
+            .with_value(eth_addr_to_hex(&nft.common.token_address))?
+            .with_value(nft.common.token_id.to_string())?;
+        table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
+    }
+    Ok(())
+}
+
+/// `get_last_block_from_table` function returns the highest block in the table related to certain blockchain type.
+async fn get_last_block_from_table(
+    chain: &Chain,
+    table: DbTable<'_, impl TableSignature + BlockNumberTable>,
+    cursor: &str,
+) -> MmResult<Option<u64>, WasmNftCacheError> {
+    let items = table
+        .cursor_builder()
+        .only("chain", chain.to_string())
+        .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+        // Sets lower and upper bounds for block_number field
+        .bound("block_number", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
+        // Opens a cursor by the specified index.
+        // In get_last_block_from_table case it is CHAIN_BLOCK_NUMBER_INDEX, as we need to search block_number for specific chain.
+        // Cursor returns values from the lowest to highest key indexes.
+        .open_cursor(cursor)
+        .await
+        .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
+        .collect()
+        .await
+        .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
+
+    let maybe_item = items
+        .into_iter()
+        .last()
+        .map(|(_item_id, item)| {
+            item.get_block_number()
+                .to_u64()
+                .ok_or_else(|| WasmNftCacheError::GetLastNftBlockError("height is too large".to_string()))
+        })
+        .transpose()?;
+    Ok(maybe_item)
+}
+
+trait BlockNumberTable {
+    fn get_block_number(&self) -> &BeBigUint;
+}
+
+impl BlockNumberTable for NftListTable {
+    fn get_block_number(&self) -> &BeBigUint { &self.block_number }
+}
+
+impl BlockNumberTable for NftTransferHistoryTable {
+    fn get_block_number(&self) -> &BeBigUint { &self.block_number }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct NftListTable {
+    token_address: String,
+    token_id: String,
+    chain: String,
+    amount: String,
+    block_number: BeBigUint,
+    contract_type: ContractType,
+    possible_spam: bool,
+    possible_phishing: bool,
+    token_domain: Option<String>,
+    image_domain: Option<String>,
+    animation_domain: Option<String>,
+    external_domain: Option<String>,
+    details_json: Json,
+}
+
+impl NftListTable {
+    const CHAIN_ANIMATION_DOMAIN_INDEX: &str = "chain_animation_domain_index";
+    const CHAIN_EXTERNAL_DOMAIN_INDEX: &str = "chain_external_domain_index";
+
+    fn from_nft(nft: &Nft) -> WasmNftCacheResult<NftListTable> {
+        let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
+        Ok(NftListTable {
+            token_address: eth_addr_to_hex(&nft.common.token_address),
+            token_id: nft.common.token_id.to_string(),
+            chain: nft.chain.to_string(),
+            amount: nft.common.amount.to_string(),
+            block_number: BeBigUint::from(nft.block_number),
+            contract_type: nft.contract_type,
+            possible_spam: nft.common.possible_spam,
+            possible_phishing: nft.possible_phishing,
+            token_domain: nft.common.token_domain.clone(),
+            image_domain: nft.uri_meta.image_domain.clone(),
+            animation_domain: nft.uri_meta.animation_domain.clone(),
+            external_domain: nft.uri_meta.external_domain.clone(),
+            details_json,
+        })
+    }
+}
+
+impl TableSignature for NftListTable {
+    fn table_name() -> &'static str { "nft_list_cache_table" }
+
+    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        if is_initial_upgrade(old_version, new_version) {
+            let table = upgrader.create_table(Self::table_name())?;
+            table.create_multi_index(
+                CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
+                &["chain", "token_address", "token_id"],
+                true,
+            )?;
+            table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
+            table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
+            table.create_multi_index(
+                Self::CHAIN_ANIMATION_DOMAIN_INDEX,
+                &["chain", "animation_domain"],
+                false,
+            )?;
+            table.create_multi_index(Self::CHAIN_EXTERNAL_DOMAIN_INDEX, &["chain", "external_domain"], false)?;
+            table.create_index("chain", false)?;
+            table.create_index("block_number", false)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct NftTransferHistoryTable {
+    transaction_hash: String,
+    log_index: u32,
+    chain: String,
+    block_number: BeBigUint,
+    block_timestamp: BeBigUint,
+    contract_type: ContractType,
+    token_address: String,
+    token_id: String,
+    status: TransferStatus,
+    amount: String,
+    token_uri: Option<String>,
+    token_domain: Option<String>,
+    collection_name: Option<String>,
+    image_url: Option<String>,
+    image_domain: Option<String>,
+    token_name: Option<String>,
+    possible_spam: bool,
+    possible_phishing: bool,
+    details_json: Json,
+}
+
+impl NftTransferHistoryTable {
+    const CHAIN_TX_HASH_LOG_INDEX_INDEX: &str = "chain_tx_hash_log_index_index";
+
+    fn from_transfer_history(transfer: &NftTransferHistory) -> WasmNftCacheResult<NftTransferHistoryTable> {
+        let details_json =
+            json::to_value(transfer).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
+        Ok(NftTransferHistoryTable {
+            transaction_hash: transfer.common.transaction_hash.clone(),
+            log_index: transfer.common.log_index,
+            chain: transfer.chain.to_string(),
+            block_number: BeBigUint::from(transfer.block_number),
+            block_timestamp: BeBigUint::from(transfer.block_timestamp),
+            contract_type: transfer.contract_type,
+            token_address: eth_addr_to_hex(&transfer.common.token_address),
+            token_id: transfer.common.token_id.to_string(),
+            status: transfer.status,
+            amount: transfer.common.amount.to_string(),
+            token_uri: transfer.token_uri.clone(),
+            token_domain: transfer.token_domain.clone(),
+            collection_name: transfer.collection_name.clone(),
+            image_url: transfer.image_url.clone(),
+            image_domain: transfer.image_domain.clone(),
+            token_name: transfer.token_name.clone(),
+            possible_spam: transfer.common.possible_spam,
+            possible_phishing: transfer.possible_phishing,
+            details_json,
+        })
+    }
+}
+
+impl TableSignature for NftTransferHistoryTable {
+    fn table_name() -> &'static str { "nft_transfer_history_cache_table" }
+
+    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        if is_initial_upgrade(old_version, new_version) {
+            let table = upgrader.create_table(Self::table_name())?;
+            table.create_multi_index(
+                CHAIN_TOKEN_ADD_TOKEN_ID_INDEX,
+                &["chain", "token_address", "token_id"],
+                false,
+            )?;
+            table.create_multi_index(
+                Self::CHAIN_TX_HASH_LOG_INDEX_INDEX,
+                &["chain", "transaction_hash", "log_index"],
+                true,
+            )?;
+            table.create_multi_index(CHAIN_BLOCK_NUMBER_INDEX, &["chain", "block_number"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_ADD_INDEX, &["chain", "token_address"], false)?;
+            table.create_multi_index(CHAIN_TOKEN_DOMAIN_INDEX, &["chain", "token_domain"], false)?;
+            table.create_multi_index(CHAIN_IMAGE_DOMAIN_INDEX, &["chain", "image_domain"], false)?;
+            table.create_index("block_number", false)?;
+            table.create_index("chain", false)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct LastScannedBlockTable {
+    chain: String,
+    last_scanned_block: BeBigUint,
+}
+
+impl TableSignature for LastScannedBlockTable {
+    fn table_name() -> &'static str { "last_scanned_block_table" }
+
+    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        if is_initial_upgrade(old_version, new_version) {
+            let table = upgrader.create_table(Self::table_name())?;
+            table.create_index("chain", true)?;
+        }
+        Ok(())
+    }
+}
+
+fn nft_details_from_item(item: NftListTable) -> WasmNftCacheResult<Nft> {
+    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
+}
+
+fn transfer_details_from_item(item: NftTransferHistoryTable) -> WasmNftCacheResult<NftTransferHistory> {
+    json::from_value(item.details_json).map_to_mm(|e| WasmNftCacheError::ErrorDeserializing(e.to_string()))
 }

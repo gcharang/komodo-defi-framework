@@ -635,7 +635,6 @@ impl From<Nft> for TransferMeta {
 /// This struct provides an interface for interacting with the underlying data structures
 /// required for NFT operations, including guarding against concurrent accesses and
 /// dealing with platform-specific storage mechanisms.
-#[allow(dead_code)]
 pub(crate) struct NftCtx {
     /// An asynchronous mutex to guard against concurrent NFT operations, ensuring data consistency.
     pub(crate) guard: Arc<AsyncMutex<()>>,
