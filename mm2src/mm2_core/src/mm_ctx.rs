@@ -60,7 +60,6 @@ const EXPORT_METRICS_INTERVAL: f64 = 5. * 60.;
 /// Only the pointers (`MmArc`, `MmWeak`) can be moved around.
 ///
 /// Threads only have the non-`mut` access to `MmCtx`, allowing us to directly share certain fields.
-#[allow(dead_code)]
 pub struct MmCtx {
     /// MM command-line configuration.
     pub conf: Json,
