@@ -174,7 +174,6 @@ impl<'a> WalletIndexedDb {
         &self,
         extfvks: &[ExtendedFullViewingKey],
     ) -> MmResult<(), ZcoinStorageError> {
-        let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let walletdb_account_table = db_transaction.table::<WalletDbAccountsTable>().await?;
@@ -182,7 +181,7 @@ impl<'a> WalletIndexedDb {
         // check if account exists
         let maybe_min_account = walletdb_account_table
             .cursor_builder()
-            .only("ticker", &ticker)?
+            .only("ticker", &self.ticker)?
             .bound("height", 0u32, u32::MAX)
             .open_cursor(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
             .await?
@@ -205,7 +204,7 @@ impl<'a> WalletIndexedDb {
                 account: account_int.clone(),
                 extfvk: encode_extended_full_viewing_key(self.params.hrp_sapling_extended_full_viewing_key(), extfvk),
                 address,
-                ticker: ticker.clone(),
+                ticker: self.ticker.clone(),
             };
 
             let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
