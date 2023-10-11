@@ -358,7 +358,9 @@ pub async fn cancel_create_new_account(
 pub(crate) mod common_impl {
     use super::*;
     use crate::coin_balance::HDWalletBalanceOps;
-    use crate::hd_wallet::{HDAccountOps, HDWalletOps};
+    use crate::hd_wallet::{create_new_account, ExtractExtendedPubkey, HDAccountOps, HDAccountStorageOps,
+                           HDCoinHDAccount, HDWalletOps};
+    use crypto::Secp256k1ExtendedPublicKey;
 
     pub async fn init_create_new_account_rpc<'a, Coin, XPubExtractor>(
         coin: &Coin,
@@ -367,14 +369,17 @@ pub(crate) mod common_impl {
         xpub_extractor: Option<XPubExtractor>,
     ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
     where
-        Coin: HDWalletBalanceOps + CoinWithDerivationMethod + Send + Sync,
+        Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey>
+            + HDWalletBalanceOps
+            + CoinWithDerivationMethod
+            + Send
+            + Sync,
         XPubExtractor: HDXPubExtractor + Send,
+        HDCoinHDAccount<Coin>: HDAccountStorageOps,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
-        let mut new_account = coin
-            .create_new_account(hd_wallet, xpub_extractor, params.account_id)
-            .await?;
+        let mut new_account = create_new_account(coin, hd_wallet, xpub_extractor, params.account_id).await?;
         let account_index = new_account.account_id();
         let account_derivation_path = new_account.account_derivation_path();
 

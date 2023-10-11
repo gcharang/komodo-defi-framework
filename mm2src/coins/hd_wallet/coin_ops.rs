@@ -1,6 +1,6 @@
-use super::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountMut, HDAccountOps,
-            HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress, HDWalletOps, HDXPubExtractor, NewAccountCreationError,
-            NewAddressDeriveConfirmError, NewAddressDerivingError};
+use super::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountOps,
+            HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress, HDWalletOps, NewAddressDeriveConfirmError,
+            NewAddressDerivingError};
 use crate::hd_wallet::{HDAddressOps, HDWalletStorageOps};
 use async_trait::async_trait;
 use bip32::{ChildNumber, DerivationPath};
@@ -242,27 +242,6 @@ pub trait HDWalletCoinOps {
 
         Ok(hd_address)
     }
-
-    /// Creates and registers a new HD account for a specific wallet.
-    ///
-    /// # Parameters
-    /// - `hd_wallet`: The specified HD wallet.
-    /// - `xpub_extractor`: Optional method for extracting the extended public key.
-    ///   This is especially useful when dealing with hardware wallets. It can
-    ///   allow for the extraction of the extended public key directly from the
-    ///   wallet when needed.
-    /// - `account_id`: Optional account identifier.
-    ///
-    /// # Returns
-    /// A result containing a mutable reference to the created `Self::HDAccount` or an error.
-    async fn create_new_account<'a, XPubExtractor>(
-        &self,
-        hd_wallet: &'a Self::HDWallet,
-        xpub_extractor: Option<XPubExtractor>,
-        account_id: Option<u32>,
-    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreationError>
-    where
-        XPubExtractor: HDXPubExtractor + Send;
 
     /// Updates the count of known addresses for a specified HD account and chain.
     /// This is useful for tracking the number of created addresses.

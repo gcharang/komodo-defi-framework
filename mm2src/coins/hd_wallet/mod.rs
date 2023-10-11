@@ -39,7 +39,8 @@ mod storage;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use storage::HDWalletDb;
 #[cfg(test)] pub(crate) use storage::HDWalletMockStorage;
-pub use storage::{HDAccountStorageItem, HDWalletCoinStorage, HDWalletId, HDWalletStorageError, HDWalletStorageOps};
+pub use storage::{HDAccountStorageItem, HDAccountStorageOps, HDWalletCoinStorage, HDWalletId, HDWalletStorageError,
+                  HDWalletStorageOps};
 pub(crate) use storage::{HDWalletStorageInternalOps, HDWalletStorageResult};
 
 mod wallet_ops;
@@ -134,6 +135,21 @@ where
 {
     type HDAddress = HDAddress;
 
+    fn new(
+        account_id: u32,
+        extended_pubkey: Secp256k1ExtendedPublicKey,
+        account_derivation_path: StandardHDPathToAccount,
+    ) -> Self {
+        HDAccount {
+            account_id,
+            extended_pubkey,
+            account_derivation_path,
+            external_addresses_number: 0,
+            internal_addresses_number: 0,
+            derived_addresses: HDAddressesCache::default(),
+        }
+    }
+
     fn address_limit(&self) -> u32 { DEFAULT_ADDRESS_LIMIT }
 
     fn known_addresses_number(&self, chain: Bip44Chain) -> MmResult<u32, InvalidBip44ChainError> {
@@ -168,14 +184,17 @@ where
     fn extended_pubkey(&self) -> &Secp256k1ExtendedPublicKey { &self.extended_pubkey }
 }
 
-impl<HDAddress> HDAccount<HDAddress>
+impl<HDAddress> HDAccountStorageOps for HDAccount<HDAddress>
 where
     HDAddress: HDAddressOps + Send,
 {
-    pub fn try_from_storage_item(
+    fn try_from_storage_item(
         wallet_der_path: &StandardHDPathToCoin,
         account_info: &HDAccountStorageItem,
-    ) -> HDWalletStorageResult<Self> {
+    ) -> HDWalletStorageResult<Self>
+    where
+        Self: Sized,
+    {
         const ACCOUNT_CHILD_HARDENED: bool = true;
 
         let account_child = ChildNumber::new(account_info.account_id, ACCOUNT_CHILD_HARDENED)?;
@@ -195,7 +214,7 @@ where
         })
     }
 
-    pub fn to_storage_item(&self) -> HDAccountStorageItem {
+    fn to_storage_item(&self) -> HDAccountStorageItem {
         HDAccountStorageItem {
             account_id: self.account_id,
             account_xpub: self.extended_pubkey.to_string(bip32::Prefix::XPUB),
@@ -276,6 +295,8 @@ where
 
     fn coin_type(&self) -> u32 { self.derivation_path.coin_type() }
 
+    fn derivation_path(&self) -> &StandardHDPathToCoin { &self.derivation_path }
+
     fn gap_limit(&self) -> u32 { self.gap_limit }
 
     fn account_limit(&self) -> u32 { DEFAULT_ACCOUNT_LIMIT }
@@ -335,10 +356,83 @@ where
     }
 }
 
+/// Creates and registers a new HD account for a HDWallet.
+///
+/// # Parameters
+/// - `coin`: A coin that implements [`ExtractExtendedPubkey`].
+/// - `hd_wallet`: The specified HD wallet.
+/// - `xpub_extractor`: Optional method for extracting the extended public key.
+///   This is especially useful when dealing with hardware wallets. It can
+///   allow for the extraction of the extended public key directly from the
+///   wallet when needed.
+/// - `account_id`: Optional account identifier.
+///
+/// # Returns
+/// A result containing a mutable reference to the created `HDAccount` if successful.
+pub async fn create_new_account<'a, Coin, XPubExtractor, HDWallet, HDAccount>(
+    coin: &Coin,
+    hd_wallet: &'a HDWallet,
+    xpub_extractor: Option<XPubExtractor>,
+    account_id: Option<u32>,
+) -> MmResult<HDAccountMut<'a, HDWalletHDAccount<HDWallet>>, NewAccountCreationError>
+where
+    Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey> + Sync,
+    HDWallet: HDWalletOps<HDAccount = HDAccount> + HDWalletStorageOps + Sync,
+    XPubExtractor: HDXPubExtractor + Send,
+    HDAccount: 'a + HDAccountOps + HDAccountStorageOps,
+{
+    const INIT_ACCOUNT_ID: u32 = 0;
+    let new_account_id = match account_id {
+        Some(account_id) => account_id,
+        None => {
+            let accounts = hd_wallet.get_accounts_mut().await;
+            let last_account_id = accounts.iter().last().map(|(account_id, _account)| *account_id);
+            last_account_id.map_or(INIT_ACCOUNT_ID, |last_id| {
+                (INIT_ACCOUNT_ID..=last_id)
+                    .find(|id| !accounts.contains_key(id))
+                    .unwrap_or(last_id + 1)
+            })
+        },
+    };
+    let max_accounts_number = hd_wallet.account_limit();
+    if new_account_id >= max_accounts_number {
+        return MmError::err(NewAccountCreationError::AccountLimitReached { max_accounts_number });
+    }
+
+    let account_child_hardened = true;
+    let account_child = ChildNumber::new(new_account_id, account_child_hardened)
+        .map_to_mm(|e| NewAccountCreationError::Internal(e.to_string()))?;
+
+    let account_derivation_path: StandardHDPathToAccount = hd_wallet.derivation_path().derive(account_child)?;
+    let account_pubkey = coin
+        .extract_extended_pubkey(xpub_extractor, account_derivation_path.to_derivation_path())
+        .await?;
+
+    let new_account = HDAccount::new(new_account_id, account_pubkey, account_derivation_path);
+
+    let accounts = hd_wallet.get_accounts_mut().await;
+    if accounts.contains_key(&new_account_id) {
+        let error = format!(
+            "Account '{}' has been activated while we proceed the 'create_new_account' function",
+            new_account_id
+        );
+        return MmError::err(NewAccountCreationError::Internal(error));
+    }
+
+    hd_wallet.upload_new_account(new_account.to_storage_item()).await?;
+
+    Ok(AsyncMutexGuard::map(accounts, |accounts| {
+        accounts
+            .entry(new_account_id)
+            // the `entry` method should return [`Entry::Vacant`] due to the checks above
+            .or_insert(new_account)
+    }))
+}
+
 #[async_trait]
 impl<HDAccount> HDWalletStorageOps for HDWallet<HDAccount>
 where
-    HDAccount: HDAccountOps + Clone + Send + Sync,
+    HDAccount: HDAccountOps + HDAccountStorageOps + Clone + Send + Sync,
 {
     fn hd_wallet_storage(&self) -> &HDWalletCoinStorage { &self.hd_wallet_storage }
 }

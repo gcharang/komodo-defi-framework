@@ -1,7 +1,7 @@
 use super::*;
 use crate::coin_errors::MyAddressError;
-use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress,
-                       HDExtractPubkeyError, HDXPubExtractor, NewAccountCreationError, NewAddressDeriveConfirmError};
+use crate::hd_wallet::{ExtractExtendedPubkey, HDCoinAddress, HDCoinHDAddress, HDExtractPubkeyError, HDXPubExtractor,
+                       NewAddressDeriveConfirmError};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxDetailsBuilder,
                               TxHistoryStorage};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
@@ -1362,18 +1362,6 @@ impl HDWalletCoinOps for BchCoin {
         derivation_path: DerivationPath,
     ) -> HDCoinHDAddress<Self> {
         utxo_common::address_from_extended_pubkey(self, extended_pubkey, derivation_path)
-    }
-
-    async fn create_new_account<'a, XPubExtractor>(
-        &self,
-        hd_wallet: &'a Self::HDWallet,
-        xpub_extractor: Option<XPubExtractor>,
-        account_id: Option<u32>,
-    ) -> MmResult<HDAccountMut<'a, HDCoinHDAccount<Self>>, NewAccountCreationError>
-    where
-        XPubExtractor: HDXPubExtractor + Send,
-    {
-        utxo_common::create_new_account(self, hd_wallet, xpub_extractor, account_id).await
     }
 
     fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError> { utxo_common::trezor_coin(self) }

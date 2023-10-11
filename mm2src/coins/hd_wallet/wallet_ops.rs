@@ -1,6 +1,6 @@
 use super::{HDAccountMut, HDAccountOps, HDAccountsMap, HDAccountsMut, HDAccountsMutex, HDWalletAddress};
 use async_trait::async_trait;
-use crypto::Bip44Chain;
+use crypto::{Bip44Chain, StandardHDPathToCoin};
 
 /// `HDWalletOps`: Operations that should be implemented for Structs that represent HD wallets.
 #[async_trait]
@@ -17,6 +17,15 @@ pub trait HDWalletOps {
     ///
     /// A `u32` value representing the coin type from the wallet's derivation path.
     fn coin_type(&self) -> u32;
+
+    /// Returns the derivation path associated with this HD Wallet.
+    ///
+    /// This method can be implemented to fetch the derivation path as specified in the wallet's BIP44 derivation path.
+    ///
+    /// # Returns
+    ///
+    /// A `StandardHDPathToCoin` value representing the derivation path from the wallet's derivation path.
+    fn derivation_path(&self) -> &StandardHDPathToCoin;
 
     /// Fetches the gap limit associated with this HD Wallet.
     ///

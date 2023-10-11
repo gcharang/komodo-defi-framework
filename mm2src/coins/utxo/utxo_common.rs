@@ -2,8 +2,7 @@ use super::*;
 use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
-use crate::hd_wallet::{ExtractExtendedPubkey, HDAccountMut, HDAddressesCache, HDCoinAddress, HDCoinHDAccount,
-                       HDExtractPubkeyError, HDWalletStorageOps, HDXPubExtractor, NewAccountCreationError,
+use crate::hd_wallet::{HDCoinAddress, HDCoinHDAccount, HDExtractPubkeyError, HDXPubExtractor,
                        NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
@@ -33,7 +32,7 @@ use chain::{OutPoint, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
 use common::log::error;
-use crypto::{Bip32DerPathOps, Bip44Chain, RpcDerivationPath};
+use crypto::{Bip44Chain, RpcDerivationPath};
 use futures::compat::Future01CompatExt;
 use futures::future::{FutureExt, TryFutureExt};
 use futures01::future::Either;
@@ -129,73 +128,6 @@ where
         let error = format!("'{ticker}' coin must contain the 'trezor_coin' field in the coins config");
         NewAddressDeriveConfirmError::DeriveError(NewAddressDerivingError::Internal(error))
     })
-}
-
-// Todo: Move this to hd_wallet mod and make it generic
-pub async fn create_new_account<'a, Coin, XPubExtractor>(
-    coin: &Coin,
-    hd_wallet: &'a UtxoHDWallet,
-    xpub_extractor: Option<XPubExtractor>,
-    account_id: Option<u32>,
-) -> MmResult<HDAccountMut<'a, UtxoHDAccount>, NewAccountCreationError>
-where
-    Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey> + Sync,
-    XPubExtractor: HDXPubExtractor + Send,
-{
-    const INIT_ACCOUNT_ID: u32 = 0;
-    let new_account_id = match account_id {
-        Some(account_id) => account_id,
-        None => {
-            let accounts = hd_wallet.accounts.lock().await;
-            let last_account_id = accounts.iter().last().map(|(account_id, _account)| *account_id);
-            last_account_id.map_or(INIT_ACCOUNT_ID, |last_id| {
-                (INIT_ACCOUNT_ID..=last_id)
-                    .find(|id| !accounts.contains_key(id))
-                    .unwrap_or(last_id + 1)
-            })
-        },
-    };
-    let max_accounts_number = hd_wallet.account_limit();
-    if new_account_id >= max_accounts_number {
-        return MmError::err(NewAccountCreationError::AccountLimitReached { max_accounts_number });
-    }
-
-    let account_child_hardened = true;
-    let account_child = ChildNumber::new(new_account_id, account_child_hardened)
-        .map_to_mm(|e| NewAccountCreationError::Internal(e.to_string()))?;
-
-    let account_derivation_path: StandardHDPathToAccount = hd_wallet.derivation_path.derive(account_child)?;
-    let account_pubkey = coin
-        .extract_extended_pubkey(xpub_extractor, account_derivation_path.to_derivation_path())
-        .await?;
-
-    let new_account = UtxoHDAccount {
-        account_id: new_account_id,
-        extended_pubkey: account_pubkey,
-        account_derivation_path,
-        // We don't know how many addresses are used by the user at this moment.
-        external_addresses_number: 0,
-        internal_addresses_number: 0,
-        derived_addresses: HDAddressesCache::default(),
-    };
-
-    let accounts = hd_wallet.accounts.lock().await;
-    if accounts.contains_key(&new_account_id) {
-        let error = format!(
-            "Account '{}' has been activated while we proceed the 'create_new_account' function",
-            new_account_id
-        );
-        return MmError::err(NewAccountCreationError::Internal(error));
-    }
-
-    hd_wallet.upload_new_account(new_account.to_storage_item()).await?;
-
-    Ok(AsyncMutexGuard::map(accounts, |accounts| {
-        accounts
-            .entry(new_account_id)
-            // the `entry` method should return [`Entry::Vacant`] due to the checks above
-            .or_insert(new_account)
-    }))
 }
 
 pub async fn produce_hd_address_scanner<T>(coin: &T) -> BalanceResult<UtxoAddressScanner>

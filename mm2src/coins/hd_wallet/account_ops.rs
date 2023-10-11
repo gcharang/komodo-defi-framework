@@ -1,5 +1,5 @@
 use super::{HDAddressOps, HDAddressesCache, InvalidBip44ChainError};
-use crypto::{Bip44Chain, DerivationPath, Secp256k1ExtendedPublicKey};
+use crypto::{Bip44Chain, DerivationPath, Secp256k1ExtendedPublicKey, StandardHDPathToAccount};
 use mm2_err_handle::prelude::*;
 
 /// `HDAccountOps` Trait
@@ -13,6 +13,23 @@ use mm2_err_handle::prelude::*;
 /// Implementors of this trait provide details about such HD account like its specific derivation path, known addresses, and its index.
 pub trait HDAccountOps {
     type HDAddress: HDAddressOps + Clone + Send;
+
+    /// Creates a new `HDAccountOps` instance.
+    ///
+    /// # Parameters
+    ///
+    /// * `account_id`: The index of the account.
+    /// * `account_extended_pubkey`: The extended public key associated with this account.
+    /// * `account_derivation_path`: The derivation path from the master key to this account.
+    ///
+    /// # Returns
+    ///
+    /// A new `HDAccountOps` instance.
+    fn new(
+        account_id: u32,
+        account_extended_pubkey: Secp256k1ExtendedPublicKey,
+        account_derivation_path: StandardHDPathToAccount,
+    ) -> Self;
 
     /// Provides the limit on the number of addresses that can be added to an account.
     ///

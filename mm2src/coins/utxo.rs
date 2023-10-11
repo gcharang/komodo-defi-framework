@@ -51,8 +51,7 @@ use common::first_char_to_upper;
 use common::jsonrpc_client::JsonRpcError;
 use common::log::LogOnError;
 use common::{now_sec, now_sec_u32};
-use crypto::{Bip32Error, ChildNumber, DerivationPath, Secp256k1ExtendedPublicKey, StandardHDPathError,
-             StandardHDPathToAccount, StandardHDPathToCoin};
+use crypto::{Bip32Error, DerivationPath, Secp256k1ExtendedPublicKey, StandardHDPathError, StandardHDPathToCoin};
 use derive_more::Display;
 #[cfg(not(target_arch = "wasm32"))] use dirs::home_dir;
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedSender};

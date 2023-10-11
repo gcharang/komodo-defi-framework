@@ -331,7 +331,9 @@ pub enum AddressBalanceStatus<Balance> {
 
 pub mod common_impl {
     use super::*;
-    use crate::hd_wallet::{HDAccountOps, HDAddressOps, HDWalletOps};
+    use crate::hd_wallet::{create_new_account, ExtractExtendedPubkey, HDAccountOps, HDAccountStorageOps, HDAddressOps,
+                           HDWalletOps};
+    use crypto::Secp256k1ExtendedPublicKey;
 
     pub(crate) async fn enable_hd_account<Coin>(
         coin: &Coin,
@@ -380,9 +382,13 @@ pub mod common_impl {
         path_to_address: &HDAccountAddressId,
     ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
     where
-        Coin: HDWalletBalanceOps + MarketCoinOps + Sync,
+        Coin: ExtractExtendedPubkey<ExtendedPublicKey = Secp256k1ExtendedPublicKey>
+            + HDWalletBalanceOps
+            + MarketCoinOps
+            + Sync,
         HDCoinAddress<Coin>: fmt::Display,
         XPubExtractor: HDXPubExtractor + Send,
+        HDCoinHDAccount<Coin>: HDAccountStorageOps,
     {
         let mut accounts = hd_wallet.get_accounts_mut().await;
         let address_scanner = coin.produce_hd_address_scanner().await?;
@@ -400,9 +406,8 @@ pub mod common_impl {
             );
 
             // Create new HD account.
-            let mut new_account = coin
-                .create_new_account(hd_wallet, xpub_extractor, Some(path_to_address.account_id))
-                .await?;
+            let mut new_account =
+                create_new_account(coin, hd_wallet, xpub_extractor, Some(path_to_address.account_id)).await?;
             let scan_new_addresses = matches!(
                 params.scan_policy,
                 EnableCoinScanPolicy::ScanIfNewWallet | EnableCoinScanPolicy::Scan

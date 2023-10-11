@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crypto::{CryptoCtx, CryptoCtxError, XPub};
+use crypto::{CryptoCtx, CryptoCtxError, StandardHDPathToCoin, XPub};
 use derive_more::Display;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
@@ -164,6 +164,20 @@ pub trait HDWalletStorageOps {
         let storage = self.hd_wallet_storage();
         storage.clear_accounts().await
     }
+}
+
+/// `HDAccountStorageOps` is a trait that allows us to convert `HDAccountStorageItem` to whatever implements this trait and vice versa.
+pub trait HDAccountStorageOps {
+    /// Converts `HDAccountStorageItem` to whatever implements this trait.
+    fn try_from_storage_item(
+        wallet_der_path: &StandardHDPathToCoin,
+        account_info: &HDAccountStorageItem,
+    ) -> HDWalletStorageResult<Self>
+    where
+        Self: Sized;
+
+    /// Converts whatever implements this trait to `HDAccountStorageItem`.
+    fn to_storage_item(&self) -> HDAccountStorageItem;
 }
 
 /// The wrapper over the [`HDWalletStorage::inner`] database implementation.

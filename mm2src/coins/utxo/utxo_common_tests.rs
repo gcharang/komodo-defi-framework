@@ -13,6 +13,7 @@ use common::executor::{spawn, Timer};
 use common::jsonrpc_client::JsonRpcErrorType;
 use common::PagingOptionsEnum;
 use crypto::privkey::key_pair_from_seed;
+use crypto::StandardHDPathToAccount;
 use itertools::Itertools;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
 use std::convert::TryFrom;
