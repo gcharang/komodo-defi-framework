@@ -427,8 +427,12 @@ pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResu
     nft_db.common.last_metadata_sync = moralis_meta.common.last_metadata_sync;
     nft_db.common.possible_spam = moralis_meta.common.possible_spam;
     nft_db.uri_meta = uri_meta;
-    refresh_possible_spam(&storage, &req.chain, &mut nft_db, &req.url_antispam).await?;
-    refresh_possible_phishing(&storage, &req.chain, domains, &mut nft_db, &req.url_antispam).await?;
+    if !nft_db.common.possible_spam {
+        refresh_possible_spam(&storage, &req.chain, &mut nft_db, &req.url_antispam).await?;
+    };
+    if !nft_db.possible_phishing {
+        refresh_possible_phishing(&storage, &req.chain, domains, &mut nft_db, &req.url_antispam).await?;
+    };
     storage
         .refresh_nft_metadata(&moralis_meta.chain, nft_db.clone())
         .await?;
@@ -481,6 +485,9 @@ where
     let spam_res = send_spam_request(chain, url_antispam, address_hex.clone()).await?;
     if let Some(true) = spam_res.result.get(&nft_db.common.token_address) {
         nft_db.common.possible_spam = true;
+        storage
+            .update_nft_spam_by_token_address(chain, address_hex.clone(), true)
+            .await?;
         storage
             .update_transfer_spam_by_token_address(chain, address_hex, true)
             .await?;
