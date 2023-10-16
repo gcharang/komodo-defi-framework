@@ -259,13 +259,15 @@ pub(super) async fn test_hd_utxo_tx_history_impl(rpc_client: ElectrumClient) {
     let mut fields = utxo_coin_fields_for_test(rpc_client.into(), None, false);
     fields.conf.ticker = "MORTY".to_string();
     fields.derivation_method = DerivationMethod::HDWallet(UtxoHDWallet {
-        hd_wallet_rmd160: "6d9d2b554d768232320587df75c4338ecc8bf37d".into(),
-        hd_wallet_storage: HDWalletCoinStorage::default(),
+        inner: HDWallet {
+            hd_wallet_rmd160: "6d9d2b554d768232320587df75c4338ecc8bf37d".into(),
+            hd_wallet_storage: HDWalletCoinStorage::default(),
+            derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
+            accounts: HDAccountsMutex::new(hd_accounts),
+            enabled_address: None,
+            gap_limit: 20,
+        },
         address_format: UtxoAddressFormat::Standard,
-        derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
-        accounts: HDAccountsMutex::new(hd_accounts),
-        enabled_address: None,
-        gap_limit: 20,
     });
 
     let coin = utxo_coin_from_fields(fields);
@@ -295,7 +297,7 @@ pub(super) async fn test_hd_utxo_tx_history_impl(rpc_client: ElectrumClient) {
     // Activate new `RQstQeTUEZLh6c3YWJDkeVTTQoZUsfvNCr` address.
     match coin.as_ref().derivation_method {
         DerivationMethod::HDWallet(ref hd_wallet) => {
-            let mut accounts = hd_wallet.accounts.lock().await;
+            let mut accounts = hd_wallet.inner.accounts.lock().await;
             accounts.get_mut(&0).unwrap().internal_addresses_number += 1
         },
         _ => unimplemented!(),

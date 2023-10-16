@@ -3,8 +3,6 @@ use common::log::warn;
 use crypto::{Bip32DerPathOps, Bip32Error, Bip44Chain, ChildNumber, DerivationPath, Secp256k1ExtendedPublicKey,
              StandardHDPath, StandardHDPathError, StandardHDPathToAccount, StandardHDPathToCoin};
 use futures::lock::{MappedMutexGuard as AsyncMappedMutexGuard, Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
-// Todo: remove reliance on UtxoAddressFormat to make this a crate independent of coins crate
-use keys::AddressFormat as UtxoAddressFormat;
 use mm2_err_handle::prelude::*;
 use primitives::hash::H160;
 use serde::Serialize;
@@ -265,8 +263,6 @@ where
     /// Provides a means to access database operations for a specific user, HD wallet, and coin.
     /// The storage wrapper associates with the `coin` and `hd_wallet_rmd160` to provide unique storage access.
     pub hd_wallet_storage: HDWalletCoinStorage,
-    /// Specifies the global format for all addresses in the wallet.
-    pub address_format: UtxoAddressFormat,
     /// Derivation path of the coin.
     /// This derivation path consists of `purpose` and `coin_type` only
     /// where the full `BIP44` address has the following structure:

@@ -1,5 +1,5 @@
-use crate::hd_wallet::{load_hd_accounts_from_storage, HDAccountsMutex, HDWalletCoinStorage, HDWalletStorageError,
-                       DEFAULT_GAP_LIMIT};
+use crate::hd_wallet::{load_hd_accounts_from_storage, HDAccountsMutex, HDWallet, HDWalletCoinStorage,
+                       HDWalletStorageError, DEFAULT_GAP_LIMIT};
 use crate::utxo::rpc_clients::{ElectrumClient, ElectrumClientImpl, ElectrumRpcRequest, EstimateFeeMethod,
                                UtxoRpcClientEnum};
 use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
@@ -214,13 +214,15 @@ pub trait UtxoFieldsWithGlobalHDBuilder: UtxoCoinBuilderCommonOps {
             .mm_err(UtxoCoinBuildError::from)?;
         let gap_limit = self.gap_limit();
         let hd_wallet = UtxoHDWallet {
-            hd_wallet_rmd160,
-            hd_wallet_storage,
+            inner: HDWallet {
+                hd_wallet_rmd160,
+                hd_wallet_storage,
+                derivation_path: path_to_coin.clone(),
+                accounts: HDAccountsMutex::new(accounts),
+                enabled_address: Some(path_to_address),
+                gap_limit,
+            },
             address_format,
-            derivation_path: path_to_coin.clone(),
-            accounts: HDAccountsMutex::new(accounts),
-            enabled_address: Some(path_to_address),
-            gap_limit,
         };
         let derivation_method = DerivationMethod::HDWallet(hd_wallet);
         build_utxo_coin_fields_with_conf_and_policy(self, conf, priv_key_policy, derivation_method).await
@@ -316,13 +318,15 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             .mm_err(UtxoCoinBuildError::from)?;
         let gap_limit = self.gap_limit();
         let hd_wallet = UtxoHDWallet {
-            hd_wallet_rmd160,
-            hd_wallet_storage,
+            inner: HDWallet {
+                hd_wallet_rmd160,
+                hd_wallet_storage,
+                derivation_path: path_to_coin,
+                accounts: HDAccountsMutex::new(accounts),
+                enabled_address: None,
+                gap_limit,
+            },
             address_format,
-            derivation_path: path_to_coin,
-            accounts: HDAccountsMutex::new(accounts),
-            enabled_address: None,
-            gap_limit,
         };
 
         // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,

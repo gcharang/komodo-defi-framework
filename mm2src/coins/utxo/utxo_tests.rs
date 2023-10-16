@@ -3515,13 +3515,15 @@ fn test_account_balance_rpc() {
         derived_addresses: HDAddressesCache::default(),
     });
     fields.derivation_method = DerivationMethod::HDWallet(UtxoHDWallet {
-        hd_wallet_rmd160: "21605444b36ec72780bdf52a5ffbc18288893664".into(),
-        hd_wallet_storage: HDWalletCoinStorage::default(),
+        inner: HDWallet {
+            hd_wallet_rmd160: "21605444b36ec72780bdf52a5ffbc18288893664".into(),
+            hd_wallet_storage: HDWalletCoinStorage::default(),
+            derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
+            accounts: HDAccountsMutex::new(hd_accounts),
+            enabled_address: None,
+            gap_limit: 3,
+        },
         address_format: UtxoAddressFormat::Standard,
-        derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
-        accounts: HDAccountsMutex::new(hd_accounts),
-        enabled_address: None,
-        gap_limit: 3,
     });
     let coin = utxo_coin_from_fields(fields);
 
@@ -3843,13 +3845,15 @@ fn test_scan_for_new_addresses() {
         derived_addresses: HDAddressesCache::default(),
     });
     fields.derivation_method = DerivationMethod::HDWallet(UtxoHDWallet {
-        hd_wallet_rmd160: "21605444b36ec72780bdf52a5ffbc18288893664".into(),
-        hd_wallet_storage: HDWalletCoinStorage::default(),
+        inner: HDWallet {
+            hd_wallet_rmd160: "21605444b36ec72780bdf52a5ffbc18288893664".into(),
+            hd_wallet_storage: HDWalletCoinStorage::default(),
+            derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
+            accounts: HDAccountsMutex::new(hd_accounts),
+            enabled_address: None,
+            gap_limit: 3,
+        },
         address_format: UtxoAddressFormat::Standard,
-        derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
-        accounts: HDAccountsMutex::new(hd_accounts),
-        enabled_address: None,
-        gap_limit: 3,
     });
     let coin = utxo_coin_from_fields(fields);
 
@@ -3905,7 +3909,7 @@ fn test_scan_for_new_addresses() {
     assert_eq!(actual, expected);
 
     let accounts = match coin.as_ref().derivation_method {
-        DerivationMethod::HDWallet(UtxoHDWallet { ref accounts, .. }) => block_on(accounts.lock()).clone(),
+        DerivationMethod::HDWallet(UtxoHDWallet { ref inner, .. }) => block_on(inner.accounts.lock()).clone(),
         _ => unreachable!(),
     };
     assert_eq!(accounts[&0].external_addresses_number, 4);
@@ -3981,13 +3985,15 @@ fn test_get_new_address() {
     hd_accounts.insert(2, hd_account_for_test);
 
     fields.derivation_method = DerivationMethod::HDWallet(UtxoHDWallet {
-        hd_wallet_rmd160: "21605444b36ec72780bdf52a5ffbc18288893664".into(),
-        hd_wallet_storage: HDWalletCoinStorage::default(),
+        inner: HDWallet {
+            hd_wallet_rmd160: "21605444b36ec72780bdf52a5ffbc18288893664".into(),
+            hd_wallet_storage: HDWalletCoinStorage::default(),
+            derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
+            accounts: HDAccountsMutex::new(hd_accounts),
+            enabled_address: None,
+            gap_limit: 2,
+        },
         address_format: UtxoAddressFormat::Standard,
-        derivation_path: StandardHDPathToCoin::from_str("m/44'/141'").unwrap(),
-        accounts: HDAccountsMutex::new(hd_accounts),
-        enabled_address: None,
-        gap_limit: 2,
     });
     fields.conf.trezor_coin = Some("Komodo".to_string());
     let coin = utxo_coin_from_fields(fields);
