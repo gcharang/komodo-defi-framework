@@ -1,11 +1,12 @@
 use super::*;
-use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex, HDAddressesCache, HDWalletCoinStorage};
+use crate::hd_wallet::{HDAccountsMap, HDAccountsMutex, HDAddressesCache, HDWallet, HDWalletCoinStorage};
 use crate::my_tx_history_v2::{my_tx_history_v2_impl, CoinWithTxHistoryV2, MyTxHistoryDetails, MyTxHistoryRequestV2,
                               MyTxHistoryResponseV2, MyTxHistoryTarget};
 use crate::tx_history_storage::TxHistoryStorageBuilder;
 use crate::utxo::rpc_clients::{ElectrumClient, UtxoRpcClientOps};
 use crate::utxo::tx_cache::dummy_tx_cache::DummyVerboseCache;
 use crate::utxo::tx_cache::UtxoVerboseCacheOps;
+use crate::utxo::utxo_hd_wallet::UtxoHDAccount;
 use crate::utxo::utxo_tx_history_v2::{utxo_history_loop, UtxoTxHistoryOps};
 use crate::{compare_transaction_details, UtxoStandardCoin};
 use common::custom_futures::repeatable::{Ready, Retry};

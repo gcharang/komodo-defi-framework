@@ -35,6 +35,7 @@ pub mod swap_proto_v2_scripts;
 pub mod utxo_block_header_storage;
 pub mod utxo_builder;
 pub mod utxo_common;
+pub mod utxo_hd_wallet;
 pub mod utxo_standard;
 pub mod utxo_tx_history_v2;
 pub mod utxo_withdraw;
@@ -51,8 +52,7 @@ use common::first_char_to_upper;
 use common::jsonrpc_client::JsonRpcError;
 use common::log::LogOnError;
 use common::{now_sec, now_sec_u32};
-use crypto::{Bip32Error, Bip44Chain, DerivationPath, Secp256k1ExtendedPublicKey, StandardHDPathError,
-             StandardHDPathToCoin};
+use crypto::{Bip32Error, DerivationPath, Secp256k1ExtendedPublicKey, StandardHDPathError, StandardHDPathToCoin};
 use derive_more::Display;
 #[cfg(not(target_arch = "wasm32"))] use dirs::home_dir;
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedSender};
@@ -92,6 +92,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex, Weak};
 use utxo_builder::UtxoConfBuilder;
 use utxo_common::{big_decimal_from_sat, UtxoTxBuilder};
+use utxo_hd_wallet::UtxoHDWallet;
 use utxo_signer::with_key_pair::sign_tx;
 use utxo_signer::{TxProvider, TxProviderError, UtxoSignTxError, UtxoSignTxResult};
 
@@ -106,9 +107,8 @@ use super::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BalanceResu
             TradePreimageResult, Transaction, TransactionDetails, TransactionEnum, TransactionErr,
             UnexpectedDerivationMethod, VerificationError, WithdrawError, WithdrawRequest};
 use crate::coin_balance::{EnableCoinScanPolicy, EnabledCoinBalanceParams, HDAddressBalanceScanner};
-use crate::hd_wallet::{HDAccount, HDAccountAddressId, HDAccountMut, HDAccountOps, HDAccountsMap, HDAccountsMut,
-                       HDAccountsMutex, HDAddress, HDAddressId, HDAddressOps, HDWallet, HDWalletAddress,
-                       HDWalletCoinOps, HDWalletCoinStorage, HDWalletOps, HDWalletStorageError, HDWalletStorageOps};
+use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddressId, HDAddressOps, HDWalletCoinOps, HDWalletOps,
+                       HDWalletStorageError};
 use crate::utxo::tx_cache::UtxoVerboseCacheShared;
 
 pub mod tx_cache;
@@ -136,54 +136,6 @@ pub type GenerateTxResult = Result<(TransactionInputSigner, AdditionalTxData), M
 pub type HistoryUtxoTxMap = HashMap<H256Json, HistoryUtxoTx>;
 pub type MatureUnspentMap = HashMap<Address, MatureUnspentList>;
 pub type RecentlySpentOutPointsGuard<'a> = AsyncMutexGuard<'a, RecentlySpentOutPoints>;
-pub type UtxoHDAddress = HDAddress<Address, Public>;
-pub type UtxoHDAccount = HDAccount<UtxoHDAddress>;
-
-/// A struct to encapsulate the types needed for a UTXO HD wallet.
-pub struct UtxoHDWallet {
-    /// The inner HD wallet field that makes use of the generic `HDWallet` struct.
-    pub inner: HDWallet<UtxoHDAccount>,
-    /// Specifies the UTXO address format for all addresses in the wallet.
-    pub address_format: UtxoAddressFormat,
-}
-
-#[async_trait]
-impl HDWalletStorageOps for UtxoHDWallet {
-    fn hd_wallet_storage(&self) -> &HDWalletCoinStorage { self.inner.hd_wallet_storage() }
-}
-
-#[async_trait]
-impl HDWalletOps for UtxoHDWallet {
-    type HDAccount = UtxoHDAccount;
-
-    fn coin_type(&self) -> u32 { self.inner.coin_type() }
-
-    fn derivation_path(&self) -> &StandardHDPathToCoin { self.inner.derivation_path() }
-
-    fn gap_limit(&self) -> u32 { self.inner.gap_limit() }
-
-    fn account_limit(&self) -> u32 { self.inner.account_limit() }
-
-    fn default_receiver_chain(&self) -> Bip44Chain { self.inner.default_receiver_chain() }
-
-    fn get_accounts_mutex(&self) -> &HDAccountsMutex<Self::HDAccount> { self.inner.get_accounts_mutex() }
-
-    async fn get_account(&self, account_id: u32) -> Option<Self::HDAccount> { self.inner.get_account(account_id).await }
-
-    async fn get_account_mut(&self, account_id: u32) -> Option<HDAccountMut<'_, Self::HDAccount>> {
-        self.inner.get_account_mut(account_id).await
-    }
-
-    async fn get_accounts(&self) -> HDAccountsMap<Self::HDAccount> { self.inner.get_accounts().await }
-
-    async fn get_accounts_mut(&self) -> HDAccountsMut<'_, Self::HDAccount> { self.inner.get_accounts_mut().await }
-
-    async fn remove_account_if_last(&self, account_id: u32) -> Option<Self::HDAccount> {
-        self.inner.remove_account_if_last(account_id).await
-    }
-
-    async fn get_enabled_address(&self) -> Option<HDWalletAddress<Self>> { self.inner.get_enabled_address().await }
-}
 
 #[cfg(windows)]
 #[cfg(not(target_arch = "wasm32"))]
