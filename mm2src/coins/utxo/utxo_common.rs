@@ -2,8 +2,8 @@ use super::*;
 use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
-use crate::hd_wallet::{HDCoinAddress, HDCoinHDAccount, HDExtractPubkeyError, HDXPubExtractor,
-                       NewAddressDeriveConfirmError, NewAddressDerivingError};
+use crate::hd_wallet::{HDCoinAddress, HDCoinHDAccount, HDCoinWithdrawOps, HDExtractPubkeyError, HDXPubExtractor,
+                       NewAddressDeriveConfirmError, NewAddressDerivingError, WithdrawSenderAddress};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
@@ -14,8 +14,8 @@ use crate::utxo::utxo_hd_wallet::UtxoHDAddress;
 use crate::utxo::utxo_withdraw::{InitUtxoWithdraw, StandardUtxoWithdraw, UtxoWithdraw};
 use crate::watcher_common::validate_watcher_reward;
 use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPaymentInput, GenTakerPaymentSpendArgs,
-            GenTakerPaymentSpendResult, GetWithdrawSenderAddress, HDAccountAddressId, RawTransactionError,
-            RawTransactionRequest, RawTransactionRes, RefundPaymentArgs, RewardTarget, SearchForSwapTxSpendInput,
+            GenTakerPaymentSpendResult, GetWithdrawSenderAddress, RawTransactionError, RawTransactionRequest,
+            RawTransactionRes, RefundPaymentArgs, RewardTarget, SearchForSwapTxSpendInput,
             SendCombinedTakerPaymentArgs, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignatureError,
             SignatureResult, SpendPaymentArgs, SwapOps, TradePreimageValue, TransactionFut, TransactionResult,
             TxFeeDetails, TxGenError, TxMarshalingErr, TxPreimageWithSig, ValidateAddressResult,
@@ -23,8 +23,8 @@ use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPayment
             ValidateTakerPaymentError, ValidateTakerPaymentResult, ValidateTakerPaymentSpendPreimageError,
             ValidateTakerPaymentSpendPreimageResult, VerificationError, VerificationResult,
             WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
-            WithdrawResult, WithdrawSenderAddress, EARLY_CONFIRMATION_ERR_LOG, INVALID_RECEIVER_ERR_LOG,
-            INVALID_REFUND_TX_ERR_LOG, INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
+            WithdrawResult, EARLY_CONFIRMATION_ERR_LOG, INVALID_RECEIVER_ERR_LOG, INVALID_REFUND_TX_ERR_LOG,
+            INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
 use crate::{MmCoinEnum, WatcherReward, WatcherRewardError};
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
@@ -2529,11 +2529,16 @@ pub async fn get_withdraw_from_address<T>(
     req: &WithdrawRequest,
 ) -> MmResult<WithdrawSenderAddress<Address, Public>, WithdrawError>
 where
-    T: CoinWithDerivationMethod + HDWalletCoinOps<HDWallet = UtxoHDWallet> + UtxoCommonOps,
+    T: CoinWithDerivationMethod + HDWalletCoinOps<HDWallet = UtxoHDWallet> + HDCoinWithdrawOps + UtxoCommonOps,
 {
     match coin.derivation_method() {
         DerivationMethod::SingleAddress(my_address) => get_withdraw_iguana_sender(coin, req, my_address),
-        DerivationMethod::HDWallet(hd_wallet) => get_withdraw_hd_sender(coin, req, hd_wallet).await,
+        DerivationMethod::HDWallet(hd_wallet) => {
+            let from = req.from.clone().or_mm_err(|| WithdrawError::FromAddressNotFound)?;
+            coin.get_withdraw_hd_sender(hd_wallet, &from)
+                .await
+                .mm_err(WithdrawError::from)
+        },
     }
 }
 
@@ -2554,49 +2559,6 @@ pub fn get_withdraw_iguana_sender<T: UtxoCommonOps>(
         address: my_address.clone(),
         pubkey: *pubkey,
         derivation_path: None,
-    })
-}
-
-// Todo: Move this to hd_wallet mod and make it generic
-pub async fn get_withdraw_hd_sender<T>(
-    coin: &T,
-    req: &WithdrawRequest,
-    hd_wallet: &UtxoHDWallet,
-) -> MmResult<WithdrawSenderAddress<Address, Public>, WithdrawError>
-where
-    T: HDWalletCoinOps<HDWallet = UtxoHDWallet> + Sync,
-{
-    let HDAccountAddressId {
-        account_id,
-        chain,
-        address_id,
-    } = req
-        .from
-        .clone()
-        .or_mm_err(|| WithdrawError::FromAddressNotFound)?
-        .to_address_path(hd_wallet.coin_type())?;
-
-    let hd_account = hd_wallet
-        .get_account(account_id)
-        .await
-        .or_mm_err(|| WithdrawError::UnknownAccount { account_id })?;
-
-    let is_address_activated = hd_account
-        .is_address_activated(chain, address_id)
-        // If [`HDWalletCoinOps::derive_address`] succeeds, [`HDAccountOps::is_address_activated`] shouldn't fails with an `InvalidBip44ChainError`.
-        .mm_err(|e| WithdrawError::InternalError(e.to_string()))?;
-
-    let hd_address = coin.derive_address(&hd_account, chain, address_id).await?;
-    let address = hd_address.address();
-    if !is_address_activated {
-        let error = format!("'{}' address is not activated", address);
-        return MmError::err(WithdrawError::UnexpectedFromAddress(error));
-    }
-
-    Ok(WithdrawSenderAddress {
-        address,
-        pubkey: *hd_address.pubkey(),
-        derivation_path: Some(hd_address.derivation_path().clone()),
     })
 }
 

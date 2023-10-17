@@ -2,8 +2,9 @@ use super::*;
 use crate::coin_balance::{self, EnableCoinBalanceError, EnabledCoinBalanceParams, HDAccountBalance, HDAddressBalance,
                           HDBalanceAddress, HDWalletBalance, HDWalletBalanceOps};
 use crate::coin_errors::MyAddressError;
-use crate::hd_wallet::{ExtractExtendedPubkey, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress,
-                       HDExtractPubkeyError, HDXPubExtractor, NewAddressDeriveConfirmError};
+use crate::hd_wallet::{ExtractExtendedPubkey, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress, HDCoinWithdrawOps,
+                       HDConfirmAddress, HDExtractPubkeyError, HDXPubExtractor, NewAddressDeriveConfirmError,
+                       WithdrawSenderAddress};
 use crate::my_tx_history_v2::{CoinWithTxHistoryV2, MyTxHistoryErrorV2, MyTxHistoryTarget, TxHistoryStorage};
 use crate::rpc_command::account_balance::{self, AccountBalanceParams, AccountBalanceRpcOps, HDAccountBalanceResponse};
 use crate::rpc_command::get_new_address::{self, GetNewAddressParams, GetNewAddressResponse, GetNewAddressRpcError,
@@ -30,7 +31,7 @@ use crate::{CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, CoinWithDeriva
             ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, ValidateTakerPaymentArgs,
             ValidateTakerPaymentResult, ValidateTakerPaymentSpendPreimageResult, VerificationResult,
             WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut, WithdrawSenderAddress};
+            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut};
 use common::executor::{AbortableSystem, AbortedError};
 use futures::{FutureExt, TryFutureExt};
 use mm2_metrics::MetricsArc;
@@ -874,6 +875,8 @@ impl HDWalletCoinOps for UtxoStandardCoin {
 
     fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError> { utxo_common::trezor_coin(self) }
 }
+
+impl HDCoinWithdrawOps for UtxoStandardCoin {}
 
 #[async_trait]
 impl GetNewAddressRpcOps for UtxoStandardCoin {

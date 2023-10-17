@@ -50,8 +50,7 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
 use common::log::{warn, LogOnError};
 use common::{calc_total_pages, now_sec, ten, HttpStatusCode};
 use crypto::{derive_secp256k1_secret, Bip32Error, CryptoCtx, CryptoCtxError, DerivationPath, GlobalHDAccountArc,
-             HwRpcError, KeyPairPolicy, Secp256k1Secret, StandardHDPath, StandardHDPathError, StandardHDPathToCoin,
-             WithHwRpcError};
+             HwRpcError, KeyPairPolicy, Secp256k1Secret, StandardHDPathToCoin, WithHwRpcError};
 use derive_more::Display;
 use enum_from::{EnumFromStringify, EnumFromTrait};
 use ethereum_types::H256;
@@ -221,7 +220,7 @@ use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetail
 
 pub mod hd_wallet;
 use hd_wallet::{AccountUpdatingError, AddressDerivingError, HDAccountAddressId, HDCoinAddress, HDWalletAddress,
-                HDWalletCoinOps, HDWalletOps};
+                HDWalletCoinOps, HDWalletOps, HDWithdrawError, WithdrawFrom, WithdrawSenderAddress};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
@@ -1345,12 +1344,6 @@ pub enum WithdrawFee {
     },
 }
 
-pub struct WithdrawSenderAddress<Address, Pubkey> {
-    address: Address,
-    pubkey: Pubkey,
-    derivation_path: Option<DerivationPath>,
-}
-
 /// Rename to `GetWithdrawSenderAddresses` when withdraw supports multiple `from` addresses.
 #[async_trait]
 pub trait GetWithdrawSenderAddress {
@@ -1361,41 +1354,6 @@ pub trait GetWithdrawSenderAddress {
         &self,
         req: &WithdrawRequest,
     ) -> MmResult<WithdrawSenderAddress<Self::Address, Self::Pubkey>, WithdrawError>;
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum WithdrawFrom {
-    AddressId(HDAccountAddressId),
-    /// Don't use `Bip44DerivationPath` or `RpcDerivationPath` because if there is an error in the path,
-    /// `serde::Deserialize` returns "data did not match any variant of untagged enum WithdrawFrom".
-    /// It's better to show the user an informative error.
-    DerivationPath {
-        derivation_path: String,
-    },
-}
-
-impl WithdrawFrom {
-    #[allow(clippy::result_large_err)]
-    pub fn to_address_path(&self, expected_coin_type: u32) -> Result<HDAccountAddressId, MmError<WithdrawError>> {
-        match self {
-            WithdrawFrom::AddressId(address_id) => Ok(*address_id),
-            WithdrawFrom::DerivationPath { derivation_path } => {
-                let derivation_path = StandardHDPath::from_str(derivation_path)
-                    .map_to_mm(StandardHDPathError::from)
-                    .mm_err(|e| WithdrawError::UnexpectedFromAddress(e.to_string()))?;
-                let coin_type = derivation_path.coin_type();
-                if coin_type != expected_coin_type {
-                    let error = format!(
-                        "Derivation path '{}' must has '{}' coin type",
-                        derivation_path, expected_coin_type
-                    );
-                    return MmError::err(WithdrawError::UnexpectedFromAddress(error));
-                }
-                Ok(HDAccountAddressId::from(derivation_path))
-            },
-        }
-    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -2291,6 +2249,17 @@ impl From<CoinFindError> for WithdrawError {
     fn from(e: CoinFindError) -> Self {
         match e {
             CoinFindError::NoSuchCoin { coin } => WithdrawError::NoSuchCoin { coin },
+        }
+    }
+}
+
+impl From<HDWithdrawError> for WithdrawError {
+    fn from(e: HDWithdrawError) -> Self {
+        match e {
+            HDWithdrawError::UnexpectedFromAddress(e) => WithdrawError::UnexpectedFromAddress(e),
+            HDWithdrawError::UnknownAccount { account_id } => WithdrawError::UnknownAccount { account_id },
+            HDWithdrawError::AddressDerivingError(e) => e.into(),
+            HDWithdrawError::InternalError(e) => WithdrawError::InternalError(e),
         }
     }
 }

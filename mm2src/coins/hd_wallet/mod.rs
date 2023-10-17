@@ -27,8 +27,8 @@ pub(crate) use confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
 pub use confirm_address::{HDConfirmAddress, HDConfirmAddressError};
 
 mod errors;
-pub use errors::{AccountUpdatingError, AddressDerivingError, InvalidBip44ChainError, NewAccountCreationError,
-                 NewAddressDeriveConfirmError, NewAddressDerivingError};
+pub use errors::{AccountUpdatingError, AddressDerivingError, HDWithdrawError, InvalidBip44ChainError,
+                 NewAccountCreationError, NewAddressDeriveConfirmError, NewAddressDerivingError};
 
 mod pubkey;
 pub use pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
@@ -44,6 +44,10 @@ pub(crate) use storage::{HDWalletStorageInternalOps, HDWalletStorageResult};
 mod wallet_ops;
 pub use wallet_ops::HDWalletOps;
 
+// Todo: make this a feature when hd_wallet mod is a crate
+mod withdraw_ops;
+pub use withdraw_ops::{HDCoinWithdrawOps, WithdrawFrom, WithdrawSenderAddress};
+
 pub(crate) type AddressDerivingResult<T> = MmResult<T, AddressDerivingError>;
 pub(crate) type HDAccountsMap<HDAccount> = BTreeMap<u32, HDAccount>;
 pub(crate) type HDAccountsMutex<HDAccount> = AsyncMutex<HDAccountsMap<HDAccount>>;
@@ -51,7 +55,10 @@ pub(crate) type HDAccountsMut<'a, HDAccount> = AsyncMutexGuard<'a, HDAccountsMap
 pub(crate) type HDAccountMut<'a, HDAccount> = AsyncMappedMutexGuard<'a, HDAccountsMap<HDAccount>, HDAccount>;
 pub(crate) type HDWalletAddress<T> =
     <<<T as HDWalletOps>::HDAccount as HDAccountOps>::HDAddress as HDAddressOps>::Address;
+pub(crate) type HDWalletPubKey<T> =
+    <<<T as HDWalletOps>::HDAccount as HDAccountOps>::HDAddress as HDAddressOps>::Pubkey;
 pub(crate) type HDCoinAddress<T> = HDWalletAddress<<T as HDWalletCoinOps>::HDWallet>;
+pub(crate) type HDCoinPubKey<T> = HDWalletPubKey<<T as HDWalletCoinOps>::HDWallet>;
 pub(crate) type HDWalletHDAddress<T> = <<T as HDWalletOps>::HDAccount as HDAccountOps>::HDAddress;
 pub(crate) type HDCoinHDAddress<T> = HDWalletHDAddress<<T as HDWalletCoinOps>::HDWallet>;
 pub(crate) type HDWalletHDAccount<T> = <T as HDWalletOps>::HDAccount;
@@ -72,13 +79,14 @@ pub struct HDAddress<Address, Pubkey> {
 impl<Address, Pubkey> HDAddressOps for HDAddress<Address, Pubkey>
 where
     Address: Clone + Display + Send + Sync,
+    Pubkey: Clone,
 {
     type Address = Address;
     type Pubkey = Pubkey;
 
     fn address(&self) -> Self::Address { self.address.clone() }
 
-    fn pubkey(&self) -> &Self::Pubkey { &self.pubkey }
+    fn pubkey(&self) -> Self::Pubkey { self.pubkey.clone() }
 
     fn derivation_path(&self) -> &DerivationPath { &self.derivation_path }
 }

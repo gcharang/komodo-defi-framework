@@ -154,3 +154,14 @@ impl From<InvalidBip44ChainError> for AccountUpdatingError {
 impl From<HDWalletStorageError> for AccountUpdatingError {
     fn from(e: HDWalletStorageError) -> Self { AccountUpdatingError::WalletStorageError(e) }
 }
+
+pub enum HDWithdrawError {
+    UnexpectedFromAddress(String),
+    UnknownAccount { account_id: u32 },
+    AddressDerivingError(AddressDerivingError),
+    InternalError(String),
+}
+
+impl From<AddressDerivingError> for HDWithdrawError {
+    fn from(e: AddressDerivingError) -> Self { HDWithdrawError::AddressDerivingError(e) }
+}

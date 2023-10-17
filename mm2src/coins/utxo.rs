@@ -107,7 +107,7 @@ use super::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BalanceResu
             TradePreimageResult, Transaction, TransactionDetails, TransactionEnum, TransactionErr,
             UnexpectedDerivationMethod, VerificationError, WithdrawError, WithdrawRequest};
 use crate::coin_balance::{EnableCoinScanPolicy, EnabledCoinBalanceParams, HDAddressBalanceScanner};
-use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddressId, HDAddressOps, HDWalletCoinOps, HDWalletOps,
+use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDAddressId, HDAddressOps, HDWalletCoinOps,
                        HDWalletStorageError};
 use crate::utxo::tx_cache::UtxoVerboseCacheShared;
 

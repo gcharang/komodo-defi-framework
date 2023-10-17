@@ -3,9 +3,9 @@ use std::fmt::Display;
 
 pub trait HDAddressOps {
     type Address: Clone + Display + Send + Sync;
-    type Pubkey;
+    type Pubkey: Clone;
 
     fn address(&self) -> Self::Address;
-    fn pubkey(&self) -> &Self::Pubkey;
+    fn pubkey(&self) -> Self::Pubkey;
     fn derivation_path(&self) -> &DerivationPath;
 }

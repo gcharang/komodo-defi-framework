@@ -21,6 +21,15 @@ pub struct HDAddressId {
 pub trait HDWalletCoinOps {
     /// The type representing the HD Wallet operations associated with this coin.
     type HDWallet: HDWalletOps + HDWalletStorageOps + Send + Sync;
+
+    /// Derives an address for the coin that implements this trait from an extended public key.
+    ///
+    /// # Parameters
+    /// - `extended_pubkey`: The extended public key from which the address will be derived.
+    /// - `derivation_path`: The derivation path of the address.
+    ///
+    /// # Returns
+    /// A result containing the derived `HDCoinHDAddress<Self>` instance or an error.
     fn address_from_extended_pubkey(
         &self,
         extended_pubkey: &Secp256k1ExtendedPublicKey,
