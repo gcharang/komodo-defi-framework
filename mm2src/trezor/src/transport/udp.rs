@@ -43,8 +43,8 @@ pub struct UdpAvailableDevice {
 
 impl UdpAvailableDevice {
     /// Connect to the device.
-    async fn connect(self) -> TrezorResult<UdpTransport> {
-        let transport = UdpTransport::connect(&self).await?;
+    async fn connect(&self) -> TrezorResult<UdpTransport> {
+        let transport = UdpTransport::connect(self).await?;
         Ok(transport)
     }
 }
@@ -160,14 +160,14 @@ impl Transport for UdpTransport {
 
 #[async_trait]
 impl ConnectableDeviceWrapper for UdpAvailableDevice {
-    type T = UdpTransport;
+    type TransportType = UdpTransport;
 
     async fn find_devices() -> TrezorResult<Vec<Self>>
     where
         Self: Sized,
     {
-        crate::transport::udp::find_devices().await
+        find_devices().await
     }
 
-    async fn connect(self) -> TrezorResult<UdpTransport> { UdpAvailableDevice::connect(self).await }
+    async fn connect(&self) -> TrezorResult<Self::TransportType> { UdpAvailableDevice::connect(self).await }
 }

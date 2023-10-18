@@ -124,12 +124,11 @@ impl HwClient {
     ) -> MmResult<TrezorClient, HwProcessingError<Processor::Error>> {
         use common::custom_futures::timeout::TimeoutError;
         use common::executor::Timer;
-        use trezor::transport::{ConnectableDeviceWrapper, Transport};
+        use trezor::transport::ConnectableDeviceWrapper;
 
         async fn try_to_connect<C>() -> HwResult<Option<TrezorClient>>
         where
-            C: ConnectableDeviceWrapper,
-            <C as ConnectableDeviceWrapper>::T: Transport + Sync + Send + 'static,
+            C: ConnectableDeviceWrapper + 'static,
         {
             let mut devices = C::find_devices().await?;
             if devices.is_empty() {

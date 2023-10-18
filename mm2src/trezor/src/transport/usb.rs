@@ -73,7 +73,7 @@ pub struct UsbAvailableDevice(UsbAvailableDeviceImpl);
 
 impl UsbAvailableDevice {
     /// Please note [`hw_common::transport::libusb::UsbAvailableDevice::connect`] spawns a thread.
-    async fn connect(self) -> TrezorResult<UsbTransport> {
+    async fn connect(&self) -> TrezorResult<UsbTransport> {
         let link = UsbLink {
             device: self.0.connect()?,
         };
@@ -95,14 +95,14 @@ fn is_trezor(device: &UsbAvailableDeviceImpl) -> bool {
 
 #[async_trait]
 impl ConnectableDeviceWrapper for UsbAvailableDevice {
-    type T = UsbTransport;
+    type TransportType = UsbTransport;
 
     async fn find_devices() -> TrezorResult<Vec<Self>>
     where
         Self: Sized,
     {
-        crate::transport::usb::find_devices().await
+        find_devices().await
     }
 
-    async fn connect(self) -> TrezorResult<UsbTransport> { UsbAvailableDevice::connect(self).await }
+    async fn connect(&self) -> TrezorResult<Self::TransportType> { UsbAvailableDevice::connect(self).await }
 }
