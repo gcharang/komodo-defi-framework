@@ -158,6 +158,7 @@ where
         gap_limit,
     )
     .await?;
+    // Todo: this extend can be disabled for coins that don't support internal addresses, e.g. eth, should me make it optional and depend on coin config?
     addresses.extend(
         scan_for_new_addresses_impl(
             coin,

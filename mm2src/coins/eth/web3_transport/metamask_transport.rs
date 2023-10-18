@@ -7,13 +7,13 @@ use std::fmt;
 use std::sync::Arc;
 use web3::{RequestId, Transport};
 
-pub(crate) struct MetamaskEthConfig {
+pub struct MetamaskEthConfig {
     /// The `ChainId` that the MetaMask wallet should be targeted on each RPC.
     pub chain_id: u64,
 }
 
 #[derive(Clone)]
-pub(crate) struct MetamaskTransport {
+pub struct MetamaskTransport {
     inner: Arc<MetamaskTransportInner>,
 }
 

@@ -1,5 +1,6 @@
 use super::*;
-use crate::hd_wallet::HDAccountAddressId;
+use crate::hd_wallet::{load_hd_accounts_from_storage, HDAccountAddressId, HDAccountsMutex, HDWalletCoinStorage,
+                       HDWalletStorageError, DEFAULT_GAP_LIMIT};
 #[cfg(target_arch = "wasm32")] use crate::EthMetamaskPolicy;
 use common::executor::AbortedError;
 use crypto::CryptoCtxError;
@@ -30,6 +31,7 @@ pub enum EthActivationV2Error {
     #[display(fmt = "Error deserializing 'derivation_path': {}", _0)]
     ErrorDeserializingDerivationPath(String),
     PrivKeyPolicyNotAllowed(PrivKeyPolicyNotAllowed),
+    HDWalletStorageError(String),
     #[cfg(target_arch = "wasm32")]
     #[from_trait(WithMetamaskRpcError::metamask_rpc_error)]
     #[display(fmt = "{}", _0)]
@@ -53,6 +55,10 @@ impl From<CryptoCtxError> for EthActivationV2Error {
 
 impl From<UnexpectedDerivationMethod> for EthActivationV2Error {
     fn from(e: UnexpectedDerivationMethod) -> Self { EthActivationV2Error::InternalError(e.to_string()) }
+}
+
+impl From<HDWalletStorageError> for EthActivationV2Error {
+    fn from(e: HDWalletStorageError) -> Self { EthActivationV2Error::HDWalletStorageError(e.to_string()) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -194,6 +200,13 @@ impl EthCoin {
 
         let token = EthCoinImpl {
             priv_key_policy: self.priv_key_policy.clone(),
+            // Todo: we should inherit the derivation method from the parent coin? we should add an option to have a new arc if we want to use a different hd wallet for a specific or all erc20 tokens
+            // Todo: check storage for HD in this case? what about balances, db, etc..? what if ETH is enabled without tokens as a standalone hd wallet after erc20 tokens were added to the HD wallet storage?
+            // Todo: will probably need to do rescanning of all addresses or some other thing when enabling a token after enabling eth?
+            // Todo: what about Address poisoning attacks when scanning for non-empty addresses? usually these attacks are sent to already used addresses anyways.
+            // Todo: how about scanning for tokens feature? will that be too much? Maybe another API?
+            // Todo: eth is needed to send from the same account some erc20 tokens, so having the same HD wallet for all erc20 tokens is good
+            derivation_method: self.derivation_method.clone(),
             my_address: self.my_address,
             coin_type: EthCoinType::Erc20 {
                 platform: protocol.platform,
@@ -214,6 +227,7 @@ impl EthCoin {
             ctx: self.ctx.clone(),
             required_confirmations,
             chain_id: self.chain_id,
+            trezor_coin: self.trezor_coin.clone(),
             logs_block_range: self.logs_block_range,
             nonce_lock: self.nonce_lock.clone(),
             erc20_tokens_infos: Default::default(),
@@ -231,8 +245,6 @@ pub async fn eth_coin_from_conf_and_request_v2(
     req: EthActivationV2Request,
     priv_key_policy: EthPrivKeyBuildPolicy,
 ) -> MmResult<EthCoin, EthActivationV2Error> {
-    let ticker = ticker.to_string();
-
     if req.swap_contract_address == Address::default() {
         return Err(EthActivationV2Error::InvalidSwapContractAddr(
             "swap_contract_address can't be zero address".to_string(),
@@ -249,8 +261,8 @@ pub async fn eth_coin_from_conf_and_request_v2(
         }
     }
 
-    let (my_address, priv_key_policy) =
-        build_address_and_priv_key_policy(conf, priv_key_policy, &req.path_to_address).await?;
+    let (my_address, priv_key_policy, derivation_method) =
+        build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &req.path_to_address).await?;
     let my_address_str = checksum_address(&format!("{:02x}", my_address));
 
     let chain_id = conf["chain_id"].as_u64();
@@ -263,7 +275,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
                 activated_key: key_pair,
                 ..
             },
-        ) => build_http_transport(ctx, ticker.clone(), my_address_str, key_pair, &req.nodes).await?,
+        ) => build_http_transport(ctx, ticker.to_string(), my_address_str, key_pair, &req.nodes).await?,
         (EthRpcMode::Http, EthPrivKeyPolicy::Trezor) => {
             return MmError::err(EthActivationV2Error::PrivKeyPolicyNotAllowed(
                 PrivKeyPolicyNotAllowed::HardwareWalletNotSupported,
@@ -274,12 +286,15 @@ pub async fn eth_coin_from_conf_and_request_v2(
             let chain_id = chain_id
                 .or_else(|| conf["rpc_chain_id"].as_u64())
                 .or_mm_err(|| EthActivationV2Error::ExpectedRpcChainId)?;
-            build_metamask_transport(ctx, ticker.clone(), chain_id).await?
+            build_metamask_transport(ctx, ticker.to_string(), chain_id).await?
         },
         #[cfg(target_arch = "wasm32")]
         (EthRpcMode::Http, EthPrivKeyPolicy::Metamask(_)) | (EthRpcMode::Metamask, _) => {
             let error = r#"priv_key_policy="Metamask" and rpc_mode="Metamask" should be used both"#.to_string();
-            return MmError::err(EthActivationV2Error::ActivationFailed { ticker, error });
+            return MmError::err(EthActivationV2Error::ActivationFailed {
+                ticker: ticker.to_string(),
+                error,
+            });
         },
     };
 
@@ -295,8 +310,10 @@ pub async fn eth_coin_from_conf_and_request_v2(
 
     let sign_message_prefix: Option<String> = json::from_value(conf["sign_message_prefix"].clone()).ok();
 
+    let trezor_coin: Option<String> = json::from_value(conf["trezor_coin"].clone()).ok();
+
     let mut map = NONCE_LOCK.lock().unwrap();
-    let nonce_lock = map.entry(ticker.clone()).or_insert_with(new_nonce_lock).clone();
+    let nonce_lock = map.entry(ticker.to_string()).or_insert_with(new_nonce_lock).clone();
 
     // Create an abortable system linked to the `MmCtx` so if the app is stopped on `MmArc::stop`,
     // all spawned futures related to `ETH` coin will be aborted as well.
@@ -304,6 +321,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
 
     let coin = EthCoinImpl {
         priv_key_policy,
+        derivation_method: Arc::new(derivation_method),
         my_address,
         coin_type: EthCoinType::Eth,
         sign_message_prefix,
@@ -311,7 +329,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
         fallback_swap_contract: req.fallback_swap_contract,
         contract_supports_watchers: req.contract_supports_watchers,
         decimals: ETH_DECIMALS,
-        ticker,
+        ticker: ticker.to_string(),
         gas_station_url: req.gas_station_url,
         gas_station_decimals: req.gas_station_decimals.unwrap_or(ETH_GAS_STATION_DECIMALS),
         gas_station_policy: req.gas_station_policy,
@@ -321,6 +339,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
         ctx: ctx.weak(),
         required_confirmations,
         chain_id,
+        trezor_coin,
         logs_block_range: conf["logs_block_range"].as_u64().unwrap_or(DEFAULT_LOGS_BLOCK_RANGE),
         nonce_lock,
         erc20_tokens_infos: Default::default(),
@@ -334,15 +353,21 @@ pub async fn eth_coin_from_conf_and_request_v2(
 /// This function expects either [`PrivKeyBuildPolicy::IguanaPrivKey`]
 /// or [`PrivKeyBuildPolicy::GlobalHDAccount`], otherwise returns `PrivKeyPolicyNotAllowed` error.
 pub(crate) async fn build_address_and_priv_key_policy(
+    ctx: &MmArc,
+    ticker: &str,
     conf: &Json,
     priv_key_policy: EthPrivKeyBuildPolicy,
     path_to_address: &HDAccountAddressId,
-) -> MmResult<(Address, EthPrivKeyPolicy), EthActivationV2Error> {
+    // Todo: refactor this to use builder pattern like UTXO or at least make the return not a tuple that has 3 elements
+    // Todo: make DerivationMethod<Address, EthHDWallet> a type
+) -> MmResult<(Address, EthPrivKeyPolicy, DerivationMethod<Address, EthHDWallet>), EthActivationV2Error> {
     match priv_key_policy {
         EthPrivKeyBuildPolicy::IguanaPrivKey(iguana) => {
             let key_pair = KeyPair::from_secret_slice(iguana.as_slice())
                 .map_to_mm(|e| EthActivationV2Error::InternalError(e.to_string()))?;
-            Ok((key_pair.address(), EthPrivKeyPolicy::Iguana(key_pair)))
+            let address = key_pair.address();
+            let derivation_method = DerivationMethod::SingleAddress(address);
+            Ok((address, EthPrivKeyPolicy::Iguana(key_pair), derivation_method))
         },
         EthPrivKeyBuildPolicy::GlobalHDAccount(global_hd_ctx) => {
             // Consider storing `derivation_path` at `EthCoinImpl`.
@@ -358,11 +383,33 @@ pub(crate) async fn build_address_and_priv_key_policy(
             let activated_key = KeyPair::from_secret_slice(raw_priv_key.as_slice())
                 .map_to_mm(|e| EthActivationV2Error::InternalError(e.to_string()))?;
             let bip39_secp_priv_key = global_hd_ctx.root_priv_key().clone();
-            Ok((activated_key.address(), EthPrivKeyPolicy::HDWallet {
-                path_to_coin,
-                activated_key,
-                bip39_secp_priv_key,
-            }))
+
+            let hd_wallet_rmd160 = *ctx.rmd160();
+            let hd_wallet_storage = HDWalletCoinStorage::init_with_rmd160(ctx, ticker.to_string(), hd_wallet_rmd160)
+                .await
+                .mm_err(EthActivationV2Error::from)?;
+            let accounts = load_hd_accounts_from_storage(&hd_wallet_storage, &path_to_coin).await?;
+            // Todo: use fn gap_limit(&self) -> u32 { self.activation_params().gap_limit.unwrap_or(DEFAULT_GAP_LIMIT) } like UTXO
+            let gap_limit = DEFAULT_GAP_LIMIT;
+            // Todo: Maybe we can make a constructor for HDWallet struct
+            let hd_wallet = EthHDWallet {
+                hd_wallet_rmd160,
+                hd_wallet_storage,
+                derivation_path: path_to_coin.clone(),
+                accounts: HDAccountsMutex::new(accounts),
+                enabled_address: Some(*path_to_address),
+                gap_limit,
+            };
+            let derivation_method = DerivationMethod::HDWallet(hd_wallet);
+            Ok((
+                activated_key.address(),
+                EthPrivKeyPolicy::HDWallet {
+                    path_to_coin,
+                    activated_key,
+                    bip39_secp_priv_key,
+                },
+                derivation_method,
+            ))
         },
         #[cfg(target_arch = "wasm32")]
         EthPrivKeyBuildPolicy::Metamask(metamask_ctx) => {
@@ -375,6 +422,8 @@ pub(crate) async fn build_address_and_priv_key_policy(
                     public_key,
                     public_key_uncompressed,
                 }),
+                // Todo: Metamask supports multiple accounts, so we should use a different derivation method in the future
+                DerivationMethod::SingleAddress(address),
             ))
         },
     }

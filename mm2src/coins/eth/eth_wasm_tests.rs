@@ -23,12 +23,14 @@ async fn test_send() {
     let transport = Web3Transport::single_node(ETH_DEV_NODE, false);
     let web3 = Web3::new(transport);
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -45,6 +47,7 @@ async fn test_send() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),

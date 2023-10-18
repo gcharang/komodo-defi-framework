@@ -583,7 +583,7 @@ pub struct UtxoCoinFields {
     pub rpc_client: UtxoRpcClientEnum,
     /// Either ECDSA key pair or a Hardware Wallet info.
     pub priv_key_policy: PrivKeyPolicy<KeyPair>,
-    /// Either an Iguana address or an info about last derived account/address.
+    /// Either an Iguana address or a 'UtxoHDWallet' instance.
     pub derivation_method: DerivationMethod<Address, UtxoHDWallet>,
     pub history_sync_state: Mutex<HistorySyncState>,
     /// The cache of verbose transactions.

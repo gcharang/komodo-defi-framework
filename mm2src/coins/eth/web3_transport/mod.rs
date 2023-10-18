@@ -17,7 +17,7 @@ pub(crate) mod http_transport;
 type Web3SendOut = BoxFuture<'static, Result<Json, Error>>;
 
 #[derive(Clone, Debug)]
-pub(crate) enum Web3Transport {
+pub enum Web3Transport {
     Http(http_transport::HttpTransport),
     #[cfg(target_arch = "wasm32")]
     Metamask(metamask_transport::MetamaskTransport),

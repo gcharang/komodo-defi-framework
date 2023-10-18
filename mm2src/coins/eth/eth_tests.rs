@@ -127,6 +127,7 @@ fn eth_coin_from_keypair(
         EthCoinType::Eth => "ETH".to_string(),
         EthCoinType::Erc20 { .. } => "JST".to_string(),
     };
+    let my_address = key_pair.address();
 
     let eth_coin = EthCoin(Arc::new(EthCoinImpl {
         coin_type,
@@ -135,9 +136,10 @@ fn eth_coin_from_keypair(
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract,
         contract_supports_watchers: false,
@@ -150,6 +152,7 @@ fn eth_coin_from_keypair(
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -312,15 +315,17 @@ fn send_and_refund_erc20_payment() {
     let transport = Web3Transport::single_node(ETH_DEV_NODE, false);
     let web3 = Web3::new(transport);
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Erc20 {
             platform: "ETH".to_string(),
             token_addr: Address::from_str(ETH_DEV_TOKEN_CONTRACT).unwrap(),
         },
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -337,6 +342,7 @@ fn send_and_refund_erc20_payment() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -401,12 +407,14 @@ fn send_and_refund_eth_payment() {
     let transport = Web3Transport::single_node(ETH_DEV_NODE, false);
     let web3 = Web3::new(transport);
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -423,6 +431,7 @@ fn send_and_refund_eth_payment() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -499,12 +508,14 @@ fn test_nonce_several_urls() {
     let web3_failing = Web3::new(failing_transport);
 
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -531,6 +542,7 @@ fn test_nonce_several_urls() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -560,6 +572,7 @@ fn test_wait_for_payment_spend_timeout() {
     let transport = Web3Transport::single_node(ETH_DEV_NODE, false);
     let web3 = Web3::new(transport);
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
 
     let coin = EthCoinImpl {
         coin_type: EthCoinType::Eth,
@@ -568,9 +581,10 @@ fn test_wait_for_payment_spend_timeout() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -583,6 +597,7 @@ fn test_wait_for_payment_spend_timeout() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -631,6 +646,7 @@ fn test_search_for_swap_tx_spend_was_spent() {
     let ctx = MmCtxBuilder::new().into_mm_arc();
 
     let swap_contract_address = Address::from_str(ETH_MAINNET_SWAP_CONTRACT).unwrap();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         coin_type: EthCoinType::Eth,
         decimals: 18,
@@ -638,9 +654,10 @@ fn test_search_for_swap_tx_spend_was_spent() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address,
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -653,6 +670,7 @@ fn test_search_for_swap_tx_spend_was_spent() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -739,6 +757,7 @@ fn test_search_for_swap_tx_spend_was_refunded() {
     let ctx = MmCtxBuilder::new().into_mm_arc();
 
     let swap_contract_address = Address::from_str(ETH_MAINNET_SWAP_CONTRACT).unwrap();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         coin_type: EthCoinType::Erc20 {
             platform: "ETH".to_string(),
@@ -749,7 +768,8 @@ fn test_search_for_swap_tx_spend_was_refunded() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address: key_pair.address(),
+        my_address,
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         swap_contract_address,
@@ -764,6 +784,7 @@ fn test_search_for_swap_tx_spend_was_refunded() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -1415,12 +1436,14 @@ fn test_message_hash() {
     let transport = Web3Transport::single_node(ETH_DEV_NODE, false);
     let web3 = Web3::new(transport);
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -1437,6 +1460,7 @@ fn test_message_hash() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -1460,12 +1484,14 @@ fn test_sign_verify_message() {
 
     let web3 = Web3::new(transport);
     let ctx = MmCtxBuilder::new().into_mm_arc();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address: Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -1482,6 +1508,7 @@ fn test_sign_verify_message() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
@@ -1509,6 +1536,7 @@ fn test_eth_extract_secret() {
     let ctx = MmCtxBuilder::new().into_mm_arc();
 
     let swap_contract_address = Address::from_str("0x7Bc1bBDD6A0a722fC9bffC49c921B685ECB84b94").unwrap();
+    let my_address = key_pair.address();
     let coin = EthCoin(Arc::new(EthCoinImpl {
         coin_type: EthCoinType::Erc20 {
             platform: "ETH".to_string(),
@@ -1519,9 +1547,10 @@ fn test_eth_extract_secret() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address: key_pair.address(),
+        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
+        derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         swap_contract_address,
         fallback_swap_contract: None,
         contract_supports_watchers: false,
@@ -1534,6 +1563,7 @@ fn test_eth_extract_secret() {
         ctx: ctx.weak(),
         required_confirmations: 1.into(),
         chain_id: None,
+        trezor_coin: None,
         logs_block_range: DEFAULT_LOGS_BLOCK_RANGE,
         nonce_lock: new_nonce_lock(),
         erc20_tokens_infos: Default::default(),
