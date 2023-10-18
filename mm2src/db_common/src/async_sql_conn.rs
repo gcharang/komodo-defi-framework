@@ -1,10 +1,10 @@
 use crate::sqlite::rusqlite::Error as SqlError;
 use crossbeam_channel::Sender;
+use futures::channel::oneshot::{self};
 use rusqlite::OpenFlags;
 use std::fmt::{self, Debug, Display};
 use std::path::Path;
 use std::thread;
-use tokio::sync::oneshot::{self};
 
 /// Represents the errors specific for AsyncConnection.
 #[derive(Debug)]
@@ -143,8 +143,7 @@ impl AsyncConnection {
         start(move || rusqlite::Connection::open_in_memory_with_flags_and_vfs(flags, &vfs)).await
     }
 
-    /// Call a function in background thread and get the result
-    /// asynchronously.
+    /// Call a function in background thread and get the result asynchronously.
     ///
     /// # Failure
     ///
@@ -166,8 +165,7 @@ impl AsyncConnection {
         receiver.await.map_err(|_| AsyncConnError::ConnectionClosed)?
     }
 
-    /// Call a function in background thread and get the result
-    /// asynchronously.
+    /// Call a function in background thread and get the result asynchronously.
     ///
     /// This method can cause a `panic` if the underlying database connection is closed.
     /// it is a more user-friendly alternative to the [`AsyncConnection::call`] method.

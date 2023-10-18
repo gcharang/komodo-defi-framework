@@ -1737,6 +1737,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crossbeam-channel 0.5.1",
+ "futures 0.3.28",
  "hex 0.4.3",
  "log",
  "rusqlite",
