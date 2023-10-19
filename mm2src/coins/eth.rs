@@ -28,7 +28,8 @@ use crate::hd_wallet::{ExtractExtendedPubkey, HDAccount, HDAccountAddressId, HDA
 use crate::lp_price::get_base_price_in_rel;
 use crate::nft::nft_structs::{ContractType, ConvertChain, TransactionNftDetails, WithdrawErc1155, WithdrawErc721};
 use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
-use crate::{coin_balance, BalanceResult, CoinWithDerivationMethod, DerivationMethod, PrivKeyPolicy, TransactionResult};
+use crate::{coin_balance, scan_for_new_addresses_impl, BalanceResult, CoinWithDerivationMethod, DerivationMethod,
+            PrivKeyPolicy, TransactionResult};
 use async_trait::async_trait;
 use bip32::DerivationPath;
 use bitcrypto::{keccak256, ripemd160, sha256};
@@ -121,7 +122,6 @@ use crate::coin_balance::{EnableCoinBalanceError, EnabledCoinBalanceParams, HDAd
 use crate::rpc_command::get_new_address;
 use crate::rpc_command::get_new_address::{GetNewAddressParams, GetNewAddressResponse, GetNewAddressRpcError,
                                           GetNewAddressRpcOps};
-use crate::utxo::utxo_common::scan_for_new_addresses_impl;
 use nonce::ParityNonce;
 
 /// https://github.com/artemii235/etomic-swap/blob/master/contracts/EtomicSwap.sol
@@ -5794,7 +5794,6 @@ impl HDWalletBalanceOps for EthCoin {
         address_scanner: &Self::HDAddressScanner,
         gap_limit: u32,
     ) -> BalanceResult<Vec<HDAddressBalance>> {
-        // Todo: scan_for_new_addresses_impl is in utxo module and should be moved to hd_wallet mod
         scan_for_new_addresses_impl(
             self,
             hd_wallet,
@@ -5804,34 +5803,16 @@ impl HDWalletBalanceOps for EthCoin {
             gap_limit,
         )
         .await
-        // Todo: this extend is disabled for coins that don't support internal addresses, e.g. eth, should we make it optional and depend on coin config?
-        // addresses.extend(
-        //     scan_for_new_addresses_impl(
-        //         coin,
-        //         hd_wallet,
-        //         hd_account,
-        //         address_scanner,
-        //         Bip44Chain::Internal,
-        //         gap_limit,
-        //     )
-        //         .await?,
-        // );
     }
 
     async fn all_known_addresses_balances(
         &self,
         hd_account: &HDCoinHDAccount<Self>,
     ) -> BalanceResult<Vec<HDAddressBalance>> {
-        // Todo: this block of code is in utxo common and should be moved to hd_wallet mod
         let external_addresses = hd_account
             .known_addresses_number(Bip44Chain::External)
             // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
             .mm_err(|e| BalanceError::Internal(e.to_string()))?;
-        // Todo: this extend is disabled for coins that don't support internal addresses, e.g. eth, should we make it optional and depend on coin config?
-        // let internal_addresses = hd_account
-        //     .known_addresses_number(Bip44Chain::Internal)
-        //     // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
-        //     .mm_err(|e| BalanceError::Internal(e.to_string()))?;
 
         self.known_addresses_balances_with_ids(hd_account, Bip44Chain::External, 0..external_addresses)
             .await

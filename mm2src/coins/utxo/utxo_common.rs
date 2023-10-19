@@ -1,5 +1,5 @@
 use super::*;
-use crate::coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
+use crate::coin_balance::{HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
 use crate::hd_wallet::{HDCoinAddress, HDCoinHDAccount, HDCoinWithdrawOps, HDExtractPubkeyError, HDXPubExtractor,
@@ -13,6 +13,7 @@ use crate::utxo::tx_cache::TxCacheResult;
 use crate::utxo::utxo_hd_wallet::UtxoHDAddress;
 use crate::utxo::utxo_withdraw::{InitUtxoWithdraw, StandardUtxoWithdraw, UtxoWithdraw};
 use crate::watcher_common::validate_watcher_reward;
+use crate::{scan_for_new_addresses_impl, MmCoinEnum, WatcherReward, WatcherRewardError};
 use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPaymentInput, GenTakerPaymentSpendArgs,
             GenTakerPaymentSpendResult, GetWithdrawSenderAddress, RawTransactionError, RawTransactionRequest,
             RawTransactionRes, RefundPaymentArgs, RewardTarget, SearchForSwapTxSpendInput,
@@ -25,7 +26,6 @@ use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPayment
             WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
             WithdrawResult, EARLY_CONFIRMATION_ERR_LOG, INVALID_RECEIVER_ERR_LOG, INVALID_REFUND_TX_ERR_LOG,
             INVALID_SCRIPT_ERR_LOG, INVALID_SENDER_ERR_LOG, OLD_TRANSACTION_ERR_LOG};
-use crate::{MmCoinEnum, WatcherReward, WatcherRewardError};
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
 use chain::constants::SEQUENCE_FINAL;
@@ -33,7 +33,7 @@ use chain::{OutPoint, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
 use common::log::error;
-use crypto::{Bip44Chain, RpcDerivationPath};
+use crypto::Bip44Chain;
 use futures::compat::Future01CompatExt;
 use futures::future::{FutureExt, TryFutureExt};
 use futures01::future::Either;
@@ -158,7 +158,8 @@ where
         gap_limit,
     )
     .await?;
-    // Todo: this extend can be disabled for coins that don't support internal addresses, e.g. eth, should me make it optional and depend on coin config?
+    // Todo: this extend can be disabled for coins that don't support internal addresses
+    // Todo: a new parameter should be added to the function to combine this function with scan_for_new_addresses in eth.rs
     addresses.extend(
         scan_for_new_addresses_impl(
             coin,
@@ -174,84 +175,7 @@ where
     Ok(addresses)
 }
 
-/// Checks addresses that either had empty transaction history last time we checked or has not been checked before.
-/// The checking stops at the moment when we find `gap_limit` consecutive empty addresses.
-pub async fn scan_for_new_addresses_impl<T>(
-    coin: &T,
-    hd_wallet: &T::HDWallet,
-    hd_account: &mut HDCoinHDAccount<T>,
-    address_scanner: &T::HDAddressScanner,
-    chain: Bip44Chain,
-    gap_limit: u32,
-) -> BalanceResult<Vec<HDAddressBalance>>
-where
-    T: HDWalletBalanceOps + Sync,
-    HDCoinAddress<T>: std::fmt::Display,
-{
-    let mut balances = Vec::with_capacity(gap_limit as usize);
-
-    // Get the first unknown address id.
-    let mut checking_address_id = hd_account
-        .known_addresses_number(chain)
-        // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
-        .mm_err(|e| BalanceError::Internal(e.to_string()))?;
-
-    let mut unused_addresses_counter = 0;
-    let max_addresses_number = hd_account.address_limit();
-    while checking_address_id < max_addresses_number && unused_addresses_counter <= gap_limit {
-        let hd_address = coin.derive_address(hd_account, chain, checking_address_id).await?;
-        let checking_address = hd_address.address();
-        let checking_address_der_path = hd_address.derivation_path();
-
-        match coin.is_address_used(&checking_address, address_scanner).await? {
-            // We found a non-empty address, so we have to fill up the balance list
-            // with zeros starting from `last_non_empty_address_id = checking_address_id - unused_addresses_counter`.
-            AddressBalanceStatus::Used(non_empty_balance) => {
-                let last_non_empty_address_id = checking_address_id - unused_addresses_counter;
-
-                // First, derive all empty addresses and put it into `balances` with default balance.
-                let address_ids = (last_non_empty_address_id..checking_address_id)
-                    .into_iter()
-                    .map(|address_id| HDAddressId { chain, address_id });
-                let empty_addresses =
-                    coin.derive_addresses(hd_account, address_ids)
-                        .await?
-                        .into_iter()
-                        .map(|empty_address| HDAddressBalance {
-                            address: empty_address.address().to_string(),
-                            derivation_path: RpcDerivationPath(empty_address.derivation_path().clone()),
-                            chain,
-                            balance: CoinBalance::default(),
-                        });
-                balances.extend(empty_addresses);
-
-                // Then push this non-empty address.
-                balances.push(HDAddressBalance {
-                    address: checking_address.to_string(),
-                    derivation_path: RpcDerivationPath(checking_address_der_path.clone()),
-                    chain,
-                    balance: non_empty_balance,
-                });
-                // Reset the counter of unused addresses to zero since we found a non-empty address.
-                unused_addresses_counter = 0;
-            },
-            AddressBalanceStatus::NotUsed => unused_addresses_counter += 1,
-        }
-
-        checking_address_id += 1;
-    }
-
-    coin.set_known_addresses_number(
-        hd_wallet,
-        hd_account,
-        chain,
-        checking_address_id - unused_addresses_counter,
-    )
-    .await?;
-
-    Ok(balances)
-}
-
+// Todo: this function should be moved to hd_wallet mod along other hd balance related functions
 pub async fn all_known_addresses_balances<T>(
     coin: &T,
     hd_account: &HDCoinHDAccount<T>,
@@ -264,6 +188,8 @@ where
         .known_addresses_number(Bip44Chain::External)
         // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
         .mm_err(|e| BalanceError::Internal(e.to_string()))?;
+    // Todo: this part should be disabled for coins that don't support internal addresses
+    // Todo: a new parameter should be added to the function to combine this function with all_known_addresses_balances in eth.rs
     let internal_addresses = hd_account
         .known_addresses_number(Bip44Chain::Internal)
         // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
@@ -272,6 +198,8 @@ where
     let mut balances = coin
         .known_addresses_balances_with_ids(hd_account, Bip44Chain::External, 0..external_addresses)
         .await?;
+    // Todo: this extend can be disabled for coins that don't support internal addresses
+    // Todo: a new parameter should be added to the function to combine this function with scan_for_new_addresses in eth.rs
     balances.extend(
         coin.known_addresses_balances_with_ids(hd_account, Bip44Chain::Internal, 0..internal_addresses)
             .await?,

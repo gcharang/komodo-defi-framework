@@ -49,8 +49,9 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        AbortSettings, AbortedError, SpawnAbortable, SpawnFuture};
 use common::log::{warn, LogOnError};
 use common::{calc_total_pages, now_sec, ten, HttpStatusCode};
-use crypto::{derive_secp256k1_secret, Bip32Error, CryptoCtx, CryptoCtxError, DerivationPath, GlobalHDAccountArc,
-             HwRpcError, KeyPairPolicy, Secp256k1Secret, StandardHDPathToCoin, WithHwRpcError};
+use crypto::{derive_secp256k1_secret, Bip32Error, Bip44Chain, CryptoCtx, CryptoCtxError, DerivationPath,
+             GlobalHDAccountArc, HwRpcError, KeyPairPolicy, RpcDerivationPath, Secp256k1Secret, StandardHDPathToCoin,
+             WithHwRpcError};
 use derive_more::Display;
 use enum_from::{EnumFromStringify, EnumFromTrait};
 use ethereum_types::H256;
@@ -203,6 +204,8 @@ macro_rules! ok_or_continue_after_sleep {
 }
 
 pub mod coin_balance;
+use coin_balance::{AddressBalanceStatus, HDAddressBalance, HDWalletBalanceOps};
+
 pub mod lp_price;
 pub mod watcher_common;
 
@@ -219,8 +222,9 @@ use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetail
           GetEthAddressError, SignedEthTx};
 
 pub mod hd_wallet;
-use hd_wallet::{AccountUpdatingError, AddressDerivingError, HDAccountAddressId, HDCoinAddress, HDWalletAddress,
-                HDWalletCoinOps, HDWalletOps, HDWithdrawError, WithdrawFrom, WithdrawSenderAddress};
+use hd_wallet::{AccountUpdatingError, AddressDerivingError, HDAccountAddressId, HDAccountOps, HDAddressId,
+                HDAddressOps, HDCoinAddress, HDCoinHDAccount, HDWalletAddress, HDWalletCoinOps, HDWalletOps,
+                HDWithdrawError, WithdrawFrom, WithdrawSenderAddress};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
@@ -4398,6 +4402,85 @@ fn coins_conf_check(ctx: &MmArc, coins_en: &Json, ticker: &str, req: Option<&Jso
         );
     }
     Ok(())
+}
+
+// Todo: scan_for_new_addresses_impl should be moved to hd_wallet mod alongside hd code in coin_balance.rs
+/// Checks addresses that either had empty transaction history last time we checked or has not been checked before.
+/// The checking stops at the moment when we find `gap_limit` consecutive empty addresses.
+pub async fn scan_for_new_addresses_impl<T>(
+    coin: &T,
+    hd_wallet: &T::HDWallet,
+    hd_account: &mut HDCoinHDAccount<T>,
+    address_scanner: &T::HDAddressScanner,
+    chain: Bip44Chain,
+    gap_limit: u32,
+) -> BalanceResult<Vec<HDAddressBalance>>
+where
+    T: HDWalletBalanceOps + Sync,
+    HDCoinAddress<T>: std::fmt::Display,
+{
+    let mut balances = Vec::with_capacity(gap_limit as usize);
+
+    // Get the first unknown address id.
+    let mut checking_address_id = hd_account
+        .known_addresses_number(chain)
+        // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
+        .mm_err(|e| BalanceError::Internal(e.to_string()))?;
+
+    let mut unused_addresses_counter = 0;
+    let max_addresses_number = hd_account.address_limit();
+    while checking_address_id < max_addresses_number && unused_addresses_counter <= gap_limit {
+        let hd_address = coin.derive_address(hd_account, chain, checking_address_id).await?;
+        let checking_address = hd_address.address();
+        let checking_address_der_path = hd_address.derivation_path();
+
+        match coin.is_address_used(&checking_address, address_scanner).await? {
+            // We found a non-empty address, so we have to fill up the balance list
+            // with zeros starting from `last_non_empty_address_id = checking_address_id - unused_addresses_counter`.
+            AddressBalanceStatus::Used(non_empty_balance) => {
+                let last_non_empty_address_id = checking_address_id - unused_addresses_counter;
+
+                // First, derive all empty addresses and put it into `balances` with default balance.
+                let address_ids = (last_non_empty_address_id..checking_address_id)
+                    .into_iter()
+                    .map(|address_id| HDAddressId { chain, address_id });
+                let empty_addresses =
+                    coin.derive_addresses(hd_account, address_ids)
+                        .await?
+                        .into_iter()
+                        .map(|empty_address| HDAddressBalance {
+                            address: empty_address.address().to_string(),
+                            derivation_path: RpcDerivationPath(empty_address.derivation_path().clone()),
+                            chain,
+                            balance: CoinBalance::default(),
+                        });
+                balances.extend(empty_addresses);
+
+                // Then push this non-empty address.
+                balances.push(HDAddressBalance {
+                    address: checking_address.to_string(),
+                    derivation_path: RpcDerivationPath(checking_address_der_path.clone()),
+                    chain,
+                    balance: non_empty_balance,
+                });
+                // Reset the counter of unused addresses to zero since we found a non-empty address.
+                unused_addresses_counter = 0;
+            },
+            AddressBalanceStatus::NotUsed => unused_addresses_counter += 1,
+        }
+
+        checking_address_id += 1;
+    }
+
+    coin.set_known_addresses_number(
+        hd_wallet,
+        hd_account,
+        chain,
+        checking_address_id - unused_addresses_counter,
+    )
+    .await?;
+
+    Ok(balances)
 }
 
 #[cfg(test)]
