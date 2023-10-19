@@ -1,16 +1,25 @@
-use super::{z_coin_errors::*, BlockDbImpl, WalletDbShared, ZCoinBuilder, ZcoinConsensusParams};
+use super::{z_coin_errors::*, BlockDbImpl, CheckPointBlockInfo, WalletDbShared, ZCoinBuilder, ZcoinConsensusParams};
 use crate::utxo::rpc_clients::NativeClient;
+use crate::utxo::rpc_clients::NO_TX_ERROR_CODE;
 use crate::z_coin::SyncStartPoint;
-use crate::RpcCommonOps;
 use async_trait::async_trait;
+use common::executor::Timer;
 use common::executor::{spawn_abortable, AbortOnDropHandle};
+use common::log::{debug, error, info};
 use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender};
 use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
 use futures::lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use futures::StreamExt;
+use hex::{FromHex, FromHexError};
 use mm2_err_handle::prelude::*;
 use parking_lot::Mutex;
+use prost::Message;
+use rpc::v1::types::{Bytes, H256 as H256Json};
+use std::convert::TryFrom;
+use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
+use z_coin_grpc::{BlockId, BlockRange, TreeState, TxFilter};
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 use zcash_primitives::zip32::ExtendedSpendingKey;
@@ -22,33 +31,24 @@ use z_coin_grpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use z_coin_grpc::ChainSpec;
 
 cfg_native!(
-    use super::CheckPointBlockInfo;
     use crate::ZTransaction;
-    use crate::utxo::rpc_clients::{UtxoRpcClientOps, NO_TX_ERROR_CODE};
+    use crate::utxo::rpc_clients::{UtxoRpcClientOps};
     use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper};
     use crate::z_coin::z_coin_errors::{ZcoinStorageError, ValidateBlocksError};
     use crate::utxo::utxo_builder::{UtxoCoinBuilderCommonOps, DAY_IN_SECONDS};
 
-    use common::{now_sec};
-    use common::executor::Timer;
-    use common::log::{debug, error, LogOnError};
     use futures::channel::mpsc::channel;
     use futures::compat::Future01CompatExt;
     use group::GroupEncoding;
-    use hex::{FromHex, FromHexError};
+    use common::now_sec;
     use http::Uri;
-    use prost::Message;
-    use std::convert::TryFrom;
-    use rpc::v1::types::{Bytes, H256 as H256Json};
-    use std::pin::Pin;
-    use std::str::FromStr;
+    use common::log::LogOnError;
     use tonic::transport::{Channel, ClientTlsConfig};
     use tonic::codegen::StdError;
     use zcash_extras::{WalletRead, WalletWrite};
 
-    use z_coin_grpc::TreeState;
-    use z_coin_grpc::{BlockId, BlockRange, CompactBlock as TonicCompactBlock, CompactOutput as TonicCompactOutput,
-                  CompactSpend as TonicCompactSpend, CompactTx as TonicCompactTx, TxFilter};
+    use z_coin_grpc::{CompactBlock as TonicCompactBlock, CompactOutput as TonicCompactOutput,
+                  CompactSpend as TonicCompactSpend, CompactTx as TonicCompactTx};
 );
 
 cfg_wasm32!(
@@ -57,13 +57,12 @@ cfg_wasm32!(
 
 /// ZRpcOps trait provides asynchronous methods for performing various operations related to
 /// Zcoin blockchain and wallet synchronization.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait ZRpcOps {
     /// Asynchronously retrieve the current block height from the Zcoin network.
     async fn get_block_height(&mut self) -> Result<u64, MmError<UpdateBlocksCacheErr>>;
 
     /// Asynchronously retrieve the tree state for a specific block height from the Zcoin network.
-    #[cfg(not(target_arch = "wasm32"))]
     async fn get_tree_state(&mut self, height: u64) -> Result<TreeState, MmError<UpdateBlocksCacheErr>>;
 
     /// Asynchronously scan and process blocks within a specified block height range.
@@ -86,7 +85,6 @@ pub trait ZRpcOps {
     /// checkpoint_block_from_height retrieves tree state information from rpc corresponding to the given
     /// height and constructs a `CheckPointBlockInfo` struct containing some needed details such as
     /// block height, hash, time, and sapling tree.
-    #[cfg(not(target_arch = "wasm32"))]
     async fn checkpoint_block_from_height(
         &mut self,
         height: u64,
@@ -94,8 +92,86 @@ pub trait ZRpcOps {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+type RpcClientType = Channel;
+#[cfg(target_arch = "wasm32")]
+type RpcClientType = WasmClient;
+
 pub struct LightRpcClient {
-    rpc_clients: AsyncMutex<Vec<CompactTxStreamerClient<Channel>>>,
+    rpc_clients: AsyncMutex<Vec<CompactTxStreamerClient<RpcClientType>>>,
+}
+
+impl LightRpcClient {
+    #[allow(unused_mut)]
+    pub async fn new(lightwalletd_urls: Vec<String>) -> Result<Self, MmError<ZcoinClientInitError>> {
+        let mut rpc_clients = Vec::new();
+        if lightwalletd_urls.is_empty() {
+            return MmError::err(ZcoinClientInitError::EmptyLightwalletdUris);
+        }
+
+        let mut errors = Vec::new();
+        for url in &lightwalletd_urls {
+            cfg_native!(
+            let uri = match Uri::from_str(url) {
+                Ok(uri) => uri,
+                Err(err) => {
+                    errors.push(UrlIterError::InvalidUri(err));
+                    continue;
+                },
+            };
+
+                let endpoint = match Channel::builder(uri).tls_config(ClientTlsConfig::new()) {
+                Ok(endpoint) => endpoint,
+                Err(err) => {
+                    errors.push(UrlIterError::TlsConfigFailure(err));
+                    continue;
+                },
+            };
+                let client = match connect_endpoint(endpoint).await {
+                    Ok(tonic_channel) => tonic_channel,
+                    Err(err) => {
+                        errors.push(UrlIterError::ConnectionFailure(err));
+                        continue;
+                    },
+                };
+            );
+
+            cfg_wasm32!(
+                let client = WasmClient::new(url.to_string());
+                let client = CompactTxStreamerClient::new(client.into());
+            );
+
+            rpc_clients.push(client);
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        drop_mutability!(errors);
+        drop_mutability!(rpc_clients);
+        // check if rpc_clients is empty, then for loop wasn't successful
+        if rpc_clients.is_empty() {
+            return MmError::err(ZcoinClientInitError::UrlIterFailure(errors));
+        }
+
+        Ok(LightRpcClient {
+            rpc_clients: AsyncMutex::new(rpc_clients),
+        })
+    }
+
+    async fn get_live_client(&self) -> Result<CompactTxStreamerClient<RpcClientType>, MmError<UpdateBlocksCacheErr>> {
+        let mut clients = self.rpc_clients.lock().await;
+        for (i, mut client) in clients.clone().into_iter().enumerate() {
+            let request = tonic::Request::new(ChainSpec {});
+            // use get_latest_block method as a health check
+            let latest = client.get_latest_block(request).await;
+            info!("LATEEEE: {latest:?} ");
+            if latest.is_ok() {
+                clients.rotate_left(i);
+                return Ok(client);
+            }
+        }
+        return Err(MmError::new(UpdateBlocksCacheErr::GetLiveLightClientError(
+            "All the current light clients are unavailable.".to_string(),
+        )));
+    }
 }
 
 /// Attempt to create a new client by connecting to a given endpoint.
@@ -109,30 +185,7 @@ where
     Ok(CompactTxStreamerClient::new(conn))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
-impl RpcCommonOps for LightRpcClient {
-    type RpcClient = CompactTxStreamerClient<Channel>;
-    type Error = MmError<UpdateBlocksCacheErr>;
-
-    async fn get_live_client(&self) -> Result<Self::RpcClient, Self::Error> {
-        let mut clients = self.rpc_clients.lock().await;
-        for (i, mut client) in clients.clone().into_iter().enumerate() {
-            let request = tonic::Request::new(ChainSpec {});
-            // use get_latest_block method as a health check
-            if client.get_latest_block(request).await.is_ok() {
-                clients.rotate_left(i);
-                return Ok(client);
-            }
-        }
-        return Err(MmError::new(UpdateBlocksCacheErr::GetLiveLightClientError(
-            "All the current light clients are unavailable.".to_string(),
-        )));
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
+#[async_trait(?Send)]
 impl ZRpcOps for LightRpcClient {
     async fn get_block_height(&mut self) -> Result<u64, MmError<UpdateBlocksCacheErr>> {
         let request = tonic::Request::new(ChainSpec {});
@@ -147,7 +200,6 @@ impl ZRpcOps for LightRpcClient {
         Ok(block.height)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn get_tree_state(&mut self, height: u64) -> Result<TreeState, MmError<UpdateBlocksCacheErr>> {
         let request = tonic::Request::new(BlockId { height, hash: vec![] });
 
@@ -224,7 +276,6 @@ impl ZRpcOps for LightRpcClient {
         true
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn checkpoint_block_from_height(
         &mut self,
         height: u64,
@@ -248,7 +299,7 @@ impl ZRpcOps for LightRpcClient {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
+#[async_trait(?Send)]
 impl ZRpcOps for NativeClient {
     async fn get_block_height(&mut self) -> Result<u64, MmError<UpdateBlocksCacheErr>> {
         Ok(self.get_block_count().compat().await?)
@@ -379,54 +430,8 @@ pub(super) async fn init_light_client<'a>(
     let coin = builder.ticker.to_string();
     let (sync_status_notifier, sync_watcher) = channel(1);
     let (on_tx_gen_notifier, on_tx_gen_watcher) = channel(1);
-    let mut rpc_clients = Vec::new();
-    let mut errors = Vec::new();
-    if lightwalletd_urls.is_empty() {
-        return MmError::err(ZcoinClientInitError::EmptyLightwalletdUris);
-    }
-    for url in &lightwalletd_urls {
-        let uri = match Uri::from_str(url) {
-            Ok(uri) => uri,
-            Err(err) => {
-                errors.push(UrlIterError::InvalidUri(err));
-                continue;
-            },
-        };
 
-        cfg_native!(
-            let endpoint = match Channel::builder(uri).tls_config(ClientTlsConfig::new()) {
-            Ok(endpoint) => endpoint,
-            Err(err) => {
-                errors.push(UrlIterError::TlsConfigFailure(err));
-                continue;
-            },
-        };
-            let client = match connect_endpoint(endpoint).await {
-                Ok(tonic_channel) => tonic_channel,
-                Err(err) => {
-                    errors.push(UrlIterError::ConnectionFailure(err));
-                    continue;
-                },
-            };
-        );
-
-        cfg_wasm32!(
-        //            let client = WasmClient::new(uri.to_string());
-        //            let client = CompactTxStreamerClient::new(client.intoo());
-                );
-
-        rpc_clients.push(client);
-    }
-    drop_mutability!(errors);
-    drop_mutability!(rpc_clients);
-    // check if rpc_clients is empty, then for loop wasn't successful
-    if rpc_clients.is_empty() {
-        return MmError::err(ZcoinClientInitError::UrlIterFailure(errors));
-    }
-
-    let mut light_rpc_clients = LightRpcClient {
-        rpc_clients: AsyncMutex::new(rpc_clients),
-    };
+    let mut light_rpc_clients = LightRpcClient::new(lightwalletd_urls).await?;
 
     let current_block_height = light_rpc_clients
         .get_block_height()

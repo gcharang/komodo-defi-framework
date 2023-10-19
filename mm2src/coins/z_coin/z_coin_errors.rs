@@ -22,7 +22,6 @@ use zcash_primitives::transaction::builder::Error as ZTxBuilderError;
 #[derive(Debug, Display)]
 #[non_exhaustive]
 pub enum UpdateBlocksCacheErr {
-    #[cfg(not(target_arch = "wasm32"))]
     GrpcError(tonic::Status),
     UtxoRpcError(UtxoRpcError),
     InternalError(String),
@@ -32,7 +31,6 @@ pub enum UpdateBlocksCacheErr {
     DecodeError(String),
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl From<tonic::Status> for UpdateBlocksCacheErr {
     fn from(err: tonic::Status) -> Self { UpdateBlocksCacheErr::GrpcError(err) }
 }
