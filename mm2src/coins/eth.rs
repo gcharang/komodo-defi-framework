@@ -501,9 +501,57 @@ async fn make_gas_station_request(url: &str) -> GasStationResult {
     Ok(result)
 }
 
+async fn erc20_transfer_events(
+    web3: &Web3<Web3Transport>,
+    contract: Address,
+    from_addr: Option<Address>,
+    to_addr: Option<Address>,
+    from_block: BlockNumber,
+    to_block: BlockNumber,
+    limit: Option<usize>,
+) -> Web3RpcResult<Vec<Log>> {
+    let contract_event = ERC20_CONTRACT.event("Transfer")?;
+    let topic0 = Some(vec![contract_event.signature()]);
+    let topic1 = from_addr.map(|addr| vec![addr.into()]);
+    let topic2 = to_addr.map(|addr| vec![addr.into()]);
+
+    let mut filter = FilterBuilder::default()
+        .topics(topic0, topic1, topic2, None)
+        .from_block(from_block)
+        .to_block(to_block)
+        .address(vec![contract]);
+    if let Some(l) = limit {
+        filter = filter.limit(l);
+    }
+    drop_mutability!(filter);
+
+    web3.eth().logs(filter.build()).await.map_to_mm(Web3RpcError::from)
+}
+
+async fn eth_traces(
+    web3: &Web3<Web3Transport>,
+    from_addr: Vec<Address>,
+    to_addr: Vec<Address>,
+    from_block: BlockNumber,
+    to_block: BlockNumber,
+    limit: Option<usize>,
+) -> Web3RpcResult<Vec<Trace>> {
+    let mut filter = TraceFilterBuilder::default()
+        .from_address(from_addr)
+        .to_address(to_addr)
+        .from_block(from_block)
+        .to_block(to_block);
+    if let Some(l) = limit {
+        filter = filter.count(l);
+    }
+    drop_mutability!(filter);
+
+    web3.trace().filter(filter.build()).await.map_to_mm(Web3RpcError::from)
+}
+
 impl EthCoinImpl {
     /// Gets Transfer events from ERC20 smart contract `addr` between `from_block` and `to_block`
-    fn erc20_transfer_events(
+    async fn erc20_transfer_events(
         &self,
         contract: Address,
         from_addr: Option<Address>,
@@ -511,57 +559,20 @@ impl EthCoinImpl {
         from_block: BlockNumber,
         to_block: BlockNumber,
         limit: Option<usize>,
-    ) -> Box<dyn Future<Item = Vec<Log>, Error = String> + Send> {
-        let contract_event = try_fus!(ERC20_CONTRACT.event("Transfer"));
-        let topic0 = Some(vec![contract_event.signature()]);
-        let topic1 = from_addr.map(|addr| vec![addr.into()]);
-        let topic2 = to_addr.map(|addr| vec![addr.into()]);
-        let mut filter = FilterBuilder::default()
-            .topics(topic0, topic1, topic2, None)
-            .from_block(from_block)
-            .to_block(to_block)
-            .address(vec![contract]);
-
-        if let Some(l) = limit {
-            filter = filter.limit(l);
-        }
-
-        Box::new(
-            self.web3
-                .eth()
-                .logs(filter.build())
-                .compat()
-                .map_err(|e| ERRL!("{}", e)),
-        )
+    ) -> Web3RpcResult<Vec<Log>> {
+        erc20_transfer_events(&self.web3, contract, from_addr, to_addr, from_block, to_block, limit).await
     }
 
     /// Gets ETH traces from ETH node between addresses in `from_block` and `to_block`
-    fn eth_traces(
+    async fn eth_traces(
         &self,
         from_addr: Vec<Address>,
         to_addr: Vec<Address>,
         from_block: BlockNumber,
         to_block: BlockNumber,
         limit: Option<usize>,
-    ) -> Box<dyn Future<Item = Vec<Trace>, Error = String> + Send> {
-        // Todo: extract this into a separate function to be used in address scanner
-        let mut filter = TraceFilterBuilder::default()
-            .from_address(from_addr)
-            .to_address(to_addr)
-            .from_block(from_block)
-            .to_block(to_block);
-
-        if let Some(l) = limit {
-            filter = filter.count(l);
-        }
-
-        Box::new(
-            self.web3
-                .trace()
-                .filter(filter.build())
-                .compat()
-                .map_err(|e| ERRL!("{}", e)),
-        )
+    ) -> Web3RpcResult<Vec<Trace>> {
+        eth_traces(&self.web3, from_addr, to_addr, from_block, to_block, limit).await
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -2350,7 +2361,6 @@ impl EthCoin {
                 };
 
                 let from_traces_before_earliest = match self
-                    // Todo: this can be used for checking non empty addresses for ETH
                     .eth_traces(
                         vec![self.my_address],
                         vec![],
@@ -2358,7 +2368,6 @@ impl EthCoin {
                         BlockNumber::Number(saved_traces.earliest_block),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(traces) => traces,
@@ -2381,7 +2390,6 @@ impl EthCoin {
                         BlockNumber::Number(saved_traces.earliest_block),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(traces) => traces,
@@ -2420,7 +2428,6 @@ impl EthCoin {
                         BlockNumber::Number(current_block),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(traces) => traces,
@@ -2443,7 +2450,6 @@ impl EthCoin {
                         BlockNumber::Number(current_block),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(traces) => traces,
@@ -2698,7 +2704,6 @@ impl EthCoin {
                 };
 
                 let from_events_before_earliest = match self
-                    // Todo: this can be used to check non empty addresses
                     .erc20_transfer_events(
                         token_addr,
                         Some(self.my_address),
@@ -2707,7 +2712,6 @@ impl EthCoin {
                         BlockNumber::Number(saved_events.earliest_block - 1),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(events) => events,
@@ -2731,7 +2735,6 @@ impl EthCoin {
                         BlockNumber::Number(saved_events.earliest_block - 1),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(events) => events,
@@ -2770,7 +2773,6 @@ impl EthCoin {
                         BlockNumber::Number(current_block),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(events) => events,
@@ -2794,7 +2796,6 @@ impl EthCoin {
                         BlockNumber::Number(current_block),
                         None,
                     )
-                    .compat()
                     .await
                 {
                     Ok(events) => events,
@@ -5696,57 +5697,69 @@ impl HDAddressBalanceScanner for ETHAddressScanner {
     type Address = Address;
 
     async fn is_address_used(&self, address: &Self::Address) -> BalanceResult<bool> {
-        let is_used =
-            match self {
-                ETHAddressScanner::Web3 { web3, coin_type } => {
-                    let current_block = match web3.eth().block_number().await {
-                        Ok(block) => block,
-                        Err(e) => {
-                            return Err(BalanceError::Transport(format!("Error {} on eth_block_number", e)).into());
-                        },
-                    };
-                    match coin_type {
-                        EthCoinType::Eth => {
-                            // Todo: extract this into a separate function to be used in address scanner
-                            let filter = TraceFilterBuilder::default()
-                                .from_address(vec![*address])
-                                .to_address(vec![])
-                                .from_block(BlockNumber::Earliest)
-                                .to_block(BlockNumber::Number(current_block))
-                                // Todo: check if this makes the query less intensive or not
-                                .count(1);
+        match self {
+            ETHAddressScanner::Web3 { web3, coin_type } => {
+                let current_block = match web3.eth().block_number().await {
+                    Ok(block) => block,
+                    Err(e) => {
+                        return Err(BalanceError::Transport(format!("Error {} on eth_block_number", e)).into());
+                    },
+                };
 
-                            // Todo: maybe check to_traces first since it makes sense to that an address to have incoming transactions before making any outgoing ones
-                            let from_traces =
-                                web3.trace().filter(filter.build()).await.map_to_mm(|e| {
-                                    BalanceError::Transport(format!("Error {} on eth_trace_filter", e))
-                                })?;
-                            if from_traces.is_empty() {
-                                // Todo: extract this into a separate function to be used in address scanner
-                                // Todo: Also find a way to refactor nesting here
-                                let filter = TraceFilterBuilder::default()
-                                    .from_address(vec![])
-                                    .to_address(vec![*address])
-                                    .from_block(BlockNumber::Earliest)
-                                    .to_block(BlockNumber::Number(current_block))
-                                    // Todo: check if this makes the query less intensive or not
-                                    .count(1);
+                let from_block = BlockNumber::Earliest;
+                let to_block = BlockNumber::Number(current_block);
 
-                                let to_traces = web3.trace().filter(filter.build()).await.map_to_mm(|e| {
-                                    BalanceError::Transport(format!("Error {} on eth_trace_filter", e))
-                                })?;
-                                !to_traces.is_empty()
-                            } else {
-                                true
-                            }
-                        },
-                        EthCoinType::Erc20 { .. } => {
-                            todo!()
-                        },
-                    }
-                },
-            };
-        Ok(is_used)
+                match coin_type {
+                    EthCoinType::Eth => {
+                        // It makes sense to check transactions to the hd address first since an address
+                        // should have incoming transactions before making any outgoing ones, so this will
+                        // avoid an additional call in almost all cases
+                        let to_traces = eth_traces(web3, vec![], vec![*address], from_block, to_block, Some(1)).await?;
+
+                        if !to_traces.is_empty() {
+                            return Ok(true);
+                        }
+
+                        let from_traces =
+                            eth_traces(web3, vec![*address], vec![], from_block, to_block, Some(1)).await?;
+
+                        Ok(!from_traces.is_empty())
+                    },
+                    EthCoinType::Erc20 { token_addr, .. } => {
+                        // It makes sense to check transactions to the hd address first since an address
+                        // should have incoming transactions before making any outgoing ones, so this will
+                        // avoid an additional call in almost all cases
+                        let to_events = erc20_transfer_events(
+                            web3,
+                            *token_addr,
+                            None,
+                            Some(*address),
+                            from_block,
+                            to_block,
+                            Some(1),
+                        )
+                        .await?;
+
+                        if !to_events.is_empty() {
+                            return Ok(true);
+                        }
+
+                        let from_events = erc20_transfer_events(
+                            web3,
+                            *token_addr,
+                            Some(*address),
+                            None,
+                            from_block,
+                            to_block,
+                            Some(1),
+                        )
+                        .await?;
+
+                        Ok(!from_events.is_empty())
+                    },
+                }
+            },
+        }
     }
 }
 
