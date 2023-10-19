@@ -421,7 +421,7 @@ pub struct EthCoinImpl {
     swap_contract_address: Address,
     fallback_swap_contract: Option<Address>,
     contract_supports_watchers: bool,
-    web3: Web3<Web3Transport>,
+    pub(crate) web3: Web3<Web3Transport>,
     /// The separate web3 instances kept to get nonce, will replace the web3 completely soon
     web3_instances: Vec<Web3Instance>,
     decimals: u8,
@@ -4472,7 +4472,7 @@ pub struct EthTxFeeDetails {
 }
 
 impl EthTxFeeDetails {
-    fn new(gas: U256, gas_price: U256, coin: &str) -> NumConversResult<EthTxFeeDetails> {
+    pub(crate) fn new(gas: U256, gas_price: U256, coin: &str) -> NumConversResult<EthTxFeeDetails> {
         let total_fee = gas * gas_price;
         // Fees are always paid in ETH, can use 18 decimals by default
         let total_fee = u256_to_big_decimal(total_fee, ETH_DECIMALS)?;

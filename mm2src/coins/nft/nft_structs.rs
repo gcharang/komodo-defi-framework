@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 
+use crate::eth::EthTxFeeDetails;
 use crate::nft::nft_errors::{LockDBError, ParseChainTypeError};
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 
@@ -542,6 +543,7 @@ pub struct NftTransferHistory {
     pub(crate) status: TransferStatus,
     #[serde(default)]
     pub(crate) possible_phishing: bool,
+    pub(crate) fee_details: Option<EthTxFeeDetails>,
 }
 
 /// Represents an NFT transfer structure specifically for deserialization from Moralis's JSON response.

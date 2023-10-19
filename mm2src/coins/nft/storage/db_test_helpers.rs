@@ -247,6 +247,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         token_name: None,
         status: TransferStatus::Receive,
         possible_phishing: false,
+        fee_details: None,
     };
 
     let transfer1 = NftTransferHistory {
@@ -278,6 +279,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         token_name: None,
         status: TransferStatus::Receive,
         possible_phishing: false,
+        fee_details: None,
     };
 
     // Same as transfer1 but with different log_index, meaning that transfer1 and transfer2 are part of one batch/multi token transaction
@@ -310,6 +312,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         token_name: None,
         status: TransferStatus::Receive,
         possible_phishing: false,
+        fee_details: None,
     };
 
     let transfer3 = NftTransferHistory {
@@ -341,6 +344,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         token_name: Some("Nebula Nodes".to_string()),
         status: TransferStatus::Receive,
         possible_phishing: false,
+        fee_details: None,
     };
     vec![transfer, transfer1, transfer2, transfer3]
 }
