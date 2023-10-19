@@ -364,6 +364,7 @@ fn transfer_history_from_row(row: &Row<'_>) -> Result<NftTransferHistory, SqlErr
         token_name,
         status,
         possible_phishing: possible_phishing != 0,
+        fee_details: details.fee_details,
     };
 
     Ok(transfer_history)
@@ -976,6 +977,7 @@ impl NftTransferHistoryStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
                     operator: transfer.common.operator,
                     from_address: transfer.common.from_address,
                     to_address: transfer.common.from_address,
+                    fee_details: transfer.fee_details,
                 };
                 let transfer_json = json::to_string(&details_json).expect("serialization should not fail");
                 let params = [

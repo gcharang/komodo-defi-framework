@@ -1,3 +1,4 @@
+use crate::eth::EthTxFeeDetails;
 use crate::nft::nft_structs::{Chain, Nft, NftList, NftListFilters, NftTokenAddrId, NftTransferHistory,
                               NftTransferHistoryFilters, NftsTransferHistoryList, TransferMeta};
 use crate::WithdrawError;
@@ -235,4 +236,5 @@ pub(crate) struct TransferDetailsJson {
     pub(crate) operator: Option<String>,
     pub(crate) from_address: Address,
     pub(crate) to_address: Address,
+    pub(crate) fee_details: Option<EthTxFeeDetails>,
 }

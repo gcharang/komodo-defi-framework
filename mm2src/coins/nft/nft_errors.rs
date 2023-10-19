@@ -2,7 +2,7 @@ use crate::eth::GetEthAddressError;
 #[cfg(target_arch = "wasm32")]
 use crate::nft::storage::wasm::WasmNftCacheError;
 use crate::nft::storage::NftStorageError;
-use crate::{GetMyAddressError, WithdrawError};
+use crate::{CoinFindError, GetMyAddressError, WithdrawError};
 use common::{HttpStatusCode, ParseRfc3339Err};
 #[cfg(not(target_arch = "wasm32"))]
 use db_common::sqlite::rusqlite::Error as SqlError;
@@ -184,6 +184,14 @@ pub enum UpdateNftError {
     #[from_stringify("serde_json::Error")]
     SerdeError(String),
     ProtectFromSpamError(ProtectFromSpamError),
+    #[display(fmt = "No such coin {}", coin)]
+    NoSuchCoin {
+        coin: String,
+    },
+    #[display(fmt = "{} coin doesn't support NFT", coin)]
+    CoinDoesntSupportNft {
+        coin: String,
+    },
 }
 
 impl From<GetNftInfoError> for UpdateNftError {
@@ -214,6 +222,14 @@ impl From<LockDBError> for UpdateNftError {
     fn from(e: LockDBError) -> Self { UpdateNftError::DbError(format!("{:?}", e)) }
 }
 
+impl From<CoinFindError> for UpdateNftError {
+    fn from(e: CoinFindError) -> Self {
+        match e {
+            CoinFindError::NoSuchCoin { coin } => UpdateNftError::NoSuchCoin { coin },
+        }
+    }
+}
+
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -230,7 +246,9 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::UpdateSpamPhishingError(_)
             | UpdateNftError::GetInfoFromUriError(_)
             | UpdateNftError::SerdeError(_)
-            | UpdateNftError::ProtectFromSpamError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::ProtectFromSpamError(_)
+            | UpdateNftError::NoSuchCoin { .. }
+            | UpdateNftError::CoinDoesntSupportNft { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
