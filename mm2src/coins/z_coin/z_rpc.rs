@@ -497,18 +497,6 @@ pub(super) async fn init_light_client<'a>(
     ))
 }
 
-//#[cfg(target_arch = "wasm32")]
-//#[allow(unused)]
-//pub(super) async fn init_light_client<'a>(
-//    _builder: &ZCoinBuilder<'a>,
-//    _lightwalletd_urls: Vec<String>,
-//    _blocks_db: BlockDbImpl,
-//    _sync_params: &Option<SyncStartPoint>,
-//    z_spending_key: &ExtendedSpendingKey,
-//) -> Result<(AsyncMutex<SaplingSyncConnector>, WalletDbShared), MmError<ZcoinClientInitError>> {
-//    todo!()
-//}
-
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn init_native_client<'a>(
     builder: &ZCoinBuilder<'a>,

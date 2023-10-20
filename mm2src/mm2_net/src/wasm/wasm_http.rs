@@ -295,7 +295,10 @@ impl FetchRequest {
 
         let builder = Response::builder().status(status_code);
         let (builder, content_type) = set_response_headers(builder, &js_response)?;
-        let content_type = content_type.ok_or(MmError::new(SlurpError::Internal("intaernal Error".to_string())))?;
+        let content_type = content_type.ok_or(MmError::new(SlurpError::Transport {
+            uri,
+            error: "MissingContentType".to_string(),
+        }))?;
         let body =
             ResponseBody::new(resp_stream, &content_type).map_to_mm(|err| SlurpError::Internal(format!("{err:?}")))?;
         let res = builder
