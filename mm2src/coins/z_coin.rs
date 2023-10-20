@@ -103,6 +103,7 @@ use crate::z_coin::storage::{BlockDbImpl, WalletDbShared};
 pub use z_coin_errors::*;
 
 pub mod storage;
+#[cfg(target_arch = "wasm32")] pub mod wasm_transport;
 #[cfg(all(test, feature = "zhtlc-native-tests"))]
 mod z_coin_native_tests;
 
@@ -1016,9 +1017,8 @@ impl<'a> ZCoinBuilder<'a> {
         let cache_db_path = self.db_dir_path.join(format!("{}_cache.db", self.ticker));
         let ctx = self.ctx.clone();
         let ticker = self.ticker.to_string();
-        BlockDbImpl::new(ctx, ticker, Some(cache_db_path))
-            .map_err(|err| MmError::new(ZcoinClientInitError::ZcashDBError(err.to_string())))
-            .await
+
+        Ok(BlockDbImpl::new(ctx, ticker, Some(cache_db_path)).await?)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -415,7 +415,7 @@ async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
 
 #[cfg(target_arch = "wasm32")]
 async fn send_request_to_uri(uri: &str) -> MmResult<Json, GetInfoFromUriError> {
-    use mm2_net::wasm_http::FetchRequest;
+    use mm2_net::wasm::wasm_http::FetchRequest;
 
     macro_rules! try_or {
         ($exp:expr, $errtype:ident) => {

@@ -16,7 +16,7 @@ use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 fn run_optimization_pragmas_helper(w: &WalletDbAsync<ZcoinConsensusParams>) -> MmResult<(), ZcoinClientInitError> {
     let conn = w.inner();
     let conn = conn.lock().unwrap();
-    run_optimization_pragmas(conn.sql_conn()).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+    run_optimization_pragmas(conn.sql_conn()).map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
     Ok(())
 }
 
@@ -32,12 +32,12 @@ pub async fn create_wallet_db(
     continue_from_prev_sync: bool,
 ) -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
     let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
-        .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+        .map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
 
     run_optimization_pragmas_helper(&db)?;
     init_wallet_db(&db)
         .await
-        .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+        .map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
 
     let get_evk = db.get_extended_full_viewing_keys().await?;
     let extrema = db.block_height_extrema().await?;
@@ -55,7 +55,7 @@ pub async fn create_wallet_db(
         wallet_ops
             .rewind_to_height(u32::MIN.into())
             .await
-            .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+            .map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
         if let Some(block) = checkpoint_block.clone() {
             init_blocks_table(
                 &db,

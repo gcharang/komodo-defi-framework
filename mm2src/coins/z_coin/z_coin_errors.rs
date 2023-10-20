@@ -60,7 +60,7 @@ impl From<JsonRpcError> for UpdateBlocksCacheErr {
 #[derive(Debug, Display)]
 #[non_exhaustive]
 pub enum ZcoinClientInitError {
-    ZcashDBError(String),
+    ZcoinStorageError(String),
     EmptyLightwalletdUris,
     #[display(fmt = "Fail to init clients while iterating lightwalletd urls {:?}", _0)]
     UrlIterFailure(Vec<UrlIterError>),
@@ -72,9 +72,13 @@ impl From<UpdateBlocksCacheErr> for ZcoinClientInitError {
     fn from(err: UpdateBlocksCacheErr) -> Self { ZcoinClientInitError::UpdateBlocksCacheErr(err) }
 }
 
+impl From<ZcoinStorageError> for ZcoinClientInitError {
+    fn from(err: ZcoinStorageError) -> Self { ZcoinClientInitError::ZcoinStorageError(err.to_string()) }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 impl From<SqliteClientError> for ZcoinClientInitError {
-    fn from(err: SqliteClientError) -> Self { ZcoinClientInitError::ZcashDBError(err.to_string()) }
+    fn from(err: SqliteClientError) -> Self { ZcoinClientInitError::ZcoinStorageError(err.to_string()) }
 }
 
 #[derive(Debug, Display)]

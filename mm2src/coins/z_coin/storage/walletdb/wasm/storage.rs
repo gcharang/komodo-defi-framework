@@ -53,7 +53,7 @@ macro_rules! num_to_bigint {
 
 impl<'a> WalletDbShared {
     pub async fn new(
-        builder: ZCoinBuilder<'a>,
+        builder: &ZCoinBuilder<'a>,
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
         continue_from_prev_sync: bool,

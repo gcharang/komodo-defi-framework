@@ -7,6 +7,7 @@ use common::{cfg_native, cfg_wasm32};
 use http::header::{ACCEPT, CONTENT_TYPE};
 use mm2_err_handle::prelude::*;
 use prost::DecodeError;
+use std::fmt::{Display, Formatter};
 
 cfg_native! {
     use common::APPLICATION_GRPC_WEB;
@@ -15,7 +16,7 @@ cfg_native! {
 
 cfg_wasm32! {
     use common::{X_GRPC_WEB, APPLICATION_GRPC_WEB_PROTO};
-    use crate::wasm_http::FetchRequest;
+    use crate::wasm::wasm_http::FetchRequest;
 }
 
 // one byte for the compression flag plus four bytes for the length
@@ -32,7 +33,7 @@ impl From<prost::EncodeError> for EncodeBodyError {
 }
 
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-fn encode_body<T>(msg: &T) -> Result<Vec<u8>, MmError<EncodeBodyError>>
+pub fn encode_body<T>(msg: &T) -> Result<Vec<u8>, MmError<EncodeBodyError>>
 where
     T: prost::Message,
 {
@@ -72,7 +73,7 @@ impl From<prost::DecodeError> for DecodeBodyError {
 }
 
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-fn decode_body<T>(mut body: Bytes) -> Result<T, MmError<DecodeBodyError>>
+pub fn decode_body<T>(mut body: Bytes) -> Result<T, MmError<DecodeBodyError>>
 where
     T: Default + prost::Message,
 {
@@ -92,14 +93,29 @@ where
     Ok(msg)
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum PostGrpcWebErr {
     DecodeBody(String),
     EncodeBody(String),
     InvalidRequest(String),
     Internal(String),
     PayloadTooShort(String),
+    Status(String),
     Transport { uri: String, error: String },
+}
+
+impl Display for PostGrpcWebErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PostGrpcWebErr::DecodeBody(msg) => write!(f, "DecodeBody: {msg}"),
+            PostGrpcWebErr::EncodeBody(msg) => write!(f, "EncodeBody: {msg}"),
+            PostGrpcWebErr::InvalidRequest(msg) => write!(f, "InvalidRequest: {msg}"),
+            PostGrpcWebErr::Internal(msg) => write!(f, "Internal: {msg}"),
+            PostGrpcWebErr::PayloadTooShort(msg) => write!(f, "PayloadTooShort: {msg}"),
+            PostGrpcWebErr::Status(error) => write!(f, "Status: {error:?}"),
+            PostGrpcWebErr::Transport { uri, error } => write!(f, "Transport: URI: {uri}, Error: {error}"),
+        }
+    }
 }
 
 impl From<EncodeBodyError> for PostGrpcWebErr {

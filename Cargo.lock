@@ -1008,6 +1008,7 @@ dependencies = [
  "ff 0.8.0",
  "futures 0.1.29",
  "futures 0.3.15",
+ "futures-util",
  "group 0.8.0",
  "gstuff",
  "hex 0.4.3",
@@ -1077,7 +1078,7 @@ dependencies = [
  "tokio-rustls",
  "tonic",
  "tonic-build",
- "tonic-web-wasm-client",
+ "tower-service",
  "url",
  "utxo_signer",
  "uuid 1.2.2",
@@ -4376,6 +4377,8 @@ name = "mm2_net"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.21.2",
+ "byteorder 1.4.3",
  "bytes 1.1.0",
  "cfg-if 1.0.0",
  "common",
@@ -4385,21 +4388,27 @@ dependencies = [
  "futures-util",
  "gstuff",
  "http 0.2.7",
+ "http-body 0.4.5",
+ "httparse",
  "hyper",
  "js-sys",
  "lazy_static",
  "mm2_core",
  "mm2_err_handle",
+ "pin-project 1.0.10",
  "prost",
  "rand 0.7.3",
  "rustls 0.20.4",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tokio-rustls",
+ "tower-service",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
+ "wasm-streams",
  "web-sys",
 ]
 
@@ -8017,29 +8026,6 @@ dependencies = [
  "prost-build",
  "quote 1.0.27",
  "syn 1.0.95",
-]
-
-[[package]]
-name = "tonic-web-wasm-client"
-version = "0.4.0"
-source = "git+https://github.com/borngraced/tonic-web-wasm-client?rev=cd49d00#cd49d003b337e053878ab8070c63e0b77963a7c5"
-dependencies = [
- "base64 0.21.2",
- "byteorder 1.4.3",
- "bytes 1.1.0",
- "futures-util",
- "http 0.2.7",
- "http-body 0.4.5",
- "httparse",
- "js-sys",
- "pin-project 1.0.10",
- "thiserror",
- "tonic",
- "tower-service",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-streams",
- "web-sys",
 ]
 
 [[package]]

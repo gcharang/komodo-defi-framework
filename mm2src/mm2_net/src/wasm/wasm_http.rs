@@ -1,9 +1,12 @@
 use crate::transport::{SlurpError, SlurpResult};
+use crate::wasm::body_stream::ResponseBody;
 use common::executor::spawn_local;
 use common::{stringify_js_error, APPLICATION_JSON};
 use futures::channel::oneshot;
 use http::header::CONTENT_TYPE;
-use http::{HeaderMap, StatusCode};
+use http::response::Builder;
+use http::{HeaderMap, Response, StatusCode};
+use js_sys::Array;
 use js_sys::Uint8Array;
 use mm2_err_handle::prelude::*;
 use std::collections::HashMap;
@@ -44,6 +47,41 @@ pub async fn slurp_post_json(url: &str, body: String) -> SlurpResult {
         .request_str()
         .await
         .map(|(status_code, response)| (status_code, HeaderMap::new(), response.into_bytes()))
+}
+
+fn set_response_headers(
+    mut result: Builder,
+    response: &JsResponse,
+) -> Result<(Builder, Option<String>), MmError<SlurpError>> {
+    let headers = response.headers();
+
+    let header_iter =
+        js_sys::try_iter(headers.as_ref()).map_to_mm(|err| SlurpError::InvalidRequest(format!("{err:?}")))?;
+
+    let mut content_type = None;
+
+    if let Some(header_iter) = header_iter {
+        for header in header_iter {
+            let header = header.map_to_mm(|err| SlurpError::InvalidRequest(format!("{err:?}")))?;
+            let pair: Array = header.into();
+
+            let header_name = pair.get(0).as_string();
+            let header_value = pair.get(1).as_string();
+
+            match (header_name, header_value) {
+                (Some(header_name), Some(header_value)) => {
+                    if header_name == CONTENT_TYPE.as_str() {
+                        content_type = Some(header_value.clone());
+                    }
+
+                    result = result.header(header_name, header_value);
+                },
+                _ => continue,
+            }
+        }
+    }
+
+    Ok((result, content_type))
 }
 
 pub struct FetchRequest {
@@ -122,6 +160,15 @@ impl FetchRequest {
         }
     }
 
+    pub async fn request_stream(self) -> FetchResult<Response<ResponseBody>> {
+        let (tx, rx) = oneshot::channel();
+        Self::spawn_fetch_stream(self, tx);
+        match rx.await {
+            Ok(res) => res,
+            Err(_e) => MmError::err(SlurpError::Internal("Spawned future has been canceled".to_owned())),
+        }
+    }
+
     fn spawn_fetch_str(request: Self, tx: oneshot::Sender<FetchResult<String>>) {
         let fut = async move {
             let result = Self::fetch_str(request).await;
@@ -136,6 +183,17 @@ impl FetchRequest {
     fn spawn_fetch_array(request: Self, tx: oneshot::Sender<FetchResult<Vec<u8>>>) {
         let fut = async move {
             let result = Self::fetch_array(request).await;
+            tx.send(result).ok();
+        };
+
+        // The spawned future doesn't capture shared pointers,
+        // so we can use `spawn_local` here.
+        spawn_local(fut);
+    }
+
+    fn spawn_fetch_stream(request: Self, tx: oneshot::Sender<FetchResult<Response<ResponseBody>>>) {
+        let fut = async move {
+            let result = Self::fetch_stream(request).await;
             tx.send(result).ok();
         };
 
@@ -220,6 +278,31 @@ impl FetchRequest {
         };
 
         Ok((status_code, resp_str))
+    }
+
+    /// The private non-Send method that is called in a spawned future.
+    async fn fetch_stream(request: Self) -> FetchResult<Response<ResponseBody>> {
+        let uri = request.uri.clone();
+        let (status_code, js_response) = Self::fetch(request).await?;
+
+        let resp_stream = match js_response.body() {
+            Some(txt) => txt,
+            None => {
+                let error = format!("Expected readable stream, found {:?}:", js_response,);
+                return MmError::err(SlurpError::ErrorDeserializing { uri, error });
+            },
+        };
+
+        let builder = Response::builder().status(status_code);
+        let (builder, content_type) = set_response_headers(builder, &js_response)?;
+        let content_type = content_type.ok_or(MmError::new(SlurpError::Internal("intaernal Error".to_string())))?;
+        let body =
+            ResponseBody::new(resp_stream, &content_type).map_to_mm(|err| SlurpError::Internal(format!("{err:?}")))?;
+        let res = builder
+            .body(body)
+            .map_to_mm(|err| SlurpError::Internal(err.to_string()))?;
+
+        Ok((status_code, res))
     }
 
     /// The private non-Send method that is called in a spawned future.

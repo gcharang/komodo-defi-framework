@@ -102,14 +102,13 @@ mod native_tests {
 mod wasm_tests {
     use crate::z_coin::storage::blockdb::block_db_storage_tests::{test_insert_block_and_get_latest_block_impl,
                                                                   test_rewind_to_height_impl};
-    use crate::z_coin::z_rpc::{LightRpcClient, ZRpcOps};
-    use common::log::info;
-    use common::log::wasm_log::register_wasm_log;
+    //    use crate::z_coin::z_rpc::{LightRpcClient, ZRpcOps};
+    //    use common::log::info;
+    //    use common::log::wasm_log::register_wasm_log;
     use wasm_bindgen_test::*;
 
-    use crate::z_coin::z_rpc::z_coin_grpc::compact_tx_streamer_client::CompactTxStreamerClient;
-    use crate::z_coin::z_rpc::z_coin_grpc::ChainSpec;
-    use tonic_web_wasm_client::Client;
+    //    use crate::z_coin::z_rpc::z_coin_grpc::compact_tx_streamer_client::CompactTxStreamerClient;
+    //    use crate::z_coin::z_rpc::z_coin_grpc::ChainSpec;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
@@ -119,22 +118,13 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn test_rewind_to_height() { test_rewind_to_height_impl().await }
 
-    #[wasm_bindgen_test]
-    async fn test_transport() {
-        register_wasm_log();
-        let mut client = LightRpcClient::new(vec!["http://localhost:8081".to_string()])
-            .await
-            .unwrap();
-        let latest_block = client.get_block_height().await;
-        info!("LATEST BLOCK: {latest_block:?}");
-    }
-
-    #[wasm_bindgen_test]
-    async fn test_transport2() {
-        register_wasm_log();
-        let client = Client::new("http://127.0.0.1:8081".to_string());
-        let mut client = CompactTxStreamerClient::new(client);
-        let latest = client.get_latest_block(tonic::Request::new(ChainSpec {})).await;
-        info!("LATEST BLOCK2: {latest:?}");
-    }
+    //    #[wasm_bindgen_test]
+    //    async fn test_transport() {
+    //        register_wasm_log();
+    //        let mut client = LightRpcClient::new(vec!["http://localhost:8081".to_string()])
+    //            .await
+    //            .unwrap();
+    //        let latest_block = client.get_block_height().await;
+    //        info!("LATEST BLOCK: {latest_block:?}");
+    //    }
 }
