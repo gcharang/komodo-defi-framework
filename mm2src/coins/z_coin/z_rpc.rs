@@ -1,10 +1,13 @@
 use super::{z_coin_errors::*, BlockDbImpl, CheckPointBlockInfo, WalletDbShared, ZCoinBuilder, ZcoinConsensusParams};
 use crate::utxo::rpc_clients::NO_TX_ERROR_CODE;
 use crate::utxo::utxo_builder::{UtxoCoinBuilderCommonOps, DAY_IN_SECONDS};
+use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper};
 use crate::z_coin::SyncStartPoint;
+use crate::RpcCommonOps;
 use async_trait::async_trait;
 use common::executor::Timer;
 use common::executor::{spawn_abortable, AbortOnDropHandle};
+use common::log::LogOnError;
 use common::log::{debug, error, info};
 use common::now_sec;
 use futures::channel::mpsc::channel;
@@ -22,6 +25,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use z_coin_grpc::{BlockId, BlockRange, TreeState, TxFilter};
+use zcash_extras::{WalletRead, WalletWrite};
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 use zcash_primitives::zip32::ExtendedSpendingKey;
@@ -29,24 +33,20 @@ use zcash_primitives::zip32::ExtendedSpendingKey;
 pub(crate) mod z_coin_grpc {
     tonic::include_proto!("cash.z.wallet.sdk.rpc");
 }
-use crate::RpcCommonOps;
 use z_coin_grpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use z_coin_grpc::ChainSpec;
 
 cfg_native!(
     use crate::ZTransaction;
     use crate::utxo::rpc_clients::{UtxoRpcClientOps};
-    use crate::z_coin::storage::{BlockProcessingMode, DataConnStmtCacheWrapper};
     use crate::z_coin::z_coin_errors::{ZcoinStorageError, ValidateBlocksError};
     use crate::utxo::rpc_clients::NativeClient;
 
     use futures::compat::Future01CompatExt;
     use group::GroupEncoding;
     use http::Uri;
-    use common::log::LogOnError;
     use tonic::transport::{Channel, ClientTlsConfig};
     use tonic::codegen::StdError;
-    use zcash_extras::{WalletRead, WalletWrite};
 
     use z_coin_grpc::{CompactBlock as TonicCompactBlock, CompactOutput as TonicCompactOutput,
                   CompactSpend as TonicCompactSpend, CompactTx as TonicCompactTx};
@@ -632,7 +632,6 @@ pub struct SaplingSyncLoopHandle {
     first_sync_block: FirstSyncBlock,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl SaplingSyncLoopHandle {
     fn first_sync_block(&self) -> FirstSyncBlock { self.first_sync_block.clone() }
 
@@ -772,31 +771,6 @@ impl SaplingSyncLoopHandle {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-#[allow(unused)]
-impl SaplingSyncLoopHandle {
-    fn notify_blocks_cache_status(&mut self, _current_scanned_block: u64, _latest_block: u64) { todo!() }
-
-    fn notify_building_wallet_db(&mut self, _current_scanned_block: u64, _latest_block: u64) { todo!() }
-
-    fn notify_on_error(&mut self, _error: String) { todo!() }
-
-    fn notify_sync_finished(&mut self) { todo!() }
-
-    async fn update_blocks_cache(
-        &mut self,
-        _rpc: &mut (dyn ZRpcOps + Send),
-    ) -> Result<(), MmError<UpdateBlocksCacheErr>> {
-        todo!()
-    }
-
-    /// Scans cached blocks, validates the chain and updates WalletDb.
-    /// For more notes on the process, check https://github.com/zcash/librustzcash/blob/master/zcash_client_backend/src/data_api/chain.rs#L2
-    fn scan_blocks(&mut self) -> Result<(), MmError<String>> { todo!() }
-
-    async fn check_watch_for_tx_existence(&mut self, _rpc: &mut (dyn ZRpcOps + Send)) { todo!() }
-}
-
 /// For more info on shielded light client protocol, please check the https://zips.z.cash/zip-0307
 ///
 /// It's important to note that unlike standard UTXOs, shielded outputs are not spendable until the transaction is confirmed.
@@ -818,7 +792,6 @@ impl SaplingSyncLoopHandle {
 /// 6. Once the transaction is generated and sent, `SaplingSyncRespawnGuard::watch_for_tx` is called to update `SaplingSyncLoopHandle` state.
 /// 7. Once the loop is respawned, it will check that broadcast tx is imported (or not available anymore) before stopping in favor of
 ///     next wait_for_gen_tx_blockchain_sync call.
-#[cfg(not(target_arch = "wasm32"))]
 async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut client: Box<dyn ZRpcOps + Send>) {
     info!(
         "(Re)starting light_wallet_db_sync_loop for {}, blocks per iteration {}, interval in ms {}",
@@ -866,11 +839,6 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
 
         Timer::sleep(10.).await;
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn light_wallet_db_sync_loop(mut _sync_handle: SaplingSyncLoopHandle, mut _client: Box<dyn ZRpcOps + Send>) {
-    todo!()
 }
 
 type SyncWatcher = AsyncReceiver<SyncStatus>;

@@ -145,12 +145,15 @@ impl<'a> WalletIndexedDb {
         Ok(db)
     }
 
-    #[allow(unused)]
     async fn lock_db(&self) -> WalletDbRes<WalletDbInnerLocked<'_>> {
         self.db
             .get_or_initialize()
             .await
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
+    }
+
+    pub fn get_update_ops(&self) -> MmResult<DataConnStmtCacheWasm, ZcoinStorageError> {
+        Ok(DataConnStmtCacheWasm(self.clone()))
     }
 
     pub(crate) async fn init_accounts_table(

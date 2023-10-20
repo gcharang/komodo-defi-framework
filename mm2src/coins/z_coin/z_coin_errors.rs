@@ -31,6 +31,10 @@ pub enum UpdateBlocksCacheErr {
     DecodeError(String),
 }
 
+impl From<ZcoinStorageError> for UpdateBlocksCacheErr {
+    fn from(err: ZcoinStorageError) -> Self { UpdateBlocksCacheErr::ZcashDBError(err.to_string()) }
+}
+
 impl From<tonic::Status> for UpdateBlocksCacheErr {
     fn from(err: tonic::Status) -> Self { UpdateBlocksCacheErr::GrpcError(err) }
 }
@@ -401,6 +405,10 @@ pub enum ZcoinStorageError {
     ChainError(String),
     InternalError(String),
     NotSupported(String),
+}
+
+impl From<UpdateBlocksCacheErr> for ZcoinStorageError {
+    fn from(err: UpdateBlocksCacheErr) -> Self { ZcoinStorageError::DbError(err.to_string()) }
 }
 
 #[cfg(target_arch = "wasm32")]
