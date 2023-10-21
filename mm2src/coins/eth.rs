@@ -117,11 +117,19 @@ mod web3_transport;
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
 
 mod nonce;
-use crate::coin_balance::{EnableCoinBalanceError, EnabledCoinBalanceParams, HDAddressBalance, HDAddressBalanceScanner,
-                          HDBalanceAddress, HDWalletBalance, HDWalletBalanceOps};
-use crate::rpc_command::get_new_address;
+use crate::coin_balance::{EnableCoinBalanceError, EnabledCoinBalanceParams, HDAccountBalance, HDAddressBalance,
+                          HDAddressBalanceScanner, HDBalanceAddress, HDWalletBalance, HDWalletBalanceOps};
+use crate::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps, HDAccountBalanceResponse};
 use crate::rpc_command::get_new_address::{GetNewAddressParams, GetNewAddressResponse, GetNewAddressRpcError,
                                           GetNewAddressRpcOps};
+use crate::rpc_command::hd_account_balance_rpc_error::HDAccountBalanceRpcError;
+use crate::rpc_command::init_account_balance::{InitAccountBalanceParams, InitAccountBalanceRpcOps};
+use crate::rpc_command::init_create_account::{CreateAccountRpcError, CreateAccountState, CreateNewAccountParams,
+                                              InitCreateAccountRpcOps};
+use crate::rpc_command::init_scan_for_new_addresses::{InitScanAddressesRpcOps, ScanAddressesParams,
+                                                      ScanAddressesResponse};
+use crate::rpc_command::{account_balance, get_new_address, init_account_balance, init_create_account,
+                         init_scan_for_new_addresses};
 use nonce::ParityNonce;
 
 /// https://github.com/artemii235/etomic-swap/blob/master/contracts/EtomicSwap.sol
@@ -5842,5 +5850,56 @@ impl HDWalletBalanceOps for EthCoin {
             balances.push((address, balance));
         }
         Ok(balances)
+    }
+}
+
+// Todo: for the below implementations (AccountBalanceRpcOps, InitAccountBalanceRpcOps, InitScanAddressesRpcOps, InitCreateAccountRpcOps),
+// Todo: the traits and common functions should be moved to hd_wallet mod/crate alongside coin_balance file
+#[async_trait]
+impl AccountBalanceRpcOps for EthCoin {
+    async fn account_balance_rpc(
+        &self,
+        params: AccountBalanceParams,
+    ) -> MmResult<HDAccountBalanceResponse, HDAccountBalanceRpcError> {
+        account_balance::common_impl::account_balance_rpc(self, params).await
+    }
+}
+
+#[async_trait]
+impl InitAccountBalanceRpcOps for EthCoin {
+    async fn init_account_balance_rpc(
+        &self,
+        params: InitAccountBalanceParams,
+    ) -> MmResult<HDAccountBalance, HDAccountBalanceRpcError> {
+        init_account_balance::common_impl::init_account_balance_rpc(self, params).await
+    }
+}
+
+#[async_trait]
+impl InitScanAddressesRpcOps for EthCoin {
+    async fn init_scan_for_new_addresses_rpc(
+        &self,
+        params: ScanAddressesParams,
+    ) -> MmResult<ScanAddressesResponse, HDAccountBalanceRpcError> {
+        init_scan_for_new_addresses::common_impl::scan_for_new_addresses_rpc(self, params).await
+    }
+}
+
+#[async_trait]
+impl InitCreateAccountRpcOps for EthCoin {
+    async fn init_create_account_rpc<XPubExtractor>(
+        &self,
+        params: CreateNewAccountParams,
+        state: CreateAccountState,
+        xpub_extractor: Option<XPubExtractor>,
+    ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
+    where
+        XPubExtractor: HDXPubExtractor + Send,
+    {
+        init_create_account::common_impl::init_create_new_account_rpc(self, params, state, xpub_extractor).await
+    }
+
+    async fn revert_creating_account(&self, account_id: u32) {
+        init_create_account::common_impl::revert_creating_account(self, account_id).await
     }
 }

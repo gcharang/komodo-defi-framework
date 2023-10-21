@@ -293,6 +293,17 @@ impl RpcTask for InitCreateAccountTask {
                 )
                 .await
             },
+            MmCoinEnum::EthCoin(ref eth) => {
+                create_new_account_helper(
+                    &self.ctx,
+                    eth,
+                    self.req.params.clone(),
+                    self.task_state.clone(),
+                    task_handle,
+                    false,
+                )
+                .await
+            },
             _ => MmError::err(CreateAccountRpcError::CoinIsActivatedNotWithHDWallet),
         }
     }

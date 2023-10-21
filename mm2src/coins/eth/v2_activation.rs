@@ -422,7 +422,6 @@ pub(crate) async fn build_address_and_priv_key_policy(
                     public_key,
                     public_key_uncompressed,
                 }),
-                // Todo: Metamask supports multiple accounts, so we should use a different derivation method in the future
                 DerivationMethod::SingleAddress(address),
             ))
         },

@@ -70,6 +70,7 @@ impl RpcTask for InitAccountBalanceTask {
         match self.coin {
             MmCoinEnum::UtxoCoin(ref utxo) => utxo.init_account_balance_rpc(self.req.params.clone()).await,
             MmCoinEnum::QtumCoin(ref qtum) => qtum.init_account_balance_rpc(self.req.params.clone()).await,
+            MmCoinEnum::EthCoin(ref eth) => eth.init_account_balance_rpc(self.req.params.clone()).await,
             _ => MmError::err(HDAccountBalanceRpcError::CoinIsActivatedNotWithHDWallet),
         }
     }

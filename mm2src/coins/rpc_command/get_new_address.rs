@@ -303,6 +303,9 @@ impl RpcTask for InitGetNewAddressTask {
             MmCoinEnum::QtumCoin(ref qtum) => {
                 get_new_address_helper(&self.ctx, qtum, self.req.params.clone(), task_handle).await
             },
+            MmCoinEnum::EthCoin(ref eth) => {
+                get_new_address_helper(&self.ctx, eth, self.req.params.clone(), task_handle).await
+            },
             _ => MmError::err(GetNewAddressRpcError::CoinIsActivatedNotWithHDWallet),
         }
     }
@@ -317,6 +320,7 @@ pub async fn get_new_address(
     match coin {
         MmCoinEnum::UtxoCoin(utxo) => utxo.get_new_address_rpc_without_conf(req.params).await,
         MmCoinEnum::QtumCoin(qtum) => qtum.get_new_address_rpc_without_conf(req.params).await,
+        MmCoinEnum::EthCoin(eth) => eth.get_new_address_rpc_without_conf(req.params).await,
         _ => MmError::err(GetNewAddressRpcError::CoinIsActivatedNotWithHDWallet),
     }
 }

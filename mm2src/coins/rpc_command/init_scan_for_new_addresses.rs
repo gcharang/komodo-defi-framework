@@ -82,6 +82,7 @@ impl RpcTask for InitScanAddressesTask {
         match self.coin {
             MmCoinEnum::UtxoCoin(ref utxo) => utxo.init_scan_for_new_addresses_rpc(self.req.params.clone()).await,
             MmCoinEnum::QtumCoin(ref qtum) => qtum.init_scan_for_new_addresses_rpc(self.req.params.clone()).await,
+            MmCoinEnum::EthCoin(ref eth) => eth.init_scan_for_new_addresses_rpc(self.req.params.clone()).await,
             _ => MmError::err(HDAccountBalanceRpcError::CoinIsActivatedNotWithHDWallet),
         }
     }
