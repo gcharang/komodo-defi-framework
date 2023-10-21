@@ -5,7 +5,7 @@ use http::{Request, Response};
 use mm2_err_handle::prelude::*;
 use mm2_net::grpc_web::PostGrpcWebErr;
 use mm2_net::wasm::body_stream::ResponseBody;
-use mm2_net::wasm::wasm_http::FetchRequest;
+use mm2_net::wasm::http::FetchRequest;
 use std::{pin::Pin,
           task::{Context, Poll}};
 use tonic::body::BoxBody;

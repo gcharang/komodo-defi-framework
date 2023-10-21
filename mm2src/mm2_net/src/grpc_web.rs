@@ -16,7 +16,7 @@ cfg_native! {
 
 cfg_wasm32! {
     use common::{X_GRPC_WEB, APPLICATION_GRPC_WEB_PROTO};
-    use crate::wasm::wasm_http::FetchRequest;
+    use crate::wasm::http::FetchRequest;
 }
 
 // one byte for the compression flag plus four bytes for the length

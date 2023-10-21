@@ -20,27 +20,11 @@ use wasm_bindgen::JsCast;
 use wasm_streams::readable::IntoStream;
 use web_sys::ReadableStream;
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Encoding {
-    Base64,
-    None,
-}
-
-impl Encoding {
-    pub fn from_content_type(content_type: &str) -> Result<Self, PostGrpcWebErr> {
-        match content_type {
-            APPLICATION_GRPC_WEB_TEXT | APPLICATION_GRPC_WEB_TEXT_PROTO => Ok(Encoding::Base64),
-            APPLICATION_GRPC_WEB | APPLICATION_GRPC_WEB_PROTO => Ok(Encoding::None),
-            _ => Err(PostGrpcWebErr::InvalidRequest(content_type.to_owned())),
-        }
-    }
-}
-
 /// If 8th MSB of a frame is `0` for data and `1` for trailer
 const TRAILER_BIT: u8 = 0b10000000;
 
 pub struct EncodedBytes {
-    encoding: Encoding,
+    content_type: String,
     raw_buf: BytesMut,
     buf: BytesMut,
 }
@@ -48,10 +32,18 @@ pub struct EncodedBytes {
 impl EncodedBytes {
     pub fn new(content_type: &str) -> Result<Self, PostGrpcWebErr> {
         Ok(Self {
-            encoding: Encoding::from_content_type(content_type)?,
+            content_type: content_type.to_string(),
             raw_buf: BytesMut::new(),
             buf: BytesMut::new(),
         })
+    }
+
+    fn is_base64_encoding(&self) -> Result<bool, PostGrpcWebErr> {
+        match self.content_type.as_str() {
+            APPLICATION_GRPC_WEB_TEXT | APPLICATION_GRPC_WEB_TEXT_PROTO => Ok(true),
+            APPLICATION_GRPC_WEB | APPLICATION_GRPC_WEB_PROTO => Ok(false),
+            _ => Err(PostGrpcWebErr::InvalidRequest(self.content_type.to_owned())),
+        }
     }
 
     // This is to avoid passing a slice of bytes with a length that the base64
@@ -74,12 +66,11 @@ impl EncodedBytes {
     }
 
     fn append(&mut self, bytes: Bytes) -> Result<(), PostGrpcWebErr> {
-        match self.encoding {
-            Encoding::None => self.buf.put(bytes),
-            Encoding::Base64 => {
-                self.raw_buf.put(bytes);
-                self.decode_base64_chunk()?;
-            },
+        if self.is_base64_encoding()? == true {
+            self.raw_buf.put(bytes);
+            self.decode_base64_chunk()?;
+        } else {
+            self.buf.put(bytes)
         }
 
         Ok(())
@@ -348,7 +339,7 @@ impl Default for ResponseBody {
         Self {
             body_stream: BodyStream::empty(),
             buf: EncodedBytes {
-                encoding: Encoding::None,
+                content_type: Default::default(),
                 raw_buf: BytesMut::new(),
                 buf: BytesMut::new(),
             },
