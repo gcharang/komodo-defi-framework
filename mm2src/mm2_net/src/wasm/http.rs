@@ -408,15 +408,12 @@ async fn call(mut base_url: String, request: Request<BoxBody>) -> MmResult<Respo
         .await
         .transpose()
         .map_err(|err| PostGrpcWebErr::Status(err.to_string()))?;
-    let body = body.ok_or(MmError::new(PostGrpcWebErr::InvalidRequest(
-        "Invalid request body".to_string(),
-    )))?;
+    let body = body.ok_or_else(|| MmError::new(PostGrpcWebErr::InvalidRequest("Invalid request body".to_string())))?;
 
     Ok(FetchRequest::post(&base_url)
         .body_bytes(body.to_vec())
         .header(CONTENT_TYPE.as_str(), APPLICATION_GRPC_WEB_PROTO)
         .header(ACCEPT.as_str(), APPLICATION_GRPC_WEB_PROTO)
-        // https://github.com/grpc/grpc-web/issues/85#issue-217223001
         .header(X_GRPC_WEB, "1")
         .request_stream_response()
         .await?

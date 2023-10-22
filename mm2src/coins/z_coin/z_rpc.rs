@@ -137,8 +137,7 @@ impl LightRpcClient {
             );
 
             cfg_wasm32!(
-                let client = TonicClient::new(url.to_string());
-                let client = CompactTxStreamerClient::new(client.into());
+                let client = CompactTxStreamerClient::new(TonicClient::new(url.to_string()));
             );
 
             rpc_clients.push(client);

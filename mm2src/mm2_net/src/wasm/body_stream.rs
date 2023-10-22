@@ -66,7 +66,7 @@ impl EncodedBytes {
     }
 
     fn append(&mut self, bytes: Bytes) -> Result<(), PostGrpcWebErr> {
-        if self.is_base64_encoding()? == true {
+        if self.is_base64_encoding()? {
             self.raw_buf.put(bytes);
             self.decode_base64_chunk()?;
         } else {

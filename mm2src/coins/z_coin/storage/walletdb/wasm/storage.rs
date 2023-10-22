@@ -1225,12 +1225,12 @@ impl WalletRead for WalletIndexedDb {
         let mut unspent_notes = vec![];
         for (id, value, note, sum) in &final_note {
             if **sum < i64::from(target_value) {
-                unspent_notes.push((*id, *value, note.clone(), *sum))
+                unspent_notes.push((*id, *value, *note, *sum))
             }
         }
 
         if let Some(note) = final_note.iter().find(|(_, _, _, sum)| **sum >= target_value.into()) {
-            unspent_notes.push(note.clone());
+            unspent_notes.push(*note);
         };
 
         // Step 4: Get witnesses for selected notes
