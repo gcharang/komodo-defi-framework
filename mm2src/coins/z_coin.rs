@@ -103,7 +103,6 @@ use crate::z_coin::storage::{BlockDbImpl, WalletDbShared};
 pub use z_coin_errors::*;
 
 pub mod storage;
-#[cfg(target_arch = "wasm32")] pub mod wasm_transport;
 #[cfg(all(test, feature = "zhtlc-native-tests"))]
 mod z_coin_native_tests;
 

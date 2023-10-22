@@ -53,7 +53,7 @@ cfg_native!(
 );
 
 cfg_wasm32!(
-    use crate::z_coin::wasm_transport::Client as WasmClient;
+    use mm2_net::wasm::http::TonicClient;
 );
 
 /// ZRpcOps trait provides asynchronous methods for performing various operations related to
@@ -95,7 +95,7 @@ pub trait ZRpcOps {
 #[cfg(not(target_arch = "wasm32"))]
 type RpcClientType = Channel;
 #[cfg(target_arch = "wasm32")]
-type RpcClientType = WasmClient;
+type RpcClientType = TonicClient;
 
 pub struct LightRpcClient {
     rpc_clients: AsyncMutex<Vec<CompactTxStreamerClient<RpcClientType>>>,
@@ -137,7 +137,7 @@ impl LightRpcClient {
             );
 
             cfg_wasm32!(
-                let client = WasmClient::new(url.to_string());
+                let client = TonicClient::new(url.to_string());
                 let client = CompactTxStreamerClient::new(client.into());
             );
 
@@ -168,7 +168,9 @@ impl RpcCommonOps for LightRpcClient {
         for (i, mut client) in clients.clone().into_iter().enumerate() {
             let request = tonic::Request::new(ChainSpec {});
             // use get_latest_block method as a health check
-            if client.get_latest_block(request).await.is_ok() {
+            let latest = client.get_latest_block(request).await;
+            info!("{latest:?}");
+            if latest.is_ok() {
                 clients.rotate_left(i);
                 return Ok(client);
             }
