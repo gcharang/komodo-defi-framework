@@ -248,6 +248,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         status: TransferStatus::Receive,
         possible_phishing: false,
         fee_details: None,
+        confirmations: 0,
     };
 
     let transfer1 = NftTransferHistory {
@@ -280,6 +281,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         status: TransferStatus::Receive,
         possible_phishing: false,
         fee_details: None,
+        confirmations: 0,
     };
 
     // Same as transfer1 but with different log_index, meaning that transfer1 and transfer2 are part of one batch/multi token transaction
@@ -313,6 +315,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         status: TransferStatus::Receive,
         possible_phishing: false,
         fee_details: None,
+        confirmations: 0,
     };
 
     let transfer3 = NftTransferHistory {
@@ -345,6 +348,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
         status: TransferStatus::Receive,
         possible_phishing: false,
         fee_details: None,
+        confirmations: 0,
     };
     vec![transfer, transfer1, transfer2, transfer3]
 }

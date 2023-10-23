@@ -16,7 +16,8 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
 
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721, EthCoin, EthCoinType,
                  EthTxFeeDetails};
-use crate::nft::nft_errors::{MetaFromUrlError, ProtectFromSpamError, UpdateSpamPhishingError};
+use crate::nft::nft_errors::{MetaFromUrlError, ProtectFromSpamError, TransferConfirmationsError,
+                             UpdateSpamPhishingError};
 use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, NftCommon, NftCtx, NftTransferCommon,
                               PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq, SpamContractReq,
                               SpamContractRes, TransferMeta, TransferStatus, UriMeta};
@@ -24,13 +25,14 @@ use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
 use ethereum_types::{Address, H256};
+use futures::compat::Future01CompatExt;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::send_post_request_to_uri;
 use mm2_number::BigDecimal;
 use regex::Regex;
 use serde_json::Value as Json;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use web3::types::TransactionId;
 
@@ -167,15 +169,60 @@ pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<Nft
         }
     }
     let mut transfer_history_list = storage
-        .get_transfer_history(req.chains, req.max, req.limit, req.page_number, req.filters)
+        .get_transfer_history(req.chains.clone(), req.max, req.limit, req.page_number, req.filters)
         .await?;
     if req.protect_from_spam {
         for transfer in &mut transfer_history_list.transfer_history {
             protect_from_history_spam_links(transfer, true)?;
         }
     }
+    process_transfers_confirmations(&ctx, req.chains, &mut transfer_history_list).await?;
     drop_mutability!(transfer_history_list);
     Ok(transfer_history_list)
+}
+
+async fn process_transfers_confirmations(
+    ctx: &MmArc,
+    chains: Vec<Chain>,
+    history_list: &mut NftsTransferHistoryList,
+) -> MmResult<(), TransferConfirmationsError> {
+    let mut blocks_map = HashMap::new();
+    for chain in chains.into_iter() {
+        let coin_enum = lp_coinfind_or_err(ctx, &chain.to_ticker()).await?;
+        let current_block = match coin_enum {
+            MmCoinEnum::EthCoin(eth_coin) => current_block_impl(eth_coin).await?,
+            _ => {
+                return MmError::err(TransferConfirmationsError::CoinDoesntSupportNft {
+                    coin: coin_enum.ticker().to_owned(),
+                })
+            },
+        };
+        blocks_map.insert(chain.to_ticker(), current_block);
+    }
+    for transfer in history_list.transfer_history.iter_mut() {
+        let current_block = match blocks_map.get(&transfer.chain.to_ticker()) {
+            Some(block) => *block,
+            None => 0,
+        };
+        let confirmations = if transfer.block_number == 0 || transfer.block_number > current_block {
+            0
+        } else {
+            current_block + 1 - transfer.block_number
+        };
+        transfer.confirmations = confirmations;
+    }
+    Ok(())
+}
+
+#[inline(always)]
+async fn current_block_impl<Coin>(coin: Coin) -> MmResult<u64, TransferConfirmationsError>
+where
+    Coin: MarketCoinOps,
+{
+    coin.current_block()
+        .compat()
+        .await
+        .map_to_mm(TransferConfirmationsError::GetCurrentBlockErr)
 }
 
 /// Updates NFT transfer history and NFT list in the DB.
@@ -668,6 +715,7 @@ async fn get_moralis_nft_transfers(
                     status,
                     possible_phishing: false,
                     fee_details,
+                    confirmations: 0,
                 };
                 // collect NFTs transfers from the page
                 res_list.push(transfer_history);
