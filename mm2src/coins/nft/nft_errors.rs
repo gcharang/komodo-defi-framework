@@ -42,6 +42,7 @@ pub enum GetNftInfoError {
     #[display(fmt = "The contract type is required and should not be null.")]
     ContractTypeIsNull,
     ProtectFromSpamError(ProtectFromSpamError),
+    TransferConfirmationsError(TransferConfirmationsError),
 }
 
 impl From<GetNftInfoError> for WithdrawError {
@@ -104,6 +105,10 @@ impl From<LockDBError> for GetNftInfoError {
     fn from(e: LockDBError) -> Self { GetNftInfoError::DbError(format!("{:?}", e)) }
 }
 
+impl From<TransferConfirmationsError> for GetNftInfoError {
+    fn from(e: TransferConfirmationsError) -> Self { GetNftInfoError::TransferConfirmationsError(e) }
+}
+
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -115,7 +120,8 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::GetEthAddressError(_)
             | GetNftInfoError::TokenNotFoundInWallet { .. }
             | GetNftInfoError::DbError(_)
-            | GetNftInfoError::ProtectFromSpamError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::ProtectFromSpamError(_)
+            | GetNftInfoError::TransferConfirmationsError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -341,4 +347,22 @@ impl From<SqlError> for LockDBError {
 #[cfg(target_arch = "wasm32")]
 impl From<WasmNftCacheError> for LockDBError {
     fn from(e: WasmNftCacheError) -> Self { LockDBError::WasmNftCacheError(e) }
+}
+
+#[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize)]
+pub enum TransferConfirmationsError {
+    #[display(fmt = "No such coin {}", coin)]
+    NoSuchCoin { coin: String },
+    #[display(fmt = "{} coin doesn't support NFT", coin)]
+    CoinDoesntSupportNft { coin: String },
+    #[display(fmt = "Get current block error: {}", _0)]
+    GetCurrentBlockErr(String),
+}
+
+impl From<CoinFindError> for TransferConfirmationsError {
+    fn from(e: CoinFindError) -> Self {
+        match e {
+            CoinFindError::NoSuchCoin { coin } => TransferConfirmationsError::NoSuchCoin { coin },
+        }
+    }
 }

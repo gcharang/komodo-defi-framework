@@ -365,6 +365,7 @@ fn transfer_history_from_row(row: &Row<'_>) -> Result<NftTransferHistory, SqlErr
         status,
         possible_phishing: possible_phishing != 0,
         fee_details: details.fee_details,
+        confirmations: 0,
     };
 
     Ok(transfer_history)

@@ -544,6 +544,7 @@ pub struct NftTransferHistory {
     #[serde(default)]
     pub(crate) possible_phishing: bool,
     pub(crate) fee_details: Option<EthTxFeeDetails>,
+    pub(crate) confirmations: u64,
 }
 
 /// Represents an NFT transfer structure specifically for deserialization from Moralis's JSON response.
