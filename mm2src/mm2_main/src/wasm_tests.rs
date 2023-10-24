@@ -1,5 +1,6 @@
 use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
+use common::log::info;
 use common::log::wasm_log::register_wasm_log;
 use common::wait_until_ms;
 use crypto::StandardHDCoinAddress;
@@ -21,7 +22,6 @@ use serde_json::{self as json};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const ZOMBIE_TEST_BALANCE_SEED: &str = "zombie test seed";
-const ARRR_TEST_ACTIVATION_SEED: &str = "arrr test activation seed";
 
 /// Starts the WASM version of MM.
 fn wasm_start(ctx: MmArc) {
@@ -204,13 +204,13 @@ pub async fn enable_z_coin_light(
 ) -> ZCoinActivationResult {
     let init = init_z_coin_light(mm, coin, electrums, lightwalletd_urls, starting_date, account).await;
     let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
+    info!("INIT RESULT: {init:?}");
     let timeout = wait_until_ms(60000);
 
     loop {
         if now_ms() > timeout {
             panic!("{} initialization timed out", coin);
         }
-
         let status = init_z_coin_status(mm, init.result.task_id).await;
         println!("Status {}", json::to_string(&status).unwrap());
         let status: RpcV2Response<InitZcoinStatus> = json::from_value(status).unwrap();

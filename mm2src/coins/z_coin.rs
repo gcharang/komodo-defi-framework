@@ -810,7 +810,6 @@ pub struct ZcoinActivationParams {
     pub account: u32,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn z_coin_from_conf_and_params(
     ctx: &MmArc,
     ticker: &str,
@@ -819,7 +818,11 @@ pub async fn z_coin_from_conf_and_params(
     protocol_info: ZcoinProtocolInfo,
     priv_key_policy: PrivKeyBuildPolicy,
 ) -> Result<ZCoin, MmError<ZCoinBuildError>> {
+    #[cfg(target_arch = "wasm32")]
+    let db_dir_path = PathBuf::new();
+    #[cfg(not(target_arch = "wasm32"))]
     let db_dir_path = ctx.dbdir();
+
     let z_spending_key = None;
     let builder = ZCoinBuilder::new(
         ctx,
