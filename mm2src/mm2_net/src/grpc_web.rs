@@ -33,7 +33,7 @@ impl From<prost::EncodeError> for EncodeBodyError {
 }
 
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-pub fn encode_body<T>(msg: &T) -> Result<Vec<u8>, MmError<EncodeBodyError>>
+fn encode_body<T>(msg: &T) -> Result<Vec<u8>, MmError<EncodeBodyError>>
 where
     T: prost::Message,
 {
@@ -73,7 +73,7 @@ impl From<prost::DecodeError> for DecodeBodyError {
 }
 
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-pub fn decode_body<T>(mut body: Bytes) -> Result<T, MmError<DecodeBodyError>>
+fn decode_body<T>(mut body: Bytes) -> Result<T, MmError<DecodeBodyError>>
 where
     T: Default + prost::Message,
 {

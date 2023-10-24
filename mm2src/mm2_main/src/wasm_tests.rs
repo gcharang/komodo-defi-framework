@@ -2,9 +2,8 @@ use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
 use common::log::info;
 use common::log::wasm_log::register_wasm_log;
-use common::wait_until_ms;
+use common::{now_sec, wait_until_ms, wait_until_sec};
 use crypto::StandardHDCoinAddress;
-use gstuff::now_ms;
 use mm2_core::mm_ctx::MmArc;
 use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::OrderbookResponse;
@@ -205,10 +204,10 @@ pub async fn enable_z_coin_light(
     let init = init_z_coin_light(mm, coin, electrums, lightwalletd_urls, starting_date, account).await;
     let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
     info!("INIT RESULT: {init:?}");
-    let timeout = wait_until_ms(60000);
+    let timeout = wait_until_sec(120);
 
     loop {
-        if now_ms() > timeout {
+        if now_sec() > timeout {
             panic!("{} initialization timed out", coin);
         }
         let status = init_z_coin_status(mm, init.result.task_id).await;

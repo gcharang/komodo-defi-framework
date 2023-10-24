@@ -17,4 +17,4 @@
 
 pub mod mm2;
 
-#[cfg(all(target_arch = "wasm32", test))] mod wasm_tests;
+#[cfg(all(target_arch = "wasm32", test))] pub mod wasm_tests;
