@@ -1,16 +1,27 @@
 use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
 use common::log::wasm_log::register_wasm_log;
+use common::wait_until_ms;
 use crypto::StandardHDCoinAddress;
+use gstuff::now_ms;
 use mm2_core::mm_ctx::MmArc;
+use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
-use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, morty_conf, rick_conf, start_swaps,
-                                  test_qrc20_history_impl, wait_for_swaps_finish_and_check_status, MarketMakerIt,
-                                  Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK};
+use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init_z_coin_light, init_z_coin_status,
+                                  morty_conf, rick_conf, start_swaps, test_qrc20_history_impl,
+                                  wait_for_swaps_finish_and_check_status, zombie_conf, MarketMakerIt,
+                                  Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK,
+                                  ZOMBIE_ELECTRUMS, ZOMBIE_LIGHTWALLETD_URLS, ZOMBIE_TICKER};
 use mm2_test_helpers::get_passphrase;
+use mm2_test_helpers::structs::{EnableCoinBalance, InitTaskResult, InitZcoinStatus, RpcV2Response,
+                                ZCoinActivationResult};
 use serde_json::json;
+use serde_json::{self as json};
 use wasm_bindgen_test::wasm_bindgen_test;
+
+const ZOMBIE_TEST_BALANCE_SEED: &str = "zombie test seed";
+const ARRR_TEST_ACTIVATION_SEED: &str = "arrr test activation seed";
 
 /// Starts the WASM version of MM.
 fn wasm_start(ctx: MmArc) {
@@ -181,4 +192,59 @@ async fn trade_test_rick_and_morty() {
         0.0001,
     )
     .await;
+}
+
+pub async fn enable_z_coin_light(
+    mm: &MarketMakerIt,
+    coin: &str,
+    electrums: &[&str],
+    lightwalletd_urls: &[&str],
+    starting_date: Option<u64>,
+    account: Option<u32>,
+) -> ZCoinActivationResult {
+    let init = init_z_coin_light(mm, coin, electrums, lightwalletd_urls, starting_date, account).await;
+    let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
+    let timeout = wait_until_ms(60000);
+
+    loop {
+        if now_ms() > timeout {
+            panic!("{} initialization timed out", coin);
+        }
+
+        let status = init_z_coin_status(mm, init.result.task_id).await;
+        println!("Status {}", json::to_string(&status).unwrap());
+        let status: RpcV2Response<InitZcoinStatus> = json::from_value(status).unwrap();
+        match status.result {
+            InitZcoinStatus::Ok(result) => break result,
+            InitZcoinStatus::Error(e) => panic!("{} initialization error {:?}", coin, e),
+            _ => Timer::sleep(1.).await,
+        }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn activate_z_coin_light() {
+    register_wasm_log();
+    let coins = json!([zombie_conf()]);
+
+    let conf = Mm2TestConf::seednode(ZOMBIE_TEST_BALANCE_SEED, &coins);
+    let mm = MarketMakerIt::start_async(conf.conf, conf.rpc_password, Some(wasm_start))
+        .await
+        .unwrap();
+
+    let activation_result = enable_z_coin_light(
+        &mm,
+        ZOMBIE_TICKER,
+        ZOMBIE_ELECTRUMS,
+        ZOMBIE_LIGHTWALLETD_URLS,
+        None,
+        None,
+    )
+    .await;
+
+    let balance = match activation_result.wallet_balance {
+        EnableCoinBalance::Iguana(iguana) => iguana,
+        _ => panic!("Expected EnableCoinBalance::Iguana"),
+    };
+    assert_eq!(balance.balance.spendable, BigDecimal::default());
 }

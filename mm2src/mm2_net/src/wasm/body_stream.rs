@@ -24,26 +24,24 @@ use web_sys::ReadableStream;
 const TRAILER_BIT: u8 = 0b10000000;
 
 pub struct EncodedBytes {
-    content_type: String,
+    is_base64: bool,
     raw_buf: BytesMut,
     buf: BytesMut,
 }
 
 impl EncodedBytes {
     pub fn new(content_type: &str) -> Result<Self, PostGrpcWebErr> {
+        let is_base64 = match content_type {
+            APPLICATION_GRPC_WEB_TEXT | APPLICATION_GRPC_WEB_TEXT_PROTO => true,
+            APPLICATION_GRPC_WEB | APPLICATION_GRPC_WEB_PROTO => false,
+            _ => return Err(PostGrpcWebErr::InvalidRequest(content_type.to_owned())),
+        };
+
         Ok(Self {
-            content_type: content_type.to_string(),
+            is_base64,
             raw_buf: BytesMut::new(),
             buf: BytesMut::new(),
         })
-    }
-
-    fn is_base64_encoding(&self) -> Result<bool, PostGrpcWebErr> {
-        match self.content_type.as_str() {
-            APPLICATION_GRPC_WEB_TEXT | APPLICATION_GRPC_WEB_TEXT_PROTO => Ok(true),
-            APPLICATION_GRPC_WEB | APPLICATION_GRPC_WEB_PROTO => Ok(false),
-            _ => Err(PostGrpcWebErr::InvalidRequest(self.content_type.to_owned())),
-        }
     }
 
     // This is to avoid passing a slice of bytes with a length that the base64
@@ -66,7 +64,7 @@ impl EncodedBytes {
     }
 
     fn append(&mut self, bytes: Bytes) -> Result<(), PostGrpcWebErr> {
-        if self.is_base64_encoding()? {
+        if self.is_base64 {
             self.raw_buf.put(bytes);
             self.decode_base64_chunk()?;
         } else {
@@ -339,7 +337,7 @@ impl Default for ResponseBody {
         Self {
             body_stream: BodyStream::empty(),
             buf: EncodedBytes {
-                content_type: Default::default(),
+                is_base64: Default::default(),
                 raw_buf: BytesMut::new(),
                 buf: BytesMut::new(),
             },
