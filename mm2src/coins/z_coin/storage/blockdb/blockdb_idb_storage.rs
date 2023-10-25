@@ -175,7 +175,7 @@ impl BlockDbImpl {
         let mut maybe_blocks = block_db
             .cursor_builder()
             .only("ticker", &self.ticker)?
-            .bound("height", min + 1, u32::MAX)
+            .bound("height", min, u32::MAX)
             .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
             .await?;
 
