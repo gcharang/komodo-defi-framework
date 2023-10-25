@@ -171,10 +171,12 @@ impl BlockDbImpl {
         let block_db = db_transaction.table::<BlockDbTable>().await?;
 
         // Fetch CompactBlocks block_db are needed for scanning.
+        let min = u32::from(from_height + 1);
+        let cursor_limit = limit.unwrap_or(u32::MIN);
         let mut maybe_blocks = block_db
             .cursor_builder()
             .only("ticker", &self.ticker)?
-            .bound("height", u32::from(from_height + 1), limit.unwrap_or(u32::MAX))
+            .bound("height", min, min + cursor_limit)
             .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
             .await?;
 
