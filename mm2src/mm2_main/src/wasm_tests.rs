@@ -11,7 +11,7 @@ use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init
                                   morty_conf, rick_conf, start_swaps, test_qrc20_history_impl,
                                   wait_for_swaps_finish_and_check_status, zombie_conf, MarketMakerIt,
                                   Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK,
-                                  ZOMBIE_ELECTRUMS_WSS, ZOMBIE_LIGHTWALLETD_URLS, ZOMBIE_TICKER};
+                                  ZOMBIE_ELECTRUMS_WSS, ZOMBIE_LIGHTWALLETD_PROXIED_URLS, ZOMBIE_TICKER};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::{EnableCoinBalance, InitTaskResult, InitZcoinStatus, RpcV2Response,
                                 ZCoinActivationResult};
@@ -233,7 +233,7 @@ async fn activate_z_coin_light() {
         &mm,
         ZOMBIE_TICKER,
         ZOMBIE_ELECTRUMS_WSS,
-        ZOMBIE_LIGHTWALLETD_URLS,
+        ZOMBIE_LIGHTWALLETD_PROXIED_URLS,
         None,
         None,
     )

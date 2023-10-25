@@ -297,8 +297,13 @@ pub enum SpendableNotesError {
 }
 
 #[derive(Debug, Display)]
-pub enum ZCoinBalanceError {}
+pub enum ZCoinBalanceError {
+    BalanceError(String),
+}
 
+impl From<ZcoinStorageError> for ZCoinBalanceError {
+    fn from(value: ZcoinStorageError) -> Self { ZCoinBalanceError::BalanceError(value.to_string()) }
+}
 /// The `ValidateBlocksError` enum encapsulates different types of errors that may occur
 /// during the validation and scanning process of zcoin blocks.
 #[derive(Debug, Display)]
