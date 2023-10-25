@@ -75,7 +75,8 @@ impl TableSignature for WalletDbBlocksTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbTransactionsTable {
-    pub txid: Vec<u8>, // unique
+    /// Unique field
+    pub txid: Vec<u8>,
     pub created: Option<String>,
     pub block: Option<u32>,
     pub tx_index: Option<i64>,
@@ -116,18 +117,19 @@ impl TableSignature for WalletDbTransactionsTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbReceivedNotesTable {
-    // references transactions(id_tx)
+    /// references transactions(id_tx)
     pub tx: u32,
     pub output_index: u32,
-    // references accounts(account)
+    /// references accounts(account)
     pub account: BigInt,
     pub diversifier: Vec<u8>,
     pub value: BigInt,
     pub rcm: Vec<u8>,
-    pub nf: Option<Vec<u8>>, // unique
+    /// Unique field
+    pub nf: Option<Vec<u8>>,
     pub is_change: Option<bool>,
     pub memo: Option<Vec<u8>>,
-    // references transactions(id_tx)
+    /// references transactions(id_tx)
     pub spent: Option<BigInt>,
     pub ticker: String,
 }
@@ -171,9 +173,9 @@ impl TableSignature for WalletDbReceivedNotesTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSaplingWitnessesTable {
-    // REFERENCES received_notes(id_note)
+    /// REFERENCES received_notes(id_note)
     pub note: BigInt,
-    // REFERENCES blocks(height)
+    /// REFERENCES blocks(height)
     pub block: u32,
     pub witness: Vec<u8>,
     pub ticker: String,
@@ -203,10 +205,10 @@ impl TableSignature for WalletDbSaplingWitnessesTable {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WalletDbSentNotesTable {
-    // REFERENCES transactions(id_tx)
+    /// REFERENCES transactions(id_tx)
     pub tx: BigInt,
     pub output_index: BigInt,
-    // REFERENCES accounts(account)
+    /// REFERENCES accounts(account)
     pub from_account: BigInt,
     pub address: String,
     pub value: BigInt,

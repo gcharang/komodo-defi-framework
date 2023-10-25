@@ -138,11 +138,40 @@ pub const MORTY_ELECTRUM_ADDRS: &[&str] = &[
     "electrum2.cipig.net:10018",
     "electrum3.cipig.net:10018",
 ];
+pub const DOC: &str = "DOC";
+#[cfg(not(target_arch = "wasm32"))]
+pub const DOC_ELECTRUM_ADDRS: &[&str] = &[
+    "electrum1.cipig.net:10020",
+    "electrum2.cipig.net:10020",
+    "electrum3.cipig.net:10020",
+];
+#[cfg(target_arch = "wasm32")]
+pub const DOC_ELECTRUM_ADDRS: &[&str] = &[
+    "electrum1.cipig.net:30020",
+    "electrum2.cipig.net:30020",
+    "electrum3.cipig.net:30020",
+];
+pub const MARTY: &str = "MARTY";
+pub const MARTY_ELECTRUM_ADDRS: &[&str] = &[
+    "electrum1.cipig.net:10021",
+    "electrum2.cipig.net:10021",
+    "electrum3.cipig.net:10021",
+];
 pub const ZOMBIE_TICKER: &str = "ZOMBIE";
 pub const ARRR: &str = "ARRR";
-pub const ZOMBIE_ELECTRUMS: &[&str] = &["zombie.dragonhound.info:10033"];
+pub const ZOMBIE_ELECTRUMS: &[&str] = &[
+    "electrum1.cipig.net:10008",
+    "electrum2.cipig.net:10008",
+    "electrum3.cipig.net:10008",
+];
 pub const ZOMBIE_ELECTRUMS_WSS: &[&str] = &["zombie.dragonhound.info:30059"];
-pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &["http://zombie.dragonhound.info:443"];
+pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &[
+    "https://lightd1.pirate.black:443",
+    "https://piratelightd1.cryptoforge.cc:443",
+    "https://piratelightd2.cryptoforge.cc:443",
+    "https://piratelightd3.cryptoforge.cc:443",
+    "https://piratelightd4.cryptoforge.cc:443",
+];
 pub const ZOMBIE_LIGHTWALLETD_PROXIED_URLS: &[&str] = &["http://pirate.spyglass.quest:8081"];
 pub const PIRATE_ELECTRUMS: &[&str] = &["node1.chainkeeper.pro:10132"];
 pub const PIRATE_LIGHTWALLETD_URLS: &[&str] = &["http://node1.chainkeeper.pro:443"];
@@ -152,6 +181,7 @@ pub const QRC20_ELECTRUMS: &[&str] = &[
     "electrum2.cipig.net:10071",
     "electrum3.cipig.net:10071",
 ];
+pub const T_BCH_ELECTRUMS: &[&str] = &["tbch.loping.net:60001", "bch0.kister.net:51001"];
 pub const TBTC_ELECTRUMS: &[&str] = &[
     "electrum1.cipig.net:10068",
     "electrum2.cipig.net:10068",
@@ -193,6 +223,22 @@ impl Mm2TestConf {
         }
     }
 
+    /// Generates a seed node conf enabling use_trading_proto_v2
+    pub fn seednode_trade_v2(passphrase: &str, coins: &Json) -> Self {
+        Mm2TestConf {
+            conf: json!({
+                "gui": "nogui",
+                "netid": 9998,
+                "passphrase": passphrase,
+                "coins": coins,
+                "rpc_password": DEFAULT_RPC_PASSWORD,
+                "i_am_seed": true,
+                "use_trading_proto_v2": true,
+            }),
+            rpc_password: DEFAULT_RPC_PASSWORD.into(),
+        }
+    }
+
     pub fn seednode_with_hd_account(passphrase: &str, coins: &Json) -> Self {
         Mm2TestConf {
             conf: json!({
@@ -217,6 +263,22 @@ impl Mm2TestConf {
                 "coins": coins,
                 "rpc_password": DEFAULT_RPC_PASSWORD,
                 "seednodes": seednodes
+            }),
+            rpc_password: DEFAULT_RPC_PASSWORD.into(),
+        }
+    }
+
+    /// Generates a light node conf enabling use_trading_proto_v2
+    pub fn light_node_trade_v2(passphrase: &str, coins: &Json, seednodes: &[&str]) -> Self {
+        Mm2TestConf {
+            conf: json!({
+                "gui": "nogui",
+                "netid": 9998,
+                "passphrase": passphrase,
+                "coins": coins,
+                "rpc_password": DEFAULT_RPC_PASSWORD,
+                "seednodes": seednodes,
+                "use_trading_proto_v2": true,
             }),
             rpc_password: DEFAULT_RPC_PASSWORD.into(),
         }
@@ -1537,7 +1599,7 @@ pub async fn enable_qrc20(
 pub fn from_env_file(env: Vec<u8>) -> (Option<String>, Option<String>) {
     use regex::bytes::Regex;
     let (mut passphrase, mut userpass) = (None, None);
-    for cap in Regex::new(r"(?m)^(PASSPHRASE|USERPASS)=(\w[\w ]+)$")
+    for cap in Regex::new(r"^\w+_(PASSPHRASE|USERPASS)=(\w+( \w+)+)\s*")
         .unwrap()
         .captures_iter(&env)
     {
@@ -1573,6 +1635,9 @@ macro_rules! get_passphrase {
 }
 
 /// Reads passphrase from file or environment.
+/// Note that if you try to read the passphrase file from the current directory
+/// the current directory could be different depending on how you run tests
+/// (it could be either the workspace directory or the module source directory)
 #[cfg(not(target_arch = "wasm32"))]
 pub fn get_passphrase(path: &dyn AsRef<Path>, env: &str) -> Result<String, String> {
     if let (Some(file_passphrase), _file_userpass) = from_env_file(try_s!(slurp(path))) {
@@ -1683,7 +1748,7 @@ pub enum UtxoRpcMode {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn electrum_servers_rpc(servers: &[&str]) -> Vec<ElectrumRpcRequest> {
+pub fn electrum_servers_rpc(servers: &[&str]) -> Vec<ElectrumRpcRequest> {
     servers
         .iter()
         .map(|url| ElectrumRpcRequest {
@@ -1694,7 +1759,7 @@ fn electrum_servers_rpc(servers: &[&str]) -> Vec<ElectrumRpcRequest> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn electrum_servers_rpc(servers: &[&str]) -> Vec<ElectrumRpcRequest> {
+pub fn electrum_servers_rpc(servers: &[&str]) -> Vec<ElectrumRpcRequest> {
     servers
         .iter()
         .map(|url| ElectrumRpcRequest {
@@ -3027,4 +3092,30 @@ pub async fn get_locked_amount(mm: &MarketMakerIt, coin: &str) -> GetLockedAmoun
     println!("get_locked_amount response {}", request.1);
     let response: RpcV2Response<GetLockedAmountResponse> = json::from_str(&request.1).unwrap();
     response.result
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_parse_env_file() {
+    let env_client =
+        b"ALICE_PASSPHRASE=spice describe gravity federal blast come thank unfair canal monkey style afraid";
+    let env_client_new_line =
+        b"ALICE_PASSPHRASE=spice describe gravity federal blast come thank unfair canal monkey style afraid\n";
+    let env_client_space =
+        b"ALICE_PASSPHRASE=spice describe gravity federal blast come thank unfair canal monkey style afraid  ";
+
+    let parsed1 = from_env_file(env_client.to_vec());
+    let parsed2 = from_env_file(env_client_new_line.to_vec());
+    let parsed3 = from_env_file(env_client_space.to_vec());
+    assert_eq!(parsed1, parsed2);
+    assert_eq!(parsed1, parsed3);
+    assert_eq!(
+        parsed1,
+        (
+            Some(String::from(
+                "spice describe gravity federal blast come thank unfair canal monkey style afraid"
+            )),
+            None
+        )
+    );
 }

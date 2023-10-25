@@ -31,7 +31,7 @@ use zcash_primitives::transaction::TxId;
 use zcash_primitives::zip32::ExtendedSpendingKey;
 
 pub(crate) mod z_coin_grpc {
-    tonic::include_proto!("cash.z.wallet.sdk.rpc");
+    tonic::include_proto!("pirate.z.wallet.sdk.rpc");
 }
 use z_coin_grpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use z_coin_grpc::ChainSpec;
@@ -464,7 +464,7 @@ pub(super) async fn init_light_client<'a>(
 
     // Get min_height in blocks_db and rewind blocks_db to 0 if sync_height != min_height
     let min_height = blocks_db.get_earliest_block().await?;
-    if sync_height != min_height as u64 {
+    if !continue_from_prev_sync && (sync_height != min_height as u64) {
         // let user know we're clearing cache and resyncing from new provided height.
         if min_height > 0 {
             info!("Older/Newer sync height detected!, rewinding blocks_db to new height: {sync_height:?}");
