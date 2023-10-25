@@ -212,7 +212,7 @@ impl<'a> WalletIndexedDb {
             };
 
             let index_keys = MultiIndex::new(WalletDbAccountsTable::TICKER_ACCOUNT_INDEX)
-                .with_value(&ticker)?
+                .with_value(&self.ticker)?
                 .with_value(account_int)?;
 
             walletdb_account_table

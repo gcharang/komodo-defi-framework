@@ -159,12 +159,16 @@ pub const MARTY_ELECTRUM_ADDRS: &[&str] = &[
 ];
 pub const ZOMBIE_TICKER: &str = "ZOMBIE";
 pub const ARRR: &str = "ARRR";
+#[cfg(not(target_arch = "wasm32"))]
 pub const ZOMBIE_ELECTRUMS: &[&str] = &[
     "electrum1.cipig.net:10008",
     "electrum2.cipig.net:10008",
     "electrum3.cipig.net:10008",
 ];
-pub const ZOMBIE_ELECTRUMS_WSS: &[&str] = &["zombie.dragonhound.info:30059"];
+#[cfg(target_arch = "wasm32")]
+pub const ZOMBIE_ELECTRUMS: &[&str] = &["zombie.dragonhound.info:30059"];
+
+#[cfg(not(target_arch = "wasm32"))]
 pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &[
     "https://lightd1.pirate.black:443",
     "https://piratelightd1.cryptoforge.cc:443",
@@ -172,7 +176,8 @@ pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &[
     "https://piratelightd3.cryptoforge.cc:443",
     "https://piratelightd4.cryptoforge.cc:443",
 ];
-pub const ZOMBIE_LIGHTWALLETD_PROXIED_URLS: &[&str] = &["http://pirate.spyglass.quest:8081"];
+#[cfg(target_arch = "wasm32")]
+pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &["http://pirate.spyglass.quest:8081"];
 pub const PIRATE_ELECTRUMS: &[&str] = &["node1.chainkeeper.pro:10132"];
 pub const PIRATE_LIGHTWALLETD_URLS: &[&str] = &["http://node1.chainkeeper.pro:443"];
 pub const DEFAULT_RPC_PASSWORD: &str = "pass";

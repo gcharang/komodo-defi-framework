@@ -34,7 +34,6 @@ use bitcrypto::dhash256;
 use chain::constants::SEQUENCE_FINAL;
 use chain::{Transaction as UtxoTx, TransactionOutput};
 use common::executor::{AbortableSystem, AbortedError};
-use common::sha256_digest;
 use common::{log, one_thousand_u32};
 use crypto::privkey::{key_pair_from_secret, secp_privkey_from_hash};
 use crypto::{Bip32DerPathOps, GlobalHDAccountArc};
@@ -91,7 +90,7 @@ pub use z_rpc::{FirstSyncBlock, SyncStatus};
 cfg_native!(
     use crate::utxo::utxo_common::{addresses_from_script, big_decimal_from_sat};
 
-    use common::{async_blocking, calc_total_pages, PagingOptionsEnum};
+    use common::{async_blocking, sha256_digest, calc_total_pages, PagingOptionsEnum};
     use db_common::sqlite::offset_by_id;
     use db_common::sqlite::rusqlite::{Error as SqlError, Row};
     use db_common::sqlite::sql_builder::{name, SqlBuilder, SqlName};
@@ -130,13 +129,13 @@ macro_rules! try_ztx_s {
 
 const DEX_FEE_OVK: OutgoingViewingKey = OutgoingViewingKey([7; 32]);
 const DEX_FEE_Z_ADDR: &str = "zs1rp6426e9r6jkq2nsanl66tkd34enewrmr0uvj0zelhkcwmsy0uvxz2fhm9eu9rl3ukxvgzy2v9f";
-const SAPLING_SPEND_NAME: &str = "sapling-spend.params";
-const SAPLING_OUTPUT_NAME: &str = "sapling-output.params";
-const SAPLING_SPEND_EXPECTED_HASH: &str = "8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13";
-const SAPLING_OUTPUT_EXPECTED_HASH: &str = "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4";
 cfg_native!(
     const BLOCKS_TABLE: &str = "blocks";
+    const SAPLING_OUTPUT_NAME: &str = "sapling-output.params";
+    const SAPLING_SPEND_NAME: &str = "sapling-spend.params";
     const TRANSACTIONS_TABLE: &str = "transactions";
+    const SAPLING_SPEND_EXPECTED_HASH: &str = "8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13";
+    const SAPLING_OUTPUT_EXPECTED_HASH: &str = "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4";
 );
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -830,12 +829,14 @@ pub async fn z_coin_from_conf_and_params(
     builder.build().await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn verify_checksum_zcash_params(spend_path: &PathBuf, output_path: &PathBuf) -> Result<bool, ZCoinBuildError> {
     let spend_hash = sha256_digest(spend_path)?;
     let out_hash = sha256_digest(output_path)?;
     Ok(spend_hash == SAPLING_SPEND_EXPECTED_HASH && out_hash == SAPLING_OUTPUT_EXPECTED_HASH)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn get_spend_output_paths(params_dir: PathBuf) -> Result<(PathBuf, PathBuf), ZCoinBuildError> {
     if !params_dir.exists() {
         return Err(ZCoinBuildError::ZCashParamsNotFound);
