@@ -2,8 +2,7 @@ use super::*;
 use crate::coin_balance::{HDAddressBalance, HDWalletBalanceOps};
 use crate::coin_errors::{MyAddressError, ValidatePaymentError};
 use crate::eth::EthCoinType;
-use crate::hd_wallet::{HDCoinAddress, HDCoinHDAccount, HDCoinWithdrawOps, HDExtractPubkeyError, HDXPubExtractor,
-                       NewAddressDeriveConfirmError, NewAddressDerivingError, WithdrawSenderAddress};
+use crate::hd_wallet::{HDCoinAddress, HDCoinHDAccount, HDCoinWithdrawOps, TrezorCoinError, WithdrawSenderAddress};
 use crate::lp_price::get_base_price_in_rel;
 use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
@@ -29,6 +28,7 @@ use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPayment
 pub use bitcrypto::{dhash160, sha256, ChecksumType};
 use bitcrypto::{dhash256, ripemd160};
 use chain::constants::SEQUENCE_FINAL;
+pub use chain::Transaction as UtxoTx;
 use chain::{OutPoint, TransactionOutput};
 use common::executor::Timer;
 use common::jsonrpc_client::JsonRpcErrorType;
@@ -59,8 +59,6 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 use utxo_signer::with_key_pair::{calc_and_sign_sighash, p2sh_spend, signature_hash_to_sign, SIGHASH_ALL,
                                  SIGHASH_SINGLE};
 use utxo_signer::UtxoSignerOps;
-
-pub use chain::Transaction as UtxoTx;
 
 pub mod utxo_tx_history_v2_common;
 
@@ -120,14 +118,14 @@ where
     }
 }
 
-pub(crate) fn trezor_coin<Coin>(coin: &Coin) -> MmResult<String, NewAddressDeriveConfirmError>
+pub(crate) fn trezor_coin<Coin>(coin: &Coin) -> MmResult<String, TrezorCoinError>
 where
     Coin: AsRef<UtxoCoinFields>,
 {
     coin.as_ref().conf.trezor_coin.clone().or_mm_err(|| {
         let ticker = &coin.as_ref().conf.ticker;
-        let error = format!("'{ticker}' coin must contain the 'trezor_coin' field in the coins config");
-        NewAddressDeriveConfirmError::DeriveError(NewAddressDerivingError::Internal(error))
+        let error = format!("'{ticker}' coin has 'trezor_coin' field as `None` in the coins config");
+        TrezorCoinError::Internal(error)
     })
 }
 
@@ -268,41 +266,6 @@ where
 }
 
 pub fn derivation_method(coin: &UtxoCoinFields) -> &DerivationMethod<Address, UtxoHDWallet> { &coin.derivation_method }
-
-pub async fn extract_extended_pubkey<XPubExtractor>(
-    coin: &UtxoCoinFields,
-    xpub_extractor: Option<XPubExtractor>,
-    derivation_path: DerivationPath,
-) -> MmResult<Secp256k1ExtendedPublicKey, HDExtractPubkeyError>
-where
-    XPubExtractor: HDXPubExtractor + Send,
-{
-    match xpub_extractor {
-        Some(xpub_extractor) => {
-            let trezor_coin = coin
-                .conf
-                .trezor_coin
-                .clone()
-                .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
-            let xpub = xpub_extractor.extract_xpub(trezor_coin, derivation_path).await?;
-            Secp256k1ExtendedPublicKey::from_str(&xpub).map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
-        },
-        None => {
-            let mut priv_key = coin
-                .priv_key_policy
-                .bip39_secp_priv_key_or_err()
-                .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
-                .clone();
-            for child in derivation_path {
-                priv_key = priv_key
-                    .derive_child(child)
-                    .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
-            }
-            drop_mutability!(priv_key);
-            Ok(priv_key.public_key())
-        },
-    }
-}
 
 /// returns the fee required to be paid for HTLC spend transaction
 pub async fn get_htlc_spend_fee<T: UtxoCommonOps>(

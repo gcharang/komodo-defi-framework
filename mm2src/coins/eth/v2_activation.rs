@@ -200,12 +200,11 @@ impl EthCoin {
 
         let token = EthCoinImpl {
             priv_key_policy: self.priv_key_policy.clone(),
-            // Todo: we should inherit the derivation method from the parent coin? we should add an option to have a new arc if we want to use a different hd wallet for a specific or all erc20 tokens
-            // Todo: check storage for HD in this case? what about balances, db, etc..? what if ETH is enabled without tokens as a standalone hd wallet after erc20 tokens were added to the HD wallet storage?
-            // Todo: will probably need to do rescanning of all addresses or some other thing when enabling a token after enabling eth?
-            // Todo: what about Address poisoning attacks when scanning for non-empty addresses? usually these attacks are sent to already used addresses anyways.
-            // Todo: how about scanning for tokens feature? will that be too much? Maybe another API?
-            // Todo: eth is needed to send from the same account some erc20 tokens, so having the same HD wallet for all erc20 tokens is good
+            // We inherit the derivation method from the parent/platform coin
+            // If we want a new wallet for each token we can add this as an option in the future
+            // storage ticker will be the platform coin ticker
+            // Todo: rescan all enabled addresses for this token and use gap limit as well to find other addresses that has this token balance
+            // Todo: we should add an option for scan_for_new_addresses methods to scan only for this token or all enabled tokens and the platform coin
             derivation_method: self.derivation_method.clone(),
             my_address: self.my_address,
             coin_type: EthCoinType::Erc20 {

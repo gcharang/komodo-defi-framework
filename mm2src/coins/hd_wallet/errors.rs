@@ -1,6 +1,7 @@
 use super::{HDConfirmAddressError, HDWalletStorageError};
 use bip32::Error as Bip32Error;
-use crypto::{Bip32DerPathError, Bip44Chain, HwError, StandardHDPathError};
+use crypto::trezor::{TrezorError, TrezorProcessingError};
+use crypto::{Bip32DerPathError, Bip44Chain, CryptoCtxError, HwError, HwProcessingError, StandardHDPathError, XpubError};
 use rpc_task::RpcTaskError;
 
 #[derive(Debug, Display)]
@@ -164,4 +165,78 @@ pub enum HDWithdrawError {
 
 impl From<AddressDerivingError> for HDWithdrawError {
     fn from(e: AddressDerivingError) -> Self { HDWithdrawError::AddressDerivingError(e) }
+}
+
+#[derive(Clone)]
+pub enum HDExtractPubkeyError {
+    HwContextNotInitialized,
+    CoinDoesntSupportTrezor,
+    RpcTaskError(RpcTaskError),
+    HardwareWalletError(HwError),
+    InvalidXpub(String),
+    Internal(String),
+}
+
+impl From<CryptoCtxError> for HDExtractPubkeyError {
+    fn from(e: CryptoCtxError) -> Self { HDExtractPubkeyError::Internal(e.to_string()) }
+}
+
+impl From<TrezorError> for HDExtractPubkeyError {
+    fn from(e: TrezorError) -> Self { HDExtractPubkeyError::HardwareWalletError(HwError::from(e)) }
+}
+
+impl From<HwError> for HDExtractPubkeyError {
+    fn from(e: HwError) -> Self { HDExtractPubkeyError::HardwareWalletError(e) }
+}
+
+impl From<TrezorProcessingError<RpcTaskError>> for HDExtractPubkeyError {
+    fn from(e: TrezorProcessingError<RpcTaskError>) -> Self {
+        match e {
+            TrezorProcessingError::TrezorError(trezor) => HDExtractPubkeyError::from(HwError::from(trezor)),
+            TrezorProcessingError::ProcessorError(rpc) => HDExtractPubkeyError::RpcTaskError(rpc),
+        }
+    }
+}
+
+impl From<HwProcessingError<RpcTaskError>> for HDExtractPubkeyError {
+    fn from(e: HwProcessingError<RpcTaskError>) -> Self {
+        match e {
+            HwProcessingError::HwError(hw) => HDExtractPubkeyError::from(hw),
+            HwProcessingError::ProcessorError(rpc) => HDExtractPubkeyError::RpcTaskError(rpc),
+        }
+    }
+}
+
+impl From<XpubError> for HDExtractPubkeyError {
+    fn from(e: XpubError) -> Self { HDExtractPubkeyError::InvalidXpub(e.to_string()) }
+}
+
+impl From<HDExtractPubkeyError> for NewAccountCreationError {
+    fn from(e: HDExtractPubkeyError) -> Self {
+        match e {
+            HDExtractPubkeyError::HwContextNotInitialized => NewAccountCreationError::HwContextNotInitialized,
+            HDExtractPubkeyError::CoinDoesntSupportTrezor => NewAccountCreationError::CoinDoesntSupportTrezor,
+            HDExtractPubkeyError::RpcTaskError(rpc) => NewAccountCreationError::RpcTaskError(rpc),
+            HDExtractPubkeyError::HardwareWalletError(hw) => NewAccountCreationError::HardwareWalletError(hw),
+            HDExtractPubkeyError::InvalidXpub(xpub) => {
+                NewAccountCreationError::HardwareWalletError(HwError::InvalidXpub(xpub))
+            },
+            HDExtractPubkeyError::Internal(internal) => NewAccountCreationError::Internal(internal),
+        }
+    }
+}
+
+#[derive(Display)]
+pub enum TrezorCoinError {
+    Internal(String),
+}
+
+impl From<TrezorCoinError> for HDExtractPubkeyError {
+    fn from(e: TrezorCoinError) -> Self { HDExtractPubkeyError::Internal(e.to_string()) }
+}
+
+impl From<TrezorCoinError> for NewAddressDeriveConfirmError {
+    fn from(e: TrezorCoinError) -> Self {
+        NewAddressDeriveConfirmError::DeriveError(NewAddressDerivingError::Internal(e.to_string()))
+    }
 }

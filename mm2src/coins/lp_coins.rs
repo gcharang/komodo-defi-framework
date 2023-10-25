@@ -50,8 +50,8 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
 use common::log::{warn, LogOnError};
 use common::{calc_total_pages, now_sec, ten, HttpStatusCode};
 use crypto::{derive_secp256k1_secret, Bip32Error, Bip44Chain, CryptoCtx, CryptoCtxError, DerivationPath,
-             GlobalHDAccountArc, HwRpcError, KeyPairPolicy, RpcDerivationPath, Secp256k1Secret, StandardHDPathToCoin,
-             WithHwRpcError};
+             GlobalHDAccountArc, HwRpcError, KeyPairPolicy, RpcDerivationPath, Secp256k1ExtendedPublicKey,
+             Secp256k1Secret, StandardHDPathToCoin, WithHwRpcError};
 use derive_more::Display;
 use enum_from::{EnumFromStringify, EnumFromTrait};
 use ethereum_types::H256;
@@ -223,8 +223,8 @@ use eth::{eth_coin_from_conf_and_request, get_eth_address, EthCoin, EthGasDetail
 
 pub mod hd_wallet;
 use hd_wallet::{AccountUpdatingError, AddressDerivingError, HDAccountAddressId, HDAccountOps, HDAddressId,
-                HDAddressOps, HDCoinAddress, HDCoinHDAccount, HDWalletAddress, HDWalletCoinOps, HDWalletOps,
-                HDWithdrawError, WithdrawFrom, WithdrawSenderAddress};
+                HDAddressOps, HDCoinAddress, HDCoinHDAccount, HDExtractPubkeyError, HDWalletAddress, HDWalletCoinOps,
+                HDWalletOps, HDWithdrawError, HDXPubExtractor, WithdrawFrom, WithdrawSenderAddress};
 
 #[cfg(not(target_arch = "wasm32"))] pub mod lightning;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
@@ -3128,6 +3128,47 @@ impl<T> PrivKeyPolicy<T> {
     }
 
     fn is_trezor(&self) -> bool { matches!(self, PrivKeyPolicy::Trezor) }
+}
+
+/// 'CoinWithPrivKeyPolicy' trait is used to get the private key policy of a coin.
+pub trait CoinWithPrivKeyPolicy {
+    /// The type of the key pair used by the coin.
+    type KeyPair;
+
+    /// Returns the private key policy of the coin.
+    fn priv_key_policy(&self) -> &PrivKeyPolicy<Self::KeyPair>;
+}
+
+pub async fn extract_extended_pubkey<Coin, XPubExtractor>(
+    coin: &Coin,
+    xpub_extractor: Option<XPubExtractor>,
+    derivation_path: DerivationPath,
+) -> MmResult<Secp256k1ExtendedPublicKey, HDExtractPubkeyError>
+where
+    XPubExtractor: HDXPubExtractor + Send,
+    Coin: HDWalletCoinOps + CoinWithPrivKeyPolicy,
+{
+    match xpub_extractor {
+        Some(xpub_extractor) => {
+            let trezor_coin = coin.trezor_coin()?;
+            let xpub = xpub_extractor.extract_xpub(trezor_coin, derivation_path).await?;
+            Secp256k1ExtendedPublicKey::from_str(&xpub).map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
+        },
+        None => {
+            let mut priv_key = coin
+                .priv_key_policy()
+                .bip39_secp_priv_key_or_err()
+                .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
+                .clone();
+            for child in derivation_path {
+                priv_key = priv_key
+                    .derive_child(child)
+                    .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
+            }
+            drop_mutability!(priv_key);
+            Ok(priv_key.public_key())
+        },
+    }
 }
 
 #[derive(Clone)]

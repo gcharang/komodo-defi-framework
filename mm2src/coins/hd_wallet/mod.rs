@@ -27,11 +27,12 @@ pub(crate) use confirm_address::{ConfirmAddressStatus, RpcTaskConfirmAddress};
 pub use confirm_address::{HDConfirmAddress, HDConfirmAddressError};
 
 mod errors;
-pub use errors::{AccountUpdatingError, AddressDerivingError, HDWithdrawError, InvalidBip44ChainError,
-                 NewAccountCreationError, NewAddressDeriveConfirmError, NewAddressDerivingError};
+pub use errors::{AccountUpdatingError, AddressDerivingError, HDExtractPubkeyError, HDWithdrawError,
+                 InvalidBip44ChainError, NewAccountCreationError, NewAddressDeriveConfirmError,
+                 NewAddressDerivingError, TrezorCoinError};
 
 mod pubkey;
-pub use pubkey::{ExtractExtendedPubkey, HDExtractPubkeyError, HDXPubExtractor, RpcTaskXPubExtractor};
+pub use pubkey::{ExtractExtendedPubkey, HDXPubExtractor, RpcTaskXPubExtractor};
 
 mod storage;
 #[cfg(target_arch = "wasm32")]

@@ -1,75 +1,14 @@
-use super::NewAccountCreationError;
+use super::*;
 use async_trait::async_trait;
 use crypto::hw_rpc_task::HwConnectStatuses;
 use crypto::trezor::trezor_rpc_task::{TrezorRpcTaskProcessor, TryIntoUserAction};
 use crypto::trezor::utxo::IGNORE_XPUB_MAGIC;
-use crypto::trezor::{ProcessTrezorResponse, TrezorError, TrezorProcessingError};
-use crypto::{CryptoCtx, CryptoCtxError, DerivationPath, EcdsaCurve, HardwareWalletArc, HwError, HwProcessingError,
-             XPub, XPubConverter, XpubError};
+use crypto::trezor::ProcessTrezorResponse;
+use crypto::{CryptoCtx, DerivationPath, EcdsaCurve, HardwareWalletArc, XPub, XPubConverter};
 use mm2_core::mm_ctx::MmArc;
-use mm2_err_handle::prelude::*;
-use rpc_task::{RpcTask, RpcTaskError, RpcTaskHandle};
+use rpc_task::{RpcTask, RpcTaskHandle};
 
 const SHOW_PUBKEY_ON_DISPLAY: bool = false;
-
-#[derive(Clone)]
-pub enum HDExtractPubkeyError {
-    HwContextNotInitialized,
-    CoinDoesntSupportTrezor,
-    RpcTaskError(RpcTaskError),
-    HardwareWalletError(HwError),
-    InvalidXpub(String),
-    Internal(String),
-}
-
-impl From<CryptoCtxError> for HDExtractPubkeyError {
-    fn from(e: CryptoCtxError) -> Self { HDExtractPubkeyError::Internal(e.to_string()) }
-}
-
-impl From<TrezorError> for HDExtractPubkeyError {
-    fn from(e: TrezorError) -> Self { HDExtractPubkeyError::HardwareWalletError(HwError::from(e)) }
-}
-
-impl From<HwError> for HDExtractPubkeyError {
-    fn from(e: HwError) -> Self { HDExtractPubkeyError::HardwareWalletError(e) }
-}
-
-impl From<TrezorProcessingError<RpcTaskError>> for HDExtractPubkeyError {
-    fn from(e: TrezorProcessingError<RpcTaskError>) -> Self {
-        match e {
-            TrezorProcessingError::TrezorError(trezor) => HDExtractPubkeyError::from(HwError::from(trezor)),
-            TrezorProcessingError::ProcessorError(rpc) => HDExtractPubkeyError::RpcTaskError(rpc),
-        }
-    }
-}
-
-impl From<HwProcessingError<RpcTaskError>> for HDExtractPubkeyError {
-    fn from(e: HwProcessingError<RpcTaskError>) -> Self {
-        match e {
-            HwProcessingError::HwError(hw) => HDExtractPubkeyError::from(hw),
-            HwProcessingError::ProcessorError(rpc) => HDExtractPubkeyError::RpcTaskError(rpc),
-        }
-    }
-}
-
-impl From<XpubError> for HDExtractPubkeyError {
-    fn from(e: XpubError) -> Self { HDExtractPubkeyError::InvalidXpub(e.to_string()) }
-}
-
-impl From<HDExtractPubkeyError> for NewAccountCreationError {
-    fn from(e: HDExtractPubkeyError) -> Self {
-        match e {
-            HDExtractPubkeyError::HwContextNotInitialized => NewAccountCreationError::HwContextNotInitialized,
-            HDExtractPubkeyError::CoinDoesntSupportTrezor => NewAccountCreationError::CoinDoesntSupportTrezor,
-            HDExtractPubkeyError::RpcTaskError(rpc) => NewAccountCreationError::RpcTaskError(rpc),
-            HDExtractPubkeyError::HardwareWalletError(hw) => NewAccountCreationError::HardwareWalletError(hw),
-            HDExtractPubkeyError::InvalidXpub(xpub) => {
-                NewAccountCreationError::HardwareWalletError(HwError::InvalidXpub(xpub))
-            },
-            HDExtractPubkeyError::Internal(internal) => NewAccountCreationError::Internal(internal),
-        }
-    }
-}
 
 #[async_trait]
 pub trait ExtractExtendedPubkey {

@@ -1,7 +1,7 @@
 use super::{inner_impl, AccountUpdatingError, AddressDerivingError, AddressDerivingResult, HDAccountOps,
             HDCoinHDAccount, HDCoinHDAddress, HDConfirmAddress, HDWalletOps, NewAddressDeriveConfirmError,
             NewAddressDerivingError};
-use crate::hd_wallet::{HDAddressOps, HDWalletStorageOps};
+use crate::hd_wallet::{HDAddressOps, HDWalletStorageOps, TrezorCoinError};
 use async_trait::async_trait;
 use bip32::{ChildNumber, DerivationPath};
 use crypto::{Bip44Chain, Secp256k1ExtendedPublicKey};
@@ -292,7 +292,6 @@ pub trait HDWalletCoinOps {
     }
 
     // Todo: Maybe make a trait specifically for HW wallets that is a superset of HDWalletCoinOps
-    // Todo: Use an error type that is specific to this function
     /// Returns the Trezor coin name for this coin.
-    fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError>;
+    fn trezor_coin(&self) -> MmResult<String, TrezorCoinError>;
 }

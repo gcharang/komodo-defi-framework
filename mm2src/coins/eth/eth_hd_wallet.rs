@@ -1,10 +1,10 @@
 use super::*;
-use crate::hd_wallet::{ExtractExtendedPubkey, HDAccount, HDAddress, HDExtractPubkeyError, HDWallet, HDXPubExtractor};
+use crate::hd_wallet::{ExtractExtendedPubkey, HDAccount, HDAddress, HDExtractPubkeyError, HDWallet, HDXPubExtractor,
+                       TrezorCoinError};
 use async_trait::async_trait;
 use bip32::DerivationPath;
 use crypto::Secp256k1ExtendedPublicKey;
 use ethereum_types::{Address, Public};
-use std::str::FromStr;
 
 pub type EthHDAddress = HDAddress<Address, Public>;
 pub type EthHDAccount = HDAccount<EthHDAddress>;
@@ -22,32 +22,7 @@ impl ExtractExtendedPubkey for EthCoin {
     where
         XPubExtractor: HDXPubExtractor + Send,
     {
-        // Todo: there is a lot of repetition between here and utxo
-        match xpub_extractor {
-            Some(xpub_extractor) => {
-                let trezor_coin = self
-                    .trezor_coin
-                    .clone()
-                    .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
-                let xpub = xpub_extractor.extract_xpub(trezor_coin, derivation_path).await?;
-                Secp256k1ExtendedPublicKey::from_str(&xpub)
-                    .map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
-            },
-            None => {
-                let mut priv_key = self
-                    .priv_key_policy
-                    .bip39_secp_priv_key_or_err()
-                    .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
-                    .clone();
-                for child in derivation_path {
-                    priv_key = priv_key
-                        .derive_child(child)
-                        .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
-                }
-                drop_mutability!(priv_key);
-                Ok(priv_key.public_key())
-            },
-        }
+        extract_extended_pubkey(self, xpub_extractor, derivation_path).await
     }
 }
 
@@ -74,12 +49,11 @@ impl HDWalletCoinOps for EthCoin {
         }
     }
 
-    fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError> {
+    fn trezor_coin(&self) -> MmResult<String, TrezorCoinError> {
         self.trezor_coin.clone().or_mm_err(|| {
-            // Todo: this can be made common with utxo
             let ticker = self.ticker();
-            let error = format!("'{ticker}' coin must contain the 'trezor_coin' field in the coins config");
-            NewAddressDeriveConfirmError::DeriveError(NewAddressDerivingError::Internal(error))
+            let error = format!("'{ticker}' coin has 'trezor_coin' field as `None` in the coins config");
+            TrezorCoinError::Internal(error)
         })
     }
 }

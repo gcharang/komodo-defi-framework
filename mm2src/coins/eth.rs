@@ -24,8 +24,7 @@ use super::eth::Action::{Call, Create};
 use super::watcher_common::{validate_watcher_reward, REWARD_GAS_AMOUNT};
 use super::*;
 use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress,
-                       HDCoinWithdrawOps, HDConfirmAddress, HDWalletCoinOps, HDXPubExtractor,
-                       NewAddressDeriveConfirmError, NewAddressDerivingError};
+                       HDCoinWithdrawOps, HDConfirmAddress, HDWalletCoinOps, HDXPubExtractor};
 use crate::lp_price::get_base_price_in_rel;
 use crate::nft::nft_structs::{ContractType, ConvertChain, TransactionNftDetails, WithdrawErc1155, WithdrawErc721};
 use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
@@ -419,7 +418,9 @@ pub struct EthCoinImpl {
     pub coin_type: EthCoinType,
     priv_key_policy: EthPrivKeyPolicy,
     /// Either an Iguana address or a 'EthHDWallet' instance.
-    // Todo: recheck the use of arc here
+    /// Arc is used to use the same hd wallet from platform coin if we need to.
+    /// This allows the reuse of the same derived accounts/addresses of the
+    /// platform coin for tokens and vice versa.
     derivation_method: Arc<DerivationMethod<Address, EthHDWallet>>,
     my_address: Address,
     sign_message_prefix: Option<String>,
@@ -5447,7 +5448,6 @@ impl From<CryptoCtxError> for GetEthAddressError {
 
 /// `get_eth_address` returns wallet address for coin with `ETH` protocol type.
 /// Note: result address has mixed-case checksum form.
-// Todo: look where this is used and if it's possible to utilize hd wallet in it, e.g. NFT HD wallet
 pub async fn get_eth_address(
     ctx: &MmArc,
     conf: &Json,
@@ -5458,6 +5458,7 @@ pub async fn get_eth_address(
     // Convert `PrivKeyBuildPolicy` to `EthPrivKeyBuildPolicy` if it's possible.
     let priv_key_policy = EthPrivKeyBuildPolicy::try_from(priv_key_policy)?;
 
+    // Todo: This creates an HD wallet different from the ETH one for NFT, we should combine them in the future when implementing NFT HD wallet
     let (my_address, ..) =
         build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, path_to_address).await?;
     let wallet_address = checksum_address(&format!("{:#02x}", my_address));
@@ -5566,6 +5567,12 @@ async fn get_eth_gas_details(
             Ok((gas_limit, gas_price))
         },
     }
+}
+
+impl CoinWithPrivKeyPolicy for EthCoin {
+    type KeyPair = KeyPair;
+
+    fn priv_key_policy(&self) -> &PrivKeyPolicy<Self::KeyPair> { &self.priv_key_policy }
 }
 
 impl CoinWithDerivationMethod for EthCoin {
