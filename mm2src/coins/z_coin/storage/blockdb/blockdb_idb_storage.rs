@@ -98,13 +98,7 @@ impl BlockDbImpl {
             .next()
             .await?;
 
-        let maybe_height = maybe_height.map(|(_, item)| item.height);
-
-        let Some(height) = maybe_height else {
-            return MmError::err(ZcoinStorageError::GetFromStorageError(format!("{ticker} block height not found")));
-        };
-
-        Ok(height)
+        Ok(maybe_height.map(|(_, item)| item.height).unwrap_or_else(|| 0))
     }
 
     /// Insert new block to BlockDbTable given the provided data.
@@ -205,7 +199,6 @@ impl BlockDbImpl {
     ///
     /// Processes blocks based on the provided `BlockProcessingMode` and other parameters,
     /// which may include a starting block height, validation criteria, and a processing limit.
-    #[allow(unused)]
     pub(crate) async fn process_blocks_with_mode(
         &self,
         params: ZcoinConsensusParams,
