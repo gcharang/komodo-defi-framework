@@ -142,6 +142,7 @@ pub const ZOMBIE_TICKER: &str = "ZOMBIE";
 pub const ARRR: &str = "ARRR";
 pub const ZOMBIE_ELECTRUMS: &[&str] = &["zombie.dragonhound.info:10033"];
 pub const ZOMBIE_LIGHTWALLETD_URLS: &[&str] = &["http://zombie.dragonhound.info:443"];
+pub const ZOMBIE_LIGHTWALLETD_WSS_URLS: &[&str] = &["zombie.dragonhound.info:30059"];
 pub const PIRATE_ELECTRUMS: &[&str] = &["node1.chainkeeper.pro:10132"];
 pub const PIRATE_LIGHTWALLETD_URLS: &[&str] = &["http://node1.chainkeeper.pro:443"];
 pub const DEFAULT_RPC_PASSWORD: &str = "pass";

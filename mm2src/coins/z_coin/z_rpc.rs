@@ -168,7 +168,6 @@ impl RpcCommonOps for LightRpcClient {
             let request = tonic::Request::new(ChainSpec {});
             // use get_latest_block method as a health check
             let latest = client.get_latest_block(request).await;
-            info!("{latest:?}");
             if latest.is_ok() {
                 clients.rotate_left(i);
                 return Ok(client);

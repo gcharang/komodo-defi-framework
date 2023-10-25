@@ -2,7 +2,7 @@ use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
 use common::log::info;
 use common::log::wasm_log::register_wasm_log;
-use common::{now_sec, wait_until_ms, wait_until_sec};
+use common::{now_sec, wait_until_sec};
 use crypto::StandardHDCoinAddress;
 use mm2_core::mm_ctx::MmArc;
 use mm2_number::BigDecimal;
@@ -12,7 +12,7 @@ use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init
                                   morty_conf, rick_conf, start_swaps, test_qrc20_history_impl,
                                   wait_for_swaps_finish_and_check_status, zombie_conf, MarketMakerIt,
                                   Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK,
-                                  ZOMBIE_ELECTRUMS, ZOMBIE_LIGHTWALLETD_URLS, ZOMBIE_TICKER};
+                                  ZOMBIE_ELECTRUMS, ZOMBIE_LIGHTWALLETD_WSS_URLS, ZOMBIE_TICKER};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::{EnableCoinBalance, InitTaskResult, InitZcoinStatus, RpcV2Response,
                                 ZCoinActivationResult};
@@ -193,7 +193,7 @@ async fn trade_test_rick_and_morty() {
     .await;
 }
 
-pub async fn enable_z_coin_light(
+async fn enable_z_coin_light(
     mm: &MarketMakerIt,
     coin: &str,
     electrums: &[&str],
@@ -203,7 +203,6 @@ pub async fn enable_z_coin_light(
 ) -> ZCoinActivationResult {
     let init = init_z_coin_light(mm, coin, electrums, lightwalletd_urls, starting_date, account).await;
     let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
-    info!("INIT RESULT: {init:?}");
     let timeout = wait_until_sec(120);
 
     loop {
@@ -235,7 +234,7 @@ async fn activate_z_coin_light() {
         &mm,
         ZOMBIE_TICKER,
         ZOMBIE_ELECTRUMS,
-        ZOMBIE_LIGHTWALLETD_URLS,
+        ZOMBIE_LIGHTWALLETD_WSS_URLS,
         None,
         None,
     )
