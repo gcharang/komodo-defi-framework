@@ -316,7 +316,6 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
     }
 }
 
-// Todo: Move this trait to the `hd_wallet` module and most of this coin_balance file to the `hd_wallet` module while refactoring the code.
 #[async_trait]
 #[cfg_attr(test, mockable)]
 pub trait HDAddressBalanceScanner {

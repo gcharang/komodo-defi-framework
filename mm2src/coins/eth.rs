@@ -21,17 +21,17 @@
 //  Copyright © 2022 AtomicDEX. All rights reserved.
 //
 use super::eth::Action::{Call, Create};
-use crate::hd_wallet::{ExtractExtendedPubkey, HDAccount, HDAccountAddressId, HDAccountOps, HDAddress, HDCoinAddress,
-                       HDCoinHDAccount, HDCoinHDAddress, HDCoinWithdrawOps, HDConfirmAddress, HDExtractPubkeyError,
-                       HDWallet, HDWalletCoinOps, HDXPubExtractor, NewAddressDeriveConfirmError,
-                       NewAddressDerivingError};
+use super::watcher_common::{validate_watcher_reward, REWARD_GAS_AMOUNT};
+use super::*;
+use crate::hd_wallet::{HDAccountAddressId, HDAccountOps, HDCoinAddress, HDCoinHDAccount, HDCoinHDAddress,
+                       HDCoinWithdrawOps, HDConfirmAddress, HDWalletCoinOps, HDXPubExtractor,
+                       NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::lp_price::get_base_price_in_rel;
 use crate::nft::nft_structs::{ContractType, ConvertChain, TransactionNftDetails, WithdrawErc1155, WithdrawErc721};
 use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
 use crate::{coin_balance, scan_for_new_addresses_impl, BalanceResult, CoinWithDerivationMethod, DerivationMethod,
             PrivKeyPolicy, TransactionResult};
 use async_trait::async_trait;
-use bip32::DerivationPath;
 use bitcrypto::{keccak256, ripemd160, sha256};
 use common::custom_futures::repeatable::{Ready, Retry, RetryOnError};
 use common::custom_futures::timeout::FutureTimerExt;
@@ -39,10 +39,8 @@ use common::executor::{abortable_queue::AbortableQueue, AbortableSystem, Aborted
 use common::log::{debug, error, info, warn};
 use common::number_type_casting::SafeTypeCastingNumbers;
 use common::{get_utc_timestamp, now_sec, small_rng, DEX_FEE_ADDR_RAW_PUBKEY};
-#[cfg(target_arch = "wasm32")]
-use common::{now_ms, wait_until_ms};
 use crypto::privkey::key_pair_from_secret;
-use crypto::{Bip44Chain, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, KeyPairPolicy, Secp256k1ExtendedPublicKey};
+use crypto::{Bip44Chain, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, KeyPairPolicy};
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use ethabi::{Contract, Function, Token};
@@ -56,13 +54,13 @@ use futures::future::{join_all, select_ok, try_join_all, Either, FutureExt, TryF
 use futures01::Future;
 use http::StatusCode;
 use mm2_core::mm_ctx::{MmArc, MmWeak};
-use mm2_err_handle::prelude::*;
 use mm2_net::transport::{slurp_url, GuiAuthValidation, GuiAuthValidationGenerator, SlurpError};
 use mm2_number::bigdecimal_custom::CheckedDivision;
 use mm2_number::{BigDecimal, MmNumber};
 use mm2_rpc::data::legacy::GasStationPricePolicy;
 #[cfg(test)] use mocktopus::macros::*;
 use rand::seq::SliceRandom;
+pub use rlp;
 use rpc::v1::types::Bytes as BytesJson;
 use secp256k1::PublicKey;
 use serde_json::{self as json, Value as Json};
@@ -71,7 +69,6 @@ use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Deref;
-#[cfg(not(target_arch = "wasm32"))] use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
@@ -81,37 +78,23 @@ use web3::{self, Web3};
 use web3_transport::{http_transport::HttpTransportNode, EthFeeHistoryNamespace, Web3Transport};
 
 cfg_wasm32! {
+    use common::{now_ms, wait_until_ms};
     use crypto::MetamaskArc;
     use ethereum_types::{H264, H520};
     use mm2_metamask::MetamaskError;
     use web3::types::TransactionRequest;
 }
 
-use super::watcher_common::{validate_watcher_reward, REWARD_GAS_AMOUNT};
-use super::{coin_conf, lp_coinfind_or_err, AsyncMutex, BalanceError, BalanceFut, CheckIfMyPaymentSentArgs,
-            CoinBalance, CoinFutSpawner, CoinProtocol, CoinTransportMetrics, CoinsContext, ConfirmPaymentInput,
-            EthValidateFeeArgs, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, IguanaPrivKey, MakerSwapTakerCoin,
-            MarketCoinOps, MmCoin, MmCoinEnum, MyAddressError, MyWalletAddress, NegotiateSwapContractAddrErr,
-            NumConversError, NumConversResult, PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr,
-            PrivKeyBuildPolicy, PrivKeyPolicyNotAllowed, RawTransactionError, RawTransactionFut,
-            RawTransactionRequest, RawTransactionRes, RawTransactionResult, RefundError, RefundPaymentArgs,
-            RefundResult, RewardTarget, RpcClientType, RpcTransportEventHandler, RpcTransportEventHandlerShared,
-            SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SignatureError,
-            SignatureResult, SpendPaymentArgs, SwapOps, TakerSwapMakerCoin, TradeFee, TradePreimageError,
-            TradePreimageFut, TradePreimageResult, TradePreimageValue, Transaction, TransactionDetails,
-            TransactionEnum, TransactionErr, TransactionFut, TransactionType, TxMarshalingErr,
-            UnexpectedDerivationMethod, ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr,
-            ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, VerificationError,
-            VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
-            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
-            WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest, WithdrawResult, EARLY_CONFIRMATION_ERR_LOG,
-            INVALID_CONTRACT_ADDRESS_ERR_LOG, INVALID_PAYMENT_STATE_ERR_LOG, INVALID_RECEIVER_ERR_LOG,
-            INVALID_SENDER_ERR_LOG, INVALID_SWAP_ID_ERR_LOG};
-pub use rlp;
+cfg_native! {
+    use std::path::PathBuf;
+}
 
 #[cfg(test)] mod eth_tests;
 #[cfg(target_arch = "wasm32")] mod eth_wasm_tests;
 mod web3_transport;
+
+pub mod eth_hd_wallet;
+use eth_hd_wallet::EthHDWallet;
 
 #[path = "eth/v2_activation.rs"] pub mod v2_activation;
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
@@ -187,10 +170,6 @@ lazy_static! {
     pub static ref ERC1155_CONTRACT: Contract = Contract::load(ERC1155_ABI.as_bytes()).unwrap();
 }
 
-// Todo: these hd wallet eth specific types should be moved to a separate file alongside the implementations at the bottom of this file
-pub type EthHDAddress = HDAddress<Address, Public>;
-pub type EthHDAccount = HDAccount<EthHDAddress>;
-pub type EthHDWallet = HDWallet<EthHDAccount>;
 pub type Web3RpcFut<T> = Box<dyn Future<Item = T, Error = MmError<Web3RpcError>> + Send>;
 pub type Web3RpcResult<T> = Result<T, MmError<Web3RpcError>>;
 pub type GasStationResult = Result<GasStationData, MmError<GasStationReqErr>>;
@@ -5594,83 +5573,6 @@ impl CoinWithDerivationMethod for EthCoin {
 }
 
 #[async_trait]
-impl ExtractExtendedPubkey for EthCoin {
-    type ExtendedPublicKey = Secp256k1ExtendedPublicKey;
-
-    async fn extract_extended_pubkey<XPubExtractor>(
-        &self,
-        xpub_extractor: Option<XPubExtractor>,
-        derivation_path: DerivationPath,
-    ) -> MmResult<Self::ExtendedPublicKey, HDExtractPubkeyError>
-    where
-        XPubExtractor: HDXPubExtractor + Send,
-    {
-        // Todo: there is a lot of repetition between here and utxo
-        match xpub_extractor {
-            Some(xpub_extractor) => {
-                let trezor_coin = self
-                    .trezor_coin
-                    .clone()
-                    .or_mm_err(|| HDExtractPubkeyError::CoinDoesntSupportTrezor)?;
-                let xpub = xpub_extractor.extract_xpub(trezor_coin, derivation_path).await?;
-                Secp256k1ExtendedPublicKey::from_str(&xpub)
-                    .map_to_mm(|e| HDExtractPubkeyError::InvalidXpub(e.to_string()))
-            },
-            None => {
-                let mut priv_key = self
-                    .priv_key_policy
-                    .bip39_secp_priv_key_or_err()
-                    .mm_err(|e| HDExtractPubkeyError::Internal(e.to_string()))?
-                    .clone();
-                for child in derivation_path {
-                    priv_key = priv_key
-                        .derive_child(child)
-                        .map_to_mm(|e| HDExtractPubkeyError::Internal(e.to_string()))?;
-                }
-                drop_mutability!(priv_key);
-                Ok(priv_key.public_key())
-            },
-        }
-    }
-}
-
-#[async_trait]
-impl HDWalletCoinOps for EthCoin {
-    type HDWallet = EthHDWallet;
-
-    fn address_from_extended_pubkey(
-        &self,
-        extended_pubkey: &Secp256k1ExtendedPublicKey,
-        derivation_path: DerivationPath,
-    ) -> HDCoinHDAddress<Self> {
-        let serialized = extended_pubkey.public_key().serialize_uncompressed();
-        let mut pubkey = Public::default();
-        pubkey.as_mut().copy_from_slice(&serialized[1..65]);
-        drop_mutability!(pubkey);
-
-        let address = public_to_address(&pubkey);
-
-        EthHDAddress {
-            address,
-            pubkey,
-            derivation_path,
-        }
-    }
-
-    fn trezor_coin(&self) -> MmResult<String, NewAddressDeriveConfirmError> {
-        self.trezor_coin.clone().or_mm_err(|| {
-            // Todo: this can be made common with utxo
-            let ticker = self.ticker();
-            let error = format!("'{ticker}' coin must contain the 'trezor_coin' field in the coins config");
-            NewAddressDeriveConfirmError::DeriveError(NewAddressDerivingError::Internal(error))
-        })
-    }
-}
-
-impl HDCoinWithdrawOps for EthCoin {}
-
-// Todo: this can be moved to HD wallet implementation probably, also check other good abstractions
-#[async_trait]
 impl GetNewAddressRpcOps for EthCoin {
     async fn get_new_address_rpc_without_conf(
         &self,
@@ -5691,170 +5593,6 @@ impl GetNewAddressRpcOps for EthCoin {
     }
 }
 
-/// The ETH/ERC20 address balance scanner.
-pub enum ETHAddressScanner {
-    Web3 {
-        web3: Web3<Web3Transport>,
-        coin_type: EthCoinType,
-    },
-}
-
-#[async_trait]
-#[cfg_attr(test, mockable)]
-impl HDAddressBalanceScanner for ETHAddressScanner {
-    type Address = Address;
-
-    async fn is_address_used(&self, address: &Self::Address) -> BalanceResult<bool> {
-        match self {
-            ETHAddressScanner::Web3 { web3, coin_type } => {
-                let current_block = match web3.eth().block_number().await {
-                    Ok(block) => block,
-                    Err(e) => {
-                        return Err(BalanceError::Transport(format!("Error {} on eth_block_number", e)).into());
-                    },
-                };
-
-                let from_block = BlockNumber::Earliest;
-                let to_block = BlockNumber::Number(current_block);
-
-                match coin_type {
-                    EthCoinType::Eth => {
-                        // It makes sense to check transactions to the hd address first since an address
-                        // should have incoming transactions before making any outgoing ones, so this will
-                        // avoid an additional call in almost all cases
-                        let to_traces = eth_traces(web3, vec![], vec![*address], from_block, to_block, Some(1)).await?;
-
-                        if !to_traces.is_empty() {
-                            return Ok(true);
-                        }
-
-                        let from_traces =
-                            eth_traces(web3, vec![*address], vec![], from_block, to_block, Some(1)).await?;
-
-                        Ok(!from_traces.is_empty())
-                    },
-                    EthCoinType::Erc20 { token_addr, .. } => {
-                        // It makes sense to check transactions to the hd address first since an address
-                        // should have incoming transactions before making any outgoing ones, so this will
-                        // avoid an additional call in almost all cases
-                        let to_events = erc20_transfer_events(
-                            web3,
-                            *token_addr,
-                            None,
-                            Some(*address),
-                            from_block,
-                            to_block,
-                            Some(1),
-                        )
-                        .await?;
-
-                        if !to_events.is_empty() {
-                            return Ok(true);
-                        }
-
-                        let from_events = erc20_transfer_events(
-                            web3,
-                            *token_addr,
-                            Some(*address),
-                            None,
-                            from_block,
-                            to_block,
-                            Some(1),
-                        )
-                        .await?;
-
-                        Ok(!from_events.is_empty())
-                    },
-                }
-            },
-        }
-    }
-}
-
-#[async_trait]
-impl HDWalletBalanceOps for EthCoin {
-    type HDAddressScanner = ETHAddressScanner;
-
-    async fn produce_hd_address_scanner(&self) -> BalanceResult<Self::HDAddressScanner> {
-        Ok(ETHAddressScanner::Web3 {
-            web3: self.web3.clone(),
-            coin_type: self.coin_type.clone(),
-        })
-    }
-
-    async fn enable_hd_wallet<XPubExtractor>(
-        &self,
-        hd_wallet: &Self::HDWallet,
-        xpub_extractor: Option<XPubExtractor>,
-        params: EnabledCoinBalanceParams,
-        path_to_address: &HDAccountAddressId,
-    ) -> MmResult<HDWalletBalance, EnableCoinBalanceError>
-    where
-        XPubExtractor: HDXPubExtractor + Send,
-    {
-        coin_balance::common_impl::enable_hd_wallet(self, hd_wallet, xpub_extractor, params, path_to_address).await
-    }
-
-    async fn scan_for_new_addresses(
-        &self,
-        hd_wallet: &Self::HDWallet,
-        hd_account: &mut HDCoinHDAccount<Self>,
-        address_scanner: &Self::HDAddressScanner,
-        gap_limit: u32,
-    ) -> BalanceResult<Vec<HDAddressBalance>> {
-        scan_for_new_addresses_impl(
-            self,
-            hd_wallet,
-            hd_account,
-            address_scanner,
-            Bip44Chain::External,
-            gap_limit,
-        )
-        .await
-    }
-
-    async fn all_known_addresses_balances(
-        &self,
-        hd_account: &HDCoinHDAccount<Self>,
-    ) -> BalanceResult<Vec<HDAddressBalance>> {
-        let external_addresses = hd_account
-            .known_addresses_number(Bip44Chain::External)
-            // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
-            .mm_err(|e| BalanceError::Internal(e.to_string()))?;
-
-        self.known_addresses_balances_with_ids(hd_account, Bip44Chain::External, 0..external_addresses)
-            .await
-    }
-
-    async fn known_address_balance(&self, address: &HDBalanceAddress<Self>) -> BalanceResult<CoinBalance> {
-        let balance = self
-            .address_balance(*address)
-            .and_then(move |result| Ok(u256_to_big_decimal(result, self.decimals())?))
-            .compat()
-            .await?;
-
-        Ok(CoinBalance {
-            spendable: balance,
-            unspendable: BigDecimal::from(0),
-        })
-    }
-
-    async fn known_addresses_balances(
-        &self,
-        addresses: Vec<HDBalanceAddress<Self>>,
-    ) -> BalanceResult<Vec<(HDBalanceAddress<Self>, CoinBalance)>> {
-        // Todo: check how it's done for utxo, we should make this concurrent call
-        let mut balances = vec![];
-        for address in addresses {
-            let balance = self.known_address_balance(&address).await?;
-            balances.push((address, balance));
-        }
-        Ok(balances)
-    }
-}
-
-// Todo: for the below implementations (AccountBalanceRpcOps, InitAccountBalanceRpcOps, InitScanAddressesRpcOps, InitCreateAccountRpcOps),
-// Todo: the traits and common functions should be moved to hd_wallet mod/crate alongside coin_balance file
 #[async_trait]
 impl AccountBalanceRpcOps for EthCoin {
     async fn account_balance_rpc(
