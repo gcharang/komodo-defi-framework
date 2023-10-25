@@ -1,6 +1,5 @@
 use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
-use common::log::info;
 use common::log::wasm_log::register_wasm_log;
 use common::{now_sec, wait_until_sec};
 use crypto::StandardHDCoinAddress;

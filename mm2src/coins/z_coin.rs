@@ -69,6 +69,8 @@ use zcash_primitives::transaction::Transaction as ZTransaction;
 use zcash_primitives::zip32::ChildIndex as Zip32Child;
 use zcash_primitives::{constants::mainnet as z_mainnet_constants, sapling::PaymentAddress,
                        zip32::ExtendedFullViewingKey, zip32::ExtendedSpendingKey};
+#[cfg(target_arch = "wasm32")]
+use zcash_proofs::parse_parameters;
 use zcash_proofs::prover::LocalTxProver;
 
 mod z_htlc;
@@ -1043,7 +1045,16 @@ impl<'a> ZCoinBuilder<'a> {
     }
 
     #[cfg(target_arch = "wasm32")]
-    async fn z_tx_prover(&self) -> Result<LocalTxProver, MmError<ZCoinBuildError>> { todo!() }
+    async fn z_tx_prover(&self) -> Result<LocalTxProver, MmError<ZCoinBuildError>> {
+        let (spend_buf, output_buf) = wagyu_zcash_parameters::load_sapling_parameters();
+        let p = parse_parameters(&spend_buf[..], &output_buf[..], None);
+
+        Ok(LocalTxProver {
+            spend_params: p.spend_params,
+            spend_vk: p.spend_vk,
+            output_params: p.output_params,
+        })
+    }
 }
 
 /// Initialize `ZCoin` with a forced `z_spending_key`.
