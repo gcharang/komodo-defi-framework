@@ -2371,13 +2371,9 @@ pub async fn init_z_coin_light_with_short_height(
     coin: &str,
     electrums: &[&str],
     lightwalletd_urls: &[&str],
-    starting_date: Option<u64>,
     account: Option<u32>,
 ) -> Json {
     // Number of seconds in a day
-    let one_day_seconds = 24 * 60 * 60;
-    let starting_date = starting_date.unwrap_or(now_sec() - one_day_seconds);
-
     let request = mm
         .rpc(&json!({
             "userpass": mm.userpass,
@@ -2392,7 +2388,7 @@ pub async fn init_z_coin_light_with_short_height(
                             "electrum_servers": electrum_servers_rpc(electrums),
                             "light_wallet_d_servers": lightwalletd_urls,
                             "sync_params": {
-                                "height": 2626131
+                                "height": 2626265
                             }
                         },
                     },

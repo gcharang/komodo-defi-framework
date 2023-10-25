@@ -8,8 +8,8 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_number::BigDecimal;
 use mm2_rpc::data::legacy::OrderbookResponse;
 use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
-use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init_z_coin_light, init_z_coin_status,
-                                  morty_conf, rick_conf, start_swaps, test_qrc20_history_impl,
+use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init_z_coin_light_with_short_height,
+                                  init_z_coin_status, morty_conf, rick_conf, start_swaps, test_qrc20_history_impl,
                                   wait_for_swaps_finish_and_check_status, zombie_conf, MarketMakerIt,
                                   Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, MORTY, RICK,
                                   ZOMBIE_ELECTRUMS_WSS, ZOMBIE_LIGHTWALLETD_PROXIED_URLS, ZOMBIE_TICKER};
@@ -201,7 +201,8 @@ async fn enable_z_coin_light(
     starting_date: Option<u64>,
     account: Option<u32>,
 ) -> ZCoinActivationResult {
-    let init = init_z_coin_light(mm, coin, electrums, lightwalletd_urls, starting_date, account).await;
+    let init =
+        init_z_coin_light_with_short_height(mm, coin, electrums, lightwalletd_urls, starting_date, account).await;
     let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
     let timeout = wait_until_sec(120);
 

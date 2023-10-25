@@ -285,6 +285,7 @@ impl ZRpcOps for LightRpcClient {
         &mut self,
         height: u64,
     ) -> MmResult<Option<CheckPointBlockInfo>, UpdateBlocksCacheErr> {
+        info!("SYNC STARTING HEIGHT: {height}");
         let tree_state = self.get_tree_state(height).await?;
         let hash = H256Json::from_str(&tree_state.hash)
             .map_err(|err| UpdateBlocksCacheErr::DecodeError(err.to_string()))?
