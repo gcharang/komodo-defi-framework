@@ -1,5 +1,6 @@
 use crate::mm2::lp_init;
 use common::executor::{spawn, Timer};
+use common::log::info;
 use common::log::wasm_log::register_wasm_log;
 use common::{now_sec, wait_until_sec};
 use crypto::StandardHDCoinAddress;
@@ -209,7 +210,7 @@ async fn enable_z_coin_light(
             panic!("{} initialization timed out", coin);
         }
         let status = init_z_coin_status(mm, init.result.task_id).await;
-        println!("Status {}", json::to_string(&status).unwrap());
+        info!("Status {}", json::to_string(&status).unwrap());
         let status: RpcV2Response<InitZcoinStatus> = json::from_value(status).unwrap();
         match status.result {
             InitZcoinStatus::Ok(result) => break result,
