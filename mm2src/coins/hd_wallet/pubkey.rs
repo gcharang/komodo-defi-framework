@@ -32,7 +32,6 @@ pub trait HDXPubExtractor: Sync {
     ) -> MmResult<XPub, HDExtractPubkeyError>;
 }
 
-// Todo: it would be good to separate hardware wallet specific code from HD wallet code.
 pub enum RpcTaskXPubExtractor<'task, Task: RpcTask> {
     Trezor {
         hw_ctx: HardwareWalletArc,

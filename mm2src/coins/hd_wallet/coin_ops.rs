@@ -291,7 +291,6 @@ pub trait HDWalletCoinOps {
         Ok(())
     }
 
-    // Todo: Maybe make a trait specifically for HW wallets that is a superset of HDWalletCoinOps
     /// Returns the Trezor coin name for this coin.
     fn trezor_coin(&self) -> MmResult<String, TrezorCoinError>;
 }

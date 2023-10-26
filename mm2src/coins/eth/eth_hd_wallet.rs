@@ -212,12 +212,14 @@ impl HDWalletBalanceOps for EthCoin {
         &self,
         addresses: Vec<HDBalanceAddress<Self>>,
     ) -> BalanceResult<Vec<(HDBalanceAddress<Self>, CoinBalance)>> {
-        // Todo: check how it's done for utxo, we should make this concurrent call
-        let mut balances = vec![];
+        let mut balance_futs = Vec::new();
         for address in addresses {
-            let balance = self.known_address_balance(&address).await?;
-            balances.push((address, balance));
+            let fut = async move {
+                let balance = self.known_address_balance(&address).await?;
+                Ok((address, balance))
+            };
+            balance_futs.push(fut);
         }
-        Ok(balances)
+        try_join_all(balance_futs).await
     }
 }

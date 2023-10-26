@@ -45,7 +45,6 @@ pub(crate) use storage::{HDWalletStorageInternalOps, HDWalletStorageResult};
 mod wallet_ops;
 pub use wallet_ops::HDWalletOps;
 
-// Todo: make this a feature when hd_wallet mod is a crate
 mod withdraw_ops;
 pub use withdraw_ops::{HDCoinWithdrawOps, WithdrawFrom, WithdrawSenderAddress};
 

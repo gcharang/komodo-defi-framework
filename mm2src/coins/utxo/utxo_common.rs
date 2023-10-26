@@ -156,8 +156,6 @@ where
         gap_limit,
     )
     .await?;
-    // Todo: this extend can be disabled for coins that don't support internal addresses
-    // Todo: a new parameter should be added to the function to combine this function with scan_for_new_addresses in eth.rs
     addresses.extend(
         scan_for_new_addresses_impl(
             coin,
@@ -173,7 +171,6 @@ where
     Ok(addresses)
 }
 
-// Todo: this function should be moved to hd_wallet mod along other hd balance related functions
 pub async fn all_known_addresses_balances<T>(
     coin: &T,
     hd_account: &HDCoinHDAccount<T>,
@@ -186,8 +183,6 @@ where
         .known_addresses_number(Bip44Chain::External)
         // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].
         .mm_err(|e| BalanceError::Internal(e.to_string()))?;
-    // Todo: this part should be disabled for coins that don't support internal addresses
-    // Todo: a new parameter should be added to the function to combine this function with all_known_addresses_balances in eth.rs
     let internal_addresses = hd_account
         .known_addresses_number(Bip44Chain::Internal)
         // A UTXO coin should support both [`Bip44Chain::External`] and [`Bip44Chain::Internal`].

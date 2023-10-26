@@ -4445,7 +4445,6 @@ fn coins_conf_check(ctx: &MmArc, coins_en: &Json, ticker: &str, req: Option<&Jso
     Ok(())
 }
 
-// Todo: scan_for_new_addresses_impl should be moved to hd_wallet mod alongside hd code in coin_balance.rs
 /// Checks addresses that either had empty transaction history last time we checked or has not been checked before.
 /// The checking stops at the moment when we find `gap_limit` consecutive empty addresses.
 pub async fn scan_for_new_addresses_impl<T>(
@@ -4458,7 +4457,7 @@ pub async fn scan_for_new_addresses_impl<T>(
 ) -> BalanceResult<Vec<HDAddressBalance>>
 where
     T: HDWalletBalanceOps + Sync,
-    HDCoinAddress<T>: std::fmt::Display,
+    HDCoinAddress<T>: fmt::Display,
 {
     let mut balances = Vec::with_capacity(gap_limit as usize);
 
