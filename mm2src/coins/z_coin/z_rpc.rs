@@ -701,7 +701,6 @@ impl SaplingSyncLoopHandle {
     /// Scans cached blocks, validates the chain and updates WalletDb.
     /// For more notes on the process, check https://github.com/zcash/librustzcash/blob/master/zcash_client_backend/src/data_api/chain.rs#L2
     async fn scan_validate_and_update_blocks(&mut self) -> Result<(), MmError<ZcoinStorageError>> {
-        // required to avoid immutable borrow of self
         let wallet_db = self.wallet_db.clone().db;
         let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
         let mut wallet_ops_guard_clone = wallet_ops_guard.clone();
@@ -716,7 +715,6 @@ impl SaplingSyncLoopHandle {
             )
             .await;
         if let Err(e) = validate_chain {
-            info!("ERROR: {e:?}");
             match e.into_inner() {
                 ZcoinStorageError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
                     let lower_bound = height;
@@ -748,6 +746,7 @@ impl SaplingSyncLoopHandle {
 
             let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
             let scan = DataConnStmtCacheWrapper::new(wallet_ops_guard);
+            info!("START SCANNING WALLETDB");
             blocks_db
                 .process_blocks_with_mode(
                     self.consensus_params.clone(),
@@ -799,7 +798,7 @@ async fn light_wallet_db_sync_loop(mut sync_handle: SaplingSyncLoopHandle, mut c
         "(Re)starting light_wallet_db_sync_loop for {}, blocks per iteration {}, interval in ms {}",
         sync_handle.coin, sync_handle.scan_blocks_per_iteration, sync_handle.scan_interval_ms
     );
-    // this loop is spawned as standalone task so it's safe to use block_in_place here
+
     loop {
         if let Err(e) = sync_handle.update_blocks_cache(client.as_mut()).await {
             error!("Error {} on blocks cache update", e);

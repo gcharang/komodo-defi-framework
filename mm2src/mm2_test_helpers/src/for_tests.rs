@@ -2458,7 +2458,7 @@ pub async fn init_z_coin_light_with_short_height(
                             "electrum_servers": electrum_servers_rpc(electrums),
                             "light_wallet_d_servers": lightwalletd_urls,
                             "sync_params": {
-                                "height": 2626737
+                                "height": 2626830
                             }
                         },
                     },
