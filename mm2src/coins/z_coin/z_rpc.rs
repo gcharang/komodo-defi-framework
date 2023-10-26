@@ -716,6 +716,7 @@ impl SaplingSyncLoopHandle {
             )
             .await;
         if let Err(e) = validate_chain {
+            info!("ERROR: {e:?}");
             match e.into_inner() {
                 ZcoinStorageError::ValidateBlocksError(ValidateBlocksError::ChainInvalid { height, .. }) => {
                     let lower_bound = height;
