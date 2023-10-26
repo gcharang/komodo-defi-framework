@@ -256,9 +256,7 @@ impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> InitialState for Init
 }
 
 #[async_trait]
-impl<MakerCoin: MmCoin + SwapOpsV2 + Send + Sync + 'static, TakerCoin: MmCoin + SwapOpsV2 + Send + Sync + 'static> State
-    for Initialize<MakerCoin, TakerCoin>
-{
+impl<MakerCoin: MmCoin + SwapOpsV2, TakerCoin: MmCoin + SwapOpsV2> State for Initialize<MakerCoin, TakerCoin> {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {

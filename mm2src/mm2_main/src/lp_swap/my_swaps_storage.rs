@@ -104,7 +104,7 @@ mod wasm_impl {
     use super::*;
     use crate::mm2::lp_swap::swap_wasm_db::cursor_prelude::*;
     use crate::mm2::lp_swap::swap_wasm_db::{DbTransactionError, InitDbError, MySwapsFiltersTable};
-    use crate::mm2::lp_swap::SwapsContext;
+    use crate::mm2::lp_swap::{SwapsContext, LEGACY_SWAP_TYPE};
     use std::collections::BTreeSet;
     use uuid::Uuid;
 
@@ -176,6 +176,8 @@ mod wasm_impl {
                 my_coin: my_coin.to_owned(),
                 other_coin: other_coin.to_owned(),
                 started_at: started_at as u32,
+                is_finished: false,
+                swap_type: LEGACY_SWAP_TYPE,
             };
             my_swaps_table.add_item(&item).await?;
             Ok(())

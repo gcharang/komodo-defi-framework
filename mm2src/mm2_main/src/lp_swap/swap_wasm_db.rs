@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, OnUpgradeResult,
-                         TableSignature};
+use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, OnUpgradeError,
+                         OnUpgradeResult, TableSignature};
 use std::ops::Deref;
 use uuid::Uuid;
 
@@ -39,6 +39,7 @@ impl Deref for SwapDb {
 
 pub mod tables {
     use super::*;
+    use mm2_err_handle::prelude::MmError;
     use serde_json::Value as Json;
 
     #[derive(Debug, Deserialize, Clone, Serialize, PartialEq)]
@@ -78,19 +79,40 @@ pub mod tables {
         pub my_coin: String,
         pub other_coin: String,
         pub started_at: u32,
+        #[serde(default)]
+        pub is_finished: bool,
+        #[serde(default)]
+        pub swap_type: u8,
     }
 
     impl TableSignature for MySwapsFiltersTable {
         fn table_name() -> &'static str { "my_swaps" }
 
-        fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-            if let (0, 1) = (old_version, new_version) {
-                let table = upgrader.create_table(Self::table_name())?;
-                table.create_index("uuid", true)?;
-                table.create_index("started_at", false)?;
-                table.create_multi_index("with_my_coin", &["my_coin", "started_at"], false)?;
-                table.create_multi_index("with_other_coin", &["other_coin", "started_at"], false)?;
-                table.create_multi_index("with_my_other_coins", &["my_coin", "other_coin", "started_at"], false)?;
+        fn on_upgrade_needed(upgrader: &DbUpgrader, mut old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+            while old_version < new_version {
+                match old_version {
+                    0 => {
+                        let table = upgrader.create_table(Self::table_name())?;
+                        table.create_index("uuid", true)?;
+                        table.create_index("started_at", false)?;
+                        table.create_multi_index("with_my_coin", &["my_coin", "started_at"], false)?;
+                        table.create_multi_index("with_other_coin", &["other_coin", "started_at"], false)?;
+                        table.create_multi_index(
+                            "with_my_other_coins",
+                            &["my_coin", "other_coin", "started_at"],
+                            false,
+                        )?;
+                    },
+                    unsupported_version => {
+                        return MmError::err(OnUpgradeError::UnsupportedVersion {
+                            unsupported_version,
+                            old_version,
+                            new_version,
+                        })
+                    },
+                }
+
+                old_version += 1;
             }
             Ok(())
         }
