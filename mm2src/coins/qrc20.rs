@@ -25,8 +25,8 @@ use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, Coi
             TradePreimageValue, TransactionDetails, TransactionEnum, TransactionErr, TransactionFut,
             TransactionResult, TransactionType, TxMarshalingErr, UnexpectedDerivationMethod, ValidateAddressResult,
             ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentFut,
-            ValidatePaymentInput, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward,
-            WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
+            ValidatePaymentInput, ValidateWatcherSpendInput, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps,
+            WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
             WatcherValidateTakerFeeInput, WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest, WithdrawResult};
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
@@ -1144,6 +1144,10 @@ impl WatcherOps for Qrc20Coin {
         unimplemented!();
     }
 
+    fn taker_validates_payment_spend_or_refund(&self, _input: ValidateWatcherSpendInput) -> ValidatePaymentFut<()> {
+        unimplemented!()
+    }
+
     async fn watcher_search_for_swap_tx_spend(
         &self,
         _input: WatcherSearchForSwapTxSpendInput<'_>,
@@ -1289,11 +1293,13 @@ impl MarketCoinOps for Qrc20Coin {
 
     fn display_priv_key(&self) -> Result<String, String> { utxo_common::display_priv_key(&self.utxo) }
 
+    #[inline]
     fn min_tx_amount(&self) -> BigDecimal { BigDecimal::from(0) }
 
+    #[inline]
     fn min_trading_vol(&self) -> MmNumber {
-        let pow = self.utxo.decimals / 3;
-        MmNumber::from(1) / MmNumber::from(10u64.pow(pow as u32))
+        let pow = self.utxo.decimals as u32;
+        MmNumber::from(1) / MmNumber::from(10u64.pow(pow))
     }
 
     fn is_trezor(&self) -> bool { self.as_ref().priv_key_policy.is_trezor() }

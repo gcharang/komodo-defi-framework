@@ -28,9 +28,9 @@ use crate::{CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, CoinWithDeriva
             TradePreimageValue, TransactionFut, TransactionResult, TxMarshalingErr, TxPreimageWithSig,
             ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr,
             ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, ValidateTakerPaymentArgs,
-            ValidateTakerPaymentResult, ValidateTakerPaymentSpendPreimageResult, VerificationResult,
-            WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut};
+            ValidateTakerPaymentResult, ValidateTakerPaymentSpendPreimageResult, ValidateWatcherSpendInput,
+            VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
+            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut};
 use common::executor::{AbortableSystem, AbortedError};
 use futures::{FutureExt, TryFutureExt};
 use mm2_metrics::MetricsArc;
@@ -469,7 +469,7 @@ impl SwapOps for UtxoStandardCoin {
         MmError::err(ValidateInstructionsErr::UnsupportedCoin(self.ticker().to_string()))
     }
 
-    fn is_supported_by_watchers(&self) -> bool { std::env::var("USE_WATCHERS").is_ok() }
+    fn is_supported_by_watchers(&self) -> bool { true }
 }
 
 #[async_trait]
@@ -545,6 +545,11 @@ impl WatcherOps for UtxoStandardCoin {
     #[inline]
     fn watcher_validate_taker_payment(&self, input: WatcherValidatePaymentInput) -> ValidatePaymentFut<()> {
         utxo_common::watcher_validate_taker_payment(self, input)
+    }
+
+    #[inline]
+    fn taker_validates_payment_spend_or_refund(&self, input: ValidateWatcherSpendInput) -> ValidatePaymentFut<()> {
+        utxo_common::validate_payment_spend_or_refund(self, input)
     }
 
     #[inline]

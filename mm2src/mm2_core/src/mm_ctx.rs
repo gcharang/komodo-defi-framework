@@ -6,6 +6,7 @@ use common::log::{self, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
+use mm2_event_stream::{controller::Controller, Event, EventStreamConfiguration};
 use mm2_metrics::{MetricsArc, MetricsOps};
 use primitives::hash::H160;
 use rand::Rng;
@@ -72,6 +73,10 @@ pub struct MmCtx {
     pub initialized: Constructible<bool>,
     /// True if the RPC HTTP server was started.
     pub rpc_started: Constructible<bool>,
+    /// Controller for continuously streaming data using streaming channels of `mm2_event_stream`.
+    pub stream_channel_controller: Controller<Event>,
+    /// Configuration of event streaming used for SSE.
+    pub event_stream_configuration: Option<EventStreamConfiguration>,
     /// True if the MarketMaker instance needs to stop.
     pub stop: Constructible<bool>,
     /// Unique context identifier, allowing us to more easily pass the context through the FFI boundaries.  
@@ -133,6 +138,8 @@ impl MmCtx {
             metrics: MetricsArc::new(),
             initialized: Constructible::default(),
             rpc_started: Constructible::default(),
+            stream_channel_controller: Controller::new(),
+            event_stream_configuration: None,
             stop: Constructible::default(),
             ffi_handle: Constructible::default(),
             ordermatch_ctx: Mutex::new(None),
@@ -272,10 +279,7 @@ impl MmCtx {
 
     pub fn is_watcher(&self) -> bool { self.conf["is_watcher"].as_bool().unwrap_or_default() }
 
-    pub fn use_watchers(&self) -> bool {
-        std::env::var("USE_WATCHERS").is_ok()
-        //self.conf["use_watchers"].as_bool().unwrap_or(true)
-    }
+    pub fn use_watchers(&self) -> bool { self.conf["use_watchers"].as_bool().unwrap_or(true) }
 
     pub fn netid(&self) -> u16 {
         let netid = self.conf["netid"].as_u64().unwrap_or(0);
@@ -680,8 +684,17 @@ impl MmCtxBuilder {
         let mut ctx = MmCtx::with_log_state(log);
         ctx.mm_version = self.version;
         ctx.datetime = self.datetime;
+
         if let Some(conf) = self.conf {
-            ctx.conf = conf
+            ctx.conf = conf;
+
+            let event_stream_configuration = &ctx.conf["event_stream_configuration"];
+            if !event_stream_configuration.is_null() {
+                let event_stream_configuration: EventStreamConfiguration =
+                    json::from_value(event_stream_configuration.clone())
+                        .expect("Invalid json value in 'event_stream_configuration'.");
+                ctx.event_stream_configuration = Some(event_stream_configuration);
+            }
         }
 
         #[cfg(target_arch = "wasm32")]

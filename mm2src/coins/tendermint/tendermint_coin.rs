@@ -26,10 +26,10 @@ use crate::{big_decimal_from_sat_unsigned, BalanceError, BalanceFut, BigDecimal,
             TradePreimageValue, TransactionDetails, TransactionEnum, TransactionErr, TransactionFut,
             TransactionResult, TransactionType, TxFeeDetails, TxMarshalingErr, UnexpectedDerivationMethod,
             ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr,
-            ValidatePaymentFut, ValidatePaymentInput, VerificationError, VerificationResult, WaitForHTLCTxSpendArgs,
-            WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawError, WithdrawFee, WithdrawFut,
-            WithdrawRequest};
+            ValidatePaymentFut, ValidatePaymentInput, ValidateWatcherSpendInput, VerificationError,
+            VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
+            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
+            WithdrawError, WithdrawFee, WithdrawFut, WithdrawRequest};
 use async_std::prelude::FutureExt as AsyncStdFutureExt;
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
@@ -2388,9 +2388,11 @@ impl MarketCoinOps for TendermintCoin {
             .to_string())
     }
 
+    #[inline]
     fn min_tx_amount(&self) -> BigDecimal { big_decimal_from_sat(MIN_TX_SATOSHIS, self.decimals) }
 
-    fn min_trading_vol(&self) -> MmNumber { MmNumber::from("0.00777") }
+    #[inline]
+    fn min_trading_vol(&self) -> MmNumber { self.min_tx_amount().into() }
 
     fn is_trezor(&self) -> bool { self.priv_key_policy.is_trezor() }
 }
@@ -2726,6 +2728,10 @@ impl WatcherOps for TendermintCoin {
     }
 
     fn watcher_validate_taker_payment(&self, _input: WatcherValidatePaymentInput) -> ValidatePaymentFut<()> {
+        unimplemented!();
+    }
+
+    fn taker_validates_payment_spend_or_refund(&self, _input: ValidateWatcherSpendInput) -> ValidatePaymentFut<()> {
         unimplemented!();
     }
 

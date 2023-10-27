@@ -4,7 +4,7 @@ use common::{block_on, log, now_ms, wait_until_ms};
 use crypto::privkey::key_pair_from_seed;
 use mm2_main::mm2::{lp_main, LpMainParams};
 use mm2_rpc::data::legacy::CoinInitResponse;
-use mm2_test_helpers::electrums::{morty_electrums, rick_electrums};
+use mm2_test_helpers::electrums::{doc_electrums, marty_electrums};
 use mm2_test_helpers::for_tests::{create_new_account_status, enable_native as enable_native_impl,
                                   init_create_new_account, init_z_coin_light, init_z_coin_status, MarketMakerIt};
 use mm2_test_helpers::structs::{CreateNewAccountStatus, HDAccountAddressId, HDAccountBalance, InitTaskResult,
@@ -64,10 +64,10 @@ pub async fn enable_native(
 
 pub async fn enable_coins_rick_morty_electrum(mm: &MarketMakerIt) -> HashMap<&'static str, CoinInitResponse> {
     let mut replies = HashMap::new();
-    replies.insert("RICK", enable_electrum_json(mm, "RICK", false, rick_electrums()).await);
+    replies.insert("RICK", enable_electrum_json(mm, "RICK", false, doc_electrums()).await);
     replies.insert(
         "MORTY",
-        enable_electrum_json(mm, "MORTY", false, morty_electrums()).await,
+        enable_electrum_json(mm, "MORTY", false, marty_electrums()).await,
     );
     replies
 }
@@ -105,10 +105,10 @@ pub async fn enable_coins_eth_electrum(
     eth_urls: &[&str],
 ) -> HashMap<&'static str, CoinInitResponse> {
     let mut replies = HashMap::new();
-    replies.insert("RICK", enable_electrum_json(mm, "RICK", false, rick_electrums()).await);
+    replies.insert("RICK", enable_electrum_json(mm, "RICK", false, doc_electrums()).await);
     replies.insert(
         "MORTY",
-        enable_electrum_json(mm, "MORTY", false, morty_electrums()).await,
+        enable_electrum_json(mm, "MORTY", false, marty_electrums()).await,
     );
     replies.insert("ETH", enable_native(mm, "ETH", eth_urls, None).await);
     replies.insert("JST", enable_native(mm, "JST", eth_urls, None).await);

@@ -2,9 +2,9 @@ use common::custom_futures::repeatable::{Ready, Retry};
 use common::{block_on, log, repeatable};
 use http::StatusCode;
 use itertools::Itertools;
-use mm2_test_helpers::for_tests::{disable_coin, enable_bch_with_tokens, enable_slp, my_tx_history_v2, sign_message,
-                                  tbch_for_slp_conf, tbch_usdf_conf, verify_message, MarketMakerIt, Mm2TestConf,
-                                  UtxoRpcMode};
+use mm2_test_helpers::for_tests::{disable_coin, electrum_servers_rpc, enable_bch_with_tokens, enable_slp,
+                                  my_tx_history_v2, sign_message, tbch_for_slp_conf, tbch_usdf_conf, verify_message,
+                                  MarketMakerIt, Mm2TestConf, UtxoRpcMode, T_BCH_ELECTRUMS};
 use mm2_test_helpers::structs::{Bip44Chain, EnableBchWithTokensResponse, HDAccountAddressId, RpcV2Response,
                                 SignatureResponse, StandardHistoryV2Res, UtxoFeeDetails, VerificationResponse};
 use serde_json::{self as json, json, Value as Json};
@@ -12,25 +12,7 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-#[cfg(not(target_arch = "wasm32"))]
-const T_BCH_ELECTRUMS: &[&str] = &[
-    "electroncash.de:50003",
-    "tbch.loping.net:60001",
-    "blackie.c3-soft.com:60001",
-    "bch0.kister.net:51001",
-    "testnet.imaginary.cash:50001",
-];
-
-#[cfg(target_arch = "wasm32")]
-const T_BCH_ELECTRUMS: &[&str] = &[
-    "electroncash.de:60003",
-    "electroncash.de:60004",
-    "blackie.c3-soft.com:60004",
-];
-
 const BIP39_PASSPHRASE: &str = "tank abandon bind salon remove wisdom net size aspect direct source fossil";
-
-fn t_bch_electrums_legacy_json() -> Vec<Json> { T_BCH_ELECTRUMS.iter().map(|url| json!({ "url": url })).collect() }
 
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
@@ -62,7 +44,7 @@ fn test_withdraw_cashaddresses() {
         "userpass": mm.userpass,
         "method": "electrum",
         "coin": "BCH",
-        "servers": t_bch_electrums_legacy_json(),
+        "servers": electrum_servers_rpc(T_BCH_ELECTRUMS),
         "mm2": 1,
     })))
     .unwrap();
@@ -176,7 +158,7 @@ fn test_withdraw_cashaddresses() {
         "userpass": mm.userpass,
         "method": "electrum",
         "coin": "BCH",
-        "servers": t_bch_electrums_legacy_json(),
+        "servers": electrum_servers_rpc(T_BCH_ELECTRUMS),
         "address_format":{"format":"standard"},
         "mm2": 1,
     })))
@@ -266,7 +248,7 @@ fn test_withdraw_to_different_cashaddress_network_should_fail() {
         "userpass": mm.userpass,
         "method": "electrum",
         "coin": "BCH",
-        "servers": t_bch_electrums_legacy_json(),
+        "servers": electrum_servers_rpc(T_BCH_ELECTRUMS),
         "mm2": 1,
     })))
     .unwrap();
@@ -329,7 +311,7 @@ fn test_common_cashaddresses() {
         "userpass": mm.userpass,
         "method": "electrum",
         "coin": "BCH",
-        "servers": t_bch_electrums_legacy_json(),
+        "servers": electrum_servers_rpc(T_BCH_ELECTRUMS),
         "mm2": 1,
     })))
     .unwrap();
@@ -530,7 +512,7 @@ fn test_sign_verify_message_bch() {
         "userpass": mm.userpass,
         "method": "electrum",
         "coin": "BCH",
-        "servers": t_bch_electrums_legacy_json(),
+        "servers": electrum_servers_rpc(T_BCH_ELECTRUMS),
         "mm2": 1,
     })))
     .unwrap();
