@@ -136,7 +136,6 @@ fn eth_coin_from_keypair(
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -322,7 +321,6 @@ fn send_and_refund_erc20_payment() {
             platform: "ETH".to_string(),
             token_addr: Address::from_str(ETH_DEV_TOKEN_CONTRACT).unwrap(),
         },
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -411,7 +409,6 @@ fn send_and_refund_eth_payment() {
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -512,7 +509,6 @@ fn test_nonce_several_urls() {
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -549,14 +545,12 @@ fn test_nonce_several_urls() {
         abortable_system: AbortableQueue::default(),
     }));
 
-    log!("My address {:?}", coin.my_address);
+    log!("My address {}", coin.my_address().unwrap());
     log!("before payment");
-    let payment = coin.send_to_address(coin.my_address, 200000000.into()).wait().unwrap();
+    let payment = coin.send_to_address(my_address, 200000000.into()).wait().unwrap();
 
     log!("{:?}", payment);
-    let new_nonce = get_addr_nonce(coin.my_address, coin.web3_instances.clone())
-        .wait()
-        .unwrap();
+    let new_nonce = get_addr_nonce(my_address, coin.web3_instances.clone()).wait().unwrap();
     log!("{:?}", new_nonce);
 }
 
@@ -581,7 +575,6 @@ fn test_wait_for_payment_spend_timeout() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -654,7 +647,6 @@ fn test_search_for_swap_tx_spend_was_spent() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -768,7 +760,6 @@ fn test_search_for_swap_tx_spend_was_refunded() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address,
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
@@ -920,16 +911,12 @@ fn test_nonce_lock() {
     // send several transactions concurrently to check that they are not using same nonce
     // using real ETH dev node
     let (ctx, coin) = random_eth_coin_for_test(EthCoinType::Eth, ETH_DEV_NODES, None);
+    let my_address = block_on(coin.derivation_method.single_addr_or_err()).unwrap();
     let mut futures = vec![];
     for _ in 0..5 {
         futures.push(
-            coin.sign_and_send_transaction(
-                1000000000000u64.into(),
-                Action::Call(coin.my_address),
-                vec![],
-                21000.into(),
-            )
-            .compat(),
+            coin.sign_and_send_transaction(1000000000000u64.into(), Action::Call(my_address), vec![], 21000.into())
+                .compat(),
         );
     }
     let results = block_on(join_all(futures));
@@ -1404,7 +1391,7 @@ fn polygon_check_if_my_payment_sent() {
     ))
     .unwrap();
 
-    println!("{:02x}", coin.my_address);
+    log!("{}", coin.my_address().unwrap());
 
     let secret_hash = hex::decode("fc33114b389f0ee1212abf2867e99e89126f4860").unwrap();
     let swap_contract_address = "9130b257d37a52e52f21054c4da3450c72f595ce".into();
@@ -1440,7 +1427,6 @@ fn test_message_hash() {
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -1488,7 +1474,6 @@ fn test_sign_verify_message() {
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),
@@ -1547,7 +1532,6 @@ fn test_eth_extract_secret() {
         gas_station_decimals: ETH_GAS_STATION_DECIMALS,
         gas_station_policy: GasStationPricePolicy::MeanAverageFast,
         history_sync_state: Mutex::new(HistorySyncState::NotEnabled),
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),

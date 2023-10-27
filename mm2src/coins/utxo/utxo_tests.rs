@@ -170,10 +170,7 @@ fn test_send_maker_spends_taker_payment_recoverable_tx() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let tx_err = coin
-        .send_maker_spends_taker_payment(maker_spends_payment_args)
-        .wait()
-        .unwrap_err();
+    let tx_err = block_on(coin.send_maker_spends_taker_payment(maker_spends_payment_args)).unwrap_err();
 
     let tx: UtxoTx = deserialize(tx_hex.as_slice()).unwrap();
 

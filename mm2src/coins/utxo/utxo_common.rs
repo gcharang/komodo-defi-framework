@@ -191,8 +191,6 @@ where
     let mut balances = coin
         .known_addresses_balances_with_ids(hd_account, Bip44Chain::External, 0..external_addresses)
         .await?;
-    // Todo: this extend can be disabled for coins that don't support internal addresses
-    // Todo: a new parameter should be added to the function to combine this function with scan_for_new_addresses in eth.rs
     balances.extend(
         coin.known_addresses_balances_with_ids(hd_account, Bip44Chain::Internal, 0..internal_addresses)
             .await?,
@@ -1183,12 +1181,15 @@ where
     Box::new(send_fut)
 }
 
-pub fn send_maker_spends_taker_payment<T: UtxoCommonOps + SwapOps>(coin: T, args: SpendPaymentArgs) -> TransactionFut {
-    let mut prev_transaction: UtxoTx = try_tx_fus!(deserialize(args.other_payment_tx).map_err(|e| ERRL!("{:?}", e)));
+pub async fn send_maker_spends_taker_payment<T: UtxoCommonOps + SwapOps>(
+    coin: T,
+    args: SpendPaymentArgs<'_>,
+) -> TransactionResult {
+    let mut prev_transaction: UtxoTx = try_tx_s!(deserialize(args.other_payment_tx).map_err(|e| ERRL!("{:?}", e)));
     prev_transaction.tx_hash_algo = coin.as_ref().tx_hash_algo;
     drop_mutability!(prev_transaction);
     if prev_transaction.outputs.is_empty() {
-        return try_tx_fus!(TX_PLAIN_ERR!("Transaction doesn't have any output"));
+        return try_tx_s!(TX_PLAIN_ERR!("Transaction doesn't have any output"));
     }
 
     let key_pair = coin.derive_htlc_key_pair(args.swap_unique_data);
@@ -1197,50 +1198,47 @@ pub fn send_maker_spends_taker_payment<T: UtxoCommonOps + SwapOps>(coin: T, args
         .push_opcode(Opcode::OP_0)
         .into_script();
 
-    let time_lock = try_tx_fus!(args.time_lock.try_into());
+    let time_lock = try_tx_s!(args.time_lock.try_into());
     let redeem_script = payment_script(
         time_lock,
         args.secret_hash,
-        &try_tx_fus!(Public::from_slice(args.other_pubkey)),
+        &try_tx_s!(Public::from_slice(args.other_pubkey)),
         key_pair.public(),
     )
     .into();
-    let fut = async move {
-        let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err().await);
-        let fee = try_tx_s!(
-            coin.get_htlc_spend_fee(DEFAULT_SWAP_TX_SPEND_SIZE, &FeeApproxStage::WithoutApprox)
-                .await
+    let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err().await);
+    let fee = try_tx_s!(
+        coin.get_htlc_spend_fee(DEFAULT_SWAP_TX_SPEND_SIZE, &FeeApproxStage::WithoutApprox)
+            .await
+    );
+    if fee >= prev_transaction.outputs[0].value {
+        return TX_PLAIN_ERR!(
+            "HTLC spend fee {} is greater than transaction output {}",
+            fee,
+            prev_transaction.outputs[0].value
         );
-        if fee >= prev_transaction.outputs[0].value {
-            return TX_PLAIN_ERR!(
-                "HTLC spend fee {} is greater than transaction output {}",
-                fee,
-                prev_transaction.outputs[0].value
-            );
-        }
-        let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
-        let output = TransactionOutput {
-            value: prev_transaction.outputs[0].value - fee,
-            script_pubkey,
-        };
-
-        let input = P2SHSpendingTxInput {
-            prev_transaction,
-            redeem_script,
-            outputs: vec![output],
-            script_data,
-            sequence: SEQUENCE_FINAL,
-            lock_time: time_lock,
-            keypair: &key_pair,
-        };
-        let transaction = try_tx_s!(coin.p2sh_spending_tx(input).await);
-
-        let tx_fut = coin.as_ref().rpc_client.send_transaction(&transaction).compat();
-        try_tx_s!(tx_fut.await, transaction);
-
-        Ok(transaction.into())
+    }
+    let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+    let output = TransactionOutput {
+        value: prev_transaction.outputs[0].value - fee,
+        script_pubkey,
     };
-    Box::new(fut.boxed().compat())
+
+    let input = P2SHSpendingTxInput {
+        prev_transaction,
+        redeem_script,
+        outputs: vec![output],
+        script_data,
+        sequence: SEQUENCE_FINAL,
+        lock_time: time_lock,
+        keypair: &key_pair,
+    };
+    let transaction = try_tx_s!(coin.p2sh_spending_tx(input).await);
+
+    let tx_fut = coin.as_ref().rpc_client.send_transaction(&transaction).compat();
+    try_tx_s!(tx_fut.await, transaction);
+
+    Ok(transaction.into())
 }
 
 pub fn send_maker_payment_spend_preimage<T: UtxoCommonOps + SwapOps>(
@@ -1409,12 +1407,15 @@ pub fn create_taker_payment_refund_preimage<T: UtxoCommonOps + SwapOps>(
     Box::new(fut.boxed().compat())
 }
 
-pub fn send_taker_spends_maker_payment<T: UtxoCommonOps + SwapOps>(coin: T, args: SpendPaymentArgs) -> TransactionFut {
-    let mut prev_transaction: UtxoTx = try_tx_fus!(deserialize(args.other_payment_tx).map_err(|e| ERRL!("{:?}", e)));
+pub async fn send_taker_spends_maker_payment<T: UtxoCommonOps + SwapOps>(
+    coin: T,
+    args: SpendPaymentArgs<'_>,
+) -> TransactionResult {
+    let mut prev_transaction: UtxoTx = try_tx_s!(deserialize(args.other_payment_tx).map_err(|e| ERRL!("{:?}", e)));
     prev_transaction.tx_hash_algo = coin.as_ref().tx_hash_algo;
     drop_mutability!(prev_transaction);
     if prev_transaction.outputs.is_empty() {
-        return try_tx_fus!(TX_PLAIN_ERR!("Transaction doesn't have any output"));
+        return try_tx_s!(TX_PLAIN_ERR!("Transaction doesn't have any output"));
     }
 
     let key_pair = coin.derive_htlc_key_pair(args.swap_unique_data);
@@ -1424,51 +1425,48 @@ pub fn send_taker_spends_maker_payment<T: UtxoCommonOps + SwapOps>(coin: T, args
         .push_opcode(Opcode::OP_0)
         .into_script();
 
-    let time_lock = try_tx_fus!(args.time_lock.try_into());
+    let time_lock = try_tx_s!(args.time_lock.try_into());
     let redeem_script = payment_script(
         time_lock,
         args.secret_hash,
-        &try_tx_fus!(Public::from_slice(args.other_pubkey)),
+        &try_tx_s!(Public::from_slice(args.other_pubkey)),
         key_pair.public(),
     )
     .into();
 
-    let fut = async move {
-        let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err().await);
-        let fee = try_tx_s!(
-            coin.get_htlc_spend_fee(DEFAULT_SWAP_TX_SPEND_SIZE, &FeeApproxStage::WithoutApprox)
-                .await
+    let my_address = try_tx_s!(coin.as_ref().derivation_method.single_addr_or_err().await);
+    let fee = try_tx_s!(
+        coin.get_htlc_spend_fee(DEFAULT_SWAP_TX_SPEND_SIZE, &FeeApproxStage::WithoutApprox)
+            .await
+    );
+    if fee >= prev_transaction.outputs[0].value {
+        return TX_PLAIN_ERR!(
+            "HTLC spend fee {} is greater than transaction output {}",
+            fee,
+            prev_transaction.outputs[0].value
         );
-        if fee >= prev_transaction.outputs[0].value {
-            return TX_PLAIN_ERR!(
-                "HTLC spend fee {} is greater than transaction output {}",
-                fee,
-                prev_transaction.outputs[0].value
-            );
-        }
-        let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
-        let output = TransactionOutput {
-            value: prev_transaction.outputs[0].value - fee,
-            script_pubkey,
-        };
-
-        let input = P2SHSpendingTxInput {
-            prev_transaction,
-            redeem_script,
-            outputs: vec![output],
-            script_data,
-            sequence: SEQUENCE_FINAL,
-            lock_time: time_lock,
-            keypair: &key_pair,
-        };
-        let transaction = try_tx_s!(coin.p2sh_spending_tx(input).await);
-
-        let tx_fut = coin.as_ref().rpc_client.send_transaction(&transaction).compat();
-        try_tx_s!(tx_fut.await, transaction);
-
-        Ok(transaction.into())
+    }
+    let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+    let output = TransactionOutput {
+        value: prev_transaction.outputs[0].value - fee,
+        script_pubkey,
     };
-    Box::new(fut.boxed().compat())
+
+    let input = P2SHSpendingTxInput {
+        prev_transaction,
+        redeem_script,
+        outputs: vec![output],
+        script_data,
+        sequence: SEQUENCE_FINAL,
+        lock_time: time_lock,
+        keypair: &key_pair,
+    };
+    let transaction = try_tx_s!(coin.p2sh_spending_tx(input).await);
+
+    let tx_fut = coin.as_ref().rpc_client.send_transaction(&transaction).compat();
+    try_tx_s!(tx_fut.await, transaction);
+
+    Ok(transaction.into())
 }
 
 async fn refund_htlc_payment<T: UtxoCommonOps + SwapOps>(
@@ -3129,6 +3127,7 @@ where
         }));
     }
 
+    // Todo: this should work with hd wallet?
     let my_address = &coin.my_address()?;
     let claimed_by_me = tx_details.from.iter().all(|from| from == my_address) && tx_details.to.contains(my_address);
 

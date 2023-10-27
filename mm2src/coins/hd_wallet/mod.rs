@@ -129,6 +129,7 @@ where
     /// This is used in order not to check the transaction history for each address,
     /// but to request the balance of addresses whose index is less than `address_number`.
     pub external_addresses_number: u32,
+    // Todo: make this an option and then merge eth implementation with utxo
     pub internal_addresses_number: u32,
     /// The cache of derived addresses.
     /// This is used at [`HDWalletCoinOps::derive_address`].

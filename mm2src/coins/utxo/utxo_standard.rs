@@ -304,13 +304,19 @@ impl SwapOps for UtxoStandardCoin {
     }
 
     #[inline]
-    fn send_maker_spends_taker_payment(&self, maker_spends_payment_args: SpendPaymentArgs) -> TransactionFut {
-        utxo_common::send_maker_spends_taker_payment(self.clone(), maker_spends_payment_args)
+    async fn send_maker_spends_taker_payment(
+        &self,
+        maker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult {
+        utxo_common::send_maker_spends_taker_payment(self.clone(), maker_spends_payment_args).await
     }
 
     #[inline]
-    fn send_taker_spends_maker_payment(&self, taker_spends_payment_args: SpendPaymentArgs) -> TransactionFut {
-        utxo_common::send_taker_spends_maker_payment(self.clone(), taker_spends_payment_args)
+    async fn send_taker_spends_maker_payment(
+        &self,
+        taker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult {
+        utxo_common::send_taker_spends_maker_payment(self.clone(), taker_spends_payment_args).await
     }
 
     #[inline]

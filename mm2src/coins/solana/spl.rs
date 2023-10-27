@@ -297,11 +297,17 @@ impl SwapOps for SplToken {
 
     fn send_taker_payment(&self, _taker_payment_args: SendPaymentArgs) -> TransactionFut { unimplemented!() }
 
-    fn send_maker_spends_taker_payment(&self, _maker_spends_payment_args: SpendPaymentArgs) -> TransactionFut {
+    async fn send_maker_spends_taker_payment(
+        &self,
+        _maker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult {
         unimplemented!()
     }
 
-    fn send_taker_spends_maker_payment(&self, _taker_spends_payment_args: SpendPaymentArgs) -> TransactionFut {
+    async fn send_taker_spends_maker_payment(
+        &self,
+        _taker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult {
         unimplemented!()
     }
 

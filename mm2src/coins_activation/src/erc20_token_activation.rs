@@ -81,6 +81,7 @@ impl TokenActivationOps for EthCoin {
             .initialize_erc20_token(activation_params, protocol_conf, ticker)
             .await?;
 
+        // Todo: maybe add hd wallet init here until init_token is implemented
         let address = token.my_address()?;
         let token_contract_address = token
             .erc20_token_address()

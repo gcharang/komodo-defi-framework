@@ -235,10 +235,7 @@ fn test_taker_spends_maker_payment() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let spend = taker_coin
-        .send_taker_spends_maker_payment(taker_spends_payment_args)
-        .wait()
-        .unwrap();
+    let spend = block_on(taker_coin.send_taker_spends_maker_payment(taker_spends_payment_args)).unwrap();
     let spend_tx_hash = spend.tx_hash();
     let spend_tx_hex = spend.tx_hex();
     log!("Taker spends tx: {:?}", spend_tx_hash);
@@ -340,10 +337,7 @@ fn test_maker_spends_taker_payment() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let spend = maker_coin
-        .send_maker_spends_taker_payment(maker_spends_payment_args)
-        .wait()
-        .unwrap();
+    let spend = block_on(maker_coin.send_maker_spends_taker_payment(maker_spends_payment_args)).unwrap();
     let spend_tx_hash = spend.tx_hash();
     let spend_tx_hex = spend.tx_hex();
     log!("Maker spends tx: {:?}", spend_tx_hash);
@@ -613,10 +607,7 @@ fn test_search_for_swap_tx_spend_taker_spent() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let spend = taker_coin
-        .send_taker_spends_maker_payment(taker_spends_payment_args)
-        .wait()
-        .unwrap();
+    let spend = block_on(taker_coin.send_taker_spends_maker_payment(taker_spends_payment_args)).unwrap();
     let spend_tx_hash = spend.tx_hash();
     let spend_tx_hex = spend.tx_hex();
     log!("Taker spends tx: {:?}", spend_tx_hash);
@@ -857,10 +848,7 @@ fn test_wait_for_tx_spend() {
             swap_unique_data: &[],
             watcher_reward: false,
         };
-        let spend = taker_coin
-            .send_taker_spends_maker_payment(taker_spends_payment_args)
-            .wait()
-            .unwrap();
+        let spend = block_on(taker_coin.send_taker_spends_maker_payment(taker_spends_payment_args)).unwrap();
         unsafe { SPEND_TX = Some(spend) }
     });
 

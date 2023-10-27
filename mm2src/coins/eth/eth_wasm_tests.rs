@@ -27,7 +27,6 @@ async fn test_send() {
     let coin = EthCoin(Arc::new(EthCoinImpl {
         ticker: "ETH".into(),
         coin_type: EthCoinType::Eth,
-        my_address,
         sign_message_prefix: Some(String::from("Ethereum Signed Message:\n")),
         priv_key_policy: key_pair.into(),
         derivation_method: Arc::new(DerivationMethod::SingleAddress(my_address)),

@@ -2424,11 +2424,14 @@ impl SwapOps for TendermintCoin {
         )
     }
 
-    fn send_maker_spends_taker_payment(&self, maker_spends_payment_args: SpendPaymentArgs) -> TransactionFut {
-        let tx = try_tx_fus!(cosmrs::Tx::from_bytes(maker_spends_payment_args.other_payment_tx));
-        let msg = try_tx_fus!(tx.body.messages.first().ok_or("Tx body couldn't be read."));
-        let htlc_proto: CreateHtlcProtoRep = try_tx_fus!(prost::Message::decode(msg.value.as_slice()));
-        let htlc = try_tx_fus!(MsgCreateHtlc::try_from(htlc_proto));
+    async fn send_maker_spends_taker_payment(
+        &self,
+        maker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult {
+        let tx = try_tx_s!(cosmrs::Tx::from_bytes(maker_spends_payment_args.other_payment_tx));
+        let msg = try_tx_s!(tx.body.messages.first().ok_or("Tx body couldn't be read."));
+        let htlc_proto: CreateHtlcProtoRep = try_tx_s!(prost::Message::decode(msg.value.as_slice()));
+        let htlc = try_tx_s!(MsgCreateHtlc::try_from(htlc_proto));
 
         let mut amount = htlc.amount.clone();
         amount.sort();
@@ -2442,46 +2445,44 @@ impl SwapOps for TendermintCoin {
 
         let htlc_id = self.calculate_htlc_id(&htlc.sender, &htlc.to, amount, maker_spends_payment_args.secret_hash);
 
-        let claim_htlc_tx = try_tx_fus!(self.gen_claim_htlc_tx(htlc_id, maker_spends_payment_args.secret));
-        let coin = self.clone();
+        let claim_htlc_tx = try_tx_s!(self.gen_claim_htlc_tx(htlc_id, maker_spends_payment_args.secret));
 
-        let fut = async move {
-            let current_block = try_tx_s!(coin.current_block().compat().await);
-            let timeout_height = current_block + TIMEOUT_HEIGHT_DELTA;
+        let current_block = try_tx_s!(self.current_block().compat().await);
+        let timeout_height = current_block + TIMEOUT_HEIGHT_DELTA;
 
-            let fee = try_tx_s!(
-                coin.calculate_fee(
-                    claim_htlc_tx.msg_payload.clone(),
-                    timeout_height,
-                    TX_DEFAULT_MEMO.to_owned(),
-                    None
-                )
-                .await
-            );
+        let fee = try_tx_s!(
+            self.calculate_fee(
+                claim_htlc_tx.msg_payload.clone(),
+                timeout_height,
+                TX_DEFAULT_MEMO.to_owned(),
+                None
+            )
+            .await
+        );
 
-            let (_tx_id, tx_raw) = try_tx_s!(
-                coin.seq_safe_send_raw_tx_bytes(
-                    claim_htlc_tx.msg_payload.clone(),
-                    fee.clone(),
-                    timeout_height,
-                    TX_DEFAULT_MEMO.into(),
-                )
-                .await
-            );
+        let (_tx_id, tx_raw) = try_tx_s!(
+            self.seq_safe_send_raw_tx_bytes(
+                claim_htlc_tx.msg_payload.clone(),
+                fee.clone(),
+                timeout_height,
+                TX_DEFAULT_MEMO.into(),
+            )
+            .await
+        );
 
-            Ok(TransactionEnum::CosmosTransaction(CosmosTransaction {
-                data: tx_raw.into(),
-            }))
-        };
-
-        Box::new(fut.boxed().compat())
+        Ok(TransactionEnum::CosmosTransaction(CosmosTransaction {
+            data: tx_raw.into(),
+        }))
     }
 
-    fn send_taker_spends_maker_payment(&self, taker_spends_payment_args: SpendPaymentArgs) -> TransactionFut {
-        let tx = try_tx_fus!(cosmrs::Tx::from_bytes(taker_spends_payment_args.other_payment_tx));
-        let msg = try_tx_fus!(tx.body.messages.first().ok_or("Tx body couldn't be read."));
-        let htlc_proto: CreateHtlcProtoRep = try_tx_fus!(prost::Message::decode(msg.value.as_slice()));
-        let htlc = try_tx_fus!(MsgCreateHtlc::try_from(htlc_proto));
+    async fn send_taker_spends_maker_payment(
+        &self,
+        taker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult {
+        let tx = try_tx_s!(cosmrs::Tx::from_bytes(taker_spends_payment_args.other_payment_tx));
+        let msg = try_tx_s!(tx.body.messages.first().ok_or("Tx body couldn't be read."));
+        let htlc_proto: CreateHtlcProtoRep = try_tx_s!(prost::Message::decode(msg.value.as_slice()));
+        let htlc = try_tx_s!(MsgCreateHtlc::try_from(htlc_proto));
 
         let mut amount = htlc.amount.clone();
         amount.sort();
@@ -2495,39 +2496,34 @@ impl SwapOps for TendermintCoin {
 
         let htlc_id = self.calculate_htlc_id(&htlc.sender, &htlc.to, amount, taker_spends_payment_args.secret_hash);
 
-        let claim_htlc_tx = try_tx_fus!(self.gen_claim_htlc_tx(htlc_id, taker_spends_payment_args.secret));
-        let coin = self.clone();
+        let claim_htlc_tx = try_tx_s!(self.gen_claim_htlc_tx(htlc_id, taker_spends_payment_args.secret));
 
-        let fut = async move {
-            let current_block = try_tx_s!(coin.current_block().compat().await);
-            let timeout_height = current_block + TIMEOUT_HEIGHT_DELTA;
+        let current_block = try_tx_s!(self.current_block().compat().await);
+        let timeout_height = current_block + TIMEOUT_HEIGHT_DELTA;
 
-            let fee = try_tx_s!(
-                coin.calculate_fee(
-                    claim_htlc_tx.msg_payload.clone(),
-                    timeout_height,
-                    TX_DEFAULT_MEMO.into(),
-                    None
-                )
-                .await
-            );
+        let fee = try_tx_s!(
+            self.calculate_fee(
+                claim_htlc_tx.msg_payload.clone(),
+                timeout_height,
+                TX_DEFAULT_MEMO.into(),
+                None
+            )
+            .await
+        );
 
-            let (tx_id, tx_raw) = try_tx_s!(
-                coin.seq_safe_send_raw_tx_bytes(
-                    claim_htlc_tx.msg_payload.clone(),
-                    fee.clone(),
-                    timeout_height,
-                    TX_DEFAULT_MEMO.into(),
-                )
-                .await
-            );
+        let (tx_id, tx_raw) = try_tx_s!(
+            self.seq_safe_send_raw_tx_bytes(
+                claim_htlc_tx.msg_payload.clone(),
+                fee.clone(),
+                timeout_height,
+                TX_DEFAULT_MEMO.into(),
+            )
+            .await
+        );
 
-            Ok(TransactionEnum::CosmosTransaction(CosmosTransaction {
-                data: tx_raw.into(),
-            }))
-        };
-
-        Box::new(fut.boxed().compat())
+        Ok(TransactionEnum::CosmosTransaction(CosmosTransaction {
+            data: tx_raw.into(),
+        }))
     }
 
     async fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult {

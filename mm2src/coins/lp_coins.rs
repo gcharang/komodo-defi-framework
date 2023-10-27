@@ -464,7 +464,7 @@ impl Serialize for PrivKeyPolicyNotAllowed {
     }
 }
 
-#[derive(Clone, Debug, Display, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize)]
 pub enum UnexpectedDerivationMethod {
     #[display(fmt = "Expected 'SingleAddress' derivation method")]
     ExpectedSingleAddress,
@@ -890,9 +890,15 @@ pub trait SwapOps {
 
     fn send_taker_payment(&self, taker_payment_args: SendPaymentArgs<'_>) -> TransactionFut;
 
-    fn send_maker_spends_taker_payment(&self, maker_spends_payment_args: SpendPaymentArgs<'_>) -> TransactionFut;
+    async fn send_maker_spends_taker_payment(
+        &self,
+        maker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult;
 
-    fn send_taker_spends_maker_payment(&self, taker_spends_payment_args: SpendPaymentArgs<'_>) -> TransactionFut;
+    async fn send_taker_spends_maker_payment(
+        &self,
+        taker_spends_payment_args: SpendPaymentArgs<'_>,
+    ) -> TransactionResult;
 
     async fn send_taker_refunds_payment(&self, taker_refunds_payment_args: RefundPaymentArgs<'_>) -> TransactionResult;
 

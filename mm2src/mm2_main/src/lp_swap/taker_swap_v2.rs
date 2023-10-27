@@ -779,12 +779,7 @@ impl<MakerCoin: MmCoin + Send + Sync + 'static, TakerCoin: MmCoin + SwapOpsV2> S
             swap_unique_data: &state_machine.unique_data(),
             watcher_reward: false,
         };
-        let maker_payment_spend = match state_machine
-            .maker_coin
-            .send_taker_spends_maker_payment(args)
-            .compat()
-            .await
-        {
+        let maker_payment_spend = match state_machine.maker_coin.send_taker_spends_maker_payment(args).await {
             Ok(tx) => tx,
             Err(e) => {
                 let next_state = Aborted::new(format!("Failed to spend maker payment {:?}", e));

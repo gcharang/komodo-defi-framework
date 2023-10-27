@@ -213,10 +213,7 @@ fn test_search_for_taker_swap_tx_spend_native_was_spent_by_maker() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let spend_tx = coin
-        .send_maker_spends_taker_payment(maker_spends_payment_args)
-        .wait()
-        .unwrap();
+    let spend_tx = block_on(coin.send_maker_spends_taker_payment(maker_spends_payment_args)).unwrap();
 
     let confirm_payment_input = ConfirmPaymentInput {
         payment_tx: spend_tx.tx_hex(),
@@ -284,10 +281,7 @@ fn test_search_for_maker_swap_tx_spend_native_was_spent_by_taker() {
         swap_unique_data: &[],
         watcher_reward: false,
     };
-    let spend_tx = coin
-        .send_taker_spends_maker_payment(taker_spends_payment_args)
-        .wait()
-        .unwrap();
+    let spend_tx = block_on(coin.send_taker_spends_maker_payment(taker_spends_payment_args)).unwrap();
 
     let confirm_payment_input = ConfirmPaymentInput {
         payment_tx: spend_tx.tx_hex(),

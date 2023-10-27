@@ -220,6 +220,7 @@ impl PlatformWithTokensActivationOps for EthCoin {
             .await
             .map_err(EthActivationV2Error::InternalError)?;
 
+        // Todo: maybe add enabling of HD wallet here until it's moved to init_eth_with_tokens
         let my_address = self.my_address()?;
         let pubkey = self.get_public_key()?;
 
@@ -258,6 +259,7 @@ impl PlatformWithTokensActivationOps for EthCoin {
         eth_address_info.balances = Some(eth_balance);
         drop_mutability!(eth_address_info);
 
+        // Todo: get_tokens_balance_list use get_token_balance_by_address that uses my_address, we should pass the address in the future for HD wallet
         let token_balances = self
             .get_tokens_balance_list()
             .await
