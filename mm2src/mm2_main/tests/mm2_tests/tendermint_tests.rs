@@ -649,7 +649,7 @@ mod swap {
     use mm2_rpc::data::legacy::OrderbookResponse;
     use mm2_test_helpers::for_tests::{check_my_swap_status, check_recent_swaps, check_stats_swap_status,
                                       enable_eth_coin, rick_conf, tbnb_conf, usdc_ibc_iris_testnet_conf,
-                                      RICK_ELECTRUM_ADDRS};
+                                      DOC_ELECTRUM_ADDRS};
     use std::convert::TryFrom;
     use std::{env, thread};
 
@@ -802,9 +802,9 @@ mod swap {
             false
         )));
 
-        dbg!(block_on(enable_electrum(&mm_bob, "RICK", false, RICK_ELECTRUM_ADDRS)));
+        dbg!(block_on(enable_electrum(&mm_bob, "RICK", false, DOC_ELECTRUM_ADDRS,)));
 
-        dbg!(block_on(enable_electrum(&mm_alice, "RICK", false, RICK_ELECTRUM_ADDRS)));
+        dbg!(block_on(enable_electrum(&mm_alice, "RICK", false, DOC_ELECTRUM_ADDRS,)));
 
         block_on(trade_base_rel_tendermint(
             mm_bob,
