@@ -9,7 +9,7 @@ pub use mm2_db::indexed_db::{cursor_prelude, DbTransactionError, DbTransactionRe
 pub use tables::{MySwapsFiltersTable, SavedSwapTable, SwapLockTable};
 
 const DB_NAME: &str = "swap";
-const DB_VERSION: u32 = 1;
+const DB_VERSION: u32 = 2;
 
 pub struct SwapDb {
     inner: IndexedDb,
@@ -103,6 +103,10 @@ pub mod tables {
                             false,
                         )?;
                     },
+                    1 => {
+                        let table = upgrader.open_table(Self::table_name())?;
+                        table.create_index("is_finished", false)?;
+                    },
                     unsupported_version => {
                         return MmError::err(OnUpgradeError::UnsupportedVersion {
                             unsupported_version,
@@ -121,13 +125,29 @@ pub mod tables {
     /// [`TableSignature::on_upgrade_needed`] implementation common for the most tables with the only `uuid` unique index.
     fn on_upgrade_swap_table_by_uuid_v1(
         upgrader: &DbUpgrader,
-        old_version: u32,
+        mut old_version: u32,
         new_version: u32,
         table_name: &'static str,
     ) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(table_name)?;
-            table.create_index("uuid", true)?;
+        while old_version < new_version {
+            match old_version {
+                0 => {
+                    let table = upgrader.create_table(table_name)?;
+                    table.create_index("uuid", true)?;
+                },
+                1 => {
+                    // do nothing explicitly because no action is required for SwapLockTable and SavedSwapTable
+                },
+                unsupported_version => {
+                    return MmError::err(OnUpgradeError::UnsupportedVersion {
+                        unsupported_version,
+                        old_version,
+                        new_version,
+                    })
+                },
+            }
+
+            old_version += 1;
         }
         Ok(())
     }
