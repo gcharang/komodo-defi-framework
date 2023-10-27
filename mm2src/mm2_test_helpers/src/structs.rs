@@ -617,6 +617,14 @@ pub struct UtxoStandardActivationResult {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct EthWithTokensActivationResult {
+    pub current_block: u64,
+    pub eth_addresses_infos: HashMap<String, CoinAddressInfo<CoinBalance>>,
+    pub erc20_addresses_infos: HashMap<String, CoinAddressInfo<TokenBalances>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LightningActivationResult {
     pub platform_coin: String,
     pub address: String,

@@ -23,7 +23,6 @@ use serde_json::{self as json, json, Value as Json};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::env;
-#[cfg(not(target_arch = "wasm32"))] use std::io::Write;
 use std::net::IpAddr;
 use std::num::NonZeroUsize;
 use std::process::Child;
@@ -43,6 +42,7 @@ cfg_native! {
     use http::Request;
     use regex::Regex;
     use std::fs;
+    use std::io::Write;
     use std::net::Ipv4Addr;
     use std::path::{Path, PathBuf};
     use std::process::Command;
@@ -2616,6 +2616,44 @@ pub async fn assert_coin_not_found_on_balance(mm: &MarketMakerIt, coin: &str) {
         .unwrap();
     assert_eq!(balance.0, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(balance.1.contains(&format!("No such coin: {coin}")));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn enable_eth_with_tokens(
+    mm: &MarketMakerIt,
+    platform_coin: &str,
+    tokens: &[&str],
+    nodes: &[&str],
+    path_to_address: Option<HDAccountAddressId>,
+) -> EthWithTokensActivationResult {
+    let erc20_tokens_requests: Vec<_> = tokens.iter().map(|ticker| json!({ "ticker": ticker })).collect();
+    let nodes: Vec<_> = nodes.iter().map(|url| json!({ "url": url })).collect();
+
+    let enable = mm
+        .rpc(&json!({
+        "userpass": mm.userpass,
+        "method": "enable_eth_with_tokens",
+        "mmrpc": "2.0",
+        "params": {
+                "ticker": platform_coin,
+                "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
+                "fallback_swap_contract": ETH_DEV_FALLBACK_CONTRACT,
+                "nodes": nodes,
+                "tx_history": true,
+                "erc20_tokens_requests": erc20_tokens_requests,
+                "path_to_address": path_to_address.unwrap_or_default(),
+            }
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        enable.0,
+        StatusCode::OK,
+        "'enable_eth_with_tokens' failed: {}",
+        enable.1
+    );
+    let res: Json = json::from_str(&enable.1).unwrap();
+    json::from_value(res["result"].clone()).unwrap()
 }
 
 pub async fn enable_tendermint(

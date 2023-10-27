@@ -1,9 +1,10 @@
 use crate::{prelude::{TryFromCoinProtocol, TryPlatformCoinFromMmCoinEnum},
             token::{EnableTokenError, TokenActivationOps, TokenProtocolParams}};
 use async_trait::async_trait;
-use coins::{eth::{v2_activation::{Erc20Protocol, Erc20TokenActivationError, Erc20TokenActivationRequest},
+use coins::{eth::{display_eth_address,
+                  v2_activation::{Erc20Protocol, Erc20TokenActivationError, Erc20TokenActivationRequest},
                   valid_addr_from_str, EthCoin},
-            CoinBalance, CoinProtocol, MarketCoinOps, MmCoin, MmCoinEnum};
+            CoinBalance, CoinProtocol, CoinWithDerivationMethod, MarketCoinOps, MmCoin, MmCoinEnum};
 use common::Future01CompatExt;
 use mm2_err_handle::prelude::MmError;
 use serde::Serialize;
@@ -22,6 +23,7 @@ impl From<Erc20TokenActivationError> for EnableTokenError {
         match err {
             Erc20TokenActivationError::InternalError(e) => EnableTokenError::Internal(e),
             Erc20TokenActivationError::CouldNotFetchBalance(e) => EnableTokenError::Transport(e),
+            Erc20TokenActivationError::UnexpectedDerivationMethod(e) => EnableTokenError::UnexpectedDerivationMethod(e),
         }
     }
 }
@@ -81,8 +83,8 @@ impl TokenActivationOps for EthCoin {
             .initialize_erc20_token(activation_params, protocol_conf, ticker)
             .await?;
 
-        // Todo: maybe add hd wallet init here until init_token is implemented
-        let address = token.my_address()?;
+        // Todo: We only return the enabled address for swaps in the response for now, init_token method should allow scanning and returning all addresses with balances
+        let address = display_eth_address(&token.derivation_method().single_addr_or_err().await?);
         let token_contract_address = token
             .erc20_token_address()
             .ok_or_else(|| Erc20TokenActivationError::InternalError("Token contract address is missing".to_string()))?;

@@ -728,6 +728,7 @@ async fn get_tx_hex_by_hash_impl(coin: EthCoin, tx_hash: H256) -> RawTransaction
     })
 }
 
+// Todo: use builder pattern for this function similar to StandardUtxoWithdraw/InitUtxoWithdraw, this will be needed for Trezor implementation
 async fn withdraw_impl(coin: EthCoin, req: WithdrawRequest) -> WithdrawResult {
     let to_addr = coin
         .address_from_str(&req.to)
@@ -747,7 +748,6 @@ async fn withdraw_impl(coin: EthCoin, req: WithdrawRequest) -> WithdrawResult {
         },
         None => (
             coin.my_balance().compat().await?,
-            // Todo: make this function similar to StandardUtxoWithdraw::new, to use builder it will be added with trezor implementation
             coin.derivation_method.single_addr_or_err().await?,
             coin.priv_key_policy.activated_key_or_err()?.clone(),
         ),
@@ -882,8 +882,8 @@ async fn withdraw_impl(coin: EthCoin, req: WithdrawRequest) -> WithdrawResult {
         spent_by_me += &fee_details.total_fee;
     }
     Ok(TransactionDetails {
-        to: vec![checksum_address(&format!("{:#02x}", to_addr))],
-        from: vec![checksum_address(&format!("{:#02x}", my_address))],
+        to: vec![display_eth_address(&to_addr)],
+        from: vec![display_eth_address(&my_address)],
         total_amount: amount_decimal,
         my_balance_change: &received_by_me - &spent_by_me,
         spent_by_me,
@@ -2095,7 +2095,7 @@ impl MarketCoinOps for EthCoin {
 
     fn my_address(&self) -> MmResult<String, MyAddressError> {
         match self.derivation_method() {
-            DerivationMethod::SingleAddress(my_address) => Ok(checksum_address(&format!("{:#02x}", my_address))),
+            DerivationMethod::SingleAddress(my_address) => Ok(display_eth_address(my_address)),
             DerivationMethod::HDWallet(_) => MmError::err(MyAddressError::UnexpectedDerivationMethod(
                 "'my_address' is deprecated for HD wallets".to_string(),
             )),
@@ -2868,8 +2868,8 @@ impl EthCoin {
                     spent_by_me,
                     received_by_me,
                     total_amount,
-                    to: vec![checksum_address(&format!("{:#02x}", call_data.to))],
-                    from: vec![checksum_address(&format!("{:#02x}", call_data.from))],
+                    to: vec![display_eth_address(&call_data.to)],
+                    from: vec![display_eth_address(&call_data.from)],
                     coin: self.ticker.clone(),
                     fee_details: fee_details.map(|d| d.into()),
                     block_height: trace.block_number,
@@ -3243,8 +3243,8 @@ impl EthCoin {
                     spent_by_me,
                     received_by_me,
                     total_amount,
-                    to: vec![checksum_address(&format!("{:#02x}", to_addr))],
-                    from: vec![checksum_address(&format!("{:#02x}", from_addr))],
+                    to: vec![display_eth_address(&to_addr)],
+                    from: vec![display_eth_address(&from_addr)],
                     coin: self.ticker.clone(),
                     fee_details: fee_details.map(|d| d.into()),
                     block_height: block_number.as_u64(),
@@ -3973,7 +3973,6 @@ impl EthCoin {
     async fn get_token_balance_by_address(&self, token_address: Address) -> Result<U256, MmError<BalanceError>> {
         let coin = self.clone();
         let function = ERC20_CONTRACT.function("balanceOf")?;
-        // Todo: we might pass address instead (sender_address or my_address)
         let my_address = self.derivation_method.single_addr_or_err().await?;
         let data = function.encode_input(&[Token::Address(my_address)])?;
         let res = coin
@@ -5495,7 +5494,7 @@ pub async fn eth_coin_from_conf_and_request(
     ))
     .unwrap_or_default();
     let (key_pair, derivation_method) =
-        try_s!(build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &path_to_address).await);
+        try_s!(build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &path_to_address, None).await);
 
     let mut web3_instances = vec![];
     let event_handlers = rpc_event_handlers_for_eth_transport(ctx, ticker.to_string());
@@ -5646,6 +5645,10 @@ pub(crate) fn eth_addr_to_hex(address: &Address) -> String { format!("{:#02x}", 
 /// The input must be 0x prefixed hex string
 fn is_valid_checksum_addr(addr: &str) -> bool { addr == checksum_address(addr) }
 
+/// `display_eth_address` converts Address to mixed-case checksum form.
+#[inline]
+pub fn display_eth_address(addr: &Address) -> String { checksum_address(&eth_addr_to_hex(addr)) }
+
 /// Requests the nonce from all available nodes and returns the highest nonce available with the list of nodes that returned the highest nonce.
 /// Transactions will be sent using the nodes that returned the highest nonce.
 #[cfg_attr(test, mockable)]
@@ -5775,7 +5778,7 @@ pub async fn get_eth_address(
 
     // Todo: This creates an HD wallet different from the ETH one for NFT, we should combine them in the future when implementing NFT HD wallet
     let (_, derivation_method) =
-        build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, path_to_address).await?;
+        build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, path_to_address, None).await?;
     let my_address = match derivation_method {
         EthDerivationMethod::SingleAddress(my_address) => my_address,
         EthDerivationMethod::HDWallet(_) => {
@@ -5784,11 +5787,10 @@ pub async fn get_eth_address(
             )))
         },
     };
-    let wallet_address = checksum_address(&format!("{:#02x}", my_address));
 
     Ok(MyWalletAddress {
         coin: ticker.to_owned(),
-        wallet_address,
+        wallet_address: display_eth_address(&my_address),
     })
 }
 

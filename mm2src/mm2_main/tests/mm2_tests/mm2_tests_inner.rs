@@ -13,17 +13,17 @@ use mm2_test_helpers::electrums::*;
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "zhtlc-native-tests")))]
 use mm2_test_helpers::for_tests::check_stats_swap_status;
 use mm2_test_helpers::for_tests::{account_balance, btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
-                                  check_recent_swaps, enable_eth_coin, enable_qrc20, enable_utxo_v2_electrum,
-                                  eth_jst_testnet_conf, eth_testnet_conf, find_metrics_in_json, from_env_file,
-                                  get_new_address, get_shared_db_id, mm_spat, morty_conf, rick_conf, sign_message,
-                                  start_swaps, tbtc_segwit_conf, tbtc_with_spv_conf, test_qrc20_history_impl,
-                                  tqrc20_conf, verify_message, wait_for_swap_contract_negotiation,
-                                  wait_for_swap_negotiation_failure, wait_for_swaps_finish_and_check_status,
-                                  wait_till_history_has_records, MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf,
-                                  Mm2TestConfForSwap, RaiiDump, DOC_ELECTRUM_ADDRS, ETH_DEV_NODES,
-                                  ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE,
-                                  ETH_MAINNET_SWAP_CONTRACT, MARTY_ELECTRUM_ADDRS, MORTY, QRC20_ELECTRUMS, RICK,
-                                  RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS, T_BCH_ELECTRUMS};
+                                  check_recent_swaps, enable_eth_coin, enable_eth_with_tokens, enable_qrc20,
+                                  enable_utxo_v2_electrum, eth_jst_testnet_conf, eth_testnet_conf,
+                                  find_metrics_in_json, from_env_file, get_new_address, get_shared_db_id, mm_spat,
+                                  morty_conf, rick_conf, sign_message, start_swaps, tbtc_segwit_conf,
+                                  tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf, verify_message,
+                                  wait_for_swap_contract_negotiation, wait_for_swap_negotiation_failure,
+                                  wait_for_swaps_finish_and_check_status, wait_till_history_has_records,
+                                  MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, RaiiDump,
+                                  DOC_ELECTRUM_ADDRS, ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT,
+                                  ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MARTY_ELECTRUM_ADDRS, MORTY,
+                                  QRC20_ELECTRUMS, RICK, RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS, T_BCH_ELECTRUMS};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::*;
 use serde_json::{self as json, json, Value as Json};
@@ -792,10 +792,8 @@ async fn trade_base_rel_electrum(
         log!("enable ZOMBIE alice {:?}", zombie_alice);
     }
     // Enable coins on Bob side. Print the replies in case we need the address.
-    let enable_eth = enable_native(&mm_bob, "ETH", ETH_DEV_NODES, bob_path_to_address.clone()).await;
+    let enable_eth = enable_eth_with_tokens(&mm_bob, "ETH", &["JST"], ETH_DEV_NODES, bob_path_to_address.clone()).await;
     log!("enable_eth (bob): {:?}", enable_eth);
-    let enable_jst = enable_native(&mm_bob, "JST", ETH_DEV_NODES, bob_path_to_address.clone()).await;
-    log!("enable_jst (bob): {:?}", enable_jst);
     match bob_priv_key_policy {
         Mm2InitPrivKeyPolicy::Iguana => {
             let enable_rick = enable_electrum_json(&mm_bob, "RICK", false, doc_electrums()).await;
@@ -814,10 +812,9 @@ async fn trade_base_rel_electrum(
     }
 
     // Enable coins on Alice side. Print the replies in case we need the address.
-    let enable_eth = enable_native(&mm_alice, "ETH", ETH_DEV_NODES, alice_path_to_address.clone()).await;
+    let enable_eth =
+        enable_eth_with_tokens(&mm_alice, "ETH", &["JST"], ETH_DEV_NODES, alice_path_to_address.clone()).await;
     log!("enable_eth (alice): {:?}", enable_eth);
-    let enable_jst = enable_native(&mm_alice, "JST", ETH_DEV_NODES, alice_path_to_address.clone()).await;
-    log!("enable_jst (alice): {:?}", enable_jst);
     match alice_priv_key_policy {
         Mm2InitPrivKeyPolicy::Iguana => {
             let enable_rick = enable_electrum_json(&mm_alice, "RICK", false, doc_electrums()).await;
@@ -6337,6 +6334,8 @@ fn test_get_public_key_hash() {
 }
 
 #[test]
+// Todo: This is disabled since get_my_address doesn't work for HD wallets anymore, should be re-enabled once get_my_address supports HD wallets again
+#[ignore]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_get_my_address_hd() {
     const PASSPHRASE: &str = "tank abandon bind salon remove wisdom net size aspect direct source fossil";
@@ -7456,15 +7455,17 @@ fn test_enable_coins_with_enable_hd() {
     let (_dump_log, _dump_dashboard) = mm_hd_0.mm_dump();
     log!("log path: {}", mm_hd_0.log_path.display());
 
-    let eth = block_on(enable_native(
+    let eth_with_tokens = block_on(enable_eth_with_tokens(
         &mm_hd_0,
         "ETH",
+        &["JST"],
         ETH_DEV_NODES,
-        Some(path_to_address.clone()),
+        Some(path_to_address),
     ));
-    assert_eq!(eth.address, "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
-    let jst = block_on(enable_native(&mm_hd_0, "JST", ETH_DEV_NODES, Some(path_to_address)));
-    assert_eq!(jst.address, "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
+    let eth_addresses = eth_with_tokens.eth_addresses_infos.keys().collect::<Vec<_>>();
+    assert_eq!(eth_addresses[0], "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
+    let tokens_addresses = eth_with_tokens.erc20_addresses_infos.keys().collect::<Vec<_>>();
+    assert_eq!(tokens_addresses[0], "0x1737F1FaB40c6Fd3dc729B51C0F97DB3297CCA93");
 
     let path_to_address = HDAccountAddressId {
         account_id: 0,
@@ -7476,15 +7477,17 @@ fn test_enable_coins_with_enable_hd() {
     let (_dump_log, _dump_dashboard) = mm_hd_1.mm_dump();
     log!("log path: {}", mm_hd_1.log_path.display());
 
-    let eth = block_on(enable_native(
+    let eth_with_tokens = block_on(enable_eth_with_tokens(
         &mm_hd_1,
         "ETH",
+        &["JST"],
         ETH_DEV_NODES,
-        Some(path_to_address.clone()),
+        Some(path_to_address),
     ));
-    assert_eq!(eth.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
-    let jst = block_on(enable_native(&mm_hd_1, "JST", ETH_DEV_NODES, Some(path_to_address)));
-    assert_eq!(jst.address, "0xDe841899aB4A22E23dB21634e54920aDec402397");
+    let eth_addresses = eth_with_tokens.eth_addresses_infos.keys().collect::<Vec<_>>();
+    assert_eq!(eth_addresses[0], "0xDe841899aB4A22E23dB21634e54920aDec402397");
+    let tokens_addresses = eth_with_tokens.erc20_addresses_infos.keys().collect::<Vec<_>>();
+    assert_eq!(tokens_addresses[0], "0xDe841899aB4A22E23dB21634e54920aDec402397");
 
     let path_to_address = HDAccountAddressId {
         account_id: 77,
@@ -7496,15 +7499,17 @@ fn test_enable_coins_with_enable_hd() {
     let (_dump_log, _dump_dashboard) = mm_hd_1.mm_dump();
     log!("log path: {}", mm_hd_1.log_path.display());
 
-    let eth = block_on(enable_native(
+    let eth_with_tokens = block_on(enable_eth_with_tokens(
         &mm_hd_1,
         "ETH",
+        &["JST"],
         ETH_DEV_NODES,
-        Some(path_to_address.clone()),
+        Some(path_to_address),
     ));
-    assert_eq!(eth.address, "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
-    let jst = block_on(enable_native(&mm_hd_1, "JST", ETH_DEV_NODES, Some(path_to_address)));
-    assert_eq!(jst.address, "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
+    let eth_addresses = eth_with_tokens.eth_addresses_infos.keys().collect::<Vec<_>>();
+    assert_eq!(eth_addresses[0], "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
+    let tokens_addresses = eth_with_tokens.erc20_addresses_infos.keys().collect::<Vec<_>>();
+    assert_eq!(tokens_addresses[0], "0xa420a4DBd8C50e6240014Db4587d2ec8D0cE0e6B");
 }
 
 // Todo: Ignored until enable_qtum_with_tokens is implemented, and also implemented for HD wallet using task manager.

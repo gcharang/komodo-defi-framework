@@ -133,7 +133,6 @@ impl From<HDWalletStorageError> for NewAccountCreationError {
     }
 }
 
-// Todo: Need to change implementation to support no change/internal addresses for Ethereum
 /// Currently, we suppose that ETH/ERC20/QRC20 don't have [`Bip44Chain::Internal`] addresses.
 #[derive(Display)]
 #[display(fmt = "Coin doesn't support the given BIP44 chain: {:?}", chain)]

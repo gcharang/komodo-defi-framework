@@ -3156,7 +3156,7 @@ where
         }));
     }
 
-    // Todo: this should work with hd wallet?
+    // Todo: https://github.com/KomodoPlatform/komodo-defi-framework/issues/1625
     let my_address = &coin.my_address()?;
     let claimed_by_me = tx_details.from.iter().all(|from| from == my_address) && tx_details.to.contains(my_address);
 

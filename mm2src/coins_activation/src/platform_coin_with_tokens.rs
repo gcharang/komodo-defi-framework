@@ -2,7 +2,8 @@ use crate::prelude::*;
 use async_trait::async_trait;
 use coins::my_tx_history_v2::TxHistoryStorage;
 use coins::tx_history_storage::{CreateTxHistoryStorageError, TxHistoryStorageBuilder};
-use coins::{lp_coinfind_any, CoinProtocol, CoinsContext, MmCoin, MmCoinEnum, PrivKeyPolicyNotAllowed};
+use coins::{lp_coinfind_any, CoinProtocol, CoinsContext, MmCoin, MmCoinEnum, PrivKeyPolicyNotAllowed,
+            UnexpectedDerivationMethod};
 use common::{log, HttpStatusCode, StatusCode};
 use crypto::CryptoCtxError;
 use derive_more::Display;
@@ -64,6 +65,7 @@ pub trait TokenAsMmCoinInitializer: Send + Sync {
 pub enum InitTokensAsMmCoinsError {
     TokenConfigIsNotFound(String),
     CouldNotFetchBalance(String),
+    UnexpectedDerivationMethod(UnexpectedDerivationMethod),
     Internal(String),
     TokenProtocolParseError { ticker: String, error: String },
     UnexpectedTokenProtocol { ticker: String, protocol: CoinProtocol },
@@ -250,6 +252,9 @@ impl From<InitTokensAsMmCoinsError> for EnablePlatformCoinWithTokensError {
             },
             InitTokensAsMmCoinsError::Internal(e) => EnablePlatformCoinWithTokensError::Internal(e),
             InitTokensAsMmCoinsError::CouldNotFetchBalance(e) => EnablePlatformCoinWithTokensError::Transport(e),
+            InitTokensAsMmCoinsError::UnexpectedDerivationMethod(e) => {
+                EnablePlatformCoinWithTokensError::UnexpectedDerivationMethod(e.to_string())
+            },
         }
     }
 }

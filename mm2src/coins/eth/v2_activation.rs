@@ -107,8 +107,11 @@ pub struct EthActivationV2Request {
     pub required_confirmations: Option<u64>,
     #[serde(default)]
     pub priv_key_policy: EthPrivKeyActivationPolicy,
+    #[serde(flatten)]
+    pub enable_params: EnabledCoinBalanceParams,
     #[serde(default)]
     pub path_to_address: HDAccountAddressId,
+    pub gap_limit: Option<u32>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -123,6 +126,7 @@ pub struct EthNode {
 pub enum Erc20TokenActivationError {
     InternalError(String),
     CouldNotFetchBalance(String),
+    UnexpectedDerivationMethod(UnexpectedDerivationMethod),
 }
 
 impl From<AbortedError> for Erc20TokenActivationError {
@@ -131,6 +135,10 @@ impl From<AbortedError> for Erc20TokenActivationError {
 
 impl From<MyAddressError> for Erc20TokenActivationError {
     fn from(err: MyAddressError) -> Self { Self::InternalError(err.to_string()) }
+}
+
+impl From<UnexpectedDerivationMethod> for Erc20TokenActivationError {
+    fn from(e: UnexpectedDerivationMethod) -> Self { Erc20TokenActivationError::UnexpectedDerivationMethod(e) }
 }
 
 #[derive(Clone, Deserialize)]
@@ -260,9 +268,13 @@ pub async fn eth_coin_from_conf_and_request_v2(
     }
 
     let (priv_key_policy, derivation_method) =
-        build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &req.path_to_address).await?;
-    let enabled_address = derivation_method.single_addr_or_err().await?;
-    let enabled_address_str = checksum_address(&format!("{:02x}", enabled_address));
+        build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &req.path_to_address, req.gap_limit)
+            .await?;
+    let enabled_address = priv_key_policy
+        .activated_key_or_err()
+        .map_err(|e| EthActivationV2Error::PrivKeyPolicyNotAllowed(e.into_inner()))?
+        .address();
+    let enabled_address_str = display_eth_address(&enabled_address);
 
     let chain_id = conf["chain_id"].as_u64();
 
@@ -347,6 +359,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
     Ok(EthCoin(Arc::new(coin)))
 }
 
+// Todo: This function can be refactored to use builder pattern like UTXO
 /// Processes the given `priv_key_policy` and generates corresponding `KeyPair`.
 /// This function expects either [`PrivKeyBuildPolicy::IguanaPrivKey`]
 /// or [`PrivKeyBuildPolicy::GlobalHDAccount`], otherwise returns `PrivKeyPolicyNotAllowed` error.
@@ -356,7 +369,7 @@ pub(crate) async fn build_address_and_priv_key_policy(
     conf: &Json,
     priv_key_policy: EthPrivKeyBuildPolicy,
     path_to_address: &HDAccountAddressId,
-    // Todo: refactor this to use builder pattern like UTXO or at least make the return not a tuple that has 3 elements
+    gap_limit: Option<u32>,
 ) -> MmResult<(EthPrivKeyPolicy, EthDerivationMethod), EthActivationV2Error> {
     match priv_key_policy {
         EthPrivKeyBuildPolicy::IguanaPrivKey(iguana) => {
@@ -386,9 +399,7 @@ pub(crate) async fn build_address_and_priv_key_policy(
                 .await
                 .mm_err(EthActivationV2Error::from)?;
             let accounts = load_hd_accounts_from_storage(&hd_wallet_storage, &path_to_coin).await?;
-            // Todo: use fn gap_limit(&self) -> u32 { self.activation_params().gap_limit.unwrap_or(DEFAULT_GAP_LIMIT) } like UTXO
-            let gap_limit = DEFAULT_GAP_LIMIT;
-            // Todo: Maybe we can make a constructor for HDWallet struct
+            let gap_limit = gap_limit.unwrap_or(DEFAULT_GAP_LIMIT);
             let hd_wallet = EthHDWallet {
                 hd_wallet_rmd160,
                 hd_wallet_storage,

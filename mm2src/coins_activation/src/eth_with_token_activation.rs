@@ -1,23 +1,26 @@
-use crate::{platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPlatformBalance,
-                                        InitTokensAsMmCoinsError, PlatformWithTokensActivationOps, RegisterTokenInfo,
-                                        TokenActivationParams, TokenActivationRequest, TokenAsMmCoinInitializer,
-                                        TokenInitializer, TokenOf},
-            prelude::*};
+use crate::platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPlatformBalance,
+                                       InitTokensAsMmCoinsError, PlatformWithTokensActivationOps, RegisterTokenInfo,
+                                       TokenActivationParams, TokenActivationRequest, TokenAsMmCoinInitializer,
+                                       TokenInitializer, TokenOf};
+use crate::prelude::*;
 use async_trait::async_trait;
-use coins::eth::EthPrivKeyBuildPolicy;
-use coins::{eth::v2_activation::EthPrivKeyActivationPolicy, MmCoinEnum};
-use coins::{eth::{v2_activation::{eth_coin_from_conf_and_request_v2, Erc20Protocol, Erc20TokenActivationError,
-                                  Erc20TokenActivationRequest, EthActivationV2Error, EthActivationV2Request},
-                  Erc20TokenInfo, EthCoin, EthCoinType},
-            my_tx_history_v2::TxHistoryStorage,
-            CoinBalance, CoinProtocol, MarketCoinOps, MmCoin};
+use coins::coin_balance::{EnableCoinBalanceOps, EnableCoinScanPolicy};
+use coins::eth::v2_activation::{eth_coin_from_conf_and_request_v2, Erc20Protocol, Erc20TokenActivationError,
+                                Erc20TokenActivationRequest, EthActivationV2Error, EthActivationV2Request,
+                                EthPrivKeyActivationPolicy};
+use coins::eth::{display_eth_address, Erc20TokenInfo, EthCoin, EthCoinType, EthPrivKeyBuildPolicy};
+use coins::hd_wallet::RpcTaskXPubExtractor;
+use coins::my_tx_history_v2::TxHistoryStorage;
+use coins::{CoinBalance, CoinProtocol, CoinWithDerivationMethod, MarketCoinOps, MmCoin, MmCoinEnum};
 use common::Future01CompatExt;
 use common::{drop_mutability, true_f};
+use crypto::hw_rpc_task::{HwRpcTaskAwaitingStatus, HwRpcTaskUserAction};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use mm2_metamask::MetamaskRpcError;
 use mm2_number::BigDecimal;
+use rpc_task::{RpcTask, RpcTaskHandle, RpcTaskTypes};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::{HashMap, HashSet};
@@ -81,6 +84,9 @@ impl From<Erc20TokenActivationError> for InitTokensAsMmCoinsError {
         match error {
             Erc20TokenActivationError::InternalError(e) => InitTokensAsMmCoinsError::Internal(e),
             Erc20TokenActivationError::CouldNotFetchBalance(e) => InitTokensAsMmCoinsError::CouldNotFetchBalance(e),
+            Erc20TokenActivationError::UnexpectedDerivationMethod(e) => {
+                InitTokensAsMmCoinsError::UnexpectedDerivationMethod(e)
+            },
         }
     }
 }
@@ -220,8 +226,23 @@ impl PlatformWithTokensActivationOps for EthCoin {
             .await
             .map_err(EthActivationV2Error::InternalError)?;
 
-        // Todo: maybe add enabling of HD wallet here until it's moved to init_eth_with_tokens
-        let my_address = self.my_address()?;
+        // Todo: support for Trezor should be added in a similar place in init_platform_coin_with_token method when implemented
+        // Todo: check utxo implementation for reference
+        let xpub_extractor: Option<RpcTaskXPubExtractor<InitEthTask>> = None;
+        let mut enable_params = activation_request.platform_request.enable_params.clone();
+        enable_params.scan_policy = EnableCoinScanPolicy::DoNotScan;
+        drop_mutability!(enable_params);
+        let _ = self
+            .enable_coin_balance(
+                xpub_extractor,
+                enable_params,
+                &activation_request.platform_request.path_to_address,
+            )
+            .await
+            .mm_err(|e| EthActivationV2Error::InternalError(e.to_string()))?;
+
+        // Todo: We only return the enabled address for swaps in the response for now, init_platform_coin_with_token method should allow scanning and returning all addresses with balances
+        let my_address = display_eth_address(&self.derivation_method().single_addr_or_err().await?);
         let pubkey = self.get_public_key()?;
 
         let mut eth_address_info = CoinAddressInfo {
@@ -259,7 +280,8 @@ impl PlatformWithTokensActivationOps for EthCoin {
         eth_address_info.balances = Some(eth_balance);
         drop_mutability!(eth_address_info);
 
-        // Todo: get_tokens_balance_list use get_token_balance_by_address that uses my_address, we should pass the address in the future for HD wallet
+        // Todo: get_tokens_balance_list use get_token_balance_by_address that uses the enabled address
+        // Todo: We should pass and address to this function so that we can get balances for all HD wallet enabled addresses on activation
         let token_balances = self
             .get_tokens_balance_list()
             .await
@@ -280,6 +302,28 @@ impl PlatformWithTokensActivationOps for EthCoin {
         _storage: impl TxHistoryStorage + Send + 'static,
         _initial_balance: Option<BigDecimal>,
     ) {
+    }
+}
+
+// Todo: this is just an empty implementation that is used in get_activation_result, should be removed when proper init_platform_coin_with_token method is implemented
+pub struct InitEthTask {}
+
+impl RpcTaskTypes for InitEthTask {
+    type Item = ();
+    type Error = EthActivationV2Error;
+    type InProgressStatus = ();
+    type AwaitingStatus = HwRpcTaskAwaitingStatus;
+    type UserAction = HwRpcTaskUserAction;
+}
+
+#[async_trait]
+impl RpcTask for InitEthTask {
+    fn initial_status(&self) -> Self::InProgressStatus { todo!() }
+
+    async fn cancel(self) { todo!() }
+
+    async fn run(&mut self, _task_handle: &RpcTaskHandle<InitEthTask>) -> Result<Self::Item, MmError<Self::Error>> {
+        todo!()
     }
 }
 

@@ -15,6 +15,7 @@ use std::{fmt, iter};
 pub type AddressIdRange = Range<u32>;
 pub(crate) type HDBalanceAddress<T> = <<T as HDWalletBalanceOps>::HDAddressScanner as HDAddressBalanceScanner>::Address;
 
+#[derive(Display)]
 pub enum EnableCoinBalanceError {
     NewAddressDerivingError(NewAddressDerivingError),
     NewAccountCreationError(NewAccountCreationError),

@@ -6,7 +6,6 @@ use crypto::{StandardHDPath, StandardHDPathError};
 use mm2_err_handle::prelude::*;
 use std::str::FromStr;
 
-// Todo: when this is a crate serde should be an optional feature
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum WithdrawFrom {
