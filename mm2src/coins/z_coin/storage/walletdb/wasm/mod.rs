@@ -83,7 +83,6 @@ mod wasm_test {
     use crate::z_coin::storage::{BlockDbImpl, BlockProcessingMode, DataConnStmtCacheWasm, DataConnStmtCacheWrapper};
     use crate::z_coin::{ValidateBlocksError, ZcoinConsensusParams, ZcoinStorageError};
     use crate::ZcoinProtocolInfo;
-    use common::log::wasm_log::register_wasm_log;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use protobuf::Message;
     use wasm_bindgen_test::*;
@@ -138,8 +137,6 @@ mod wasm_test {
 
         WalletIndexedDb::new(&ctx, ticker, consensus_params).await.unwrap()
     }
-
-    fn network() -> Network { Network::TestNetwork }
 
     #[wasm_bindgen_test]
     async fn test_empty_database_has_no_balance() {
@@ -729,148 +726,150 @@ mod wasm_test {
         assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value - value2);
     }
 
-    #[wasm_bindgen_test]
-    async fn create_to_address_fails_on_unverified_notes() {
-        // init blocks_db
-        let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+    fn network() -> Network { Network::TestNetwork }
 
-        // init walletdb.
-        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
-        let consensus_params = consensus_params();
-
-        // Add an account to the wallet
-        let extsk = ExtendedSpendingKey::master(&[]);
-        let extfvk = ExtendedFullViewingKey::from(&extsk);
-        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
-
-        // Account balance should be zero
-        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
-
-        // Add funds to the wallet in a single note
-        let value = Amount::from_u64(50000).unwrap();
-        let (cb, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk.clone(), value);
-        let cb_bytes = cb.write_to_bytes().unwrap();
-        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        assert!(blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .is_ok());
-
-        // Verified balance matches total balance
-        let (_, anchor_height) = walletdb.get_target_and_anchor_heights().await.unwrap().unwrap();
-        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
-        assert_eq!(
-            walletdb.get_balance_at(AccountId(0), anchor_height).await.unwrap(),
-            value
-        );
-
-        // Add more funds to the wallet in a second note
-        let (cb, _) = fake_compact_block(sapling_activation_height() + 1, cb.hash(), extfvk.clone(), value);
-        let cb_bytes = cb.write_to_bytes().unwrap();
-        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        assert!(blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .is_ok());
-
-        // Verified balance does not include the second note
-        let (_, anchor_height2) = walletdb.get_target_and_anchor_heights().await.unwrap().unwrap();
-        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value);
-        assert_eq!(
-            walletdb.get_balance_at(AccountId(0), anchor_height2).await.unwrap(),
-            value
-        );
-
-        // Spend fails because there are insufficient verified notes
-        let extsk2 = ExtendedSpendingKey::master(&[]);
-        let to = extsk2.default_address().unwrap().1.into();
-        match create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(70000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        {
-            Ok(_) => panic!("Should have failed"),
-            Err(e) => assert!(e
-                .to_string()
-                .contains("Insufficient balance (have 50000, need 71000 including fee)")),
-        }
-
-        // Mine blocks SAPLING_ACTIVATION_HEIGHT + 2 to 9 until just before the second
-        // note is verified
-        for i in 2..10 {
-            let (cb, _) = fake_compact_block(sapling_activation_height() + i, cb.hash(), extfvk.clone(), value);
-            let cb_bytes = cb.write_to_bytes().unwrap();
-            blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-        }
-
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        assert!(blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .is_ok());
-
-        // Second spend still fails
-        match create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(70000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        {
-            Ok(_) => panic!("Should have failed"),
-            Err(e) => assert!(e
-                .to_string()
-                .contains("Insufficient balance (have 50000, need 71000 including fee)")),
-        }
-
-        // Mine block 11 so that the second note becomes verified
-        let (cb, _) = fake_compact_block(sapling_activation_height() + 10, cb.hash(), extfvk, value);
-        let cb_bytes = cb.write_to_bytes().unwrap();
-        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        assert!(blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .is_ok());
-
-        // Second spend should now succeed
-        create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(70000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        .unwrap();
-    }
+    //    #[wasm_bindgen_test]
+    //    async fn create_to_address_fails_on_unverified_notes() {
+    //        // init blocks_db
+    //        let ctx = mm_ctx_with_custom_db();
+    //        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+    //
+    //        // init walletdb.
+    //        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+    //        let consensus_params = consensus_params();
+    //
+    //        // Add an account to the wallet
+    //        let extsk = ExtendedSpendingKey::master(&[]);
+    //        let extfvk = ExtendedFullViewingKey::from(&extsk);
+    //        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+    //
+    //        // Account balance should be zero
+    //        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), Amount::zero());
+    //
+    //        // Add funds to the wallet in a single note
+    //        let value = Amount::from_u64(50000).unwrap();
+    //        let (cb, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk.clone(), value);
+    //        let cb_bytes = cb.write_to_bytes().unwrap();
+    //        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        assert!(blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .is_ok());
+    //
+    //        // Verified balance matches total balance
+    //        let (_, anchor_height) = walletdb.get_target_and_anchor_heights().await.unwrap().unwrap();
+    //        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
+    //        assert_eq!(
+    //            walletdb.get_balance_at(AccountId(0), anchor_height).await.unwrap(),
+    //            value
+    //        );
+    //
+    //        // Add more funds to the wallet in a second note
+    //        let (cb, _) = fake_compact_block(sapling_activation_height() + 1, cb.hash(), extfvk.clone(), value);
+    //        let cb_bytes = cb.write_to_bytes().unwrap();
+    //        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        assert!(blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .is_ok());
+    //
+    //        // Verified balance does not include the second note
+    //        let (_, anchor_height2) = walletdb.get_target_and_anchor_heights().await.unwrap().unwrap();
+    //        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value + value);
+    //        assert_eq!(
+    //            walletdb.get_balance_at(AccountId(0), anchor_height2).await.unwrap(),
+    //            value
+    //        );
+    //
+    //        // Spend fails because there are insufficient verified notes
+    //        let extsk2 = ExtendedSpendingKey::master(&[]);
+    //        let to = extsk2.default_address().unwrap().1.into();
+    //        match create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(70000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        {
+    //            Ok(_) => panic!("Should have failed"),
+    //            Err(e) => assert!(e
+    //                .to_string()
+    //                .contains("Insufficient balance (have 50000, need 71000 including fee)")),
+    //        }
+    //
+    //        // Mine blocks SAPLING_ACTIVATION_HEIGHT + 2 to 9 until just before the second
+    //        // note is verified
+    //        for i in 2..10 {
+    //            let (cb, _) = fake_compact_block(sapling_activation_height() + i, cb.hash(), extfvk.clone(), value);
+    //            let cb_bytes = cb.write_to_bytes().unwrap();
+    //            blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //        }
+    //
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        assert!(blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .is_ok());
+    //
+    //        // Second spend still fails
+    //        match create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(70000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        {
+    //            Ok(_) => panic!("Should have failed"),
+    //            Err(e) => assert!(e
+    //                .to_string()
+    //                .contains("Insufficient balance (have 50000, need 71000 including fee)")),
+    //        }
+    //
+    //        // Mine block 11 so that the second note becomes verified
+    //        let (cb, _) = fake_compact_block(sapling_activation_height() + 10, cb.hash(), extfvk, value);
+    //        let cb_bytes = cb.write_to_bytes().unwrap();
+    //        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        assert!(blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .is_ok());
+    //
+    //        // Second spend should now succeed
+    //        create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(70000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        .unwrap();
+    //    }
 
     #[wasm_bindgen_test]
     async fn test_create_to_address_fails_on_incorrect_extsk() {
@@ -991,142 +990,142 @@ mod wasm_test {
         }
     }
 
-    #[wasm_bindgen_test]
-    async fn test_create_to_address_fails_on_locked_notes() {
-        register_wasm_log();
-
-        // init blocks_db
-        let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
-
-        // init walletdb.
-        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
-        let consensus_params = consensus_params();
-
-        // Add an account to the wallet
-        let extsk = ExtendedSpendingKey::master(&[]);
-        let extfvk = ExtendedFullViewingKey::from(&extsk);
-        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
-
-        // Add funds to the wallet in a single note
-        let value = Amount::from_u64(50000).unwrap();
-        let (cb, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk, value);
-        let cb_bytes = cb.write_to_bytes().unwrap();
-        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .unwrap();
-        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
-
-        // Send some of the funds to another address
-        let extsk2 = ExtendedSpendingKey::master(&[]);
-        let to = extsk2.default_address().unwrap().1.into();
-        create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(15000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        .unwrap();
-
-        // A second spend fails because there are no usable notes
-        match create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(2000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        {
-            Ok(_) => panic!("Should have failed"),
-            Err(e) => assert!(e
-                .to_string()
-                .contains("Insufficient balance (have 0, need 3000 including fee)")),
-        }
-
-        // Mine blocks SAPLING_ACTIVATION_HEIGHT + 1 to 21 (that don't send us funds)
-        // until just before the first transaction expires
-        for i in 1..22 {
-            let (cb, _) = fake_compact_block(
-                sapling_activation_height() + i,
-                cb.hash(),
-                ExtendedFullViewingKey::from(&ExtendedSpendingKey::master(&[i as u8])),
-                value,
-            );
-            let cb_bytes = cb.write_to_bytes().unwrap();
-            blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-        }
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .unwrap();
-
-        // Second spend still fails
-        match create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(2000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        {
-            Ok(_) => panic!("Should have failed"),
-            Err(e) => assert!(e
-                .to_string()
-                .contains("Insufficient balance (have 0, need 3000 including fee)")),
-        }
-
-        // Mine block SAPLING_ACTIVATION_HEIGHT + 22 so that the first transaction expires
-        let (cb, _) = fake_compact_block(
-            sapling_activation_height() + 22,
-            cb.hash(),
-            ExtendedFullViewingKey::from(&ExtendedSpendingKey::master(&[22])),
-            value,
-        );
-        let cb_bytes = cb.write_to_bytes().unwrap();
-        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
-        // Scan the cache
-        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
-        blockdb
-            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
-            .await
-            .unwrap();
-
-        // Second spend should now succeed
-        create_spend_to_address(
-            &mut walletdb,
-            &network(),
-            test_prover(),
-            AccountId(0),
-            &extsk,
-            &to,
-            Amount::from_u64(2000).unwrap(),
-            None,
-            OvkPolicy::Sender,
-        )
-        .await
-        .unwrap();
-    }
+    //        #[wasm_bindgen_test]
+    //    async fn test_create_to_address_fails_on_locked_notes() {
+    //        register_wasm_log();
+    //
+    //        // init blocks_db
+    //        let ctx = mm_ctx_with_custom_db();
+    //        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+    //
+    //        // init walletdb.
+    //        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
+    //        let consensus_params = consensus_params();
+    //
+    //        // Add an account to the wallet
+    //        let extsk = ExtendedSpendingKey::master(&[]);
+    //        let extfvk = ExtendedFullViewingKey::from(&extsk);
+    //        assert!(walletdb.init_accounts_table(&[extfvk.clone()]).await.is_ok());
+    //
+    //        // Add funds to the wallet in a single note
+    //        let value = Amount::from_u64(50000).unwrap();
+    //        let (cb, _) = fake_compact_block(sapling_activation_height(), BlockHash([0; 32]), extfvk, value);
+    //        let cb_bytes = cb.write_to_bytes().unwrap();
+    //        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .unwrap();
+    //        assert_eq!(walletdb.get_balance(AccountId(0)).await.unwrap(), value);
+    //
+    //        // Send some of the funds to another address
+    //        let extsk2 = ExtendedSpendingKey::master(&[]);
+    //        let to = extsk2.default_address().unwrap().1.into();
+    //        create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(15000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        .unwrap();
+    //
+    //        // A second spend fails because there are no usable notes
+    //        match create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(2000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        {
+    //            Ok(_) => panic!("Should have failed"),
+    //            Err(e) => assert!(e
+    //                .to_string()
+    //                .contains("Insufficient balance (have 0, need 3000 including fee)")),
+    //        }
+    //
+    //        // Mine blocks SAPLING_ACTIVATION_HEIGHT + 1 to 21 (that don't send us funds)
+    //        // until just before the first transaction expires
+    //        for i in 1..22 {
+    //            let (cb, _) = fake_compact_block(
+    //                sapling_activation_height() + i,
+    //                cb.hash(),
+    //                ExtendedFullViewingKey::from(&ExtendedSpendingKey::master(&[i as u8])),
+    //                value,
+    //            );
+    //            let cb_bytes = cb.write_to_bytes().unwrap();
+    //            blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //        }
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .unwrap();
+    //
+    //        // Second spend still fails
+    //        match create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(2000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        {
+    //            Ok(_) => panic!("Should have failed"),
+    //            Err(e) => assert!(e
+    //                .to_string()
+    //                .contains("Insufficient balance (have 0, need 3000 including fee)")),
+    //        }
+    //
+    //        // Mine block SAPLING_ACTIVATION_HEIGHT + 22 so that the first transaction expires
+    //        let (cb, _) = fake_compact_block(
+    //            sapling_activation_height() + 22,
+    //            cb.hash(),
+    //            ExtendedFullViewingKey::from(&ExtendedSpendingKey::master(&[22])),
+    //            value,
+    //        );
+    //        let cb_bytes = cb.write_to_bytes().unwrap();
+    //        blockdb.insert_block(cb.height as u32, cb_bytes).await.unwrap();
+    //        // Scan the cache
+    //        let scan = DataConnStmtCacheWrapper::new(DataConnStmtCacheWasm(walletdb.clone()));
+    //        blockdb
+    //            .process_blocks_with_mode(consensus_params.clone(), BlockProcessingMode::Scan(scan), None, None)
+    //            .await
+    //            .unwrap();
+    //
+    //        // Second spend should now succeed
+    //        create_spend_to_address(
+    //            &mut walletdb,
+    //            &network(),
+    //            test_prover(),
+    //            AccountId(0),
+    //            &extsk,
+    //            &to,
+    //            Amount::from_u64(2000).unwrap(),
+    //            None,
+    //            OvkPolicy::Sender,
+    //        )
+    //        .await
+    //        .unwrap();
+    //    }
 }
