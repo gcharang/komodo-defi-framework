@@ -2436,47 +2436,6 @@ pub async fn init_z_coin_light(
     json::from_str(&request.1).unwrap()
 }
 
-pub async fn init_z_coin_light_with_short_height(
-    mm: &MarketMakerIt,
-    coin: &str,
-    electrums: &[&str],
-    lightwalletd_urls: &[&str],
-    account: Option<u32>,
-) -> Json {
-    // Number of seconds in a day
-    let request = mm
-        .rpc(&json!({
-            "userpass": mm.userpass,
-            "method": "task::enable_z_coin::init",
-            "mmrpc": "2.0",
-            "params": {
-                "ticker": coin,
-                "activation_params": {
-                    "mode": {
-                        "rpc": "Light",
-                        "rpc_data": {
-                            "electrum_servers": electrum_servers_rpc(electrums),
-                            "light_wallet_d_servers": lightwalletd_urls,
-                            "sync_params": {
-                                "height": 2626830
-                            }
-                        },
-                    },
-                    "account": account.unwrap_or_default(),
-                },
-            }
-        }))
-        .await
-        .unwrap();
-    assert_eq!(
-        request.0,
-        StatusCode::OK,
-        "'task::enable_z_coin::init' failed: {}",
-        request.1
-    );
-    json::from_str(&request.1).unwrap()
-}
-
 pub async fn init_z_coin_status(mm: &MarketMakerIt, task_id: u64) -> Json {
     let request = mm
         .rpc(&json!({

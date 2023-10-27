@@ -6,7 +6,6 @@ pub use blockdb::*;
 pub mod walletdb;
 pub use walletdb::*;
 
-use common::log::info;
 #[cfg(target_arch = "wasm32")]
 use walletdb::wasm::storage::DataConnStmtCacheWasm;
 #[cfg(debug_assertions)]
@@ -183,8 +182,6 @@ pub async fn scan_cached_block(
             &witnesses,
         )
         .await?;
-
-    info!("INSERTED: {current_height}");
 
     let spent_nf: Vec<Nullifier> = txs
         .iter()
