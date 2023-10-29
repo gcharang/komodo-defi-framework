@@ -122,9 +122,9 @@ async fn trade_base_rel_electrum(
             log!("enable MORTY (bob): {:?}", rc);
         },
         Mm2InitPrivKeyPolicy::GlobalHDAccount => {
-            let rc = enable_utxo_v2_electrum(&mm_bob, "RICK", doc_electrums(), bob_path_to_address.clone(), 60).await;
+            let rc = enable_utxo_v2_electrum(&mm_bob, "RICK", doc_electrums(), bob_path_to_address.clone(), 60, None).await;
             log!("enable RICK (bob): {:?}", rc);
-            let rc = enable_utxo_v2_electrum(&mm_bob, "MORTY", marty_electrums(), bob_path_to_address, 60).await;
+            let rc = enable_utxo_v2_electrum(&mm_bob, "MORTY", marty_electrums(), bob_path_to_address, 60, None).await;
             log!("enable MORTY (bob): {:?}", rc);
         },
     }
@@ -140,9 +140,9 @@ async fn trade_base_rel_electrum(
         },
         Mm2InitPrivKeyPolicy::GlobalHDAccount => {
             let rc =
-                enable_utxo_v2_electrum(&mm_alice, "RICK", doc_electrums(), alice_path_to_address.clone(), 60).await;
+                enable_utxo_v2_electrum(&mm_alice, "RICK", doc_electrums(), alice_path_to_address.clone(), 60, None).await;
             log!("enable RICK (alice): {:?}", rc);
-            let rc = enable_utxo_v2_electrum(&mm_alice, "MORTY", marty_electrums(), alice_path_to_address, 60).await;
+            let rc = enable_utxo_v2_electrum(&mm_alice, "MORTY", marty_electrums(), alice_path_to_address, 60, None).await;
             log!("enable MORTY (alice): {:?}", rc);
         },
     }

@@ -100,7 +100,7 @@ pub struct InitHwRequest {
     device_pubkey: Option<HwPubkey>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug, Deserialize)]
 pub struct InitHwResponse {
     #[serde(flatten)]
     device_info: HwDeviceInfo,

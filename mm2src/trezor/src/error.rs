@@ -110,3 +110,8 @@ impl From<UsbError> for TrezorError {
         }
     }
 }
+
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
+impl From<std::io::Error> for TrezorError {
+    fn from(e: std::io::Error) -> Self { TrezorError::UnderlyingError(e.to_string()) }
+}
