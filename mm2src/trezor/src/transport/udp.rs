@@ -10,17 +10,18 @@
 /// Be aware that when you rebuild the firmware the emulator flash memory file emulator.img is recreated (so save it before rebuilding code)
 use super::{protocol::{Link, Protocol, ProtocolV1},
             ProtoMessage, Transport};
+use crate::transport::ConnectableDeviceWrapper;
 use crate::{TrezorError, TrezorResult};
-use async_std::{io, net::UdpSocket, task::block_on};
+use async_std::{io, net::UdpSocket};
 use mm2_err_handle::prelude::*;
 use std::time::Duration;
 
 // A collection of constants related to the Emulator Ports.
 mod constants {
-    pub const DEFAULT_HOST: &str = "127.0.0.1";
-    pub const DEFAULT_PORT: &str = "21324";
-    pub const DEFAULT_DEBUG_PORT: &str = "21325";
-    pub const LOCAL_LISTENER: &str = "127.0.0.1:0";
+    pub(super) const DEFAULT_HOST: &str = "127.0.0.1";
+    pub(super) const DEFAULT_PORT: &str = "21324";
+    pub(super) const DEFAULT_DEBUG_PORT: &str = "21325";
+    pub(super) const LOCAL_LISTENER: &str = "127.0.0.1:0";
 }
 
 use async_trait::async_trait;
@@ -42,35 +43,32 @@ pub struct UdpAvailableDevice {
 
 impl UdpAvailableDevice {
     /// Connect to the device.
-    pub fn connect(self) -> TrezorResult<UdpTransport> {
-        block_on(async {
-            let transport = UdpTransport::connect(&self).await?;
-            Ok(transport)
-        })
+    async fn connect(self) -> TrezorResult<UdpTransport> {
+        let transport = UdpTransport::connect(&self).await?;
+        Ok(transport)
     }
 }
 
-pub fn find_devices() -> TrezorResult<Vec<UdpAvailableDevice>> {
-    block_on(async {
-        let debug = false;
-        let mut devices = Vec::new();
-        let mut dest = String::new();
-        dest.push_str(DEFAULT_HOST);
-        dest.push(':');
-        dest.push_str(if debug { DEFAULT_DEBUG_PORT } else { DEFAULT_PORT });
+async fn find_devices() -> TrezorResult<Vec<UdpAvailableDevice>> {
+    let debug = false;
+    let mut devices = Vec::new();
+    let dest = format!(
+        "{}:{}",
+        DEFAULT_HOST,
+        if debug { DEFAULT_DEBUG_PORT } else { DEFAULT_PORT }
+    );
 
-        let link = UdpLink::open(&dest).await?;
-        if link.ping().await? {
-            devices.push(UdpAvailableDevice {
-                // model: Model::TrezorEmulator,
-                debug,
-                transport: UdpTransport {
-                    protocol: ProtocolV1 { link },
-                },
-            });
-        }
-        Ok(devices)
-    })
+    let link = UdpLink::open(&dest).await?;
+    if link.ping().await? {
+        devices.push(UdpAvailableDevice {
+            // model: Model::TrezorEmulator,
+            debug,
+            transport: UdpTransport {
+                protocol: ProtocolV1 { link },
+            },
+        });
+    }
+    Ok(devices)
 }
 
 /// An actual serial HID USB link to a device over which bytes can be sent.
@@ -140,10 +138,10 @@ impl UdpTransport {
     /// Connect to a device over the UDP transport.
     async fn connect(device: &UdpAvailableDevice) -> TrezorResult<UdpTransport> {
         let transport = &device.transport;
-        let mut path = String::new();
-        path.push_str(&transport.protocol.link.device.0);
-        path.push(':');
-        path.push_str(&transport.protocol.link.device.1);
+        let path = format!(
+            "{}:{}",
+            transport.protocol.link.device.0, transport.protocol.link.device.1
+        );
         let link = UdpLink::open(&path).await?;
         Ok(UdpTransport {
             protocol: ProtocolV1 { link },
@@ -158,4 +156,18 @@ impl Transport for UdpTransport {
 
     async fn write_message(&mut self, message: ProtoMessage) -> TrezorResult<()> { self.protocol.write(message).await }
     async fn read_message(&mut self) -> TrezorResult<ProtoMessage> { self.protocol.read().await }
+}
+
+#[async_trait]
+impl ConnectableDeviceWrapper for UdpAvailableDevice {
+    type T = UdpTransport;
+
+    async fn find_devices() -> TrezorResult<Vec<Self>>
+    where
+        Self: Sized,
+    {
+        crate::transport::udp::find_devices().await
+    }
+
+    async fn connect(self) -> TrezorResult<UdpTransport> { UdpAvailableDevice::connect(self).await }
 }
