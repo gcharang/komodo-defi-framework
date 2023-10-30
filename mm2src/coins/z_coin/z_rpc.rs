@@ -53,7 +53,7 @@ cfg_native!(
 );
 
 cfg_wasm32!(
-    use mm2_net::wasm::http::TonicClient;
+    use mm2_net::wasm::tonic_client::TonicClient;
 );
 
 /// ZRpcOps trait provides asynchronous methods for performing various operations related to

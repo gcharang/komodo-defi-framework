@@ -1,23 +1,16 @@
-use crate::grpc_web::PostGrpcWebErr;
 use crate::transport::{SlurpError, SlurpResult};
 use crate::wasm::body_stream::ResponseBody;
 
 use common::executor::spawn_local;
-use common::{stringify_js_error, APPLICATION_GRPC_WEB_PROTO, APPLICATION_JSON, X_GRPC_WEB};
+use common::{stringify_js_error, APPLICATION_JSON};
 use futures::channel::oneshot;
-use futures_util::Future;
-use http::header::{ACCEPT, CONTENT_TYPE};
+use http::header::CONTENT_TYPE;
 use http::response::Builder;
-use http::{HeaderMap, Request, Response, StatusCode};
+use http::{HeaderMap, Response, StatusCode};
 use js_sys::Array;
 use js_sys::Uint8Array;
 use mm2_err_handle::prelude::*;
 use std::collections::HashMap;
-use std::{pin::Pin,
-          task::{Context, Poll}};
-use tonic::body::BoxBody;
-use tonic::codegen::Body;
-use tower_service::Service;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -378,46 +371,6 @@ impl RequestBody {
             },
         }
     }
-}
-
-#[derive(Clone)]
-pub struct TonicClient(String);
-
-impl TonicClient {
-    pub fn new(url: String) -> Self { Self(url) }
-}
-
-impl Service<Request<BoxBody>> for TonicClient {
-    type Response = Response<ResponseBody>;
-
-    type Error = MmError<PostGrpcWebErr>;
-
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
-
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> { Poll::Ready(Ok(())) }
-
-    fn call(&mut self, request: Request<BoxBody>) -> Self::Future { Box::pin(call(self.0.clone(), request)) }
-}
-
-async fn call(mut base_url: String, request: Request<BoxBody>) -> MmResult<Response<ResponseBody>, PostGrpcWebErr> {
-    base_url.push_str(&request.uri().to_string());
-
-    let body = request
-        .into_body()
-        .data()
-        .await
-        .transpose()
-        .map_err(|err| PostGrpcWebErr::Status(err.to_string()))?;
-    let body = body.ok_or_else(|| MmError::new(PostGrpcWebErr::InvalidRequest("Invalid request body".to_string())))?;
-
-    Ok(FetchRequest::post(&base_url)
-        .body_bytes(body.to_vec())
-        .header(CONTENT_TYPE.as_str(), APPLICATION_GRPC_WEB_PROTO)
-        .header(ACCEPT.as_str(), APPLICATION_GRPC_WEB_PROTO)
-        .header(X_GRPC_WEB, "1")
-        .request_stream_response()
-        .await?
-        .1)
 }
 
 mod tests {
