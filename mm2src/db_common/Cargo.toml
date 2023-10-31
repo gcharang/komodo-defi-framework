@@ -17,4 +17,4 @@ rusqlite = { version = "0.28", features = ["bundled"] }
 sql-builder = "3.1.1"
 tokio = { version = "1.20", default-features = false, features = ["macros"] }
 crossbeam-channel = "0.5.1"
-futures = { version = "0.3.1", package = "futures" }
+futures = "0.3.1"
