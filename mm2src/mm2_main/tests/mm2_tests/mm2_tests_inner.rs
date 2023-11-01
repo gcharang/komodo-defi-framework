@@ -8015,6 +8015,7 @@ fn test_withdraw_from_trezor_segwit_rpc() {
         Some(json!({"derivation_path": "m/84'/1'/0'/0/0"})),
     ));
     log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+    block_on(mm_bob.stop()).unwrap();
 }
 
 /// Tool to run withdraw rpc from trezor device or emulator p2pkh account
@@ -8058,4 +8059,5 @@ fn test_withdraw_from_trezor_p2pkh_rpc() {
         Some(json!({"derivation_path": "m/44'/1'/0'/0/0"})),
     ));
     log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+    block_on(mm_bob.stop()).unwrap();
 }
