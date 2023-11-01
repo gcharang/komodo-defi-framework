@@ -32,9 +32,8 @@ impl Service<Request<BoxBody>> for TonicClient {
     fn call(&mut self, request: Request<BoxBody>) -> Self::Future { Box::pin(call(self.0.clone(), request)) }
 }
 
-async fn call(mut base_url: String, request: Request<BoxBody>) -> MmResult<Response<ResponseBody>, PostGrpcWebErr> {
-    base_url.push_str(&request.uri().to_string());
-
+async fn call(base_url: String, request: Request<BoxBody>) -> MmResult<Response<ResponseBody>, PostGrpcWebErr> {
+    let base_url = format!("{base_url}{}", &request.uri().to_string());
     let body = request
         .into_body()
         .data()
@@ -48,7 +47,7 @@ async fn call(mut base_url: String, request: Request<BoxBody>) -> MmResult<Respo
         .header(CONTENT_TYPE.as_str(), APPLICATION_GRPC_WEB_PROTO)
         .header(ACCEPT.as_str(), APPLICATION_GRPC_WEB_PROTO)
         .header(X_GRPC_WEB, "1")
-        .request_stream_response()
+        .request_response_body()
         .await?
         .1)
 }

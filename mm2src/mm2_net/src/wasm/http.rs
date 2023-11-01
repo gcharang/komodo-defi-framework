@@ -57,7 +57,7 @@ pub async fn slurp_post_json(url: &str, body: String) -> SlurpResult {
 fn set_response_headers_and_content_type(
     mut result: Builder,
     response: &JsResponse,
-) -> Result<(Builder, Option<String>), MmError<SlurpError>> {
+) -> Result<(Builder, String), MmError<SlurpError>> {
     let headers = response.headers();
 
     let header_iter =
@@ -86,7 +86,11 @@ fn set_response_headers_and_content_type(
         }
     }
 
-    Ok((result, content_type))
+    if let None = content_type {
+        return MmError::err(SlurpError::InvalidRequest("MissingContentType".to_string()));
+    }
+
+    Ok((result, content_type.unwrap()))
 }
 
 pub struct FetchRequest {
@@ -165,13 +169,11 @@ impl FetchRequest {
         }
     }
 
-    pub async fn request_stream_response(self) -> FetchResult<Response<ResponseBody>> {
+    pub async fn request_response_body(self) -> FetchResult<Response<ResponseBody>> {
         let (tx, rx) = oneshot::channel();
         Self::spawn_fetch_stream_response(self, tx);
-        match rx.await {
-            Ok(res) => res,
-            Err(_e) => MmError::err(SlurpError::Internal("Spawned future has been canceled".to_owned())),
-        }
+        rx.await
+            .map_to_mm(|_| SlurpError::Internal("Spawned future has been canceled".to_owned()))?
     }
 
     fn spawn_fetch_str(request: Self, tx: oneshot::Sender<FetchResult<String>>) {
@@ -321,15 +323,15 @@ impl FetchRequest {
         let resp_stream = match js_response.body() {
             Some(txt) => txt,
             None => {
-                let error = format!("Expected readable stream, found {:?}:", js_response,);
-                return MmError::err(SlurpError::ErrorDeserializing { uri, error });
+                return MmError::err(SlurpError::ErrorDeserializing {
+                    uri,
+                    error: format!("Expected readable stream, found {:?}:", js_response),
+                });
             },
         };
 
         let builder = Response::builder().status(status_code);
         let (builder, content_type) = set_response_headers_and_content_type(builder, &js_response)?;
-        let content_type =
-            content_type.ok_or_else(|| MmError::new(SlurpError::InvalidRequest("MissingContentType".to_string())))?;
         let body = ResponseBody::new(resp_stream, &content_type)
             .map_to_mm(|err| SlurpError::InvalidRequest(format!("{err:?}")))?;
 
