@@ -13,7 +13,6 @@ use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::Diversifier;
 use zcash_primitives::sapling::Rseed;
 use zcash_primitives::transaction::components::Amount;
-use zcash_proofs::parse_parameters;
 use zcash_proofs::prover::LocalTxProver;
 
 struct SpendableNoteConstructor {
@@ -25,13 +24,7 @@ struct SpendableNoteConstructor {
 
 fn test_prover() -> LocalTxProver {
     let (spend_buf, output_buf) = wagyu_zcash_parameters::load_sapling_parameters();
-    let p = parse_parameters(&spend_buf[..], &output_buf[..], None);
-
-    LocalTxProver {
-        spend_params: p.spend_params,
-        spend_vk: p.spend_vk,
-        output_params: p.output_params,
-    }
+    LocalTxProver::from_bytes(&spend_buf[..], &output_buf[..])
 }
 
 fn to_spendable_note(note: SpendableNoteConstructor) -> MmResult<SpendableNote, ZcoinStorageError> {
