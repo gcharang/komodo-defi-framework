@@ -26,13 +26,13 @@ use mm2_test_helpers::electrums::*;
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "zhtlc-native-tests")))]
 use mm2_test_helpers::for_tests::check_stats_swap_status;
 #[cfg(all(not(target_arch = "wasm32")))]
+use mm2_test_helpers::for_tests::mm_ctx_with_custom_db_with_conf;
 use mm2_test_helpers::for_tests::{btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
                                   check_recent_swaps, enable_eth_coin, enable_qrc20, eth_jst_testnet_conf,
                                   eth_testnet_conf, find_metrics_in_json, from_env_file, get_shared_db_id,
-                                  init_trezor_rpc, init_trezor_status_rpc, init_withdraw,
-                                  mm_ctx_with_custom_db_with_conf, mm_spat, morty_conf, rick_conf, sign_message,
-                                  start_swaps, tbtc_legacy_conf, tbtc_segwit_conf, tbtc_with_spv_conf,
-                                  test_qrc20_history_impl, tqrc20_conf, verify_message,
+                                  init_trezor_rpc, init_trezor_status_rpc, init_withdraw, mm_spat, morty_conf,
+                                  rick_conf, sign_message, start_swaps, tbtc_legacy_conf, tbtc_segwit_conf,
+                                  tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf, verify_message,
                                   wait_for_swap_contract_negotiation, wait_for_swap_negotiation_failure,
                                   wait_for_swaps_finish_and_check_status, wait_till_history_has_records,
                                   withdraw_status, MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf,
