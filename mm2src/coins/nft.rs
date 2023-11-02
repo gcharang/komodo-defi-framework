@@ -186,9 +186,9 @@ async fn process_transfers_confirmations(
     chains: Vec<Chain>,
     history_list: &mut NftsTransferHistoryList,
 ) -> MmResult<(), TransferConfirmationsError> {
-    let mut blocks_map = HashMap::new();
+    let mut blocks_map = HashMap::with_capacity(chains.len());
     for chain in chains.into_iter() {
-        let coin_enum = lp_coinfind_or_err(ctx, &chain.to_ticker()).await?;
+        let coin_enum = lp_coinfind_or_err(ctx, chain.to_ticker()).await?;
         let current_block = match coin_enum {
             MmCoinEnum::EthCoin(eth_coin) => current_block_impl(eth_coin).await?,
             _ => {
@@ -200,16 +200,15 @@ async fn process_transfers_confirmations(
         blocks_map.insert(chain.to_ticker(), current_block);
     }
     for transfer in history_list.transfer_history.iter_mut() {
-        let current_block = match blocks_map.get(&transfer.chain.to_ticker()) {
+        let current_block = match blocks_map.get(transfer.chain.to_ticker()) {
             Some(block) => *block,
             None => 0,
         };
-        let confirmations = if transfer.block_number == 0 || transfer.block_number > current_block {
+        transfer.confirmations = if transfer.block_number > current_block {
             0
         } else {
             current_block + 1 - transfer.block_number
         };
-        transfer.confirmations = confirmations;
     }
     Ok(())
 }
@@ -254,7 +253,7 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
             NftTransferHistoryStorageOps::init(&storage, chain).await?;
             None
         };
-        let coin_enum = lp_coinfind_or_err(&ctx, &chain.to_ticker()).await?;
+        let coin_enum = lp_coinfind_or_err(&ctx, chain.to_ticker()).await?;
         let eth_coin = match coin_enum {
             MmCoinEnum::EthCoin(eth_coin) => eth_coin,
             _ => {
@@ -590,8 +589,8 @@ async fn get_moralis_nft_list(
 ) -> MmResult<Vec<Nft>, GetNftInfoError> {
     let mut res_list = Vec::new();
     let ticker = chain.to_ticker();
-    let conf = coin_conf(ctx, &ticker);
-    let my_address = get_eth_address(ctx, &conf, &ticker, &StandardHDCoinAddress::default()).await?;
+    let conf = coin_conf(ctx, ticker);
+    let my_address = get_eth_address(ctx, &conf, ticker, &StandardHDCoinAddress::default()).await?;
 
     let mut uri_without_cursor = url.clone();
     uri_without_cursor.set_path(MORALIS_API_ENDPOINT);
@@ -646,8 +645,8 @@ async fn get_moralis_nft_transfers(
 ) -> MmResult<Vec<NftTransferHistory>, GetNftInfoError> {
     let mut res_list = Vec::new();
     let ticker = chain.to_ticker();
-    let conf = coin_conf(ctx, &ticker);
-    let my_address = get_eth_address(ctx, &conf, &ticker, &StandardHDCoinAddress::default()).await?;
+    let conf = coin_conf(ctx, ticker);
+    let my_address = get_eth_address(ctx, &conf, ticker, &StandardHDCoinAddress::default()).await?;
 
     let mut uri_without_cursor = url.clone();
     uri_without_cursor.set_path(MORALIS_API_ENDPOINT);
@@ -892,7 +891,7 @@ async fn update_nft_list<T: NftListStorageOps + NftTransferHistoryStorageOps>(
 ) -> MmResult<(), UpdateNftError> {
     let transfers = storage.get_transfers_from_block(*chain, scan_from_block).await?;
     let req = MyAddressReq {
-        coin: chain.to_ticker(),
+        coin: chain.to_ticker().to_string(),
         path_to_address: StandardHDCoinAddress::default(),
     };
     let my_address = get_my_address(ctx.clone(), req).await?.wallet_address.to_lowercase();
