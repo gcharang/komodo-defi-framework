@@ -116,17 +116,17 @@ pub enum Chain {
 }
 
 pub(crate) trait ConvertChain {
-    fn to_ticker(&self) -> String;
+    fn to_ticker(&self) -> &'static str;
 }
 
 impl ConvertChain for Chain {
-    fn to_ticker(&self) -> String {
+    fn to_ticker(&self) -> &'static str {
         match self {
-            Chain::Avalanche => "AVAX".to_owned(),
-            Chain::Bsc => "BNB".to_owned(),
-            Chain::Eth => "ETH".to_owned(),
-            Chain::Fantom => "FTM".to_owned(),
-            Chain::Polygon => "MATIC".to_owned(),
+            Chain::Avalanche => "AVAX",
+            Chain::Bsc => "BNB",
+            Chain::Eth => "ETH",
+            Chain::Fantom => "FTM",
+            Chain::Polygon => "MATIC",
         }
     }
 }
