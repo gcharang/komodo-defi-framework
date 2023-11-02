@@ -420,6 +420,7 @@ impl ZRpcOps for NativeClient {
     async fn checkpoint_block_from_height(
         &mut self,
         _height: u64,
+        _ticker: &str,
     ) -> MmResult<Option<CheckPointBlockInfo>, UpdateBlocksCacheErr> {
         todo!()
     }
