@@ -11,8 +11,8 @@ use mm2_test_helpers::electrums::{doc_electrums, marty_electrums};
 use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init_z_coin_light, init_z_coin_status,
                                   morty_conf, pirate_conf, rick_conf, start_swaps, test_qrc20_history_impl,
                                   wait_for_swaps_finish_and_check_status, MarketMakerIt, Mm2InitPrivKeyPolicy,
-                                  Mm2TestConf, Mm2TestConfForSwap, ARRR, MORTY, RICK, ZOMBIE_ELECTRUMS,
-                                  ZOMBIE_LIGHTWALLETD_URLS};
+                                  Mm2TestConf, Mm2TestConfForSwap, ARRR, MORTY, PIRATE_LIGHTWALLETD_URLS, RICK,
+                                  ZOMBIE_ELECTRUMS};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::{EnableCoinBalance, InitTaskResult, InitZcoinStatus, RpcV2Response,
                                 ZCoinActivationResult};
@@ -20,7 +20,7 @@ use serde_json::json;
 use serde_json::{self as json};
 use wasm_bindgen_test::wasm_bindgen_test;
 
-const ZOMBIE_TEST_BALANCE_SEED: &str = "zombie test seed";
+const PIRATE_TEST_BALANCE_SEED: &str = "pirate test seed";
 
 /// Starts the WASM version of MM.
 fn wasm_start(ctx: MmArc) {
@@ -226,12 +226,12 @@ async fn activate_z_coin_light() {
     register_wasm_log();
     let coins = json!([pirate_conf()]);
 
-    let conf = Mm2TestConf::seednode(ZOMBIE_TEST_BALANCE_SEED, &coins);
+    let conf = Mm2TestConf::seednode(PIRATE_TEST_BALANCE_SEED, &coins);
     let mm = MarketMakerIt::start_async(conf.conf, conf.rpc_password, Some(wasm_start))
         .await
         .unwrap();
 
-    let activation_result = enable_z_coin_light(&mm, ARRR, ZOMBIE_ELECTRUMS, ZOMBIE_LIGHTWALLETD_URLS, None).await;
+    let activation_result = enable_z_coin_light(&mm, ARRR, ZOMBIE_ELECTRUMS, PIRATE_LIGHTWALLETD_URLS, None).await;
 
     let balance = match activation_result.wallet_balance {
         EnableCoinBalance::Iguana(iguana) => iguana,
