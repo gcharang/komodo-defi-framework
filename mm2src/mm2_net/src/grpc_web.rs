@@ -4,10 +4,10 @@
 use crate::transport::SlurpError;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use common::{cfg_native, cfg_wasm32};
+use derive_more::Display;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use mm2_err_handle::prelude::*;
 use prost::DecodeError;
-use std::fmt::{Display, Formatter};
 
 cfg_native! {
     use common::APPLICATION_GRPC_WEB;
@@ -93,7 +93,7 @@ where
     Ok(msg)
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Display)]
 pub enum PostGrpcWebErr {
     DecodeBody(String),
     EncodeBody(String),
@@ -101,21 +101,11 @@ pub enum PostGrpcWebErr {
     Internal(String),
     PayloadTooShort(String),
     Status(String),
-    Transport { uri: String, error: String },
-}
-
-impl Display for PostGrpcWebErr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PostGrpcWebErr::DecodeBody(msg) => write!(f, "DecodeBody: {msg}"),
-            PostGrpcWebErr::EncodeBody(msg) => write!(f, "EncodeBody: {msg}"),
-            PostGrpcWebErr::InvalidRequest(msg) => write!(f, "InvalidRequest: {msg}"),
-            PostGrpcWebErr::Internal(msg) => write!(f, "Internal: {msg}"),
-            PostGrpcWebErr::PayloadTooShort(msg) => write!(f, "PayloadTooShort: {msg}"),
-            PostGrpcWebErr::Status(error) => write!(f, "Status: {error:?}"),
-            PostGrpcWebErr::Transport { uri, error } => write!(f, "Transport: URI: {uri}, Error: {error}"),
-        }
-    }
+    #[display(fmt = "Transport Error — uri: {uri} — error: {error}")]
+    Transport {
+        uri: String,
+        error: String,
+    },
 }
 
 impl From<EncodeBodyError> for PostGrpcWebErr {

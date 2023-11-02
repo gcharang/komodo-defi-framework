@@ -47,7 +47,7 @@ async fn call(base_url: String, request: Request<BoxBody>) -> MmResult<Response<
         .header(CONTENT_TYPE.as_str(), APPLICATION_GRPC_WEB_PROTO)
         .header(ACCEPT.as_str(), APPLICATION_GRPC_WEB_PROTO)
         .header(X_GRPC_WEB, "1")
-        .request_response_body()
+        .fetch_stream_response()
         .await?
         .1)
 }

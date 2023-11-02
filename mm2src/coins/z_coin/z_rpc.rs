@@ -89,6 +89,7 @@ pub trait ZRpcOps {
     async fn checkpoint_block_from_height(
         &mut self,
         height: u64,
+        ticker: &str,
     ) -> MmResult<Option<CheckPointBlockInfo>, UpdateBlocksCacheErr>;
 }
 
@@ -284,8 +285,8 @@ impl ZRpcOps for LightRpcClient {
     async fn checkpoint_block_from_height(
         &mut self,
         height: u64,
+        ticker: &str,
     ) -> MmResult<Option<CheckPointBlockInfo>, UpdateBlocksCacheErr> {
-        info!("SYNC STARTING HEIGHT: {height}");
         let tree_state = self.get_tree_state(height).await?;
         let hash = H256Json::from_str(&tree_state.hash)
             .map_err(|err| UpdateBlocksCacheErr::DecodeError(err.to_string()))?
@@ -295,6 +296,7 @@ impl ZRpcOps for LightRpcClient {
                 .map_err(|err: FromHexError| UpdateBlocksCacheErr::DecodeError(err.to_string()))?,
         );
 
+        info!("Final Derived Sync Height for {ticker} is: {height}");
         Ok(Some(CheckPointBlockInfo {
             height: tree_state.height as u32,
             hash,
@@ -454,7 +456,7 @@ pub(super) async fn init_light_client<'a>(
             .unwrap_or(sapling_activation_height),
     };
     let maybe_checkpoint_block = light_rpc_clients
-        .checkpoint_block_from_height(sync_height.max(sapling_activation_height))
+        .checkpoint_block_from_height(sync_height.max(sapling_activation_height), &coin)
         .await?;
     let min_height = blocks_db.get_earliest_block().await?;
     // check if no sync_params was provided and continue syncing from last height in db if it's > 0.
@@ -746,7 +748,7 @@ impl SaplingSyncLoopHandle {
 
             let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
             let scan = DataConnStmtCacheWrapper::new(wallet_ops_guard);
-            info!("START SCANNING WALLETDB");
+            info!("Scanning/Processing blocks to be saved to walletdb storage");
             blocks_db
                 .process_blocks_with_mode(
                     self.consensus_params.clone(),
@@ -760,6 +762,7 @@ impl SaplingSyncLoopHandle {
                 Timer::sleep_ms(self.scan_interval_ms).await;
             }
         }
+
         Ok(())
     }
 

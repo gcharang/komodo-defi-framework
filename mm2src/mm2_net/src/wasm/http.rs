@@ -169,7 +169,7 @@ impl FetchRequest {
         }
     }
 
-    pub async fn request_response_body(self) -> FetchResult<Response<ResponseBody>> {
+    pub async fn fetch_stream_response(self) -> FetchResult<Response<ResponseBody>> {
         let (tx, rx) = oneshot::channel();
         Self::spawn_fetch_stream_response(self, tx);
         rx.await

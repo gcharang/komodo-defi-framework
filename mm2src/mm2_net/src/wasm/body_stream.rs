@@ -1,3 +1,19 @@
+/// This module handles HTTP response decoding and trailer extraction for gRPC-Web communication/streaming.
+/// # gRPC-Web Response Body Handling Module
+///
+/// gRPC-Web is a protocol that enables web applications to communicate with gRPC services over HTTP/1.1. It is
+/// particularly useful for browsers and other environments that do not support HTTP/2. This module provides
+/// essential functionality to process and decode gRPC-Web responses in MM2 also support streaming.
+///
+/// ## Key Components
+///
+/// - **EncodedBytes**: This struct represents a buffer for encoded bytes. It manages the decoding of base64-encoded data and is used to handle response data and trailers based on the content type. The `new` method initializes an instance based on the content type. Other methods are available for handling encoding and decoding of data.
+///
+/// - **ReadState**: An enumeration that represents the different states in which the response can be read. It keeps track of the progress of response processing, indicating whether data reading is complete or trailers have been encountered.
+///
+/// - **ResponseBody**: This struct is the core of response handling. It is designed to work with gRPC-Web responses. It reads response data from a ReadableStream, decodes and processes the response, and extracts trailers if present. The `new` method initializes an instance of ResponseBody based on the ReadableStream and content type. It implements the `Body` trait to provide a standardized interface for reading response data and trailers.
+///
+/// - **BodyStream**: A struct that represents a stream of bytes for the response body. It is used internally by ResponseBody to read the response data from a web stream. The `new` method creates a new instance based on an `IntoStream`, and the `empty` method creates an empty stream. This struct also implements the `Body` trait, providing methods to read data from the stream and return trailers.
 use crate::grpc_web::PostGrpcWebErr;
 
 use base64::prelude::BASE64_STANDARD;
@@ -20,9 +36,10 @@ use wasm_bindgen::JsCast;
 use wasm_streams::readable::IntoStream;
 use web_sys::ReadableStream;
 
-/// If 8th MSB of a frame is `0` for data and `1` for trailer
+/// If the 8th most significant bit of a frame is `0`, it indicates data; if `1`, it indicates a trailer.
 const TRAILER_BIT: u8 = 0b10000000;
 
+/// Manages a buffer for storing response data and provides methods for appending and decoding data based on the content type.
 pub struct EncodedBytes {
     is_base64: bool,
     raw_buf: BytesMut,
@@ -30,6 +47,7 @@ pub struct EncodedBytes {
 }
 
 impl EncodedBytes {
+    /// Creates a new `EncodedBytes` instance based on the content type.
     pub fn new(content_type: &str) -> Result<Self, PostGrpcWebErr> {
         let is_base64 = match content_type {
             APPLICATION_GRPC_WEB_TEXT | APPLICATION_GRPC_WEB_TEXT_PROTO => true,
@@ -90,6 +108,7 @@ impl DerefMut for EncodedBytes {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.buf }
 }
 
+/// Represents the state of reading the response body, including compression flags, data lengths, trailers, and the done state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadState {
     CompressionFlag,
@@ -110,7 +129,7 @@ impl ReadState {
     }
 }
 
-/// Type to handle HTTP response
+/// Handles the HTTP response body, decoding data, and extracting trailers
 #[pin_project]
 pub struct ResponseBody {
     #[pin]
@@ -124,6 +143,7 @@ pub struct ResponseBody {
 }
 
 impl ResponseBody {
+    /// Creates a new `ResponseBody` based on a ReadableStream and content type.
     pub(crate) fn new(body_stream: ReadableStream, content_type: &str) -> Result<Self, PostGrpcWebErr> {
         let body_stream = wasm_streams::ReadableStream::from_raw(body_stream.unchecked_into()).into_stream();
 
@@ -350,11 +370,13 @@ impl Default for ResponseBody {
     }
 }
 
+/// Represents a stream of bytes for the response body.
 pub struct BodyStream {
     body_stream: Pin<Box<dyn Stream<Item = Result<Bytes, PostGrpcWebErr>>>>,
 }
 
 impl BodyStream {
+    /// Creates a new `BodyStream` based on an IntoStream.
     pub fn new(body_stream: IntoStream<'static>) -> Self {
         let body_stream = body_stream
             .map_ok(|js_value| {
@@ -372,6 +394,7 @@ impl BodyStream {
         }
     }
 
+    /// Creates an empty `BodyStream`.
     pub fn empty() -> Self {
         let body_stream = empty();
 
@@ -381,6 +404,7 @@ impl BodyStream {
     }
 }
 
+// Implementations of the Body trait for ResponseBody and BodyStream.
 impl Body for BodyStream {
     type Data = Bytes;
 
@@ -395,5 +419,7 @@ impl Body for BodyStream {
     }
 }
 
+// Additional safety traits for BodyStream.
 unsafe impl Send for BodyStream {}
+// Additional safety traits for BodyStream.
 unsafe impl Sync for BodyStream {}
