@@ -649,7 +649,6 @@ pub fn addresses_from_script<T: UtxoCommonOps>(coin: &T, script: &Script) -> Res
                     AddressScriptType::P2WSH,
                 ),
             };
-            println!("prefixes={:?}", prefixes);
             Address {
                 hash: dst.hash,
                 checksum_type: conf.checksum_type,
@@ -1461,10 +1460,10 @@ pub async fn sign_and_send_taker_funding_spend<T: UtxoCommonOps>(
         let payment_address = Address {
             checksum_type: coin.as_ref().conf.checksum_type,
             hash: AddressHashEnum::AddressHash(dhash160(&payment_redeem_script)),
-            prefix: coin.as_ref().conf.p2sh_addr_prefix,
-            t_addr_prefix: coin.as_ref().conf.p2sh_t_addr_prefix,
+            prefixes: coin.as_ref().conf.address_prefixes.p2sh.clone(),
             hrp: coin.as_ref().conf.bech32_hrp.clone(),
             addr_format: UtxoAddressFormat::Standard,
+            script_type: AddressScriptType::P2SH,
         };
         let payment_address_str = payment_address.to_string();
         try_tx_s!(
@@ -2548,7 +2547,7 @@ pub fn validate_payment_spend_or_refund<T: UtxoCommonOps + SwapOps>(
     payment_spend_tx.tx_hash_algo = coin.as_ref().tx_hash_algo;
 
     let my_address = try_f!(coin.as_ref().derivation_method.single_addr_or_err());
-    let expected_script_pubkey = &output_script(my_address, ScriptType::P2PKH).to_bytes();
+    let expected_script_pubkey = &output_script(my_address).to_bytes();
     let output = try_f!(payment_spend_tx
         .outputs
         .get(DEFAULT_SWAP_VOUT)
@@ -4900,7 +4899,7 @@ where
             payment_value
         );
     }
-    let script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
+    let script_pubkey = output_script(&my_address).to_bytes();
     let output = TransactionOutput {
         value: payment_value - fee,
         script_pubkey,

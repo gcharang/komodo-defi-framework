@@ -16,6 +16,7 @@ use crypto::privkey::key_pair_from_seed;
 use itertools::Itertools;
 use keys::prefixes::*;
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
+use std::convert::TryFrom;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
@@ -219,7 +220,7 @@ pub(super) async fn test_electrum_display_balances(rpc_client: &ElectrumClient) 
         (
             Address::from_legacyaddress("RYPz6Lr4muj4gcFzpMdv3ks1NCGn3mkDPN", &KMD_PREFIXES.try_into().unwrap())
                 .unwrap(),
-            BigDecimal::from(3.33),
+            BigDecimal::try_from(3.33).unwrap(),
         ),
         (
             Address::from_legacyaddress("RJeDDtDRtKUoL8BCKdH7TNCHqUKr7kQRsi", &KMD_PREFIXES.try_into().unwrap())
