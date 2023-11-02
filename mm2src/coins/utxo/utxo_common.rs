@@ -3096,8 +3096,14 @@ pub fn convert_to_address<T: UtxoCommonOps>(coin: &T, from: &str, to_address_for
         json::from_value(to_address_format).map_err(|e| ERRL!("Error on parse UTXO address format {:?}", e))?;
     let from_address = try_s!(coin.address_from_str(from));
     match to_address_format {
-        UtxoAddressFormat::Standard => { // assuming convertion to p2pkh
-            Ok(LegacyAddress::new(&from_address.hash, coin.as_ref().conf.address_prefixes.p2pkh.clone(), coin.as_ref().conf.checksum_type).to_string())
+        UtxoAddressFormat::Standard => {
+            // assuming convertion to p2pkh
+            Ok(LegacyAddress::new(
+                &from_address.hash,
+                coin.as_ref().conf.address_prefixes.p2pkh.clone(),
+                coin.as_ref().conf.checksum_type,
+            )
+            .to_string())
         },
         UtxoAddressFormat::Segwit => {
             let bech32_hrp = &coin.as_ref().conf.bech32_hrp;
