@@ -749,7 +749,6 @@ impl SaplingSyncLoopHandle {
 
             let wallet_ops_guard = wallet_db.get_update_ops().expect("get_update_ops always returns Ok");
             let scan = DataConnStmtCacheWrapper::new(wallet_ops_guard);
-            info!("Scanning/Processing blocks to be saved to walletdb storage");
             blocks_db
                 .process_blocks_with_mode(
                     self.consensus_params.clone(),

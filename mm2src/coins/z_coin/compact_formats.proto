@@ -1,4 +1,5 @@
 syntax = "proto3";
+// TODO: use pirate.wallet.sdk.rpc for package name.
 package cash.z.wallet.sdk.rpc;
 option go_package = "walletrpc";
 option swift_prefix = "";

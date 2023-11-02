@@ -182,7 +182,7 @@ impl BlockDbImpl {
         let mut blocks_to_scan = vec![];
         while let Some((_, block)) = maybe_blocks.next().await? {
             if let Some(limit) = limit {
-                if block.height > limit {
+                if blocks_to_scan.len() > limit {
                     break;
                 }
             };
@@ -216,45 +216,11 @@ impl BlockDbImpl {
                     .unwrap_or(BlockHeight::from_u32(params.sapling_activation_height) - 1)
             })?,
         };
-
-        let locked_db = self.lock_db().await?;
-        let db_transaction = locked_db.get_inner().transaction().await?;
-        let block_db = db_transaction.table::<BlockDbTable>().await?;
-
-        // Fetch CompactBlocks block_db are needed for scanning.
-        let min = u32::from(from_height + 1);
-        let mut maybe_blocks = block_db
-            .cursor_builder()
-            .only("ticker", &self.ticker)?
-            .bound("height", min, u32::MAX)
-            .open_cursor(BlockDbTable::TICKER_HEIGHT_INDEX)
-            .await?;
-
-        let mut blocks_to_scan = vec![];
-        while let Some((_, block)) = maybe_blocks.next().await? {
-            if let Some(limit) = limit {
-                if blocks_to_scan.len() > limit as usize {
-                    break;
-                }
-            };
-
-            blocks_to_scan.push(CompactBlockRow {
-                height: block.height.into(),
-                data: block.data,
-            });
-        }
-
         let mut prev_height = from_height;
         let mut prev_hash: Option<BlockHash> = validate_from.map(|(_, hash)| hash);
 
-        let blocks_len = blocks_to_scan.len();
+        let blocks_to_scan = self.query_blocks_by_limit(from_height, limit).await?;
         for block in blocks_to_scan {
-            if let Some(limit) = limit {
-                if blocks_len > limit as usize {
-                    break;
-                }
-            }
-
             let cbr = block;
             let block = CompactBlock::parse_from_bytes(&cbr.data)
                 .map_to_mm(|err| ZcoinStorageError::DecodingError(err.to_string()))?;
