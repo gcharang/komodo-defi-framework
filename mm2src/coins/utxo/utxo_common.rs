@@ -3094,11 +3094,10 @@ pub fn decimals(coin: &UtxoCoinFields) -> u8 { coin.decimals }
 pub fn convert_to_address<T: UtxoCommonOps>(coin: &T, from: &str, to_address_format: Json) -> Result<String, String> {
     let to_address_format: UtxoAddressFormat =
         json::from_value(to_address_format).map_err(|e| ERRL!("Error on parse UTXO address format {:?}", e))?;
-    let mut from_address = try_s!(coin.address_from_str(from));
+    let from_address = try_s!(coin.address_from_str(from));
     match to_address_format {
-        UtxoAddressFormat::Standard => {
-            from_address.addr_format = UtxoAddressFormat::Standard;
-            Ok(from_address.to_string())
+        UtxoAddressFormat::Standard => { // assuming convertion to p2pkh
+            Ok(LegacyAddress::new(&from_address.hash, coin.as_ref().conf.address_prefixes.p2pkh.clone(), coin.as_ref().conf.checksum_type).to_string())
         },
         UtxoAddressFormat::Segwit => {
             let bech32_hrp = &coin.as_ref().conf.bech32_hrp;
@@ -3108,7 +3107,7 @@ pub fn convert_to_address<T: UtxoCommonOps>(coin: &T, from: &str, to_address_for
             }
         },
         UtxoAddressFormat::CashAddress { network, .. } => Ok(try_s!(from_address
-            .to_cashaddress(&network, &coin.as_ref().conf.address_prefixes,)
+            .to_cashaddress(&network, &coin.as_ref().conf.address_prefixes)
             .and_then(|cashaddress| cashaddress.encode()))),
     }
 }

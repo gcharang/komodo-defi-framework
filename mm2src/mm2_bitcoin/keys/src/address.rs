@@ -95,6 +95,7 @@ pub fn detect_checksum(data: &[u8], checksum: &[u8]) -> Result<ChecksumType, Err
 /// Struct for utxo address types representation
 /// Contains address hash, format, script type to generate output script
 /// Also added ScriptType field for easier output script building.
+/// TODO: remove 'pub' from the members and use from_legacyaddress, from_segwitaddress or from_cashaddress to create Address objects
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Address {
     /// The base58 prefixes of the address.
