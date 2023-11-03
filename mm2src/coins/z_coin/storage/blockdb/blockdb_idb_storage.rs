@@ -182,7 +182,7 @@ impl BlockDbImpl {
         let mut blocks_to_scan = vec![];
         while let Some((_, block)) = maybe_blocks.next().await? {
             if let Some(limit) = limit {
-                if blocks_to_scan.len() > limit {
+                if blocks_to_scan.len() > limit as usize {
                     break;
                 }
             };

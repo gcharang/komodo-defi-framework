@@ -86,7 +86,7 @@ fn set_response_headers_and_content_type(
         }
     }
 
-    if let None = content_type {
+    if content_type.is_none() {
         return MmError::err(SlurpError::InvalidRequest("MissingContentType".to_string()));
     }
 
