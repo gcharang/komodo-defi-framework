@@ -15,8 +15,8 @@ async-stream = { version = "0.3", optional = true }
 async-trait = "0.1"
 bytes = "1.1"
 cfg-if = "1.0"
-derive_more = "0.99"
 common = { path = "../common" }
+derive_more = "0.99"
 ethkey = { git = "https://github.com/KomodoPlatform/mm2-parity-ethereum.git" }
 futures = { version = "0.3", package = "futures", features = ["compat", "async-await", "thread-pool"] }
 http = "0.2"
@@ -47,9 +47,9 @@ tower-service = "0.3"
 wasm-bindgen = "0.2.86"
 wasm-bindgen-test = { version = "0.3.2" }
 wasm-bindgen-futures = "0.4.21"
+wasm-streams = "0.3.0"
 web-sys = { version = "0.3.55", features = ["console", "CloseEvent", "DomException", "ErrorEvent", "IdbDatabase",
     "IdbCursor", "IdbCursorWithValue", "IdbFactory", "IdbIndex", "IdbIndexParameters", "IdbObjectStore", "IdbObjectStoreParameters", "IdbOpenDbRequest", "IdbKeyRange", "IdbTransaction", "IdbTransactionMode", "IdbVersionChangeEvent", "MessageEvent","ReadableStream", "WebSocket"] }
-wasm-streams = "0.3.0"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

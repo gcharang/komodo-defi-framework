@@ -11,8 +11,8 @@ use mm2_test_helpers::electrums::{doc_electrums, marty_electrums};
 use mm2_test_helpers::for_tests::{check_recent_swaps, enable_electrum_json, init_z_coin_light, init_z_coin_status,
                                   morty_conf, pirate_conf, rick_conf, start_swaps, test_qrc20_history_impl,
                                   wait_for_swaps_finish_and_check_status, MarketMakerIt, Mm2InitPrivKeyPolicy,
-                                  Mm2TestConf, Mm2TestConfForSwap, ARRR, MORTY, PIRATE_LIGHTWALLETD_URLS, RICK,
-                                  ZOMBIE_ELECTRUMS};
+                                  Mm2TestConf, Mm2TestConfForSwap, ARRR, MORTY, PIRATE_ELECTRUMS,
+                                  PIRATE_LIGHTWALLETD_URLS, RICK};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::{EnableCoinBalance, InitTaskResult, InitZcoinStatus, RpcV2Response,
                                 ZCoinActivationResult};
@@ -231,7 +231,7 @@ async fn activate_z_coin_light() {
         .await
         .unwrap();
 
-    let activation_result = enable_z_coin_light(&mm, ARRR, ZOMBIE_ELECTRUMS, PIRATE_LIGHTWALLETD_URLS, None).await;
+    let activation_result = enable_z_coin_light(&mm, ARRR, PIRATE_ELECTRUMS, PIRATE_LIGHTWALLETD_URLS, None).await;
 
     let balance = match activation_result.wallet_balance {
         EnableCoinBalance::Iguana(iguana) => iguana,

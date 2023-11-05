@@ -352,24 +352,6 @@ impl Body for ResponseBody {
     }
 }
 
-impl Default for ResponseBody {
-    fn default() -> Self {
-        Self {
-            body_stream: BodyStream::empty(),
-            buf: EncodedBytes {
-                is_base64: Default::default(),
-                raw_buf: BytesMut::new(),
-                buf: BytesMut::new(),
-            },
-            incomplete_data: BytesMut::new(),
-            data: None,
-            trailer: None,
-            state: ReadState::Done,
-            finished_stream: true,
-        }
-    }
-}
-
 /// Represents a stream of bytes for the response body.
 pub struct BodyStream {
     body_stream: Pin<Box<dyn Stream<Item = Result<Bytes, PostGrpcWebErr>>>>,
@@ -378,19 +360,12 @@ pub struct BodyStream {
 impl BodyStream {
     /// Creates a new `BodyStream` based on an IntoStream.
     pub fn new(body_stream: IntoStream<'static>) -> Self {
-        let body_stream = body_stream
-            .map_ok(|js_value| {
-                let buffer = Uint8Array::new(&js_value);
-
-                let mut bytes_vec = vec![0; buffer.length() as usize];
-                buffer.copy_to(&mut bytes_vec);
-
-                bytes_vec.into()
-            })
-            .map_err(|err| PostGrpcWebErr::InvalidRequest(format!("{err:?}")));
-
         Self {
-            body_stream: Box::pin(body_stream),
+            body_stream: Box::pin(
+                body_stream
+                    .map_ok(|js_value| Uint8Array::new(&js_value).to_vec().into())
+                    .map_err(|err| PostGrpcWebErr::InvalidRequest(format!("{err:?}"))),
+            ),
         }
     }
 

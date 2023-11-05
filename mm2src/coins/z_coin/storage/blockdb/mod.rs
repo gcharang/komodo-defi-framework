@@ -118,9 +118,12 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn test_transport() {
         register_wasm_log();
-        let mut client = LightRpcClient::new(vec!["http://pirate.spyglass.quest:8081".to_string()])
-            .await
-            .unwrap();
+        let mut client = LightRpcClient::new(vec![
+            "http://pirate.spyglass.quest:8081".to_string(),
+            "http://pirate.battlefield.earth:8081".to_string(),
+        ])
+        .await
+        .unwrap();
         let tree_state = client.get_block_height().await;
         info!("LATEST BLOCK: {tree_state:?}");
     }

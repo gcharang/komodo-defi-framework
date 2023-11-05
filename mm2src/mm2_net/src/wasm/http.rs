@@ -67,12 +67,10 @@ fn set_response_headers_and_content_type(
 
     if let Some(header_iter) = header_iter {
         for header in header_iter {
-            let header = header.map_to_mm(|err| SlurpError::InvalidRequest(format!("{err:?}")))?;
-            let pair: Array = header.into();
-
-            let header_name = pair.get(0).as_string();
-            let header_value = pair.get(1).as_string();
-
+            let pair: Array = header
+                .map_to_mm(|err| SlurpError::InvalidRequest(format!("{err:?}")))?
+                .into();
+            let (header_name, header_value) = (pair.get(0).as_string(), pair.get(1).as_string());
             match (header_name, header_value) {
                 (Some(header_name), Some(header_value)) => {
                     if header_name == CONTENT_TYPE.as_str() {
@@ -86,11 +84,10 @@ fn set_response_headers_and_content_type(
         }
     }
 
-    if content_type.is_none() {
-        return MmError::err(SlurpError::InvalidRequest("MissingContentType".to_string()));
+    match content_type {
+        Some(content_type) => Ok((result, content_type)),
+        None => MmError::err(SlurpError::InvalidRequest("MissingContentType".to_string())),
     }
-
-    Ok((result, content_type.unwrap()))
 }
 
 pub struct FetchRequest {

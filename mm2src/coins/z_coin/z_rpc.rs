@@ -112,7 +112,7 @@ impl LightRpcClient {
 
         let mut errors = Vec::new();
         for url in &lightwalletd_urls {
-            cfg_native!(
+            #[cfg(not(target_arch = "wasm32"))]
             let uri = match Uri::from_str(url) {
                 Ok(uri) => uri,
                 Err(err) => {
@@ -120,26 +120,25 @@ impl LightRpcClient {
                     continue;
                 },
             };
-
-                let endpoint = match Channel::builder(uri).tls_config(ClientTlsConfig::new()) {
+            #[cfg(not(target_arch = "wasm32"))]
+            let endpoint = match Channel::builder(uri).tls_config(ClientTlsConfig::new()) {
                 Ok(endpoint) => endpoint,
                 Err(err) => {
                     errors.push(UrlIterError::TlsConfigFailure(err));
                     continue;
                 },
             };
-                let client = match connect_endpoint(endpoint).await {
-                    Ok(tonic_channel) => tonic_channel,
-                    Err(err) => {
-                        errors.push(UrlIterError::ConnectionFailure(err));
-                        continue;
-                    },
-                };
-            );
+            #[cfg(not(target_arch = "wasm32"))]
+            let client = match connect_endpoint(endpoint).await {
+                Ok(tonic_channel) => tonic_channel,
+                Err(err) => {
+                    errors.push(UrlIterError::ConnectionFailure(err));
+                    continue;
+                },
+            };
 
-            cfg_wasm32!(
-                let client = CompactTxStreamerClient::new(TonicClient::new(url.to_string()));
-            );
+            #[cfg(target_arch = "wasm32")]
+            let client = CompactTxStreamerClient::new(TonicClient::new(url.to_string()));
 
             rpc_clients.push(client);
         }

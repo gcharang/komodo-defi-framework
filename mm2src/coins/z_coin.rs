@@ -75,7 +75,6 @@ use zcash_primitives::transaction::Transaction as ZTransaction;
 use zcash_primitives::zip32::ChildIndex as Zip32Child;
 use zcash_primitives::{constants::mainnet as z_mainnet_constants, sapling::PaymentAddress,
                        zip32::ExtendedFullViewingKey, zip32::ExtendedSpendingKey};
-
 use zcash_proofs::prover::LocalTxProver;
 
 mod z_htlc;
@@ -812,7 +811,6 @@ pub async fn z_coin_from_conf_and_params(
     let db_dir_path = PathBuf::new();
     #[cfg(not(target_arch = "wasm32"))]
     let db_dir_path = ctx.dbdir();
-
     let z_spending_key = None;
     let builder = ZCoinBuilder::new(
         ctx,
@@ -916,7 +914,7 @@ impl<'a> UtxoCoinBuilder for ZCoinBuilder<'a> {
             &my_z_addr,
         );
 
-        let blocks_db = self.blocks_db().await?;
+        let blocks_db = self.init_blocks_db().await?;
         let (sync_state_connector, light_wallet_db) = match &self.z_coin_params.mode {
             #[cfg(not(target_arch = "wasm32"))]
             ZcoinRpcMode::Native => {
@@ -950,12 +948,10 @@ impl<'a> UtxoCoinBuilder for ZCoinBuilder<'a> {
             sync_state_connector,
         };
 
-        let z_coin = ZCoin {
+        Ok(ZCoin {
             utxo_arc,
             z_fields: Arc::new(z_fields),
-        };
-
-        Ok(z_coin)
+        })
     }
 }
 
@@ -1005,7 +1001,7 @@ impl<'a> ZCoinBuilder<'a> {
         }
     }
 
-    async fn blocks_db(&self) -> Result<BlockDbImpl, MmError<ZcoinClientInitError>> {
+    async fn init_blocks_db(&self) -> Result<BlockDbImpl, MmError<ZcoinClientInitError>> {
         let cache_db_path = self.db_dir_path.join(format!("{}_cache.db", self.ticker));
         let ctx = self.ctx.clone();
         let ticker = self.ticker.to_string();
@@ -1473,10 +1469,6 @@ impl SwapOps for ZCoin {
         utxo_common::search_for_swap_tx_spend_other(self, input, utxo_common::DEFAULT_SWAP_VOUT).await
     }
 
-    fn check_tx_signed_by_pub(&self, _tx: &[u8], _expected_pub: &[u8]) -> Result<bool, MmError<ValidatePaymentError>> {
-        unimplemented!();
-    }
-
     #[inline]
     async fn extract_secret(
         &self,
@@ -1485,6 +1477,10 @@ impl SwapOps for ZCoin {
         _watcher_reward: bool,
     ) -> Result<Vec<u8>, String> {
         utxo_common::extract_secret(secret_hash, spend_tx)
+    }
+
+    fn check_tx_signed_by_pub(&self, _tx: &[u8], _expected_pub: &[u8]) -> Result<bool, MmError<ValidatePaymentError>> {
+        unimplemented!();
     }
 
     fn is_auto_refundable(&self) -> bool { false }
