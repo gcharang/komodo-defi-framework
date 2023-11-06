@@ -3,8 +3,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 syntax = "proto3";
-// TODO: use pirate.wallet.sdk.rpc for package name.
-package cash.z.wallet.sdk.rpc;
+package pirate.wallet.sdk.rpc;
 option go_package = ".;walletrpc";
 option swift_prefix = "";
 import "compact_formats.proto";

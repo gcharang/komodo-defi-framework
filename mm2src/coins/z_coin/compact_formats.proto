@@ -1,6 +1,5 @@
 syntax = "proto3";
-// TODO: use pirate.wallet.sdk.rpc for package name.
-package cash.z.wallet.sdk.rpc;
+package pirate.wallet.sdk.rpc;
 option go_package = "walletrpc";
 option swift_prefix = "";
 // Remember that proto3 fields are all optional. A field that is not present will be set to its zero value.

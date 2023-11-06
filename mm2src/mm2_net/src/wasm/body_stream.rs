@@ -20,7 +20,6 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{BufMut, Bytes, BytesMut};
-use common::log::info;
 use common::{APPLICATION_GRPC_WEB, APPLICATION_GRPC_WEB_PROTO, APPLICATION_GRPC_WEB_TEXT,
              APPLICATION_GRPC_WEB_TEXT_PROTO};
 use futures_util::ready;

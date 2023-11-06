@@ -31,7 +31,7 @@ use zcash_primitives::transaction::TxId;
 use zcash_primitives::zip32::ExtendedSpendingKey;
 
 pub(crate) mod z_coin_grpc {
-    tonic::include_proto!("cash.z.wallet.sdk.rpc");
+    tonic::include_proto!("pirate.wallet.sdk.rpc");
 }
 use z_coin_grpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use z_coin_grpc::ChainSpec;
