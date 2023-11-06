@@ -1945,13 +1945,8 @@ fn parse_hex_encoded_u32(hex_encoded: &str) -> Result<u32, MmError<String>> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod for_tests {
-    use super::UtxoCoinFields;
-    use crate::rpc_command::init_withdraw::WithdrawStatusRequest;
-    use crate::rpc_command::init_withdraw::{init_withdraw, withdraw_status};
-    use crate::WithdrawFrom;
-    use crate::{utxo::{utxo_standard::UtxoStandardCoin, UtxoArc},
-                WithdrawRequest};
-    use crate::{MarketCoinOps, TransactionDetails, WithdrawError};
+    use crate::rpc_command::init_withdraw::{init_withdraw, withdraw_status, WithdrawStatusRequest};
+    use crate::{TransactionDetails, WithdrawError, WithdrawFrom, WithdrawRequest};
     use common::executor::Timer;
     use common::{now_ms, wait_until_ms};
     use mm2_core::mm_ctx::MmArc;
@@ -1963,15 +1958,11 @@ pub mod for_tests {
     /// Helper to call init_withdraw and wait for completion
     pub async fn test_withdraw_init_loop(
         ctx: MmArc,
-        fields: UtxoCoinFields,
         ticker: &str,
         to: &str,
         amount: &str,
         from_derivation_path: &str,
     ) -> MmResult<TransactionDetails, WithdrawError> {
-        let arc: UtxoArc = fields.into();
-        let coin: UtxoStandardCoin = arc.into();
-
         let withdraw_req = WithdrawRequest {
             amount: BigDecimal::from_str(amount).unwrap(),
             from: Some(WithdrawFrom::DerivationPath {
@@ -1987,7 +1978,7 @@ pub mod for_tests {
         let timeout = wait_until_ms(150000);
         loop {
             if now_ms() > timeout {
-                panic!("{} init_withdraw timed out", coin.ticker());
+                panic!("{} init_withdraw timed out", ticker);
             }
             let status = withdraw_status(ctx.clone(), WithdrawStatusRequest {
                 task_id: init.task_id,
@@ -2001,7 +1992,7 @@ pub mod for_tests {
                     _ => Timer::sleep(1.).await,
                 }
             } else {
-                panic!("{} could not get withdraw_status", coin.ticker())
+                panic!("{} could not get withdraw_status", ticker)
             }
         }
     }

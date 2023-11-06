@@ -2,10 +2,7 @@
 use super::enable_z_coin;
 use crate::integration_tests_common::*;
 use coins::utxo::for_tests::test_withdraw_init_loop;
-use coins::utxo::{utxo_builder::{UtxoArcBuilder, UtxoCoinBuilder},
-                  utxo_standard::UtxoStandardCoin,
-                  UtxoActivationParams};
-use coins::PrivKeyBuildPolicy;
+use coins::utxo::{utxo_standard::UtxoStandardCoin, UtxoActivationParams};
 use coins_activation::{for_tests::init_standalone_coin_loop, InitStandaloneCoinReq};
 use common::executor::Timer;
 use common::now_ms;
@@ -7888,7 +7885,6 @@ fn test_withdraw_from_trezor_segwit_no_rpc() {
     let mm_conf = json!({ "coins": [coin_conf] });
 
     let ctx = block_on(mm_ctx_with_trezor(mm_conf));
-    let priv_key_policy = PrivKeyBuildPolicy::Trezor;
     let enable_req = json!({
         "method": "electrum",
         "coin": ticker,
@@ -7905,18 +7901,8 @@ fn test_withdraw_from_trezor_segwit_no_rpc() {
     block_on(init_standalone_coin_loop::<UtxoStandardCoin>(ctx.clone(), request))
         .expect("coin activation must be successful");
 
-    let builder = UtxoArcBuilder::new(
-        &ctx,
-        ticker,
-        &coin_conf,
-        &activation_params,
-        priv_key_policy,
-        UtxoStandardCoin::from,
-    );
-    let fields = block_on(builder.build_utxo_fields()).unwrap();
     let tx_details = block_on(test_withdraw_init_loop(
-        ctx.clone(),
-        fields,
+        ctx,
         ticker,
         "tb1q3zkv6g29ku3jh9vdkhxlpyek44se2s0zrv7ctn",
         "0.00001",
