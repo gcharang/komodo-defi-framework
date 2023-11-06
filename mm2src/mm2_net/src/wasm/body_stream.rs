@@ -20,6 +20,7 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{BufMut, Bytes, BytesMut};
+use common::log::info;
 use common::{APPLICATION_GRPC_WEB, APPLICATION_GRPC_WEB_PROTO, APPLICATION_GRPC_WEB_TEXT,
              APPLICATION_GRPC_WEB_TEXT_PROTO};
 use futures_util::ready;
@@ -72,7 +73,7 @@ impl EncodedBytes {
 
         if self.raw_buf.len() >= index {
             let decoded = BASE64_STANDARD
-                .decode(self.buf.split_to(index))
+                .decode(self.raw_buf.split_to(index))
                 .map(Bytes::from)
                 .map_err(|err| PostGrpcWebErr::DecodeBody(err.to_string()))?;
             self.buf.put(decoded);
@@ -209,7 +210,7 @@ impl ResponseBody {
                         let data_length_bytes = this.buf.take(4);
                         let data_length = BigEndian::read_u32(data_length_bytes.as_ref());
 
-                        this.incomplete_data.unsplit(data_length_bytes);
+                        this.incomplete_data.extend_from_slice(&data_length_bytes);
                         *this.state = ReadState::Data(data_length);
                     }
                 },
@@ -290,8 +291,7 @@ impl Body for ResponseBody {
     fn poll_data(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Self::Data, Self::Error>>> {
         // Check if there's already some data in buffer and return that
         if self.data.is_some() {
-            let data = self.data.take().unwrap();
-            return Poll::Ready(Some(Ok(data.freeze())));
+            return Poll::Ready(self.data.take().map(|d| Ok(d.freeze())));
         }
 
         // If reading data is finished return `None`
@@ -312,8 +312,7 @@ impl Body for ResponseBody {
 
             if self.data.is_some() {
                 // If data is available in buffer, return that
-                let data = self.data.take().unwrap();
-                return Poll::Ready(Some(Ok(data.freeze())));
+                return Poll::Ready(self.data.take().map(|d| Ok(d.freeze())));
             } else if self.state.finished_data() {
                 // If we finished reading data continue return `None`
                 return Poll::Ready(None);
