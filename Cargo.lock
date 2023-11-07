@@ -2095,7 +2095,7 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -9406,7 +9406,7 @@ checksum = "0f9079049688da5871a7558ddacb7f04958862c703e68258594cb7a862b5e33f"
 [[package]]
 name = "zcash_client_backend"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "async-trait",
  "base64 0.13.0",
@@ -9414,7 +9414,6 @@ dependencies = [
  "bls12_381",
  "bs58 0.4.0",
  "ff 0.8.0",
- "futures 0.3.28",
  "group 0.8.0",
  "hex 0.4.3",
  "jubjub",
@@ -9432,13 +9431,12 @@ dependencies = [
 [[package]]
 name = "zcash_client_sqlite"
 version = "0.3.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "async-trait",
  "bech32",
  "bs58 0.4.0",
  "ff 0.8.0",
- "futures 0.3.28",
  "group 0.8.0",
  "jubjub",
  "libsqlite3-sys",
@@ -9455,7 +9453,7 @@ dependencies = [
 [[package]]
 name = "zcash_extras"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "async-trait",
  "ff 0.8.0",
@@ -9471,7 +9469,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.0.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -9485,7 +9483,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "aes",
  "bitvec 0.18.5",
@@ -9515,7 +9513,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=37623e3#37623e3b4c9fa6b2ebe712f8f9b0f90044e5dd01"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "bellman",
  "blake2b_simd",
