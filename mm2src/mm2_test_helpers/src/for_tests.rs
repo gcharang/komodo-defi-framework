@@ -286,6 +286,22 @@ impl Mm2TestConf {
         }
     }
 
+    pub fn seednode_with_hd_account_trade_v2(passphrase: &str, coins: &Json) -> Self {
+        Mm2TestConf {
+            conf: json!({
+                "gui": "nogui",
+                "netid": 9998,
+                "passphrase": passphrase,
+                "coins": coins,
+                "rpc_password": DEFAULT_RPC_PASSWORD,
+                "i_am_seed": true,
+                "enable_hd": true,
+                "use_trading_proto_v2": true,
+            }),
+            rpc_password: DEFAULT_RPC_PASSWORD.into(),
+        }
+    }
+
     pub fn light_node(passphrase: &str, coins: &Json, seednodes: &[&str]) -> Self {
         Mm2TestConf {
             conf: json!({
@@ -347,6 +363,22 @@ impl Mm2TestConf {
         }
     }
 
+    pub fn light_node_with_hd_account_trade_v2(passphrase: &str, coins: &Json, seednodes: &[&str]) -> Self {
+        Mm2TestConf {
+            conf: json!({
+                "gui": "nogui",
+                "netid": 9998,
+                "passphrase": passphrase,
+                "coins": coins,
+                "rpc_password": DEFAULT_RPC_PASSWORD,
+                "seednodes": seednodes,
+                "enable_hd": true,
+                "use_trading_proto_v2": true,
+            }),
+            rpc_password: DEFAULT_RPC_PASSWORD.into(),
+        }
+    }
+
     pub fn no_login_node(coins: &Json, seednodes: &[&str]) -> Self {
         Mm2TestConf {
             conf: json!({
@@ -368,7 +400,7 @@ impl Mm2TestConfForSwap {
     const BOB_HD_PASSPHRASE: &'static str =
         "involve work eager scene give acoustic tooth mimic dance smoke hold foster";
     /// TODO consider moving it to read it from a env file.
-    const ALICE_HD_PASSPHRASE: &'static str =
+    pub const ALICE_HD_PASSPHRASE: &'static str =
         "tank abandon bind salon remove wisdom net size aspect direct source fossil";
 
     pub fn bob_conf_with_policy(priv_key_policy: &Mm2InitPrivKeyPolicy, coins: &Json) -> Mm2TestConf {

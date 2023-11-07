@@ -191,9 +191,9 @@ async fn trade_test_rick_and_morty() {
 async fn trade_test_rick_and_morty_v2() {
     let coins = json!([rick_conf(), morty_conf()]);
 
-    let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
+    // let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
 
-    let bob_conf = Mm2TestConfForSwap::bob_conf_with_policy(&bob_policy, &coins);
+    let bob_conf = Mm2TestConf::seednode_trade_v2(&get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap(), &coins);
     let mm_bob = MarketMakerIt::start_async(bob_conf.conf, bob_conf.rpc_password, Some(wasm_start))
         .await
         .unwrap();
@@ -201,8 +201,11 @@ async fn trade_test_rick_and_morty_v2() {
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     Timer::sleep(1.).await;
 
-    let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
-    let alice_conf = Mm2TestConfForSwap::alice_conf_with_policy(&alice_policy, &coins, &mm_bob.my_seed_addr());
+    // let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
+    let alice_conf =
+        Mm2TestConf::light_node_with_hd_account_trade_v2(Mm2TestConfForSwap::ALICE_HD_PASSPHRASE, &coins, &[
+            &mm_bob.my_seed_addr()
+        ]);
     let mm_alice = MarketMakerIt::start_async(alice_conf.conf, alice_conf.rpc_password, Some(wasm_start))
         .await
         .unwrap();

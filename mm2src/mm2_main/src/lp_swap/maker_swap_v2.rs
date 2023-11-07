@@ -28,6 +28,10 @@ cfg_native!(
     use db_common::sqlite::rusqlite::named_params;
 );
 
+cfg_wasm32!(
+    use crate::mm2::lp_swap::swap_wasm_db::SavedSwapTable;
+);
+
 // This is needed to have Debug on messages
 #[allow(unused_imports)] use prost::Message;
 
@@ -162,7 +166,20 @@ impl StateMachineStorage for DummyMakerSwapStorage {
     type Event = MakerSwapEvent;
     type Error = MmError<MakerSwapStateMachineError>;
 
-    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> { todo!() }
+    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
+        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
+        let db = swaps_ctx.swap_db().await.unwrap();
+        let transaction = db.transaction().await.unwrap();
+        let table = transaction.table::<SavedSwapTable>().await.unwrap();
+
+        let saved_swap_json = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
+            Some((_item_id, SavedSwapTable { saved_swap, .. })) => saved_swap,
+            None => panic!("No swap with uuid {}", id),
+        };
+
+        let swap_repr: MakerSwapJsonRepr = serde_json::from_value(saved_swap_json).unwrap();
+        unimplemented!();
+    }
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
 
