@@ -10,7 +10,7 @@ use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigUint};
 use rpc::v1::types::Bytes as BytesJson;
 use serde::de::{self, Deserializer};
-use serde::Deserialize;
+use serde::{Deserialize, Serializer};
 use serde_json::Value as Json;
 use std::collections::HashMap;
 use std::fmt;
@@ -74,6 +74,7 @@ pub struct NftListFilters {
 #[derive(Debug, Deserialize)]
 pub struct NftMetadataReq {
     pub(crate) token_address: Address,
+    #[serde(deserialize_with = "deserialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) chain: Chain,
     #[serde(default)]
@@ -91,6 +92,7 @@ pub struct NftMetadataReq {
 #[derive(Debug, Deserialize)]
 pub struct RefreshMetadataReq {
     pub(crate) token_address: Address,
+    #[serde(deserialize_with = "deserialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) chain: Chain,
     pub(crate) url: Url,
@@ -288,6 +290,7 @@ pub struct Nft {
     #[serde(flatten)]
     pub(crate) common: NftCommon,
     pub(crate) chain: Chain,
+    #[serde(serialize_with = "serialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) block_number_minted: Option<u64>,
     pub(crate) block_number: u64,
@@ -385,6 +388,7 @@ pub struct WithdrawErc1155 {
     pub(crate) chain: Chain,
     pub(crate) to: String,
     pub(crate) token_address: String,
+    #[serde(deserialize_with = "deserialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) amount: Option<BigDecimal>,
     #[serde(default)]
@@ -397,6 +401,7 @@ pub struct WithdrawErc721 {
     pub(crate) chain: Chain,
     pub(crate) to: String,
     pub(crate) token_address: String,
+    #[serde(deserialize_with = "deserialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) fee: Option<WithdrawFee>,
 }
@@ -420,6 +425,7 @@ pub struct TransactionNftDetails {
     pub(crate) to: Vec<String>,
     pub(crate) contract_type: ContractType,
     pub(crate) token_address: String,
+    #[serde(serialize_with = "serialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) amount: BigDecimal,
     pub(crate) fee_details: Option<TxFeeDetails>,
@@ -525,6 +531,7 @@ pub struct NftTransferHistory {
     #[serde(flatten)]
     pub(crate) common: NftTransferCommon,
     pub(crate) chain: Chain,
+    #[serde(serialize_with = "serialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) block_number: u64,
     pub(crate) block_timestamp: u64,
@@ -710,4 +717,20 @@ pub(crate) struct SpamContractRes {
 #[derive(Debug, Deserialize)]
 pub(crate) struct PhishingDomainRes {
     pub(crate) result: HashMap<String, bool>,
+}
+
+fn serialize_token_id<S>(token_id: &BigUint, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let token_id_str = token_id.to_string();
+    serializer.serialize_str(&token_id_str)
+}
+
+fn deserialize_token_id<'de, D>(deserializer: D) -> Result<BigUint, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    BigUint::from_str(&s).map_err(serde::de::Error::custom)
 }

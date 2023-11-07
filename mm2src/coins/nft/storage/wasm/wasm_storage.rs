@@ -46,12 +46,13 @@ where
     let mut filtered_nfts = Vec::new();
     for nft_table in nfts {
         let nft = nft_details_from_item(nft_table)?;
-        if let Some(filters) = &filters {
-            if filters.passes_spam_filter(&nft) && filters.passes_phishing_filter(&nft) {
-                filtered_nfts.push(nft);
-            }
-        } else {
-            filtered_nfts.push(nft);
+        match filters {
+            Some(filters) => {
+                if filters.passes_spam_filter(&nft) && filters.passes_phishing_filter(&nft) {
+                    filtered_nfts.push(nft);
+                }
+            },
+            None => filtered_nfts.push(nft),
         }
     }
     Ok(filtered_nfts)
@@ -83,16 +84,17 @@ where
     let mut filtered_transfers = Vec::new();
     for transfers_table in transfers {
         let transfer = transfer_details_from_item(transfers_table)?;
-        if let Some(filters) = &filters {
-            if filters.is_status_match(&transfer)
-                && filters.is_date_match(&transfer)
-                && filters.passes_spam_filter(&transfer)
-                && filters.passes_phishing_filter(&transfer)
-            {
-                filtered_transfers.push(transfer);
-            }
-        } else {
-            filtered_transfers.push(transfer);
+        match filters {
+            Some(filters) => {
+                if filters.is_status_match(&transfer)
+                    && filters.is_date_match(&transfer)
+                    && filters.passes_spam_filter(&transfer)
+                    && filters.passes_phishing_filter(&transfer)
+                {
+                    filtered_transfers.push(transfer);
+                }
+            },
+            None => filtered_transfers.push(transfer),
         }
     }
     Ok(filtered_transfers)
