@@ -92,9 +92,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 #[path = "lp_swap/check_balance.rs"] mod check_balance;
 #[path = "lp_swap/maker_swap.rs"] mod maker_swap;
-#[cfg(not(target_arch = "wasm32"))]
-#[path = "lp_swap/maker_swap_v2.rs"]
-pub mod maker_swap_v2;
+#[path = "lp_swap/maker_swap_v2.rs"] pub mod maker_swap_v2;
 #[path = "lp_swap/max_maker_vol_rpc.rs"] mod max_maker_vol_rpc;
 #[path = "lp_swap/my_swaps_storage.rs"] mod my_swaps_storage;
 #[path = "lp_swap/pubkey_banning.rs"] mod pubkey_banning;
@@ -108,9 +106,7 @@ mod swap_v2_pb;
 #[path = "lp_swap/taker_restart.rs"]
 pub(crate) mod taker_restart;
 #[path = "lp_swap/taker_swap.rs"] pub(crate) mod taker_swap;
-#[cfg(not(target_arch = "wasm32"))]
-#[path = "lp_swap/taker_swap_v2.rs"]
-pub mod taker_swap_v2;
+#[path = "lp_swap/taker_swap_v2.rs"] pub mod taker_swap_v2;
 #[path = "lp_swap/trade_preimage.rs"] mod trade_preimage;
 
 #[cfg(target_arch = "wasm32")]
@@ -660,7 +656,7 @@ pub fn active_swaps(ctx: &MmArc) -> Result<Vec<Uuid>, String> {
     Ok(uuids)
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct SwapConfirmationsSettings {
     pub maker_coin_confs: u64,
     pub maker_coin_nota: bool,
@@ -1447,7 +1443,7 @@ pub async fn active_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
 }
 
 /// Algorithm used to hash swap secret.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 pub enum SecretHashAlgo {
     /// ripemd160(sha256(secret))
     DHASH160 = 1,
@@ -1484,7 +1480,7 @@ pub fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum)
 
 /// Selects secret hash algorithm depending on types of coins being swapped
 #[cfg(target_arch = "wasm32")]
-fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum) -> SecretHashAlgo {
+pub fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum) -> SecretHashAlgo {
     match (maker_coin, taker_coin) {
         (MmCoinEnum::Tendermint(_) | MmCoinEnum::TendermintToken(_), _) => SecretHashAlgo::SHA256,
         (_, MmCoinEnum::Tendermint(_) | MmCoinEnum::TendermintToken(_)) => SecretHashAlgo::SHA256,

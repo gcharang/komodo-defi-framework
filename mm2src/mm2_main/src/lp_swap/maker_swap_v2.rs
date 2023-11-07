@@ -1,5 +1,4 @@
 use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
-use crate::mm2::database::my_swaps::{get_swap_events, insert_new_swap_v2, set_swap_is_finished, update_swap_events};
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_v2_pb::*;
 use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_maker_swap, recv_swap_v2_msg, SecretHashAlgo,
@@ -12,7 +11,7 @@ use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFunding
             ValidateTakerFundingArgs};
 use common::log::{debug, info, warn};
 use common::{bits256, Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
-use db_common::sqlite::rusqlite::named_params;
+use crypto::privkey::SerializableSecp256k1Keypair;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
@@ -23,6 +22,11 @@ use primitives::hash::H256;
 use rpc::v1::types::Bytes as BytesJson;
 use std::marker::PhantomData;
 use uuid::Uuid;
+
+cfg_native!(
+    use crate::mm2::database::my_swaps::{get_swap_events, insert_new_swap_v2, set_swap_is_finished, update_swap_events};
+    use db_common::sqlite::rusqlite::named_params;
+);
 
 // This is needed to have Debug on messages
 #[allow(unused_imports)] use prost::Message;
@@ -121,6 +125,7 @@ impl DummyMakerSwapStorage {
     pub fn new(ctx: MmArc) -> Self { DummyMakerSwapStorage { ctx } }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl StateMachineStorage for DummyMakerSwapStorage {
     type MachineId = Uuid;
@@ -148,6 +153,50 @@ impl StateMachineStorage for DummyMakerSwapStorage {
         set_swap_is_finished(&self.ctx.sqlite_connection(), &id.to_string())
             .map_to_mm(|e| MakerSwapStateMachineError::StorageError(e.to_string()))
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait]
+impl StateMachineStorage for DummyMakerSwapStorage {
+    type MachineId = Uuid;
+    type Event = MakerSwapEvent;
+    type Error = MmError<MakerSwapStateMachineError>;
+
+    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> { todo!() }
+
+    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
+
+    async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> { todo!() }
+}
+
+#[derive(Serialize, Deserialize)]
+struct MakerSwapJsonRepr {
+    /// Maker coin
+    pub maker_coin: String,
+    /// The amount swapped by maker.
+    pub maker_volume: MmNumber,
+    /// The secret used in HTLC hashlock.
+    pub secret: BytesJson,
+    /// Algorithm used to hash the swap secret.
+    pub secret_hash_algo: SecretHashAlgo,
+    /// The timestamp when the swap was started.
+    pub started_at: u64,
+    /// The duration of HTLC timelock in seconds.
+    pub lock_duration: u64,
+    /// Taker coin
+    pub taker_coin: String,
+    /// The amount swapped by taker.
+    pub taker_volume: MmNumber,
+    /// Premium amount, which might be paid to maker as additional reward.
+    pub taker_premium: MmNumber,
+    /// DEX fee amount
+    pub dex_fee_amount: MmNumber,
+    /// Swap transactions' confirmations settings
+    pub conf_settings: SwapConfirmationsSettings,
+    /// UUID of the swap
+    pub uuid: Uuid,
+    /// If Some, used to sign P2P messages of this swap.
+    pub p2p_keypair: Option<SerializableSecp256k1Keypair>,
 }
 
 /// Represents the state machine for maker's side of the Trading Protocol Upgrade swap (v2).
@@ -250,6 +299,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
+        #[cfg(not(target_arch = "wasm32"))]
         {
             let sql_params = named_params! {
                 ":my_coin": state_machine.maker_coin.ticker(),
@@ -273,6 +323,9 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
             };
             insert_new_swap_v2(&state_machine.ctx, sql_params).unwrap();
         }
+
+        #[cfg(target_arch = "wasm32")]
+        {}
 
         subscribe_to_topic(&state_machine.ctx, state_machine.p2p_topic.clone());
         let swap_ctx = SwapsContext::from_ctx(&state_machine.ctx).expect("SwapsContext::from_ctx should not fail");

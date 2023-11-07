@@ -1,5 +1,4 @@
 use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
-use crate::mm2::database::my_swaps::{get_swap_events, insert_new_swap_v2, set_swap_is_finished, update_swap_events};
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_v2_pb::*;
 use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_taker_swap, recv_swap_v2_msg, SecretHashAlgo,
@@ -12,7 +11,6 @@ use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFunding
             TxPreimageWithSig, ValidatePaymentInput, WaitForHTLCTxSpendArgs};
 use common::log::{debug, info, warn};
 use common::{bits256, Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
-use db_common::sqlite::rusqlite::named_params;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
@@ -23,6 +21,11 @@ use primitives::hash::H256;
 use rpc::v1::types::Bytes as BytesJson;
 use std::marker::PhantomData;
 use uuid::Uuid;
+
+cfg_native!(
+    use crate::mm2::database::my_swaps::{get_swap_events, insert_new_swap_v2, set_swap_is_finished, update_swap_events};
+    use db_common::sqlite::rusqlite::named_params;
+);
 
 // This is needed to have Debug on messages
 #[allow(unused_imports)] use prost::Message;
@@ -135,6 +138,7 @@ impl DummyTakerSwapStorage {
     pub fn new(ctx: MmArc) -> Self { DummyTakerSwapStorage { ctx } }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl StateMachineStorage for DummyTakerSwapStorage {
     type MachineId = Uuid;
@@ -162,6 +166,20 @@ impl StateMachineStorage for DummyTakerSwapStorage {
         set_swap_is_finished(&self.ctx.sqlite_connection(), &id.to_string())
             .map_to_mm(|e| TakerSwapStateMachineError::StorageError(e.to_string()))
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait]
+impl StateMachineStorage for DummyTakerSwapStorage {
+    type MachineId = Uuid;
+    type Event = TakerSwapEvent;
+    type Error = MmError<TakerSwapStateMachineError>;
+
+    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> { todo!() }
+
+    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
+
+    async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> { todo!() }
 }
 
 /// Represents the state machine for taker's side of the Trading Protocol Upgrade swap (v2).
@@ -260,6 +278,7 @@ impl<MakerCoin: MmCoin + SwapOpsV2, TakerCoin: MmCoin + SwapOpsV2> State for Ini
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
+        #[cfg(not(target_arch = "wasm32"))]
         {
             let sql_params = named_params! {
                 ":my_coin": state_machine.taker_coin.ticker(),
