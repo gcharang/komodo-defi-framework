@@ -37,7 +37,7 @@
 //!
 
 /******************************************************************************
- * Copyright © 2022 Atomic Private Limited and its contributors               *
+ * Copyright © 2023 Pampex LTD and TillyHK LTD              *
  *                                                                            *
  * See the CONTRIBUTOR-LICENSE-AGREEMENT, COPYING, LICENSE-COPYRIGHT-NOTICE   *
  * and DEVELOPER-CERTIFICATE-OF-ORIGIN files in the LEGAL directory in        *
@@ -45,7 +45,7 @@
  * holder information and the developer policies on copyright and licensing.  *
  *                                                                            *
  * Unless otherwise agreed in a custom licensing agreement, no part of the    *
- * AtomicDEX software, including this file may be copied, modified, propagated*
+ * Komodo DeFi Framework software, including this file may be copied, modified, propagated*
  * or distributed except according to the terms contained in the              *
  * LICENSE-COPYRIGHT-NOTICE file.                                             *
  *                                                                            *
@@ -92,7 +92,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 #[path = "lp_swap/check_balance.rs"] mod check_balance;
 #[path = "lp_swap/maker_swap.rs"] mod maker_swap;
-#[path = "lp_swap/maker_swap_v2.rs"] pub mod maker_swap_v2;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "lp_swap/maker_swap_v2.rs"]
+pub mod maker_swap_v2;
 #[path = "lp_swap/max_maker_vol_rpc.rs"] mod max_maker_vol_rpc;
 #[path = "lp_swap/my_swaps_storage.rs"] mod my_swaps_storage;
 #[path = "lp_swap/pubkey_banning.rs"] mod pubkey_banning;
@@ -103,14 +105,20 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[rustfmt::skip]
 mod swap_v2_pb;
 #[path = "lp_swap/swap_watcher.rs"] pub(crate) mod swap_watcher;
-#[path = "lp_swap/taker_swap.rs"] mod taker_swap;
-#[path = "lp_swap/taker_swap_v2.rs"] pub mod taker_swap_v2;
+#[path = "lp_swap/taker_restart.rs"]
+pub(crate) mod taker_restart;
+#[path = "lp_swap/taker_swap.rs"] pub(crate) mod taker_swap;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "lp_swap/taker_swap_v2.rs"]
+pub mod taker_swap_v2;
 #[path = "lp_swap/trade_preimage.rs"] mod trade_preimage;
 
 #[cfg(target_arch = "wasm32")]
 #[path = "lp_swap/swap_wasm_db.rs"]
 mod swap_wasm_db;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::mm2::database::my_swaps::{get_swap_data_for_rpc, get_swap_type};
 pub use check_balance::{check_other_coin_balance_for_swap, CheckBalanceError, CheckBalanceResult};
 use crypto::CryptoCtx;
 use keys::{KeyPair, SECP_SIGN, SECP_VERIFY};
@@ -131,14 +139,19 @@ pub use swap_watcher::{process_watcher_msg, watcher_topic, TakerSwapWatcherData,
 use taker_swap::TakerSwapEvent;
 pub use taker_swap::{calc_max_taker_vol, check_balance_for_taker_swap, max_taker_vol, max_taker_vol_from_available,
                      run_taker_swap, taker_swap_trade_preimage, RunTakerSwapInput, TakerSavedSwap, TakerSwap,
-                     TakerSwapData, TakerSwapPreparedParams, TakerTradePreimage, WATCHER_MESSAGE_SENT_LOG};
+                     TakerSwapData, TakerSwapPreparedParams, TakerTradePreimage, MAKER_PAYMENT_SPENT_BY_WATCHER_LOG,
+                     REFUND_TEST_FAILURE_LOG, WATCHER_MESSAGE_SENT_LOG};
 pub use trade_preimage::trade_preimage_rpc;
 
 pub const SWAP_PREFIX: TopicPrefix = "swap";
-
 pub const SWAP_V2_PREFIX: TopicPrefix = "swapv2";
-
+pub const SWAP_FINISHED_LOG: &str = "Swap finished: ";
 pub const TX_HELPER_PREFIX: TopicPrefix = "txhlp";
+
+const LEGACY_SWAP_TYPE: u8 = 0;
+const MAKER_SWAP_V2_TYPE: u8 = 1;
+const TAKER_SWAP_V2_TYPE: u8 = 2;
+const MAX_STARTED_AT_DIFF: u64 = 60;
 
 const NEGOTIATE_SEND_INTERVAL: f64 = 30.;
 
@@ -188,8 +201,9 @@ pub struct SwapV2MsgStore {
     maker_negotiation: Option<MakerNegotiation>,
     taker_negotiation: Option<TakerNegotiation>,
     maker_negotiated: Option<MakerNegotiated>,
-    taker_payment: Option<TakerPaymentInfo>,
+    taker_funding: Option<TakerFundingInfo>,
     maker_payment: Option<MakerPaymentInfo>,
+    taker_payment: Option<TakerPaymentInfo>,
     taker_payment_spend_preimage: Option<TakerPaymentSpendPreimage>,
     #[allow(dead_code)]
     accept_only_from: bits256,
@@ -998,6 +1012,35 @@ impl From<SavedSwap> for MySwapStatusResponse {
 }
 
 /// Returns the status of swap performed on `my` node
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
+    let uuid: Uuid = try_s!(json::from_value(req["params"]["uuid"].clone()));
+    let uuid_str = uuid.to_string();
+    let swap_type = try_s!(get_swap_type(&ctx.sqlite_connection(), &uuid_str));
+
+    match swap_type {
+        LEGACY_SWAP_TYPE => {
+            let status = match SavedSwap::load_my_swap_from_db(&ctx, uuid).await {
+                Ok(Some(status)) => status,
+                Ok(None) => return Err("swap data is not found".to_owned()),
+                Err(e) => return ERR!("{}", e),
+            };
+
+            let res_js = json!({ "result": MySwapStatusResponse::from(status) });
+            let res = try_s!(json::to_vec(&res_js));
+            Ok(try_s!(Response::builder().body(res)))
+        },
+        MAKER_SWAP_V2_TYPE | TAKER_SWAP_V2_TYPE => {
+            let swap_data = try_s!(get_swap_data_for_rpc(&ctx.sqlite_connection(), &uuid_str));
+            let res_js = json!({ "result": swap_data });
+            let res = try_s!(json::to_vec(&res_js));
+            Ok(try_s!(Response::builder().body(res)))
+        },
+        unsupported_type => ERR!("Got unsupported swap type from DB: {}", unsupported_type),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
     let uuid: Uuid = try_s!(json::from_value(req["params"]["uuid"].clone()));
     let status = match SavedSwap::load_my_swap_from_db(&ctx, uuid).await {
@@ -1213,6 +1256,7 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
     let swaps = try_s!(SavedSwap::load_all_my_swaps_from_db(&ctx).await);
     for swap in swaps {
         if swap.is_finished() {
+            info!("{} {}", SWAP_FINISHED_LOG, swap.uuid());
             continue;
         }
 
@@ -1403,11 +1447,12 @@ pub async fn active_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
 }
 
 /// Algorithm used to hash swap secret.
+#[derive(Clone, Copy)]
 pub enum SecretHashAlgo {
     /// ripemd160(sha256(secret))
-    DHASH160,
+    DHASH160 = 1,
     /// sha256(secret)
-    SHA256,
+    SHA256 = 2,
 }
 
 impl Default for SecretHashAlgo {
@@ -1424,8 +1469,9 @@ impl SecretHashAlgo {
 }
 
 // Todo: Maybe add a secret_hash_algo method to the SwapOps trait instead
+/// Selects secret hash algorithm depending on types of coins being swapped
 #[cfg(not(target_arch = "wasm32"))]
-fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum) -> SecretHashAlgo {
+pub fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum) -> SecretHashAlgo {
     match (maker_coin, taker_coin) {
         (MmCoinEnum::Tendermint(_) | MmCoinEnum::TendermintToken(_) | MmCoinEnum::LightningCoin(_), _) => {
             SecretHashAlgo::SHA256
@@ -1436,6 +1482,7 @@ fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum) -> 
     }
 }
 
+/// Selects secret hash algorithm depending on types of coins being swapped
 #[cfg(target_arch = "wasm32")]
 fn detect_secret_hash_algo(maker_coin: &MmCoinEnum, taker_coin: &MmCoinEnum) -> SecretHashAlgo {
     match (maker_coin, taker_coin) {
@@ -1532,11 +1579,14 @@ pub fn process_swap_v2_msg(ctx: MmArc, topic: &str, msg: &[u8]) -> P2PProcessRes
             Some(swap_v2_pb::swap_message::Inner::MakerNegotiated(maker_negotiated)) => {
                 msg_store.maker_negotiated = Some(maker_negotiated)
             },
-            Some(swap_v2_pb::swap_message::Inner::TakerPaymentInfo(taker_payment)) => {
-                msg_store.taker_payment = Some(taker_payment)
+            Some(swap_v2_pb::swap_message::Inner::TakerFundingInfo(taker_funding)) => {
+                msg_store.taker_funding = Some(taker_funding)
             },
             Some(swap_v2_pb::swap_message::Inner::MakerPaymentInfo(maker_payment)) => {
                 msg_store.maker_payment = Some(maker_payment)
+            },
+            Some(swap_v2_pb::swap_message::Inner::TakerPaymentInfo(taker_payment)) => {
+                msg_store.taker_payment = Some(taker_payment)
             },
             Some(swap_v2_pb::swap_message::Inner::TakerPaymentSpendPreimage(preimage)) => {
                 msg_store.taker_payment_spend_preimage = Some(preimage)
@@ -1570,6 +1620,12 @@ async fn recv_swap_v2_msg<T>(
             return ERR!("Timeout ({} > {})", now - started, timeout);
         }
     }
+}
+
+pub fn generate_secret() -> Result<[u8; 32], rand::Error> {
+    let mut sec = [0u8; 32];
+    common::os_rng(&mut sec)?;
+    Ok(sec)
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -2082,7 +2138,10 @@ mod lp_swap_tests {
 
         maker_swap.fail_at = maker_fail_at;
 
-        let mut taker_swap = TakerSwap::new(
+        #[cfg(any(test, feature = "run-docker-tests"))]
+        let fail_at = std::env::var("TAKER_FAIL_AT").map(taker_swap::FailAt::from).ok();
+
+        let taker_swap = TakerSwap::new(
             taker_ctx.clone(),
             maker_key_pair.public().compressed_unprefixed().unwrap().into(),
             maker_amount.into(),
@@ -2095,9 +2154,9 @@ mod lp_swap_tests {
             morty_taker.into(),
             lock_duration,
             None,
+            #[cfg(any(test, feature = "run-docker-tests"))]
+            fail_at,
         );
-
-        taker_swap.fail_at = taker_fail_at;
 
         block_on(futures::future::join(
             run_maker_swap(RunMakerSwapInput::StartNew(maker_swap), maker_ctx.clone()),
