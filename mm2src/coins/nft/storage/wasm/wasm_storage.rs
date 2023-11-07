@@ -11,12 +11,11 @@ use ethereum_types::Address;
 use mm2_db::indexed_db::{BeBigUint, DbTable, DbUpgrader, MultiIndex, OnUpgradeResult, TableSignature};
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_err_handle::prelude::MmResult;
-use mm2_number::BigDecimal;
+use mm2_number::BigUint;
 use num_traits::ToPrimitive;
 use serde_json::{self as json, Value as Json};
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
-use std::str::FromStr;
 
 const CHAIN_TOKEN_ADD_TOKEN_ID_INDEX: &str = "chain_token_add_token_id_index";
 const CHAIN_BLOCK_NUMBER_INDEX: &str = "chain_block_number_index";
@@ -183,14 +182,14 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         &self,
         chain: &Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
     ) -> MmResult<Option<Nft>, Self::Error> {
         let db_transaction = self.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
-            .with_value(token_id.to_string())?;
+            .with_value(BeBigUint::from(token_id))?;
 
         if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
             Ok(Some(nft_details_from_item(item)?))
@@ -203,7 +202,7 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         &self,
         chain: &Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
         scanned_block: u64,
     ) -> MmResult<RemoveNftResult, Self::Error> {
         let db_transaction = self.get_inner().transaction().await?;
@@ -213,7 +212,7 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
-            .with_value(token_id.to_string())?;
+            .with_value(BeBigUint::from(token_id))?;
 
         let last_scanned_block = LastScannedBlockTable {
             chain: chain.to_string(),
@@ -235,14 +234,14 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         &self,
         chain: &Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
     ) -> MmResult<Option<String>, Self::Error> {
         let db_transaction = self.get_inner().transaction().await?;
         let table = db_transaction.table::<NftListTable>().await?;
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
-            .with_value(token_id.to_string())?;
+            .with_value(BeBigUint::from(token_id))?;
 
         if let Some((_item_id, item)) = table.get_item_by_unique_multi_index(index_keys).await? {
             Ok(Some(nft_details_from_item(item)?.common.amount.to_string()))
@@ -257,7 +256,7 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
-            .with_value(nft.common.token_id.to_string())?;
+            .with_value(BeBigUint::from(nft.token_id.clone()))?;
 
         let nft_item = NftListTable::from_nft(&nft)?;
         table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
@@ -292,7 +291,7 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
-            .with_value(nft.common.token_id.to_string())?;
+            .with_value(BeBigUint::from(nft.token_id.clone()))?;
 
         let nft_item = NftListTable::from_nft(&nft)?;
         nft_table
@@ -316,7 +315,7 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
-            .with_value(nft.common.token_id.to_string())?;
+            .with_value(BeBigUint::from(nft.token_id.clone()))?;
 
         let nft_item = NftListTable::from_nft(&nft)?;
         nft_table
@@ -377,7 +376,7 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
             let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
                 .with_value(&chain_str)?
                 .with_value(eth_addr_to_hex(&nft.common.token_address))?
-                .with_value(nft.common.token_id.to_string())?;
+                .with_value(BeBigUint::from(nft.token_id.clone()))?;
 
             let item = NftListTable::from_nft(&nft)?;
             table.replace_item_by_unique_multi_index(index_keys, &item).await?;
@@ -504,7 +503,7 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
         &self,
         chain: Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error> {
         let db_transaction = self.get_inner().transaction().await?;
         let table = db_transaction.table::<NftTransferHistoryTable>().await?;
@@ -512,7 +511,7 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain.to_string())?
             .with_value(&token_address)?
-            .with_value(token_id.to_string())?;
+            .with_value(BeBigUint::from(token_id))?;
 
         table
             .get_items_by_multi_index(index_keys)
@@ -555,7 +554,7 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(&chain_str)?
             .with_value(&transfer_meta.token_address)?
-            .with_value(transfer_meta.token_id.to_string())?;
+            .with_value(BeBigUint::from(transfer_meta.token_id))?;
 
         let transfers: Result<Vec<NftTransferHistory>, _> = table
             .get_items_by_multi_index(index_keys)
@@ -611,7 +610,7 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
             {
                 res.insert(NftTokenAddrId {
                     token_address: item.token_address,
-                    token_id: BigDecimal::from_str(&item.token_id).map_err(WasmNftCacheError::ParseBigDecimalError)?,
+                    token_id: BigUint::from(item.token_id),
                 });
             }
         }
@@ -764,7 +763,7 @@ async fn update_nft_phishing_for_index(
         let index_keys = MultiIndex::new(CHAIN_TOKEN_ADD_TOKEN_ID_INDEX)
             .with_value(chain)?
             .with_value(eth_addr_to_hex(&nft.common.token_address))?
-            .with_value(nft.common.token_id.to_string())?;
+            .with_value(BeBigUint::from(nft.token_id))?;
         table.replace_item_by_unique_multi_index(index_keys, &nft_item).await?;
     }
     Ok(())
@@ -819,7 +818,7 @@ impl BlockNumberTable for NftTransferHistoryTable {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct NftListTable {
     token_address: String,
-    token_id: String,
+    token_id: BeBigUint,
     chain: String,
     amount: String,
     block_number: BeBigUint,
@@ -841,7 +840,7 @@ impl NftListTable {
         let details_json = json::to_value(nft).map_to_mm(|e| WasmNftCacheError::ErrorSerializing(e.to_string()))?;
         Ok(NftListTable {
             token_address: eth_addr_to_hex(&nft.common.token_address),
-            token_id: nft.common.token_id.to_string(),
+            token_id: BeBigUint::from(nft.token_id.clone()),
             chain: nft.chain.to_string(),
             amount: nft.common.amount.to_string(),
             block_number: BeBigUint::from(nft.block_number),
@@ -894,7 +893,7 @@ pub(crate) struct NftTransferHistoryTable {
     block_timestamp: BeBigUint,
     contract_type: ContractType,
     token_address: String,
-    token_id: String,
+    token_id: BeBigUint,
     status: TransferStatus,
     amount: String,
     token_uri: Option<String>,
@@ -922,7 +921,7 @@ impl NftTransferHistoryTable {
             block_timestamp: BeBigUint::from(transfer.block_timestamp),
             contract_type: transfer.contract_type,
             token_address: eth_addr_to_hex(&transfer.common.token_address),
-            token_id: transfer.common.token_id.to_string(),
+            token_id: BeBigUint::from(transfer.token_id.clone()),
             status: transfer.status,
             amount: transfer.common.amount.to_string(),
             token_uri: transfer.token_uri.clone(),

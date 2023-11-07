@@ -1,7 +1,7 @@
 use crate::nft::nft_structs::{Chain, ContractType, Nft, NftCommon, NftCtx, NftTransferCommon, NftTransferHistory,
                               TransferStatus, UriMeta};
 use ethereum_types::Address;
-use mm2_number::BigDecimal;
+use mm2_number::{BigDecimal, BigUint};
 #[cfg(not(target_arch = "wasm32"))]
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_async_db;
 #[cfg(target_arch = "wasm32")]
@@ -13,7 +13,6 @@ pub(crate) fn nft() -> Nft {
     Nft {
         common: NftCommon {
             token_address: Address::from_str("0x5c7d6712dfaf0cb079d48981781c8705e8417ca0").unwrap(),
-            token_id: Default::default(),
             amount: BigDecimal::from_str("2").unwrap(),
             owner_of: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             token_hash: Some("b34ddf294013d20a6d70691027625839".to_string()),
@@ -31,6 +30,7 @@ pub(crate) fn nft() -> Nft {
             possible_spam: true,
         },
         chain: Chain::Bsc,
+        token_id: Default::default(),
         block_number_minted: Some(25465916),
         block_number: 25919780,
         contract_type: ContractType::Erc1155,
@@ -55,7 +55,6 @@ pub(crate) fn nft_list() -> Vec<Nft> {
     let nft = Nft {
         common: NftCommon {
             token_address: Address::from_str("0x5c7d6712dfaf0cb079d48981781c8705e8417ca0").unwrap(),
-            token_id: Default::default(),
             amount: BigDecimal::from_str("2").unwrap(),
             owner_of: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             token_hash: Some("b34ddf294013d20a6d70691027625839".to_string()),
@@ -70,6 +69,7 @@ pub(crate) fn nft_list() -> Vec<Nft> {
             possible_spam: false,
         },
         chain: Chain::Bsc,
+        token_id: Default::default(),
         block_number_minted: Some(25465916),
         block_number: 25919780,
         contract_type: ContractType::Erc1155,
@@ -92,7 +92,6 @@ pub(crate) fn nft_list() -> Vec<Nft> {
     let nft1 = Nft {
         common: NftCommon {
             token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300047252").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
             owner_of: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             token_hash: Some("c5d1cfd75a0535b0ec750c0156e6ddfe".to_string()),
@@ -110,6 +109,7 @@ pub(crate) fn nft_list() -> Vec<Nft> {
             possible_spam: true,
         },
         chain: Chain::Bsc,
+        token_id: BigUint::from_str("214300047252").unwrap(),
         block_number_minted: Some(25721963),
         block_number: 28056726,
         contract_type: ContractType::Erc721,
@@ -134,7 +134,6 @@ pub(crate) fn nft_list() -> Vec<Nft> {
     let nft2 = Nft {
         common: NftCommon {
             token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300047253").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
             owner_of: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             token_hash: Some("c5d1cfd75a0535b0ec750c0156e6ddfe".to_string()),
@@ -152,6 +151,7 @@ pub(crate) fn nft_list() -> Vec<Nft> {
             possible_spam: false,
         },
         chain: Chain::Bsc,
+        token_id: BigUint::from_str("214300047253").unwrap(),
         block_number_minted: Some(25721963),
         block_number: 28056726,
         contract_type: ContractType::Erc721,
@@ -176,7 +176,6 @@ pub(crate) fn nft_list() -> Vec<Nft> {
     let nft3 = Nft {
         common: NftCommon {
             token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300044414").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
             owner_of: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             token_hash: Some("125f8f4e952e107c257960000b4b250e".to_string()),
@@ -194,6 +193,7 @@ pub(crate) fn nft_list() -> Vec<Nft> {
             possible_spam: false,
         },
         chain: Chain::Bsc,
+        token_id: BigUint::from_str("214300044414").unwrap(),
         block_number_minted: Some(25810308),
         block_number: 28056721,
         contract_type: ContractType::Erc721,
@@ -227,7 +227,6 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
             token_address: Address::from_str("0x5c7d6712dfaf0cb079d48981781c8705e8417ca0").unwrap(),
-            token_id: Default::default(),
             from_address: Address::from_str("0x4ff0bbc9b64d635a4696d1a38554fb2529c103ff").unwrap(),
             to_address: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
@@ -236,6 +235,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             possible_spam: false,
         },
         chain: Chain::Bsc,
+        token_id: Default::default(),
         block_number: 25919780,
         block_timestamp: 1677166110,
         contract_type: ContractType::Erc1155,
@@ -260,7 +260,6 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
             token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300047252").unwrap(),
             from_address: Address::from_str("0x6fad0ec6bb76914b2a2a800686acc22970645820").unwrap(),
             to_address: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
@@ -269,6 +268,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             possible_spam: true,
         },
         chain: Chain::Bsc,
+        token_id: BigUint::from_str("214300047252").unwrap(),
         block_number: 28056726,
         block_timestamp: 1683627432,
         contract_type: ContractType::Erc721,
@@ -294,7 +294,6 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
             token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300047253").unwrap(),
             from_address: Address::from_str("0x6fad0ec6bb76914b2a2a800686acc22970645820").unwrap(),
             to_address: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
@@ -303,6 +302,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             possible_spam: false,
         },
         chain: Chain::Bsc,
+        token_id: BigUint::from_str("214300047253").unwrap(),
         block_number: 28056726,
         block_timestamp: 1683627432,
         contract_type: ContractType::Erc721,
@@ -327,7 +327,6 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             value: Default::default(),
             transaction_type: Some("Single".to_string()),
             token_address: Address::from_str("0xfd913a305d70a60aac4faac70c739563738e1f81").unwrap(),
-            token_id: BigDecimal::from_str("214300044414").unwrap(),
             from_address: Address::from_str("0x6fad0ec6bb76914b2a2a800686acc22970645820").unwrap(),
             to_address: Address::from_str("0xf622a6c52c94b500542e2ae6bcad24c53bc5b6a2").unwrap(),
             amount: BigDecimal::from_str("1").unwrap(),
@@ -336,6 +335,7 @@ pub(crate) fn nft_transfer_history() -> Vec<NftTransferHistory> {
             possible_spam: false,
         },
         chain: Chain::Bsc,
+        token_id: BigUint::from_str("214300044414").unwrap(),
         block_number: 28056721,
         block_timestamp: 1683627417,
         contract_type: ContractType::Erc721,

@@ -28,7 +28,7 @@ use ethereum_types::{Address, H256};
 use futures::compat::Future01CompatExt;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::send_post_request_to_uri;
-use mm2_number::BigDecimal;
+use mm2_number::{BigDecimal, BigUint};
 use regex::Regex;
 use serde_json::Value as Json;
 use std::cmp::Ordering;
@@ -693,7 +693,6 @@ async fn get_moralis_nft_transfers(
                         value: transfer_moralis.common.value,
                         transaction_type: transfer_moralis.common.transaction_type,
                         token_address: transfer_moralis.common.token_address,
-                        token_id: transfer_moralis.common.token_id,
                         from_address: transfer_moralis.common.from_address,
                         to_address: transfer_moralis.common.to_address,
                         amount: transfer_moralis.common.amount,
@@ -702,6 +701,7 @@ async fn get_moralis_nft_transfers(
                         possible_spam: transfer_moralis.common.possible_spam,
                     },
                     chain: *chain,
+                    token_id: transfer_moralis.token_id.0,
                     block_number: *transfer_moralis.block_number,
                     block_timestamp,
                     contract_type,
@@ -741,22 +741,25 @@ async fn get_fee_details(eth_coin: &EthCoin, transaction_hash: &str) -> Option<E
         EthCoinType::Erc20 { .. } => return None,
     };
 
-    if let Some(r) = receipt {
-        let gas_used = r.gas_used.unwrap_or_default();
-        return if let Some(gas_price) = r.effective_gas_price {
-            EthTxFeeDetails::new(gas_used, gas_price, fee_coin).ok()
-        } else {
-            let web3_tx = eth_coin
-                .web3
-                .eth()
-                .transaction(TransactionId::Hash(hash))
-                .await
-                .ok()??;
-            let gas_price = web3_tx.gas_price.unwrap_or_default();
-            EthTxFeeDetails::new(gas_used, gas_price, fee_coin).ok()
-        };
+    match receipt {
+        Some(r) => {
+            let gas_used = r.gas_used.unwrap_or_default();
+            match r.effective_gas_price {
+                Some(gas_price) => EthTxFeeDetails::new(gas_used, gas_price, fee_coin).ok(),
+                None => {
+                    let web3_tx = eth_coin
+                        .web3
+                        .eth()
+                        .transaction(TransactionId::Hash(hash))
+                        .await
+                        .ok()??;
+                    let gas_price = web3_tx.gas_price.unwrap_or_default();
+                    EthTxFeeDetails::new(gas_used, gas_price, fee_coin).ok()
+                },
+            }
+        },
+        None => None,
     }
-    None
 }
 
 /// Implements request to the Moralis "Get NFT metadata" endpoint.
@@ -770,7 +773,7 @@ async fn get_fee_details(eth_coin: &EthCoin, transaction_hash: &str) -> Option<E
 /// **Dont** use this function to get specific info about owner address, amount etc, you will get info not related to my_address.
 async fn get_moralis_metadata(
     token_address: String,
-    token_id: BigDecimal,
+    token_id: BigUint,
     chain: &Chain,
     url: &Url,
     url_antispam: &Url,
@@ -930,18 +933,18 @@ async fn handle_send_erc721<T: NftListStorageOps + NftTransferHistoryStorageOps>
         .get_nft(
             chain,
             eth_addr_to_hex(&transfer.common.token_address),
-            transfer.common.token_id.clone(),
+            transfer.token_id.clone(),
         )
         .await?
         .ok_or_else(|| UpdateNftError::TokenNotFoundInWallet {
             token_address: eth_addr_to_hex(&transfer.common.token_address),
-            token_id: transfer.common.token_id.to_string(),
+            token_id: transfer.token_id.to_string(),
         })?;
     storage
         .remove_nft_from_list(
             chain,
             eth_addr_to_hex(&transfer.common.token_address),
-            transfer.common.token_id,
+            transfer.token_id,
             transfer.block_number,
         )
         .await?;
@@ -958,7 +961,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTransferHistoryStorageO
 ) -> MmResult<(), UpdateNftError> {
     let token_address_str = eth_addr_to_hex(&transfer.common.token_address);
     match storage
-        .get_nft(chain, token_address_str.clone(), transfer.common.token_id.clone())
+        .get_nft(chain, token_address_str.clone(), transfer.token_id.clone())
         .await?
     {
         Some(mut nft_db) => {
@@ -978,7 +981,7 @@ async fn handle_receive_erc721<T: NftListStorageOps + NftTransferHistoryStorageO
         None => {
             let mut nft = match get_moralis_metadata(
                 token_address_str.clone(),
-                transfer.common.token_id.clone(),
+                transfer.token_id.clone(),
                 chain,
                 url,
                 url_antispam,
@@ -1013,21 +1016,16 @@ async fn handle_send_erc1155<T: NftListStorageOps + NftTransferHistoryStorageOps
 ) -> MmResult<(), UpdateNftError> {
     let token_address_str = eth_addr_to_hex(&transfer.common.token_address);
     let mut nft_db = storage
-        .get_nft(chain, token_address_str.clone(), transfer.common.token_id.clone())
+        .get_nft(chain, token_address_str.clone(), transfer.token_id.clone())
         .await?
         .ok_or_else(|| UpdateNftError::TokenNotFoundInWallet {
             token_address: token_address_str.clone(),
-            token_id: transfer.common.token_id.to_string(),
+            token_id: transfer.token_id.to_string(),
         })?;
     match nft_db.common.amount.cmp(&transfer.common.amount) {
         Ordering::Equal => {
             storage
-                .remove_nft_from_list(
-                    chain,
-                    token_address_str,
-                    transfer.common.token_id,
-                    transfer.block_number,
-                )
+                .remove_nft_from_list(chain, token_address_str, transfer.token_id, transfer.block_number)
                 .await?;
         },
         Ordering::Greater => {
@@ -1056,7 +1054,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
 ) -> MmResult<(), UpdateNftError> {
     let token_address_str = eth_addr_to_hex(&transfer.common.token_address);
     let mut nft = match storage
-        .get_nft(chain, token_address_str.clone(), transfer.common.token_id.clone())
+        .get_nft(chain, token_address_str.clone(), transfer.token_id.clone())
         .await?
     {
         Some(mut nft_db) => {
@@ -1076,7 +1074,7 @@ async fn handle_receive_erc1155<T: NftListStorageOps + NftTransferHistoryStorage
         None => {
             let nft = match get_moralis_metadata(
                 token_address_str.clone(),
-                transfer.common.token_id.clone(),
+                transfer.token_id.clone(),
                 chain,
                 url,
                 url_antispam,
@@ -1118,7 +1116,6 @@ async fn create_nft_from_moralis_metadata(
     let nft = Nft {
         common: NftCommon {
             token_address: moralis_meta.common.token_address,
-            token_id: moralis_meta.common.token_id,
             amount: transfer.common.amount.clone(),
             owner_of: Address::from_str(my_address).map_to_mm(|e| UpdateNftError::InvalidHexString(e.to_string()))?,
             token_hash: moralis_meta.common.token_hash,
@@ -1133,6 +1130,7 @@ async fn create_nft_from_moralis_metadata(
             possible_spam: moralis_meta.common.possible_spam,
         },
         chain: *chain,
+        token_id: moralis_meta.token_id,
         block_number_minted: moralis_meta.block_number_minted,
         block_number: transfer.block_number,
         contract_type: moralis_meta.contract_type,
@@ -1158,7 +1156,7 @@ async fn mark_as_spam_and_build_empty_meta<T: NftListStorageOps + NftTransferHis
 
     Ok(build_nft_with_empty_meta(BuildNftFields {
         token_address: transfer.common.token_address,
-        token_id: transfer.common.token_id.clone(),
+        token_id: transfer.token_id.clone(),
         amount: transfer.common.amount.clone(),
         owner_of: Address::from_str(my_address).map_to_mm(|e| UpdateNftError::InvalidHexString(e.to_string()))?,
         contract_type: transfer.contract_type,
@@ -1174,7 +1172,7 @@ pub(crate) async fn find_wallet_nft_amount(
     ctx: &MmArc,
     chain: &Chain,
     token_address: String,
-    token_id: BigDecimal,
+    token_id: BigUint,
 ) -> MmResult<BigDecimal, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(GetNftInfoError::Internal)?;
     let _lock = nft_ctx.guard.lock().await;
@@ -1377,7 +1375,6 @@ async fn build_nft_from_moralis(
     Nft {
         common: NftCommon {
             token_address: nft_moralis.common.token_address,
-            token_id: nft_moralis.common.token_id,
             amount: nft_moralis.common.amount,
             owner_of: nft_moralis.common.owner_of,
             token_hash: nft_moralis.common.token_hash,
@@ -1392,6 +1389,7 @@ async fn build_nft_from_moralis(
             possible_spam: nft_moralis.common.possible_spam,
         },
         chain,
+        token_id: nft_moralis.token_id.0,
         block_number_minted: nft_moralis.block_number_minted.map(|v| v.0),
         block_number: *nft_moralis.block_number,
         contract_type,
