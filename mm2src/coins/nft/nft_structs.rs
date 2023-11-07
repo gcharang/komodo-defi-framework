@@ -6,8 +6,8 @@ use db_common::async_sql_conn::AsyncConnection;
 use ethereum_types::Address;
 use futures::lock::Mutex as AsyncMutex;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
-use mm2_err_handle::mm_error::MmResult;
-use mm2_number::BigDecimal;
+use mm2_err_handle::prelude::*;
+use mm2_number::{BigDecimal, BigUint};
 use rpc::v1::types::Bytes as BytesJson;
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
@@ -23,17 +23,11 @@ use crate::eth::EthTxFeeDetails;
 use crate::nft::nft_errors::{LockDBError, ParseChainTypeError};
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 
-#[cfg(target_arch = "wasm32")]
-use mm2_err_handle::map_mm_error::MapMmError;
-
-#[cfg(target_arch = "wasm32")]
-use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
-
-#[cfg(target_arch = "wasm32")]
-use crate::nft::storage::wasm::WasmNftCacheError;
-
-#[cfg(target_arch = "wasm32")]
-use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
+common::cfg_wasm32! {
+    use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
+    use crate::nft::storage::wasm::WasmNftCacheError;
+    use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
+}
 
 /// Represents a request to list NFTs owned by the user across specified chains.
 ///
@@ -80,7 +74,7 @@ pub struct NftListFilters {
 #[derive(Debug, Deserialize)]
 pub struct NftMetadataReq {
     pub(crate) token_address: Address,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) chain: Chain,
     #[serde(default)]
     pub(crate) protect_from_spam: bool,
@@ -97,7 +91,7 @@ pub struct NftMetadataReq {
 #[derive(Debug, Deserialize)]
 pub struct RefreshMetadataReq {
     pub(crate) token_address: Address,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) chain: Chain,
     pub(crate) url: Url,
     pub(crate) url_antispam: Url,
@@ -270,7 +264,6 @@ impl UriMeta {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NftCommon {
     pub(crate) token_address: Address,
-    pub(crate) token_id: BigDecimal,
     pub(crate) amount: BigDecimal,
     pub(crate) owner_of: Address,
     pub(crate) token_hash: Option<String>,
@@ -295,6 +288,7 @@ pub struct Nft {
     #[serde(flatten)]
     pub(crate) common: NftCommon,
     pub(crate) chain: Chain,
+    pub(crate) token_id: BigUint,
     pub(crate) block_number_minted: Option<u64>,
     pub(crate) block_number: u64,
     pub(crate) contract_type: ContractType,
@@ -305,7 +299,7 @@ pub struct Nft {
 
 pub(crate) struct BuildNftFields {
     pub(crate) token_address: Address,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) amount: BigDecimal,
     pub(crate) owner_of: Address,
     pub(crate) contract_type: ContractType,
@@ -318,7 +312,6 @@ pub(crate) fn build_nft_with_empty_meta(nft_fields: BuildNftFields) -> Nft {
     Nft {
         common: NftCommon {
             token_address: nft_fields.token_address,
-            token_id: nft_fields.token_id,
             amount: nft_fields.amount,
             owner_of: nft_fields.owner_of,
             token_hash: None,
@@ -333,6 +326,7 @@ pub(crate) fn build_nft_with_empty_meta(nft_fields: BuildNftFields) -> Nft {
             possible_spam: nft_fields.possible_spam,
         },
         chain: nft_fields.chain,
+        token_id: nft_fields.token_id,
         block_number_minted: None,
         block_number: nft_fields.block_number,
         contract_type: nft_fields.contract_type,
@@ -351,6 +345,7 @@ pub(crate) struct NftFromMoralis {
     pub(crate) block_number_minted: Option<SerdeStringWrap<u64>>,
     pub(crate) block_number: SerdeStringWrap<u64>,
     pub(crate) contract_type: Option<ContractType>,
+    pub(crate) token_id: SerdeStringWrap<BigUint>,
 }
 
 #[derive(Debug)]
@@ -390,7 +385,7 @@ pub struct WithdrawErc1155 {
     pub(crate) chain: Chain,
     pub(crate) to: String,
     pub(crate) token_address: String,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) amount: Option<BigDecimal>,
     #[serde(default)]
     pub(crate) max: bool,
@@ -402,7 +397,7 @@ pub struct WithdrawErc721 {
     pub(crate) chain: Chain,
     pub(crate) to: String,
     pub(crate) token_address: String,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) fee: Option<WithdrawFee>,
 }
 
@@ -425,7 +420,7 @@ pub struct TransactionNftDetails {
     pub(crate) to: Vec<String>,
     pub(crate) contract_type: ContractType,
     pub(crate) token_address: String,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) amount: BigDecimal,
     pub(crate) fee_details: Option<TxFeeDetails>,
     /// The coin transaction belongs to
@@ -510,7 +505,6 @@ pub struct NftTransferCommon {
     pub(crate) value: Option<BigDecimal>,
     pub(crate) transaction_type: Option<String>,
     pub(crate) token_address: Address,
-    pub(crate) token_id: BigDecimal,
     pub(crate) from_address: Address,
     pub(crate) to_address: Address,
     pub(crate) amount: BigDecimal,
@@ -531,6 +525,7 @@ pub struct NftTransferHistory {
     #[serde(flatten)]
     pub(crate) common: NftTransferCommon,
     pub(crate) chain: Chain,
+    pub(crate) token_id: BigUint,
     pub(crate) block_number: u64,
     pub(crate) block_timestamp: u64,
     pub(crate) contract_type: ContractType,
@@ -557,6 +552,7 @@ pub(crate) struct NftTransferHistoryFromMoralis {
     pub(crate) block_number: SerdeStringWrap<u64>,
     pub(crate) block_timestamp: String,
     pub(crate) contract_type: Option<ContractType>,
+    pub(crate) token_id: SerdeStringWrap<BigUint>,
 }
 
 /// Represents the detailed transfer history of NFTs, including the total number of transfers
@@ -603,13 +599,13 @@ pub struct UpdateNftReq {
 #[derive(Debug, Deserialize, Eq, Hash, PartialEq)]
 pub struct NftTokenAddrId {
     pub(crate) token_address: String,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
 }
 
 #[derive(Debug)]
 pub struct TransferMeta {
     pub(crate) token_address: String,
-    pub(crate) token_id: BigDecimal,
+    pub(crate) token_id: BigUint,
     pub(crate) token_uri: Option<String>,
     pub(crate) token_domain: Option<String>,
     pub(crate) collection_name: Option<String>,
@@ -622,7 +618,7 @@ impl From<Nft> for TransferMeta {
     fn from(nft_db: Nft) -> Self {
         TransferMeta {
             token_address: eth_addr_to_hex(&nft_db.common.token_address),
-            token_id: nft_db.common.token_id,
+            token_id: nft_db.token_id,
             token_uri: nft_db.common.token_uri,
             token_domain: nft_db.common.token_domain,
             collection_name: nft_db.common.collection_name,

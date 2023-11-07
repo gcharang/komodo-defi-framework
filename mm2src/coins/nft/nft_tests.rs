@@ -9,7 +9,7 @@ use crate::nft::{check_moralis_ipfs_bafy, get_domain_from_url, process_metadata_
 use common::cross_test;
 use ethereum_types::Address;
 use mm2_net::transport::send_post_request_to_uri;
-use mm2_number::BigDecimal;
+use mm2_number::{BigDecimal, BigUint};
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 
@@ -163,7 +163,7 @@ cross_test!(test_add_get_nfts, {
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
-    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let token_id = BigUint::from_str(TOKEN_ID).unwrap();
     let nft = storage
         .get_nft(&chain, TOKEN_ADD.to_string(), token_id)
         .await
@@ -214,7 +214,7 @@ cross_test!(test_remove_nft, {
     let nft_list = nft_list();
     storage.add_nfts_to_list(chain, nft_list, 28056726).await.unwrap();
 
-    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let token_id = BigUint::from_str(TOKEN_ID).unwrap();
     let remove_rslt = storage
         .remove_nft_from_list(&chain, TOKEN_ADD.to_string(), token_id, 28056800)
         .await
@@ -245,11 +245,7 @@ cross_test!(test_nft_amount, {
     nft.common.amount -= BigDecimal::from(1);
     storage.update_nft_amount(&chain, nft.clone(), 25919800).await.unwrap();
     let amount = storage
-        .get_nft_amount(
-            &chain,
-            eth_addr_to_hex(&nft.common.token_address),
-            nft.common.token_id.clone(),
-        )
+        .get_nft_amount(&chain, eth_addr_to_hex(&nft.common.token_address), nft.token_id.clone())
         .await
         .unwrap()
         .unwrap();
@@ -264,7 +260,7 @@ cross_test!(test_nft_amount, {
         .await
         .unwrap();
     let amount = storage
-        .get_nft_amount(&chain, eth_addr_to_hex(&nft.common.token_address), nft.common.token_id)
+        .get_nft_amount(&chain, eth_addr_to_hex(&nft.common.token_address), nft.token_id)
         .await
         .unwrap()
         .unwrap();
@@ -287,7 +283,7 @@ cross_test!(test_refresh_metadata, {
     nft.common.symbol = Some(new_symbol.to_string());
     drop_mutability!(nft);
     let token_add = eth_addr_to_hex(&nft.common.token_address);
-    let token_id = nft.common.token_id.clone();
+    let token_id = nft.token_id.clone();
     storage.refresh_nft_metadata(&chain, nft).await.unwrap();
     let nft_upd = storage.get_nft(&chain, token_add, token_id).await.unwrap().unwrap();
     assert_eq!(new_symbol.to_string(), nft_upd.common.symbol.unwrap());
@@ -407,7 +403,7 @@ cross_test!(test_add_get_transfers, {
     let transfers = nft_transfer_history();
     storage.add_transfers_to_history(chain, transfers).await.unwrap();
 
-    let token_id = BigDecimal::from_str(TOKEN_ID).unwrap();
+    let token_id = BigUint::from_str(TOKEN_ID).unwrap();
     let transfer1 = storage
         .get_transfers_by_token_addr_id(chain, TOKEN_ADD.to_string(), token_id)
         .await

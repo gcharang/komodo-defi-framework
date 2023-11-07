@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use ethereum_types::Address;
 use mm2_err_handle::mm_error::MmResult;
 use mm2_err_handle::mm_error::{NotEqual, NotMmError};
-use mm2_number::BigDecimal;
+use mm2_number::{BigDecimal, BigUint};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
@@ -61,14 +61,14 @@ pub trait NftListStorageOps {
         &self,
         chain: &Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
     ) -> MmResult<Option<Nft>, Self::Error>;
 
     async fn remove_nft_from_list(
         &self,
         chain: &Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
         scanned_block: u64,
     ) -> MmResult<RemoveNftResult, Self::Error>;
 
@@ -76,7 +76,7 @@ pub trait NftListStorageOps {
         &self,
         chain: &Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
     ) -> MmResult<Option<String>, Self::Error>;
 
     async fn refresh_nft_metadata(&self, chain: &Chain, nft: Nft) -> MmResult<(), Self::Error>;
@@ -153,7 +153,7 @@ pub trait NftTransferHistoryStorageOps {
         &self,
         chain: Chain,
         token_address: String,
-        token_id: BigDecimal,
+        token_id: BigUint,
     ) -> MmResult<Vec<NftTransferHistory>, Self::Error>;
 
     async fn get_transfer_by_tx_hash_and_log_index(
