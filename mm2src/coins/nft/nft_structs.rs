@@ -290,7 +290,7 @@ pub struct Nft {
     #[serde(flatten)]
     pub(crate) common: NftCommon,
     pub(crate) chain: Chain,
-    #[serde(serialize_with = "serialize_token_id")]
+    #[serde(serialize_with = "serialize_token_id", deserialize_with = "deserialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) block_number_minted: Option<u64>,
     pub(crate) block_number: u64,
@@ -531,7 +531,7 @@ pub struct NftTransferHistory {
     #[serde(flatten)]
     pub(crate) common: NftTransferCommon,
     pub(crate) chain: Chain,
-    #[serde(serialize_with = "serialize_token_id")]
+    #[serde(serialize_with = "serialize_token_id", deserialize_with = "deserialize_token_id")]
     pub(crate) token_id: BigUint,
     pub(crate) block_number: u64,
     pub(crate) block_timestamp: u64,
