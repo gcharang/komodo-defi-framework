@@ -103,6 +103,19 @@ macro_rules! some_or_return_ok_none {
     };
 }
 
+#[macro_export]
+macro_rules! cross_test {
+    ($test_name:ident, $test_code:block) => {
+        #[cfg(not(target_arch = "wasm32"))]
+        #[tokio::test(flavor = "multi_thread")]
+        async fn $test_name() { $test_code }
+
+        #[cfg(target_arch = "wasm32")]
+        #[wasm_bindgen_test]
+        async fn $test_name() { $test_code }
+    };
+}
+
 #[macro_use]
 pub mod jsonrpc_client;
 #[macro_use]
