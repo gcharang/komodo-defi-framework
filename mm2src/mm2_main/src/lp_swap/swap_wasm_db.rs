@@ -8,7 +8,6 @@ pub use mm2_db::indexed_db::{cursor_prelude, DbTransactionError, DbTransactionRe
                              ItemId};
 pub use tables::{MySwapsFiltersTable, SavedSwapTable, SwapLockTable};
 
-const DB_NAME: &str = "swap";
 const DB_VERSION: u32 = 1;
 
 pub struct SwapDb {
@@ -17,7 +16,7 @@ pub struct SwapDb {
 
 #[async_trait]
 impl DbInstance for SwapDb {
-    fn db_name() -> &'static str { DB_NAME }
+    const DB_NAME: &'static str = "swap";
 
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
         let inner = IndexedDbBuilder::new(db_id)

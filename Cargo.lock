@@ -1042,6 +1042,7 @@ dependencies = [
  "mm2_core",
  "mm2_db",
  "mm2_err_handle",
+ "mm2_event_stream",
  "mm2_git",
  "mm2_io",
  "mm2_metamask",
@@ -1090,6 +1091,7 @@ dependencies = [
  "tiny-bip39",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite-wasm",
  "tonic",
  "tonic-build",
  "tower-service",
@@ -1129,6 +1131,7 @@ dependencies = [
  "lightning-invoice",
  "mm2_core",
  "mm2_err_handle",
+ "mm2_event_stream",
  "mm2_metamask",
  "mm2_metrics",
  "mm2_number",
@@ -2097,7 +2100,7 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -4340,6 +4343,7 @@ dependencies = [
  "async-trait",
  "cfg-if 1.0.0",
  "common",
+ "futures 0.3.28",
  "parking_lot 0.12.0",
  "serde",
  "tokio",
@@ -4995,6 +4999,12 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
+name = "openssl-probe"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ordered-float"
@@ -6324,6 +6334,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-native-certs"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
+dependencies = [
+ "openssl-probe",
+ "rustls-pemfile 1.0.2",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
 name = "rustls-pemfile"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6404,6 +6426,15 @@ dependencies = [
  "proc-macro2 1.0.69",
  "quote 1.0.33",
  "syn 1.0.95",
+]
+
+[[package]]
+name = "schannel"
+version = "0.1.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c3733bf4cf7ea0880754e19cb5a462007c4a8c1914bff372ccc95b464f1df88"
+dependencies = [
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -6516,6 +6547,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
 dependencies = [
  "zeroize",
+]
+
+[[package]]
+name = "security-framework"
+version = "2.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05b64fb303737d99b81884b2c63433e9ae28abebe5eb5045dcdd175dc2ecf4de"
+dependencies = [
+ "bitflags",
+ "core-foundation",
+ "core-foundation-sys",
+ "libc",
+ "security-framework-sys",
+]
+
+[[package]]
+name = "security-framework-sys"
+version = "2.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e932934257d3b408ed8f30db49d85ea163bfe74961f017f405b025af298f0c7a"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
 ]
 
 [[package]]
@@ -8303,6 +8357,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e80b39df6afcc12cdf752398ade96a6b9e99c903dfdc36e53ad10b9c366bca72"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls 0.20.4",
+ "rustls-native-certs",
+ "tokio",
+ "tokio-rustls",
+ "tungstenite",
+ "webpki 0.22.0",
+]
+
+[[package]]
+name = "tokio-tungstenite-wasm"
+version = "0.1.1-alpha.0"
+source = "git+https://github.com/KomodoPlatform/tokio-tungstenite-wasm?rev=d20abdb#d20abdbbb2f03e302e3a8d11a1736ec8b50d0f58"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "http 0.2.7",
+ "httparse",
+ "js-sys",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9430,7 +9517,7 @@ checksum = "0f9079049688da5871a7558ddacb7f04958862c703e68258594cb7a862b5e33f"
 [[package]]
 name = "zcash_client_backend"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "async-trait",
  "base64 0.13.0",
@@ -9438,7 +9525,6 @@ dependencies = [
  "bls12_381",
  "bs58 0.4.0",
  "ff 0.8.0",
- "futures 0.3.28",
  "group 0.8.0",
  "hex 0.4.3",
  "jubjub",
@@ -9456,13 +9542,12 @@ dependencies = [
 [[package]]
 name = "zcash_client_sqlite"
 version = "0.3.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "async-trait",
  "bech32",
  "bs58 0.4.0",
  "ff 0.8.0",
- "futures 0.3.28",
  "group 0.8.0",
  "jubjub",
  "libsqlite3-sys",
@@ -9479,7 +9564,7 @@ dependencies = [
 [[package]]
 name = "zcash_extras"
 version = "0.1.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "async-trait",
  "ff 0.8.0",
@@ -9495,7 +9580,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.0.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -9509,7 +9594,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "aes",
  "bitvec 0.18.5",
@@ -9539,7 +9624,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.5.0"
-source = "git+https://github.com/KomodoPlatform/librustzcash.git?rev=b381253#b3812539206e100d7fd5e70a2e42beb1cf2977cd"
+source = "git+https://github.com/KomodoPlatform/librustzcash.git?tag=k-1.4.0#debae777f20f5b5fd263e26877258f7600b52cab"
 dependencies = [
  "bellman",
  "blake2b_simd",

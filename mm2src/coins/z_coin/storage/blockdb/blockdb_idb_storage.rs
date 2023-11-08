@@ -50,7 +50,7 @@ pub struct BlockDbInner(IndexedDb);
 
 #[async_trait]
 impl DbInstance for BlockDbInner {
-    fn db_name() -> &'static str { DB_NAME }
+    const DB_NAME: &'static str = DB_NAME;
 
     async fn init(db_id: DbIdentifier) -> InitDbResult<Self> {
         let inner = IndexedDbBuilder::new(db_id)
