@@ -26,6 +26,7 @@ use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
 use ethereum_types::{Address, H256};
 use futures::compat::Future01CompatExt;
+use futures::future::join_all;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::send_post_request_to_uri;
 use mm2_number::{BigDecimal, BigUint};
@@ -187,18 +188,26 @@ async fn process_transfers_confirmations(
     history_list: &mut NftsTransferHistoryList,
 ) -> MmResult<(), TransferConfirmationsError> {
     let mut blocks_map = HashMap::with_capacity(chains.len());
-    for chain in chains.into_iter() {
-        let coin_enum = lp_coinfind_or_err(ctx, chain.to_ticker()).await?;
-        let current_block = match coin_enum {
-            MmCoinEnum::EthCoin(eth_coin) => current_block_impl(eth_coin).await?,
-            _ => {
-                return MmError::err(TransferConfirmationsError::CoinDoesntSupportNft {
-                    coin: coin_enum.ticker().to_owned(),
-                })
+
+    let futures = chains.into_iter().map(|chain| async move {
+        let ticker = chain.to_ticker();
+        let coin_enum = lp_coinfind_or_err(ctx, ticker).await?;
+        match coin_enum {
+            MmCoinEnum::EthCoin(eth_coin) => {
+                let current_block = current_block_impl(eth_coin).await?;
+                Ok((ticker, current_block))
             },
-        };
-        blocks_map.insert(chain.to_ticker(), current_block);
+            _ => MmError::err(TransferConfirmationsError::CoinDoesntSupportNft {
+                coin: coin_enum.ticker().to_owned(),
+            }),
+        }
+    });
+    let results = join_all(futures).await;
+    for result in results {
+        let (ticker, current_block) = result?;
+        blocks_map.insert(ticker, current_block);
     }
+
     for transfer in history_list.transfer_history.iter_mut() {
         let current_block = match blocks_map.get(transfer.chain.to_ticker()) {
             Some(block) => *block,
