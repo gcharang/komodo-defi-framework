@@ -90,12 +90,16 @@ impl BlockDbImpl {
     }
 
     pub(crate) async fn get_latest_block(&self) -> MmResult<u32, ZcashClientError> {
-        Ok(query_single_row(
-            &self.db.lock().unwrap(),
-            "SELECT height FROM compactblocks ORDER BY height DESC LIMIT 1",
-            [],
-            |row| row.get(0),
-        )?
+        let db = self.db.clone();
+        Ok(async_blocking(move || {
+            query_single_row(
+                &db.lock().unwrap(),
+                "SELECT height FROM compactblocks ORDER BY height DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .await?
         .unwrap_or(0))
     }
 
@@ -115,20 +119,27 @@ impl BlockDbImpl {
     }
 
     pub(crate) async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
-        self.db
-            .lock()
-            .unwrap()
-            .execute("DELETE from compactblocks WHERE height > ?1", [height])
-            .map_to_mm(|err| ZcoinStorageError::RemoveFromStorageErr(err.to_string()))
+        let db = self.db.clone();
+        async_blocking(move || {
+            db.lock()
+                .unwrap()
+                .execute("DELETE from compactblocks WHERE height > ?1", [height])
+                .map_to_mm(|err| ZcoinStorageError::RemoveFromStorageErr(err.to_string()))
+        })
+        .await
     }
 
     pub(crate) async fn get_earliest_block(&self) -> Result<u32, ZcashClientError> {
-        Ok(query_single_row(
-            &self.db.lock().unwrap(),
-            "SELECT MIN(height) from compactblocks",
-            [],
-            |row| row.get::<_, Option<u32>>(0),
-        )?
+        let db = self.db.clone();
+        Ok(async_blocking(move || {
+            query_single_row(
+                &db.lock().unwrap(),
+                "SELECT MIN(height) from compactblocks",
+                [],
+                |row| row.get::<_, Option<u32>>(0),
+            )
+        })
+        .await?
         .flatten()
         .unwrap_or(0))
     }

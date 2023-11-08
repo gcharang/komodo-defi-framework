@@ -402,7 +402,9 @@ pub enum ZcoinStorageError {
 }
 
 #[cfg(target_arch = "wasm32")]
-use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
+use mm2_db::indexed_db::cursor_prelude::*;
+#[cfg(target_arch = "wasm32")]
+use mm2_db::indexed_db::{DbTransactionError, InitDbError};
 use mm2_err_handle::mm_error::MmError;
 #[cfg(target_arch = "wasm32")] use zcash_extras::NoteId;
 

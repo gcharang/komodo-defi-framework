@@ -32,7 +32,6 @@
 #![feature(hash_raw_entry)]
 #![feature(stmt_expr_attributes)]
 #![feature(result_flattening)]
-#![feature(let_chains)]
 
 #[macro_use] extern crate common;
 #[macro_use] extern crate gstuff;
