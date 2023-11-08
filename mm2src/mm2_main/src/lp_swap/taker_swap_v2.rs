@@ -7,10 +7,11 @@ use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_taker_s
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
 use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFundingSpendArgs, GenTakerPaymentSpendArgs,
-            MmCoin, SendTakerFundingArgs, SpendPaymentArgs, SwapOps, SwapOpsV2, ToBytes, Transaction,
-            TxPreimageWithSig, ValidatePaymentInput, WaitForHTLCTxSpendArgs};
+            MmCoin, SendTakerFundingArgs, SpendPaymentArgs, SwapOpsV2, ToBytes, Transaction, TxPreimageWithSig,
+            ValidatePaymentInput, WaitForHTLCTxSpendArgs};
 use common::log::{debug, info, warn};
 use common::{bits256, Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
+use crypto::privkey::SerializableSecp256k1Keypair;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
@@ -25,6 +26,10 @@ use uuid::Uuid;
 cfg_native!(
     use crate::mm2::database::my_swaps::{get_swap_events, insert_new_swap_v2, set_swap_is_finished, update_swap_events};
     use db_common::sqlite::rusqlite::named_params;
+);
+
+cfg_wasm32!(
+    use crate::mm2::lp_swap::swap_wasm_db::SavedSwapTable;
 );
 
 // This is needed to have Debug on messages
@@ -175,15 +180,67 @@ impl StateMachineStorage for DummyTakerSwapStorage {
     type Event = TakerSwapEvent;
     type Error = MmError<TakerSwapStateMachineError>;
 
-    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> { todo!() }
+    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
+        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
+        let db = swaps_ctx.swap_db().await.unwrap();
+        let transaction = db.transaction().await.unwrap();
+        let table = transaction.table::<SavedSwapTable>().await.unwrap();
+
+        let saved_swap_json = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
+            Some((_item_id, SavedSwapTable { saved_swap, .. })) => saved_swap,
+            None => panic!("No swap with uuid {}", id),
+        };
+
+        let mut swap_repr: TakerSwapJsonRepr = serde_json::from_value(saved_swap_json).unwrap();
+        swap_repr.events.push(event);
+
+        let new_item = SavedSwapTable {
+            uuid: id,
+            saved_swap: serde_json::to_value(swap_repr).unwrap(),
+        };
+        table.replace_item_by_unique_index("uuid", id, &new_item).await.unwrap();
+        Ok(())
+    }
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
 
     async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> { todo!() }
 }
 
+#[derive(Serialize, Deserialize)]
+struct TakerSwapJsonRepr {
+    /// Maker coin
+    maker_coin: String,
+    /// The amount swapped by maker.
+    maker_volume: MmNumber,
+    /// The secret used in taker funding immediate refund path.
+    taker_secret: BytesJson,
+    /// Algorithm used to hash the swap secret.
+    secret_hash_algo: SecretHashAlgo,
+    /// The timestamp when the swap was started.
+    started_at: u64,
+    /// The duration of HTLC timelock in seconds.
+    lock_duration: u64,
+    /// Taker coin
+    taker_coin: String,
+    /// The amount swapped by taker.
+    taker_volume: MmNumber,
+    /// Premium amount, which might be paid to maker as additional reward.
+    taker_premium: MmNumber,
+    /// DEX fee amount
+    dex_fee: MmNumber,
+    /// Swap transactions' confirmations settings
+    conf_settings: SwapConfirmationsSettings,
+    /// UUID of the swap
+    uuid: Uuid,
+    /// If Some, used to sign P2P messages of this swap.
+    p2p_keypair: Option<SerializableSecp256k1Keypair>,
+    /// Swap events
+    events: Vec<TakerSwapEvent>,
+}
+
 /// Represents the state machine for taker's side of the Trading Protocol Upgrade swap (v2).
-pub struct TakerSwapStateMachine<MakerCoin, TakerCoin> {
+pub struct TakerSwapStateMachine<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> {
     /// MM2 context.
     pub ctx: MmArc,
     /// Storage.
@@ -218,7 +275,7 @@ pub struct TakerSwapStateMachine<MakerCoin, TakerCoin> {
     pub taker_secret: H256,
 }
 
-impl<MakerCoin, TakerCoin> TakerSwapStateMachine<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> TakerSwapStateMachine<MakerCoin, TakerCoin> {
     fn maker_payment_conf_timeout(&self) -> u64 { self.started_at + self.lock_duration * 2 / 3 }
 
     fn taker_funding_locktime(&self) -> u64 { self.started_at + self.lock_duration * 3 }
@@ -234,9 +291,29 @@ impl<MakerCoin, TakerCoin> TakerSwapStateMachine<MakerCoin, TakerCoin> {
             SecretHashAlgo::SHA256 => sha256(self.taker_secret.as_slice()).take().into(),
         }
     }
+
+    #[cfg(target_arch = "wasm32")]
+    fn to_json_repr(&self) -> TakerSwapJsonRepr {
+        TakerSwapJsonRepr {
+            maker_coin: self.maker_coin.ticker().into(),
+            maker_volume: self.maker_volume.clone(),
+            taker_secret: self.taker_secret.to_vec().into(),
+            secret_hash_algo: self.secret_hash_algo,
+            started_at: self.started_at,
+            lock_duration: self.lock_duration,
+            taker_coin: self.taker_coin.ticker().into(),
+            taker_volume: self.taker_volume.clone(),
+            taker_premium: self.taker_premium.clone(),
+            dex_fee: self.dex_fee.clone(),
+            conf_settings: self.conf_settings,
+            uuid: self.uuid,
+            p2p_keypair: self.p2p_keypair.map(Into::into),
+            events: Vec::new(),
+        }
+    }
 }
 
-impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> StorableStateMachine
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
     for TakerSwapStateMachine<MakerCoin, TakerCoin>
 {
     type Storage = DummyTakerSwapStorage;
@@ -269,12 +346,14 @@ impl<MakerCoin, TakerCoin> Default for Initialize<MakerCoin, TakerCoin> {
     }
 }
 
-impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> InitialState for Initialize<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> InitialState
+    for Initialize<MakerCoin, TakerCoin>
+{
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 }
 
 #[async_trait]
-impl<MakerCoin: MmCoin + SwapOpsV2, TakerCoin: MmCoin + SwapOpsV2> State for Initialize<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State for Initialize<MakerCoin, TakerCoin> {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
@@ -301,6 +380,19 @@ impl<MakerCoin: MmCoin + SwapOpsV2, TakerCoin: MmCoin + SwapOpsV2> State for Ini
                 ":taker_coin_nota": state_machine.conf_settings.taker_coin_nota
             };
             insert_new_swap_v2(&state_machine.ctx, sql_params).unwrap();
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let swaps_ctx = SwapsContext::from_ctx(&state_machine.ctx).unwrap();
+            let db = swaps_ctx.swap_db().await.unwrap();
+            let transaction = db.transaction().await.unwrap();
+            let table = transaction.table::<SavedSwapTable>().await.unwrap();
+            let item = SavedSwapTable {
+                uuid: state_machine.uuid,
+                saved_swap: serde_json::to_value(state_machine.to_json_repr()).unwrap(),
+            };
+            table.add_item(&item).await.unwrap();
         }
 
         subscribe_to_topic(&state_machine.ctx, state_machine.p2p_topic.clone());
@@ -358,7 +450,9 @@ struct Initialized<MakerCoin, TakerCoin> {
 
 impl<MakerCoin, TakerCoin> TransitionFrom<Initialize<MakerCoin, TakerCoin>> for Initialized<MakerCoin, TakerCoin> {}
 
-impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> StorableState for Initialized<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
+    for Initialized<MakerCoin, TakerCoin>
+{
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
@@ -566,7 +660,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
     }
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: SwapOpsV2> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for Negotiated<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -691,7 +785,7 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> TransitionFrom<Negoti
 {
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: SwapOpsV2> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for TakerFundingSent<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -723,7 +817,7 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> TransitionFrom<TakerF
 {
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: SwapOpsV2> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for MakerPaymentAndFundingSpendPreimgReceived<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -900,7 +994,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
     }
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: SwapOpsV2> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for TakerPaymentSent<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -948,7 +1042,7 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes>
 }
 
 #[async_trait]
-impl<MakerCoin: SwapOps + CoinAssocTypes + Send + 'static, TakerCoin: MmCoin + SwapOpsV2> State
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
     for TakerFundingRefundRequired<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -958,7 +1052,7 @@ impl<MakerCoin: SwapOps + CoinAssocTypes + Send + 'static, TakerCoin: MmCoin + S
     }
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: CoinAssocTypes + Send + 'static> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for TakerFundingRefundRequired<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1000,7 +1094,7 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> TransitionFrom<MakerP
 }
 
 #[async_trait]
-impl<MakerCoin: CoinAssocTypes + Send + Sync + 'static, TakerCoin: CoinAssocTypes + Send + Sync + 'static> State
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
     for TakerPaymentRefundRequired<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1014,7 +1108,7 @@ impl<MakerCoin: CoinAssocTypes + Send + Sync + 'static, TakerCoin: CoinAssocType
     }
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: CoinAssocTypes + Send + 'static> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for TakerPaymentRefundRequired<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1147,7 +1241,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
     }
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: SwapOpsV2> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for MakerPaymentConfirmed<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1252,7 +1346,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
     }
 }
 
-impl<MakerCoin: CoinAssocTypes + Send + 'static, TakerCoin: SwapOpsV2> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for TakerPaymentSpent<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1287,7 +1381,7 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: SwapOpsV2> TransitionFrom<TakerPaymen
 {
 }
 
-impl<MakerCoin: Send + 'static, TakerCoin: CoinAssocTypes + Send + 'static> StorableState
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
     for MakerPaymentSpent<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1308,7 +1402,7 @@ impl<MakerCoin: Send + 'static, TakerCoin: CoinAssocTypes + Send + 'static> Stor
 }
 
 #[async_trait]
-impl<MakerCoin: Send + Sync + 'static, TakerCoin: CoinAssocTypes + Send + Sync + 'static> State
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
     for MakerPaymentSpent<MakerCoin, TakerCoin>
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
@@ -1353,7 +1447,7 @@ impl<MakerCoin, TakerCoin> Aborted<MakerCoin, TakerCoin> {
 }
 
 #[async_trait]
-impl<MakerCoin: Send + Sync + 'static, TakerCoin: Send + Sync + 'static> LastState for Aborted<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> LastState for Aborted<MakerCoin, TakerCoin> {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(
@@ -1364,7 +1458,9 @@ impl<MakerCoin: Send + Sync + 'static, TakerCoin: Send + Sync + 'static> LastSta
     }
 }
 
-impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> StorableState for Aborted<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
+    for Aborted<MakerCoin, TakerCoin>
+{
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
@@ -1399,7 +1495,9 @@ impl<MakerCoin, TakerCoin> Completed<MakerCoin, TakerCoin> {
     }
 }
 
-impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> StorableState for Completed<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
+    for Completed<MakerCoin, TakerCoin>
+{
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
@@ -1408,7 +1506,7 @@ impl<MakerCoin: Send + 'static, TakerCoin: Send + 'static> StorableState for Com
 }
 
 #[async_trait]
-impl<MakerCoin: Send + Sync + 'static, TakerCoin: Send + Sync + 'static> LastState for Completed<MakerCoin, TakerCoin> {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> LastState for Completed<MakerCoin, TakerCoin> {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(
