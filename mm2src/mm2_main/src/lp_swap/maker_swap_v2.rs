@@ -193,7 +193,14 @@ impl StateMachineStorage for DummyMakerSwapStorage {
         let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
         let db = swaps_ctx.swap_db().await.unwrap();
         let transaction = db.transaction().await.unwrap();
-        let table = transaction.table::<SavedSwapTable>().await.unwrap();
+        let table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
+        let mut item = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
+            Some((_item_id, item)) => item,
+            None => panic!("No swap with uuid {}", id),
+        };
+        item.is_finished = true;
+        table.replace_item_by_unique_index("uuid", id, &item).await.unwrap();
+        Ok(())
     }
 }
 

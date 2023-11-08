@@ -29,7 +29,7 @@ cfg_native!(
 );
 
 cfg_wasm32!(
-    use crate::mm2::lp_swap::swap_wasm_db::SavedSwapTable;
+    use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
 );
 
 // This is needed to have Debug on messages
@@ -204,7 +204,19 @@ impl StateMachineStorage for DummyTakerSwapStorage {
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
 
-    async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> { todo!() }
+    async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
+        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
+        let db = swaps_ctx.swap_db().await.unwrap();
+        let transaction = db.transaction().await.unwrap();
+        let table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
+        let mut item = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
+            Some((_item_id, item)) => item,
+            None => panic!("No swap with uuid {}", id),
+        };
+        item.is_finished = true;
+        table.replace_item_by_unique_index("uuid", id, &item).await.unwrap();
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -393,6 +405,18 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
                 saved_swap: serde_json::to_value(state_machine.to_json_repr()).unwrap(),
             };
             table.add_item(&item).await.unwrap();
+
+            let filters_table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
+
+            let item = MySwapsFiltersTable {
+                uuid: state_machine.uuid,
+                my_coin: state_machine.taker_coin.ticker().into(),
+                other_coin: state_machine.maker_coin.ticker().into(),
+                started_at: state_machine.started_at as u32,
+                is_finished: false,
+                swap_type: TAKER_SWAP_V2_TYPE,
+            };
+            filters_table.add_item(&item).await.unwrap();
         }
 
         subscribe_to_topic(&state_machine.ctx, state_machine.p2p_topic.clone());

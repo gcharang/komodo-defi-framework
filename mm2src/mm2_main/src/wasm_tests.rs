@@ -189,6 +189,8 @@ async fn trade_test_rick_and_morty() {
 
 #[wasm_bindgen_test]
 async fn trade_test_rick_and_morty_v2() {
+    register_wasm_log();
+
     let coins = json!([rick_conf(), morty_conf()]);
 
     // let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
