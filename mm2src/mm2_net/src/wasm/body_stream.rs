@@ -288,14 +288,9 @@ impl Body for ResponseBody {
     type Error = PostGrpcWebErr;
 
     fn poll_data(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        // Check if there's already some data in buffer and return that
-        if self.data.is_some() {
-            return Poll::Ready(self.data.take().map(|d| Ok(d.freeze())));
-        }
-
         // If reading data is finished return `None`
         if self.state.finished_data() {
-            return Poll::Ready(None);
+            return Poll::Ready(self.data.take().map(|d| Ok(d.freeze())));
         }
 
         loop {
@@ -309,12 +304,9 @@ impl Body for ResponseBody {
                 return Poll::Ready(Some(Err(e)));
             }
 
-            if self.data.is_some() {
-                // If data is available in buffer, return that
-                return Poll::Ready(self.data.take().map(|d| Ok(d.freeze())));
-            } else if self.state.finished_data() {
+            if self.state.finished_data() {
                 // If we finished reading data continue return `None`
-                return Poll::Ready(None);
+                return Poll::Ready(self.data.take().map(|d| Ok(d.freeze())));
             } else if self.finished_stream {
                 // If stream is finished but data is not finished return error
                 return Poll::Ready(Some(Err(PostGrpcWebErr::InvalidRequest("Bad response".to_string()))));
