@@ -112,8 +112,10 @@ pub struct MmCtx {
     /// The RPC sender forwarding requests to writing part of underlying stream.
     #[cfg(target_arch = "wasm32")]
     pub wasm_rpc: Constructible<WasmRpcSender>,
+    /// Deprecated, please use `async_sqlite_connection` for new implementations.
     #[cfg(not(target_arch = "wasm32"))]
     pub sqlite_connection: Constructible<Arc<Mutex<Connection>>>,
+    /// Deprecated, please use `async_sqlite_connection` for new implementations.
     #[cfg(not(target_arch = "wasm32"))]
     pub shared_sqlite_conn: Constructible<Arc<Mutex<Connection>>>,
     pub mm_version: String,
