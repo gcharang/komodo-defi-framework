@@ -26,9 +26,9 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 #[derive(Clone)]
 pub struct DataConnStmtCacheWrapper {
     #[cfg(not(target_arch = "wasm32"))]
-    pub cache: DataConnStmtCacheAsync<ZcoinConsensusParams>,
+    cache: DataConnStmtCacheAsync<ZcoinConsensusParams>,
     #[cfg(target_arch = "wasm32")]
-    pub cache: DataConnStmtCacheWasm,
+    cache: DataConnStmtCacheWasm,
 }
 
 impl DataConnStmtCacheWrapper {
@@ -37,9 +37,11 @@ impl DataConnStmtCacheWrapper {
     #[cfg(target_arch = "wasm32")]
     pub fn new(cache: DataConnStmtCacheWasm) -> Self { Self { cache } }
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn inner(&self) -> DataConnStmtCacheAsync<ZcoinConsensusParams> { self.clone().cache }
+    #[inline]
+    pub fn inner(&self) -> &DataConnStmtCacheAsync<ZcoinConsensusParams> { &self.cache }
     #[cfg(target_arch = "wasm32")]
-    pub fn inner(&self) -> DataConnStmtCacheWasm { self.clone().cache }
+    #[inline]
+    pub fn inner(&self) -> &DataConnStmtCacheWasm { &self.cache }
 }
 
 pub struct CompactBlockRow {
@@ -84,34 +86,33 @@ pub async fn validate_chain(
     Ok(())
 }
 
-/// Scans at most `limit` new blocks added to the cache for any transactions received by
+/// Scans new blocks added to the cache for any transactions received by
 /// the tracked accounts.
 ///
-/// This function will return without error after scanning at most `limit` new blocks, to
-/// enable the caller to update their UI with scanning progress. Repeatedly calling this
-/// function will process sequential ranges of blocks, and is equivalent to calling
-/// `scan_cached_blocks` and passing `None` for the optional `limit` value.
+/// This function returns without error after scanning new blocks, allowing
+/// the caller to update their UI with scanning progress. Repeatedly calling this
+/// function will process sequential ranges of blocks.
 ///
-/// This function pays attention only to cached blocks with heights greater than the
-/// highest scanned block in `data`. Cached blocks with lower heights are not verified
-/// against previously-scanned blocks. In particular, this function **assumes** that the
-/// caller is handling rollbacks.
+/// The function focuses on cached blocks with heights greater than the
+/// highest scanned block in `data`. Cached blocks with lower heights are not
+/// verified against previously-scanned blocks. This function **assumes** that
+/// the caller is handling rollbacks.
 ///
-/// For brand-new light client databases, this function starts scanning from the Sapling
-/// activation height. This height can be fast-forwarded to a more recent block by
-/// initializing the client database with a starting block (for example, calling
+/// For brand-new light client databases, the function starts scanning from the
+/// Sapling activation height. This height can be fast-forwarded to a more recent
+/// block by initializing the client database with a starting block (e.g., calling
 /// `init_blocks_table` before this function if using `zcash_client_sqlite`).
 ///
-/// Scanned blocks are required to be height-sequential. If a block is missing from the
-/// cache, an error will be returned with kind [`ChainInvalid::BlockHeightDiscontinuity`].
+/// Scanned blocks are required to be height-sequential. If a block is missing from
+/// the cache, an error will be returned with kind [`ChainInvalid::BlockHeightDiscontinuity`].
 ///
 pub async fn scan_cached_block(
-    data: DataConnStmtCacheWrapper,
+    data: &DataConnStmtCacheWrapper,
     params: &ZcoinConsensusParams,
     block: &CompactBlock,
     last_height: &mut BlockHeight,
 ) -> Result<(), ValidateBlocksError> {
-    let mut data_guard = data.inner();
+    let mut data_guard = data.inner().clone();
     // Fetch the ExtendedFullViewingKeys we are tracking
     let extfvks = data_guard.get_extended_full_viewing_keys().await?;
     let extfvks: Vec<(&AccountId, &ExtendedFullViewingKey)> = extfvks.iter().collect();

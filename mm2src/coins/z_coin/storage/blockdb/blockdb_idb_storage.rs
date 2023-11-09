@@ -256,7 +256,7 @@ impl BlockDbImpl {
                     validate_chain(block, &mut prev_height, &mut prev_hash).await?;
                 },
                 BlockProcessingMode::Scan(data) => {
-                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                    scan_cached_block(data, &params, &block, &mut from_height).await?;
                 },
             }
         }

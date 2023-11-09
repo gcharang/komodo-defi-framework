@@ -45,20 +45,25 @@ impl BlockDbImpl {
     #[cfg(all(not(test)))]
     pub async fn new(_ctx: MmArc, ticker: String, path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
         let conn = Connection::open(path).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
-        run_optimization_pragmas(&conn).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS compactblocks (
+        let conn = Arc::new(Mutex::new(conn));
+        let clone_db = conn.clone();
+
+        async_blocking(move || {
+            let clone_db = clone_db.lock().unwrap();
+            run_optimization_pragmas(&clone_db).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            clone_db
+                .execute(
+                    "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
             data BLOB NOT NULL
         )",
-            [],
-        )
-        .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+                    [],
+                )
+                .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
 
-        Ok(Self {
-            db: Arc::new(Mutex::new(conn)),
-            ticker,
+            Ok(Self { db: conn, ticker })
         })
+        .await
     }
 
     #[cfg(all(test))]
@@ -217,7 +222,7 @@ impl BlockDbImpl {
                     validate_chain(block, &mut prev_height, &mut prev_hash).await?;
                 },
                 BlockProcessingMode::Scan(data) => {
-                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                    scan_cached_block(data, &params, &block, &mut from_height).await?;
                 },
             }
         }

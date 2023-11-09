@@ -13,13 +13,6 @@ use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
-fn run_optimization_pragmas_helper(w: &WalletDbAsync<ZcoinConsensusParams>) -> MmResult<(), ZcoinClientInitError> {
-    let conn = w.inner();
-    let conn = conn.lock().unwrap();
-    run_optimization_pragmas(conn.sql_conn()).map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-    Ok(())
-}
-
 /// `create_wallet_db` is responsible for creating a new Zcoin wallet database, initializing it
 /// with the provided parameters, and executing various initialization steps. These steps include checking and
 /// potentially rewinding the database to a specified synchronization height, performing optimizations, and
@@ -34,7 +27,14 @@ pub async fn create_wallet_db(
     let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
         .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
 
-    run_optimization_pragmas_helper(&db)?;
+    let db_clone = db.inner().clone();
+    async_blocking(move || {
+        let db_clone = db_clone.lock().unwrap();
+        run_optimization_pragmas(db_clone.sql_conn())
+    })
+    .await
+    .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+
     init_wallet_db(&db)
         .await
         .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
