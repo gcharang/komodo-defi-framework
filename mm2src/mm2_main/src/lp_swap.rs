@@ -75,7 +75,7 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, pub_sub_topic, PeerId, TopicPrefix};
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
 use parking_lot::Mutex as PaMutex;
-use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
+use rpc::v1::types::{Bytes as BytesJson, Bytes, H256 as H256Json};
 use secp256k1::{PublicKey, SecretKey, Signature};
 use serde::Serialize;
 use serde_json::{self as json, Value as Json};
@@ -113,8 +113,6 @@ pub(crate) mod taker_restart;
 #[path = "lp_swap/swap_wasm_db.rs"]
 mod swap_wasm_db;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::mm2::database::my_swaps::{get_swap_data_for_rpc, get_swap_type};
 pub use check_balance::{check_other_coin_balance_for_swap, CheckBalanceError, CheckBalanceResult};
 use crypto::CryptoCtx;
 use keys::{KeyPair, SECP_SIGN, SECP_VERIFY};
@@ -1007,12 +1005,152 @@ impl From<SavedSwap> for MySwapStatusResponse {
     }
 }
 
-/// Returns the status of swap performed on `my` node
 #[cfg(not(target_arch = "wasm32"))]
+use crate::mm2::database::my_swaps::SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID;
+#[cfg(not(target_arch = "wasm32"))]
+use db_common::sqlite::rusqlite::{Result as SqlResult, Row};
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> SqlResult<u8> {
+    let conn = ctx.sqlite_connection();
+    const SELECT_SWAP_TYPE_BY_UUID: &str = "SELECT swap_type FROM my_swaps WHERE uuid = :uuid;";
+    let mut stmt = conn.prepare(SELECT_SWAP_TYPE_BY_UUID)?;
+    let swap_type = stmt.query_row(&[(":uuid", &uuid.to_string())], |row| row.get(0))?;
+    Ok(swap_type)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> Result<u8, String> {
+    use crate::mm2::lp_swap::swap_wasm_db::MySwapsFiltersTable;
+
+    let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
+    let db = swaps_ctx.swap_db().await.unwrap();
+    let transaction = db.transaction().await.unwrap();
+    let table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
+    let item = match table.get_item_by_unique_index("uuid", uuid).await.unwrap() {
+        Some((_item_id, item)) => item,
+        None => return Err(format!("No swap with uuid {}", uuid)),
+    };
+    Ok(item.swap_type)
+}
+
+/// Represents data of the swap used for RPC, omits fields that should be kept in secret
+#[derive(Debug, Serialize)]
+struct MySwapForRpc {
+    my_coin: String,
+    other_coin: String,
+    uuid: Uuid,
+    started_at: i64,
+    is_finished: bool,
+    events_json: String,
+    maker_volume: MmNumberMultiRepr,
+    taker_volume: MmNumberMultiRepr,
+    premium: MmNumberMultiRepr,
+    dex_fee: MmNumberMultiRepr,
+    lock_duration: i64,
+    maker_coin_confs: i64,
+    maker_coin_nota: bool,
+    taker_coin_confs: i64,
+    taker_coin_nota: bool,
+}
+
+impl MySwapForRpc {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn from_row(row: &Row) -> SqlResult<Self> {
+        Ok(Self {
+            my_coin: row.get(0)?,
+            other_coin: row.get(1)?,
+            uuid: row.get(2)?,
+            started_at: row.get(3)?,
+            is_finished: row.get(4)?,
+            events_json: row.get(5)?,
+            maker_volume: row.get(6)?,
+            taker_volume: row.get(7)?,
+            premium: row.get(8)?,
+            dex_fee: row.get(9)?,
+            secret_hash: row.get(10)?,
+            secret_hash_algo: row.get(11)?,
+            lock_duration: row.get(12)?,
+            maker_coin_confs: row.get(13)?,
+            maker_coin_nota: row.get(14)?,
+            taker_coin_confs: row.get(15)?,
+            taker_coin_nota: row.get(16)?,
+        })
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> SqlResult<MySwapForRpc> {
+    let conn = ctx.sqlite_connection();
+    let mut stmt = conn.prepare(SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID)?;
+    let swap_data = stmt.query_row(&[(":uuid", &uuid.to_string())], MySwapForRpc::from_row)?;
+    Ok(swap_data)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Result<MySwapForRpc, String> {
+    use crate::mm2::lp_swap::swap_wasm_db::SavedSwapTable;
+    use maker_swap_v2::MakerSwapJsonRepr;
+    use taker_swap_v2::TakerSwapJsonRepr;
+
+    let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
+    let db = swaps_ctx.swap_db().await.unwrap();
+    let transaction = db.transaction().await.unwrap();
+    let table = transaction.table::<SavedSwapTable>().await.unwrap();
+    let item = match table.get_item_by_unique_index("uuid", uuid).await.unwrap() {
+        Some((_item_id, item)) => item,
+        None => return Err(format!("No swap with uuid {}", uuid)),
+    };
+
+    match swap_type {
+        MAKER_SWAP_V2_TYPE => {
+            let json_repr: MakerSwapJsonRepr = serde_json::from_value(item.saved_swap).unwrap();
+            Ok(MySwapForRpc {
+                my_coin: json_repr.maker_coin,
+                other_coin: json_repr.taker_coin,
+                uuid: json_repr.uuid,
+                started_at: json_repr.started_at as i64,
+                is_finished: false,
+                events_json: json::to_string(&json_repr.events).unwrap(),
+                maker_volume: json_repr.maker_volume.into(),
+                taker_volume: json_repr.taker_volume.into(),
+                premium: json_repr.taker_premium.into(),
+                dex_fee: json_repr.dex_fee_amount.into(),
+                lock_duration: json_repr.lock_duration as i64,
+                maker_coin_confs: json_repr.conf_settings.maker_coin_confs as i64,
+                maker_coin_nota: json_repr.conf_settings.maker_coin_nota,
+                taker_coin_confs: json_repr.conf_settings.taker_coin_confs as i64,
+                taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
+            })
+        },
+        TAKER_SWAP_V2_TYPE => {
+            let json_repr: TakerSwapJsonRepr = serde_json::from_value(item.saved_swap).unwrap();
+            Ok(MySwapForRpc {
+                my_coin: json_repr.taker_coin,
+                other_coin: json_repr.maker_coin,
+                uuid: json_repr.uuid,
+                started_at: json_repr.started_at as i64,
+                is_finished: false,
+                events_json: json::to_string(&json_repr.events).unwrap(),
+                maker_volume: json_repr.maker_volume.into(),
+                taker_volume: json_repr.taker_volume.into(),
+                premium: json_repr.taker_premium.into(),
+                dex_fee: json_repr.dex_fee.into(),
+                lock_duration: json_repr.lock_duration as i64,
+                maker_coin_confs: json_repr.conf_settings.maker_coin_confs as i64,
+                maker_coin_nota: json_repr.conf_settings.maker_coin_nota,
+                taker_coin_confs: json_repr.conf_settings.taker_coin_confs as i64,
+                taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
+            })
+        },
+        unsupported_type => Err(format!("Got unsupported swap type {}", unsupported_type)),
+    }
+}
+
+/// Returns the status of swap performed on `my` node
 pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
     let uuid: Uuid = try_s!(json::from_value(req["params"]["uuid"].clone()));
-    let uuid_str = uuid.to_string();
-    let swap_type = try_s!(get_swap_type(&ctx.sqlite_connection(), &uuid_str));
+    let swap_type = try_s!(get_swap_type(&ctx, &uuid).await);
 
     match swap_type {
         LEGACY_SWAP_TYPE => {
@@ -1027,27 +1165,13 @@ pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, 
             Ok(try_s!(Response::builder().body(res)))
         },
         MAKER_SWAP_V2_TYPE | TAKER_SWAP_V2_TYPE => {
-            let swap_data = try_s!(get_swap_data_for_rpc(&ctx.sqlite_connection(), &uuid_str));
+            let swap_data = try_s!(get_swap_data_for_rpc(&ctx, &uuid, swap_type).await);
             let res_js = json!({ "result": swap_data });
             let res = try_s!(json::to_vec(&res_js));
             Ok(try_s!(Response::builder().body(res)))
         },
         unsupported_type => ERR!("Got unsupported swap type from DB: {}", unsupported_type),
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, String> {
-    let uuid: Uuid = try_s!(json::from_value(req["params"]["uuid"].clone()));
-    let status = match SavedSwap::load_my_swap_from_db(&ctx, uuid).await {
-        Ok(Some(status)) => status,
-        Ok(None) => return Err("swap data is not found".to_owned()),
-        Err(e) => return ERR!("{}", e),
-    };
-
-    let res_js = json!({ "result": MySwapStatusResponse::from(status) });
-    let res = try_s!(json::to_vec(&res_js));
-    Ok(try_s!(Response::builder().body(res)))
 }
 
 #[cfg(target_arch = "wasm32")]

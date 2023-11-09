@@ -2064,7 +2064,7 @@ pub fn find_metrics_in_json(
     })
 }
 
-pub async fn my_swap_status(mm: &MarketMakerIt, uuid: &str) -> Json {
+pub async fn my_swap_status(mm: &MarketMakerIt, uuid: &str) -> Result<Json, String> {
     let response = mm
         .rpc(&json!({
             "userpass": mm.userpass,
@@ -2075,8 +2075,27 @@ pub async fn my_swap_status(mm: &MarketMakerIt, uuid: &str) -> Json {
         }))
         .await
         .unwrap();
-    assert!(response.0.is_success(), "!status of {}: {}", uuid, response.1);
-    json::from_str(&response.1).unwrap()
+
+    if !response.0.is_success() {
+        return Err(format!("!status of {}: {}", uuid, response.1));
+    }
+
+    Ok(json::from_str(&response.1).unwrap())
+}
+
+pub async fn wait_for_swap_status(mm: &MarketMakerIt, uuid: &str, wait_sec: i64) {
+    let wait_until = get_utc_timestamp() + wait_sec;
+    loop {
+        if my_swap_status(mm, uuid).await.is_ok() {
+            break;
+        }
+
+        if get_utc_timestamp() > wait_until {
+            panic!("Timed out waiting for swap {} status", uuid);
+        }
+
+        Timer::sleep(0.5).await;
+    }
 }
 
 pub async fn wait_for_swap_contract_negotiation(mm: &MarketMakerIt, swap: &str, expected_contract: Json, until: i64) {
@@ -2085,7 +2104,7 @@ pub async fn wait_for_swap_contract_negotiation(mm: &MarketMakerIt, swap: &str, 
             panic!("Timed out");
         }
 
-        let swap_status = my_swap_status(mm, swap).await;
+        let swap_status = my_swap_status(mm, swap).await.unwrap();
         let events = swap_status["result"]["events"].as_array().unwrap();
         if events.len() < 2 {
             Timer::sleep(1.).await;
@@ -2111,7 +2130,7 @@ pub async fn wait_for_swap_negotiation_failure(mm: &MarketMakerIt, swap: &str, u
             panic!("Timed out");
         }
 
-        let swap_status = my_swap_status(mm, swap).await;
+        let swap_status = my_swap_status(mm, swap).await.unwrap();
         let events = swap_status["result"]["events"].as_array().unwrap();
         if events.len() < 2 {
             Timer::sleep(1.).await;
@@ -2125,7 +2144,7 @@ pub async fn wait_for_swap_negotiation_failure(mm: &MarketMakerIt, swap: &str, u
 
 /// Helper function requesting my swap status and checking it's events
 pub async fn check_my_swap_status(mm: &MarketMakerIt, uuid: &str, maker_amount: BigDecimal, taker_amount: BigDecimal) {
-    let status_response = my_swap_status(mm, uuid).await;
+    let status_response = my_swap_status(mm, uuid).await.unwrap();
     let swap_type = status_response["result"]["type"].as_str().unwrap();
 
     let success_events: Vec<String> = json::from_value(status_response["result"]["success_events"].clone()).unwrap();
@@ -2161,7 +2180,7 @@ pub async fn check_my_swap_status_amounts(
     maker_amount: BigDecimal,
     taker_amount: BigDecimal,
 ) {
-    let status_response = my_swap_status(mm, &uuid.to_string()).await;
+    let status_response = my_swap_status(mm, &uuid.to_string()).await.unwrap();
 
     let events_array = status_response["result"]["events"].as_array().unwrap();
     let actual_maker_amount = json::from_value(events_array[0]["event"]["data"]["maker_amount"].clone()).unwrap();
@@ -2928,16 +2947,8 @@ pub async fn start_swaps(
 
     for uuid in uuids.iter() {
         // ensure the swaps are started
-        let expected_log = format!("Taker swap {} has successfully started", uuid);
-        taker
-            .wait_for_log(10., |log| log.contains(&expected_log))
-            .await
-            .unwrap();
-        let expected_log = format!("Maker swap {} has successfully started", uuid);
-        maker
-            .wait_for_log(10., |log| log.contains(&expected_log))
-            .await
-            .unwrap()
+        wait_for_swap_status(taker, uuid, 10).await;
+        wait_for_swap_status(maker, uuid, 10).await;
     }
 
     uuids
@@ -2952,14 +2963,14 @@ pub async fn wait_for_swaps_finish_and_check_status(
 ) {
     for uuid in uuids.iter() {
         maker
-            .wait_for_log(900., |log| {
+            .wait_for_log(30., |log| {
                 log.contains(&format!("[swap uuid={}] Finished", uuid.as_ref()))
             })
             .await
             .unwrap();
 
         taker
-            .wait_for_log(900., |log| {
+            .wait_for_log(30., |log| {
                 log.contains(&format!("[swap uuid={}] Finished", uuid.as_ref()))
             })
             .await

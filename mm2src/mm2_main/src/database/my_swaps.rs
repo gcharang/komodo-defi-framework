@@ -5,7 +5,7 @@ use crate::mm2::lp_swap::{MyRecentSwapsUuids, MySwapsFilter, SavedSwap, SavedSwa
 use common::log::debug;
 use common::PagingOptions;
 use db_common::sqlite::offset_by_uuid;
-use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, Row, ToSql};
+use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
 use std::convert::TryInto;
@@ -225,14 +225,6 @@ pub fn select_uuids_by_my_swaps_filter(
     })
 }
 
-/// Queries swap type by uuid
-pub fn get_swap_type(conn: &Connection, uuid: &str) -> SqlResult<u8> {
-    const SELECT_SWAP_TYPE_BY_UUID: &str = "SELECT swap_type FROM my_swaps WHERE uuid = :uuid;";
-    let mut stmt = conn.prepare(SELECT_SWAP_TYPE_BY_UUID)?;
-    let swap_type = stmt.query_row(&[(":uuid", uuid)], |row| row.get(0))?;
-    Ok(swap_type)
-}
-
 /// Queries swap events by uuid
 pub fn get_swap_events(conn: &Connection, uuid: &str) -> SqlResult<String> {
     const SELECT_SWAP_EVENTS_BY_UUID: &str = "SELECT events_json FROM my_swaps WHERE uuid = :uuid;";
@@ -255,7 +247,7 @@ pub fn set_swap_is_finished(conn: &Connection, uuid: &str) -> SqlResult<()> {
     stmt.execute(&[(":uuid", uuid)]).map(|_| ())
 }
 
-const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
+pub const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
     my_coin,
     other_coin,
     uuid,
@@ -276,56 +268,3 @@ const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
 FROM my_swaps
 WHERE uuid = :uuid;
 "#;
-
-/// Represents data of the swap used for RPC, omits fields that should be kept in secret
-#[derive(Debug, Serialize)]
-pub struct MySwapForRpc {
-    my_coin: String,
-    other_coin: String,
-    uuid: String,
-    started_at: i64,
-    is_finished: bool,
-    events_json: String,
-    maker_volume: String,
-    taker_volume: String,
-    premium: String,
-    dex_fee: String,
-    secret_hash: Vec<u8>,
-    secret_hash_algo: i64,
-    lock_duration: i64,
-    maker_coin_confs: i64,
-    maker_coin_nota: bool,
-    taker_coin_confs: i64,
-    taker_coin_nota: bool,
-}
-
-impl MySwapForRpc {
-    fn from_row(row: &Row) -> SqlResult<Self> {
-        Ok(Self {
-            my_coin: row.get(0)?,
-            other_coin: row.get(1)?,
-            uuid: row.get(2)?,
-            started_at: row.get(3)?,
-            is_finished: row.get(4)?,
-            events_json: row.get(5)?,
-            maker_volume: row.get(6)?,
-            taker_volume: row.get(7)?,
-            premium: row.get(8)?,
-            dex_fee: row.get(9)?,
-            secret_hash: row.get(10)?,
-            secret_hash_algo: row.get(11)?,
-            lock_duration: row.get(12)?,
-            maker_coin_confs: row.get(13)?,
-            maker_coin_nota: row.get(14)?,
-            taker_coin_confs: row.get(15)?,
-            taker_coin_nota: row.get(16)?,
-        })
-    }
-}
-
-/// Queries `MySwapForRpc` by uuid
-pub fn get_swap_data_for_rpc(conn: &Connection, uuid: &str) -> SqlResult<MySwapForRpc> {
-    let mut stmt = conn.prepare(SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID)?;
-    let swap_data = stmt.query_row(&[(":uuid", uuid)], MySwapForRpc::from_row)?;
-    Ok(swap_data)
-}

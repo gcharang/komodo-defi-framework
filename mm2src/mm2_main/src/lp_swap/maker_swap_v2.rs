@@ -205,35 +205,35 @@ impl StateMachineStorage for DummyMakerSwapStorage {
 }
 
 #[derive(Serialize, Deserialize)]
-struct MakerSwapJsonRepr {
+pub struct MakerSwapJsonRepr {
     /// Maker coin
-    maker_coin: String,
+    pub maker_coin: String,
     /// The amount swapped by maker.
-    maker_volume: MmNumber,
+    pub maker_volume: MmNumber,
     /// The secret used in HTLC hashlock.
-    maker_secret: BytesJson,
+    pub maker_secret: BytesJson,
     /// Algorithm used to hash the swap secret.
-    secret_hash_algo: SecretHashAlgo,
+    pub secret_hash_algo: SecretHashAlgo,
     /// The timestamp when the swap was started.
-    started_at: u64,
+    pub started_at: u64,
     /// The duration of HTLC timelock in seconds.
-    lock_duration: u64,
+    pub lock_duration: u64,
     /// Taker coin
-    taker_coin: String,
+    pub taker_coin: String,
     /// The amount swapped by taker.
-    taker_volume: MmNumber,
+    pub taker_volume: MmNumber,
     /// Premium amount, which might be paid to maker as additional reward.
-    taker_premium: MmNumber,
+    pub taker_premium: MmNumber,
     /// DEX fee amount
-    dex_fee_amount: MmNumber,
+    pub dex_fee_amount: MmNumber,
     /// Swap transactions' confirmations settings
-    conf_settings: SwapConfirmationsSettings,
+    pub conf_settings: SwapConfirmationsSettings,
     /// UUID of the swap
-    uuid: Uuid,
+    pub uuid: Uuid,
     /// If Some, used to sign P2P messages of this swap.
-    p2p_keypair: Option<SerializableSecp256k1Keypair>,
+    pub p2p_keypair: Option<SerializableSecp256k1Keypair>,
     /// Swap events
-    events: Vec<MakerSwapEvent>,
+    pub events: Vec<MakerSwapEvent>,
 }
 
 /// Represents the state machine for maker's side of the Trading Protocol Upgrade swap (v2).
