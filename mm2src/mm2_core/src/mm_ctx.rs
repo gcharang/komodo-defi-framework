@@ -115,7 +115,7 @@ pub struct MmCtx {
     /// Deprecated, please use `async_sqlite_connection` for new implementations.
     #[cfg(not(target_arch = "wasm32"))]
     pub sqlite_connection: Constructible<Arc<Mutex<Connection>>>,
-    /// Deprecated, please use `async_sqlite_connection` for new implementations.
+    /// Deprecated, please create `shared_async_sqlite_conn` for new implementations and call db `KOMODEFI-shared.db`.
     #[cfg(not(target_arch = "wasm32"))]
     pub shared_sqlite_conn: Constructible<Arc<Mutex<Connection>>>,
     pub mm_version: String,
@@ -338,7 +338,7 @@ impl MmCtx {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn init_async_sqlite_connection(&self) -> Result<(), String> {
-        let sqlite_file_path = self.dbdir().join("DB_ASYNC.db");
+        let sqlite_file_path = self.dbdir().join("KOMODEFI.db");
         log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
         let async_conn = try_s!(AsyncConnection::open(sqlite_file_path).await);
         try_s!(self.async_sqlite_connection.pin(Arc::new(AsyncMutex::new(async_conn))));

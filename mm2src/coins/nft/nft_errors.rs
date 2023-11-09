@@ -102,7 +102,7 @@ impl From<ProtectFromSpamError> for GetNftInfoError {
 }
 
 impl From<LockDBError> for GetNftInfoError {
-    fn from(e: LockDBError) -> Self { GetNftInfoError::DbError(format!("{:?}", e)) }
+    fn from(e: LockDBError) -> Self { GetNftInfoError::DbError(e.to_string()) }
 }
 
 impl From<TransferConfirmationsError> for GetNftInfoError {
@@ -225,7 +225,7 @@ impl From<ProtectFromSpamError> for UpdateNftError {
 }
 
 impl From<LockDBError> for UpdateNftError {
-    fn from(e: LockDBError) -> Self { UpdateNftError::DbError(format!("{:?}", e)) }
+    fn from(e: LockDBError) -> Self { UpdateNftError::DbError(e.to_string()) }
 }
 
 impl From<CoinFindError> for UpdateNftError {
@@ -331,7 +331,7 @@ impl From<GetInfoFromUriError> for MetaFromUrlError {
     fn from(e: GetInfoFromUriError) -> Self { MetaFromUrlError::GetInfoFromUriError(e) }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum LockDBError {
     #[cfg(target_arch = "wasm32")]
     WasmNftCacheError(WasmNftCacheError),
