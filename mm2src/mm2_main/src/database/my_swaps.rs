@@ -258,8 +258,6 @@ pub const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
     taker_volume,
     premium,
     dex_fee,
-    secret_hash,
-    secret_hash_algo,
     lock_duration,
     maker_coin_confs,
     maker_coin_nota,

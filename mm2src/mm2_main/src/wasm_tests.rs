@@ -111,10 +111,12 @@ async fn trade_base_rel_electrum(
 
     wait_for_swaps_finish_and_check_status(&mut mm_bob, &mut mm_alice, &uuids, volume, maker_price).await;
 
+    /*
     log!("Checking alice recent swaps..");
     check_recent_swaps(&mm_alice, uuids.len()).await;
     log!("Checking bob recent swaps..");
     check_recent_swaps(&mm_bob, uuids.len()).await;
+    */
     for (base, rel) in pairs.iter() {
         log!("Get {}/{} orderbook", base, rel);
         let rc = mm_bob

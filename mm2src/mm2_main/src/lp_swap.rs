@@ -75,7 +75,7 @@ use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, pub_sub_topic, PeerId, TopicPrefix};
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
 use parking_lot::Mutex as PaMutex;
-use rpc::v1::types::{Bytes as BytesJson, Bytes, H256 as H256Json};
+use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use secp256k1::{PublicKey, SecretKey, Signature};
 use serde::Serialize;
 use serde_json::{self as json, Value as Json};
@@ -992,6 +992,7 @@ struct MySwapStatusResponse {
     swap: SavedSwap,
     my_info: Option<MySwapInfo>,
     recoverable: bool,
+    is_finished: bool,
 }
 
 impl From<SavedSwap> for MySwapStatusResponse {
@@ -1000,6 +1001,7 @@ impl From<SavedSwap> for MySwapStatusResponse {
         MySwapStatusResponse {
             my_info: swap.get_my_info(),
             recoverable: swap.is_recoverable(),
+            is_finished: swap.is_finished(),
             swap,
         }
     }
@@ -1060,27 +1062,33 @@ impl MySwapForRpc {
         Ok(Self {
             my_coin: row.get(0)?,
             other_coin: row.get(1)?,
-            uuid: row.get(2)?,
+            uuid: row.get::<_, String>(2)?.parse().unwrap(),
             started_at: row.get(3)?,
             is_finished: row.get(4)?,
             events_json: row.get(5)?,
-            maker_volume: row.get(6)?,
-            taker_volume: row.get(7)?,
-            premium: row.get(8)?,
-            dex_fee: row.get(9)?,
-            secret_hash: row.get(10)?,
-            secret_hash_algo: row.get(11)?,
-            lock_duration: row.get(12)?,
-            maker_coin_confs: row.get(13)?,
-            maker_coin_nota: row.get(14)?,
-            taker_coin_confs: row.get(15)?,
-            taker_coin_nota: row.get(16)?,
+            maker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(6)?)
+                .unwrap()
+                .into(),
+            taker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(7)?)
+                .unwrap()
+                .into(),
+            premium: MmNumber::from_fraction_string(&row.get::<_, String>(8)?)
+                .unwrap()
+                .into(),
+            dex_fee: MmNumber::from_fraction_string(&row.get::<_, String>(9)?)
+                .unwrap()
+                .into(),
+            lock_duration: row.get(10)?,
+            maker_coin_confs: row.get(11)?,
+            maker_coin_nota: row.get(12)?,
+            taker_coin_confs: row.get(13)?,
+            taker_coin_nota: row.get(14)?,
         })
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> SqlResult<MySwapForRpc> {
+async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, _swap_type: u8) -> SqlResult<MySwapForRpc> {
     let conn = ctx.sqlite_connection();
     let mut stmt = conn.prepare(SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID)?;
     let swap_data = stmt.query_row(&[(":uuid", &uuid.to_string())], MySwapForRpc::from_row)?;
@@ -1089,7 +1097,7 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> SqlRe
 
 #[cfg(target_arch = "wasm32")]
 async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Result<MySwapForRpc, String> {
-    use crate::mm2::lp_swap::swap_wasm_db::SavedSwapTable;
+    use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
     use maker_swap_v2::MakerSwapJsonRepr;
     use taker_swap_v2::TakerSwapJsonRepr;
 
@@ -1102,6 +1110,12 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Resul
         None => return Err(format!("No swap with uuid {}", uuid)),
     };
 
+    let filters_table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
+    let filter_item = match filters_table.get_item_by_unique_index("uuid", uuid).await.unwrap() {
+        Some((_item_id, item)) => item,
+        None => return Err(format!("No swap with uuid {}", uuid)),
+    };
+
     match swap_type {
         MAKER_SWAP_V2_TYPE => {
             let json_repr: MakerSwapJsonRepr = serde_json::from_value(item.saved_swap).unwrap();
@@ -1110,7 +1124,7 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Resul
                 other_coin: json_repr.taker_coin,
                 uuid: json_repr.uuid,
                 started_at: json_repr.started_at as i64,
-                is_finished: false,
+                is_finished: filter_item.is_finished,
                 events_json: json::to_string(&json_repr.events).unwrap(),
                 maker_volume: json_repr.maker_volume.into(),
                 taker_volume: json_repr.taker_volume.into(),
@@ -1130,7 +1144,7 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Resul
                 other_coin: json_repr.maker_coin,
                 uuid: json_repr.uuid,
                 started_at: json_repr.started_at as i64,
-                is_finished: false,
+                is_finished: filter_item.is_finished,
                 events_json: json::to_string(&json_repr.events).unwrap(),
                 maker_volume: json_repr.maker_volume.into(),
                 taker_volume: json_repr.taker_volume.into(),

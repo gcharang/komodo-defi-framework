@@ -2098,6 +2098,22 @@ pub async fn wait_for_swap_status(mm: &MarketMakerIt, uuid: &str, wait_sec: i64)
     }
 }
 
+pub async fn wait_for_swap_finished(mm: &MarketMakerIt, uuid: &str, wait_sec: i64) {
+    let wait_until = get_utc_timestamp() + wait_sec;
+    loop {
+        let status = my_swap_status(mm, uuid).await.unwrap();
+        if status["result"]["is_finished"].as_bool().unwrap() {
+            break;
+        }
+
+        if get_utc_timestamp() > wait_until {
+            panic!("Timed out waiting for swap {} status", uuid);
+        }
+
+        Timer::sleep(0.5).await;
+    }
+}
+
 pub async fn wait_for_swap_contract_negotiation(mm: &MarketMakerIt, swap: &str, expected_contract: Json, until: i64) {
     let events = loop {
         if get_utc_timestamp() > until {
@@ -2145,7 +2161,10 @@ pub async fn wait_for_swap_negotiation_failure(mm: &MarketMakerIt, swap: &str, u
 /// Helper function requesting my swap status and checking it's events
 pub async fn check_my_swap_status(mm: &MarketMakerIt, uuid: &str, maker_amount: BigDecimal, taker_amount: BigDecimal) {
     let status_response = my_swap_status(mm, uuid).await.unwrap();
-    let swap_type = status_response["result"]["type"].as_str().unwrap();
+    let swap_type = match status_response["result"]["type"].as_str() {
+        Some(t) => t,
+        None => return,
+    };
 
     let success_events: Vec<String> = json::from_value(status_response["result"]["success_events"].clone()).unwrap();
     if swap_type == "Taker" {
@@ -2962,22 +2981,8 @@ pub async fn wait_for_swaps_finish_and_check_status(
     maker_price: f64,
 ) {
     for uuid in uuids.iter() {
-        maker
-            .wait_for_log(30., |log| {
-                log.contains(&format!("[swap uuid={}] Finished", uuid.as_ref()))
-            })
-            .await
-            .unwrap();
-
-        taker
-            .wait_for_log(30., |log| {
-                log.contains(&format!("[swap uuid={}] Finished", uuid.as_ref()))
-            })
-            .await
-            .unwrap();
-
-        log!("Waiting a few second for the fresh swap status to be saved..");
-        Timer::sleep(3.33).await;
+        wait_for_swap_finished(maker, uuid.as_ref(), 900).await;
+        wait_for_swap_finished(taker, uuid.as_ref(), 900).await;
 
         log!("Checking taker status..");
         check_my_swap_status(

@@ -5,7 +5,7 @@ use coins::{GenTakerFundingSpendArgs, RefundFundingSecretArgs, RefundPaymentArgs
             Transaction, ValidateTakerFundingArgs};
 use common::{block_on, now_sec};
 use mm2_test_helpers::for_tests::{enable_native, mm_dump, my_swap_status, mycoin1_conf, mycoin_conf, start_swaps,
-                                  MarketMakerIt, Mm2TestConf};
+                                  wait_for_swap_finished, wait_for_swap_status, MarketMakerIt, Mm2TestConf};
 use script::{Builder, Opcode};
 use serialization::serialize;
 
@@ -224,9 +224,11 @@ fn test_v2_swap_utxo_utxo() {
     println!("{:?}", uuids);
 
     for uuid in uuids {
-        let expected_msg = format!("Swap {} has been completed", uuid);
-        block_on(mm_bob.wait_for_log(60., |log| log.contains(&expected_msg))).unwrap();
-        block_on(mm_alice.wait_for_log(30., |log| log.contains(&expected_msg))).unwrap();
+        block_on(wait_for_swap_status(&mm_bob, &uuid, 10));
+        block_on(wait_for_swap_status(&mm_alice, &uuid, 10));
+
+        block_on(wait_for_swap_finished(&mm_bob, &uuid, 60));
+        block_on(wait_for_swap_finished(&mm_alice, &uuid, 30));
 
         let maker_swap_status = block_on(my_swap_status(&mm_bob, &uuid));
         println!("{:?}", maker_swap_status);
