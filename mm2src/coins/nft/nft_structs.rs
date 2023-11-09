@@ -1,10 +1,5 @@
-use crate::nft::eth_addr_to_hex;
-use crate::{TransactionType, TxFeeDetails, WithdrawFee};
 use common::ten;
-#[cfg(not(target_arch = "wasm32"))]
-use db_common::async_sql_conn::AsyncConnection;
 use ethereum_types::Address;
-use futures::lock::Mutex as AsyncMutex;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigUint};
@@ -20,10 +15,17 @@ use std::sync::Arc;
 use url::Url;
 
 use crate::eth::EthTxFeeDetails;
+use crate::nft::eth_addr_to_hex;
 use crate::nft::nft_errors::{LockDBError, ParseChainTypeError};
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
+use crate::{TransactionType, TxFeeDetails, WithdrawFee};
 
-common::cfg_wasm32! {
+cfg_native! {
+    use db_common::async_sql_conn::AsyncConnection;
+    use futures::lock::Mutex as AsyncMutex;
+}
+
+cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, SharedDb};
     use crate::nft::storage::wasm::WasmNftCacheError;
     use crate::nft::storage::wasm::nft_idb::NftCacheIDB;
@@ -642,8 +644,6 @@ impl From<Nft> for TransferMeta {
 /// required for NFT operations, including guarding against concurrent accesses and
 /// dealing with platform-specific storage mechanisms.
 pub(crate) struct NftCtx {
-    /// An asynchronous mutex to guard against concurrent NFT operations, ensuring data consistency.
-    pub(crate) guard: Arc<AsyncMutex<()>>,
     /// Platform-specific database for caching NFT data.
     #[cfg(target_arch = "wasm32")]
     pub(crate) nft_cache_db: SharedDb<NftCacheIDB>,
@@ -662,7 +662,6 @@ impl NftCtx {
                 .async_sqlite_connection
                 .ok_or("async_sqlite_connection is not initialized".to_owned())?;
             Ok(NftCtx {
-                guard: Arc::new(AsyncMutex::new(())),
                 nft_cache_db: async_sqlite_connection.clone(),
             })
         })))
@@ -672,12 +671,12 @@ impl NftCtx {
     pub(crate) fn from_ctx(ctx: &MmArc) -> Result<Arc<NftCtx>, String> {
         Ok(try_s!(from_ctx(&ctx.nft_ctx, move || {
             Ok(NftCtx {
-                guard: Arc::new(AsyncMutex::new(())),
                 nft_cache_db: ConstructibleDb::new(ctx).into_shared(),
             })
         })))
     }
 
+    /// Lock database to guard against concurrent NFT operations, ensuring data consistency.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) async fn lock_db(
         &self,

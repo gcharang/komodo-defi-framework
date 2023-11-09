@@ -26,7 +26,7 @@ use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
 use ethereum_types::{Address, H256};
 use futures::compat::Future01CompatExt;
-use futures::future::join_all;
+use futures::future::try_join_all;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::send_post_request_to_uri;
 use mm2_number::{BigDecimal, BigUint};
@@ -79,7 +79,6 @@ pub type WithdrawNftResult = Result<TransactionNftDetails, MmError<WithdrawError
 /// database errors, and spam protection errors.
 pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
 
     let storage = nft_ctx.lock_db().await?;
     for chain in req.chains.iter() {
@@ -119,7 +118,6 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
 /// database errors, and spam protection errors.
 pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
 
     let storage = nft_ctx.lock_db().await?;
     if !NftListStorageOps::is_initialized(&storage, &req.chain).await? {
@@ -161,7 +159,6 @@ pub async fn get_nft_metadata(ctx: MmArc, req: NftMetadataReq) -> MmResult<Nft, 
 /// database errors, and spam protection errors.
 pub async fn get_nft_transfers(ctx: MmArc, req: NftTransfersReq) -> MmResult<NftsTransferHistoryList, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
 
     let storage = nft_ctx.lock_db().await?;
     for chain in req.chains.iter() {
@@ -187,8 +184,6 @@ async fn process_transfers_confirmations(
     chains: Vec<Chain>,
     history_list: &mut NftsTransferHistoryList,
 ) -> MmResult<(), TransferConfirmationsError> {
-    let mut blocks_map = HashMap::with_capacity(chains.len());
-
     let futures = chains.into_iter().map(|chain| async move {
         let ticker = chain.to_ticker();
         let coin_enum = lp_coinfind_or_err(ctx, ticker).await?;
@@ -202,11 +197,7 @@ async fn process_transfers_confirmations(
             }),
         }
     });
-    let results = join_all(futures).await;
-    for result in results {
-        let (ticker, current_block) = result?;
-        blocks_map.insert(ticker, current_block);
-    }
+    let blocks_map = try_join_all(futures).await?.into_iter().collect::<HashMap<_, _>>();
 
     for transfer in history_list.transfer_history.iter_mut() {
         let current_block = match blocks_map.get(transfer.chain.to_ticker()) {
@@ -249,7 +240,6 @@ where
 /// * `MmResult<(), UpdateNftError>`: A result indicating success or an error.
 pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNftError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
 
     let storage = nft_ctx.lock_db().await?;
     for chain in req.chains.iter() {
@@ -443,7 +433,6 @@ fn prepare_uri_for_blocklist_endpoint(
 /// * `MmResult<(), UpdateNftError>`: A result indicating success or an error.
 pub async fn refresh_nft_metadata(ctx: MmArc, req: RefreshMetadataReq) -> MmResult<(), UpdateNftError> {
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
 
     let storage = nft_ctx.lock_db().await?;
     let token_address_str = eth_addr_to_hex(&req.token_address);
@@ -1184,7 +1173,6 @@ pub(crate) async fn find_wallet_nft_amount(
     token_id: BigUint,
 ) -> MmResult<BigDecimal, GetNftInfoError> {
     let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(GetNftInfoError::Internal)?;
-    let _lock = nft_ctx.guard.lock().await;
 
     let storage = nft_ctx.lock_db().await?;
     if !NftListStorageOps::is_initialized(&storage, chain).await? {
