@@ -48,8 +48,8 @@ pub use db_driver::{DbTransactionError, DbTransactionResult, DbUpgrader, InitDbE
 pub use db_lock::{ConstructibleDb, DbLocked, SharedDb, WeakDb};
 
 use db_driver::{IdbDatabaseBuilder, IdbDatabaseImpl, IdbObjectStoreImpl, IdbTransactionImpl, OnUpgradeNeededCb};
-use indexed_cursor::CursorError;
-use indexed_cursor::{cursor_event_loop, CursorBuilder, CursorDriver, CursorFilters, CursorResult, DbCursorEventTx};
+use indexed_cursor::{cursor_event_loop, CursorBuilder, CursorDriver, CursorError, CursorFilters, CursorResult,
+                     DbCursorEventTx};
 
 type DbEventTx = mpsc::UnboundedSender<internal::DbEvent>;
 type DbTransactionEventTx = mpsc::UnboundedSender<internal::DbTransactionEvent>;

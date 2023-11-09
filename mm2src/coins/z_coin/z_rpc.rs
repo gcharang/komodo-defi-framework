@@ -9,7 +9,6 @@ use futures::lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use futures::StreamExt;
 use mm2_err_handle::prelude::*;
 use parking_lot::Mutex;
-use std::num::TryFromIntError;
 use std::sync::Arc;
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
@@ -35,6 +34,7 @@ cfg_native!(
     use std::convert::TryFrom;
     use rpc::v1::types::{Bytes, H256 as H256Json};
     use std::convert::TryInto;
+    use std::num::TryFromIntError;
     use std::pin::Pin;
     use std::str::FromStr;
     use tonic::transport::{Channel, ClientTlsConfig};

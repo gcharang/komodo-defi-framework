@@ -68,7 +68,7 @@ impl BlockDbInner {
 }
 
 impl BlockDbImpl {
-    pub async fn new(ctx: MmArc, ticker: String, _path: Option<impl AsRef<Path>>) -> MmResult<Self, ZcoinStorageError> {
+    pub async fn new(ctx: MmArc, ticker: String, _path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
         Ok(Self {
             db: ConstructibleDb::new(&ctx).into_shared(),
             ticker,

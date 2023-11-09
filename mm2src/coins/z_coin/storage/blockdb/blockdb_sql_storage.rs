@@ -43,8 +43,8 @@ impl From<ChainError<NoteId>> for ZcoinStorageError {
 
 impl BlockDbImpl {
     #[cfg(all(not(test)))]
-    pub async fn new(_ctx: MmArc, ticker: String, path: Option<impl AsRef<Path>>) -> MmResult<Self, ZcoinStorageError> {
-        let conn = Connection::open(path.unwrap()).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+    pub async fn new(_ctx: MmArc, ticker: String, path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
+        let conn = Connection::open(path).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
         run_optimization_pragmas(&conn).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS compactblocks (
@@ -62,11 +62,7 @@ impl BlockDbImpl {
     }
 
     #[cfg(all(test))]
-    pub(crate) async fn new(
-        ctx: MmArc,
-        ticker: String,
-        _path: Option<impl AsRef<Path>>,
-    ) -> MmResult<Self, ZcoinStorageError> {
+    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
         let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let conn = ctx.sqlite_connection.clone_or(conn);
         let clone_db = conn.clone();
