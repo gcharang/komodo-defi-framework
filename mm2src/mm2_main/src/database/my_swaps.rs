@@ -9,7 +9,7 @@ use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlRe
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
 use std::convert::TryInto;
-use uuid::Error as UuidError;
+use uuid::{Error as UuidError, Uuid};
 
 const MY_SWAPS_TABLE: &str = "my_swaps";
 
@@ -128,21 +128,21 @@ fn insert_saved_swap_sql(swap: SavedSwap) -> Option<(&'static str, Vec<String>)>
 }
 
 #[derive(Debug)]
-pub enum SelectRecentSwapsUuidsErr {
+pub enum SelectSwapsUuidsErr {
     Sql(SqlError),
     Parse(UuidError),
 }
 
-impl std::fmt::Display for SelectRecentSwapsUuidsErr {
+impl std::fmt::Display for SelectSwapsUuidsErr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "{:?}", self) }
 }
 
-impl From<SqlError> for SelectRecentSwapsUuidsErr {
-    fn from(err: SqlError) -> Self { SelectRecentSwapsUuidsErr::Sql(err) }
+impl From<SqlError> for SelectSwapsUuidsErr {
+    fn from(err: SqlError) -> Self { SelectSwapsUuidsErr::Sql(err) }
 }
 
-impl From<UuidError> for SelectRecentSwapsUuidsErr {
-    fn from(err: UuidError) -> Self { SelectRecentSwapsUuidsErr::Parse(err) }
+impl From<UuidError> for SelectSwapsUuidsErr {
+    fn from(err: UuidError) -> Self { SelectSwapsUuidsErr::Parse(err) }
 }
 
 /// Adds where clauses determined by MySwapsFilter
@@ -172,7 +172,7 @@ pub fn select_uuids_by_my_swaps_filter(
     conn: &Connection,
     filter: &MySwapsFilter,
     paging_options: Option<&PagingOptions>,
-) -> SqlResult<MyRecentSwapsUuids, SelectRecentSwapsUuidsErr> {
+) -> SqlResult<MyRecentSwapsUuids, SelectSwapsUuidsErr> {
     let mut query_builder = SqlBuilder::select_from(MY_SWAPS_TABLE);
     let mut params = vec![];
     apply_my_swaps_filter(&mut query_builder, &mut params, filter);
@@ -245,6 +245,17 @@ pub fn set_swap_is_finished(conn: &Connection, uuid: &str) -> SqlResult<()> {
     const UPDATE_SWAP_IS_FINISHED_BY_UUID: &str = "UPDATE my_swaps SET is_finished = 1 WHERE uuid = :uuid;";
     let mut stmt = conn.prepare(UPDATE_SWAP_IS_FINISHED_BY_UUID)?;
     stmt.execute(&[(":uuid", uuid)]).map(|_| ())
+}
+
+pub fn select_unfinished_swaps_uuids(conn: &Connection, swap_type: u8) -> SqlResult<Vec<Uuid>, SelectSwapsUuidsErr> {
+    const SELECT_UNFINISHED_SWAPS_UUIDS_BY_TYPE: &str =
+        "SELECT uuid FROM my_swaps WHERE is_finished = 0 AND swap_type = :type;";
+    let mut stmt = conn.prepare(SELECT_UNFINISHED_SWAPS_UUIDS_BY_TYPE)?;
+    let uuids = stmt
+        .query_map_named(&[(":type", &swap_type)], |row| row.get(0))?
+        .collect::<SqlResult<Vec<String>>>()?;
+    let uuids: SqlResult<Vec<_>, _> = uuids.into_iter().map(|uuid| uuid.parse()).collect();
+    Ok(uuids?)
 }
 
 pub const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT

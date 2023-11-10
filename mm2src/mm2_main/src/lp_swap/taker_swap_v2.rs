@@ -25,7 +25,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 cfg_native!(
-    use crate::mm2::database::my_swaps::{insert_new_swap_v2, set_swap_is_finished};
+    use crate::mm2::database::my_swaps::{insert_new_swap_v2};
     use db_common::sqlite::rusqlite::named_params;
 );
 
@@ -145,14 +145,15 @@ impl StateMachineStorage for TakerSwapStorage {
     type Error = MmError<SwapStateMachineError>;
 
     async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
-        store_swap_event(&self.ctx, id, event).await
+        store_swap_event(self.ctx.clone(), id, event).await
     }
 
-    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
+    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> {
+        get_unfinished_swaps_uuids(self.ctx.clone(), TAKER_SWAP_V2_TYPE).await
+    }
 
     async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
-        set_swap_is_finished(&self.ctx.sqlite_connection(), &id.to_string())
-            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))
+        mark_swap_finished(self.ctx.clone(), id).await
     }
 }
 
@@ -188,17 +189,7 @@ impl StateMachineStorage for TakerSwapStorage {
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
 
     async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
-        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
-        let db = swaps_ctx.swap_db().await.unwrap();
-        let transaction = db.transaction().await.unwrap();
-        let table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
-        let mut item = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
-            Some((_item_id, item)) => item,
-            None => panic!("No swap with uuid {}", id),
-        };
-        item.is_finished = true;
-        table.replace_item_by_unique_index("uuid", id, &item).await.unwrap();
-        Ok(())
+        mark_swap_finished(self.ctx.clone(), id).await
     }
 }
 

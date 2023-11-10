@@ -51,14 +51,14 @@ impl MySwapsStorage {
 #[cfg(not(target_arch = "wasm32"))]
 mod native_impl {
     use super::*;
-    use crate::mm2::database::my_swaps::{insert_new_swap, select_uuids_by_my_swaps_filter, SelectRecentSwapsUuidsErr};
+    use crate::mm2::database::my_swaps::{insert_new_swap, select_uuids_by_my_swaps_filter, SelectSwapsUuidsErr};
     use db_common::sqlite::rusqlite::Error as SqlError;
 
-    impl From<SelectRecentSwapsUuidsErr> for MySwapsError {
-        fn from(e: SelectRecentSwapsUuidsErr) -> Self {
+    impl From<SelectSwapsUuidsErr> for MySwapsError {
+        fn from(e: SelectSwapsUuidsErr) -> Self {
             match e {
-                SelectRecentSwapsUuidsErr::Sql(db) => MySwapsError::UnknownSqlError(db.to_string()),
-                SelectRecentSwapsUuidsErr::Parse(uuid) => MySwapsError::UuidParse(uuid),
+                SelectSwapsUuidsErr::Sql(db) => MySwapsError::UnknownSqlError(db.to_string()),
+                SelectSwapsUuidsErr::Parse(uuid) => MySwapsError::UuidParse(uuid),
             }
         }
     }

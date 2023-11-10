@@ -5,7 +5,15 @@ use serde::Serialize;
 use uuid::Uuid;
 
 cfg_native!(
-    use crate::mm2::database::my_swaps::{get_swap_events, update_swap_events};
+    use common::async_blocking;
+    use crate::mm2::database::my_swaps::{get_swap_events, update_swap_events, select_unfinished_swaps_uuids,
+                                     set_swap_is_finished};
+);
+
+cfg_wasm32!(
+    use crate::mm2::lp_swap::SwapsContext;
+    use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
+    use mm2_db::indexed_db::{InitDbError, DbTransactionError};
 );
 
 /// Represents errors that can be produced by [`MakerSwapStateMachine`] or [`TakerSwapStateMachine`] run.
@@ -13,24 +21,92 @@ cfg_native!(
 pub enum SwapStateMachineError {
     StorageError(String),
     SerdeError(String),
+    #[cfg(target_arch = "wasm32")]
+    NoSwapWithUuid(Uuid),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<InitDbError> for SwapStateMachineError {
+    fn from(e: InitDbError) -> Self { SwapStateMachineError::StorageError(e.to_string()) }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<DbTransactionError> for SwapStateMachineError {
+    fn from(e: DbTransactionError) -> Self { SwapStateMachineError::StorageError(e.to_string()) }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) async fn store_swap_event<T: Serialize + DeserializeOwned>(
-    ctx: &MmArc,
+pub(super) async fn store_swap_event<T: DeserializeOwned + Serialize + Send + 'static>(
+    ctx: MmArc,
     id: Uuid,
     event: T,
 ) -> MmResult<(), SwapStateMachineError> {
     let id_str = id.to_string();
-    let events_json = get_swap_events(&ctx.sqlite_connection(), &id_str)
-        .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))?;
-    let mut events: Vec<T> =
-        serde_json::from_str(&events_json).map_to_mm(|e| SwapStateMachineError::SerdeError(e.to_string()))?;
-    events.push(event);
-    drop_mutability!(events);
-    let serialized_events =
-        serde_json::to_string(&events).map_to_mm(|e| SwapStateMachineError::SerdeError(e.to_string()))?;
-    update_swap_events(&ctx.sqlite_connection(), &id_str, &serialized_events)
-        .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))?;
+    async_blocking(move || {
+        let events_json = get_swap_events(&ctx.sqlite_connection(), &id_str)
+            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))?;
+        let mut events: Vec<T> =
+            serde_json::from_str(&events_json).map_to_mm(|e| SwapStateMachineError::SerdeError(e.to_string()))?;
+        events.push(event);
+        drop_mutability!(events);
+        let serialized_events =
+            serde_json::to_string(&events).map_to_mm(|e| SwapStateMachineError::SerdeError(e.to_string()))?;
+        update_swap_events(&ctx.sqlite_connection(), &id_str, &serialized_events)
+            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))?;
+        Ok(())
+    })
+    .await
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn store_swap_event<T: DeserializeOwned + Serialize + Send + 'static>(
+    ctx: MmArc,
+    id: Uuid,
+    event: T,
+) -> MmResult<(), SwapStateMachineError> {
+    unimplemented!()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn get_unfinished_swaps_uuids(
+    ctx: MmArc,
+    swap_type: u8,
+) -> MmResult<Vec<Uuid>, SwapStateMachineError> {
+    async_blocking(move || {
+        select_unfinished_swaps_uuids(&ctx.sqlite_connection(), swap_type)
+            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))
+    })
+    .await
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn get_unfinished_swaps_uuids(
+    ctx: MmArc,
+    swap_type: u8,
+) -> MmResult<Vec<Uuid>, SwapStateMachineError> {
+    unimplemented!()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), SwapStateMachineError> {
+    async_blocking(move || {
+        set_swap_is_finished(&ctx.sqlite_connection(), &id.to_string())
+            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))
+    })
+    .await
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), SwapStateMachineError> {
+    let swaps_ctx = SwapsContext::from_ctx(&ctx).unwrap();
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+    let table = transaction.table::<MySwapsFiltersTable>().await?;
+    let mut item = match table.get_item_by_unique_index("uuid", id).await? {
+        Some((_item_id, item)) => item,
+        None => return MmError::err(SwapStateMachineError::NoSwapWithUuid(id)),
+    };
+    item.is_finished = true;
+    table.replace_item_by_unique_index("uuid", id, &item).await?;
     Ok(())
 }

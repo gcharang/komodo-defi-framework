@@ -24,7 +24,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 cfg_native!(
-    use crate::mm2::database::my_swaps::{insert_new_swap_v2, set_swap_is_finished};
+    use crate::mm2::database::my_swaps::{insert_new_swap_v2};
     use db_common::sqlite::rusqlite::named_params;
 );
 
@@ -122,7 +122,6 @@ impl MakerSwapStorage {
     pub fn new(ctx: MmArc) -> Self { MakerSwapStorage { ctx } }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl StateMachineStorage for MakerSwapStorage {
     type MachineId = Uuid;
@@ -130,60 +129,15 @@ impl StateMachineStorage for MakerSwapStorage {
     type Error = MmError<SwapStateMachineError>;
 
     async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
-        store_swap_event(&self.ctx, id, event).await
+        store_swap_event(self.ctx.clone(), id, event).await
     }
 
-    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
+    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> {
+        get_unfinished_swaps_uuids(self.ctx.clone(), MAKER_SWAP_V2_TYPE).await
+    }
 
     async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
-        set_swap_is_finished(&self.ctx.sqlite_connection(), &id.to_string())
-            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[async_trait]
-impl StateMachineStorage for MakerSwapStorage {
-    type MachineId = Uuid;
-    type Event = MakerSwapEvent;
-    type Error = MmError<SwapStateMachineError>;
-
-    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
-        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
-        let db = swaps_ctx.swap_db().await.unwrap();
-        let transaction = db.transaction().await.unwrap();
-        let table = transaction.table::<SavedSwapTable>().await.unwrap();
-
-        let saved_swap_json = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
-            Some((_item_id, SavedSwapTable { saved_swap, .. })) => saved_swap,
-            None => panic!("No swap with uuid {}", id),
-        };
-
-        let mut swap_repr: MakerSwapJsonRepr = serde_json::from_value(saved_swap_json).unwrap();
-        swap_repr.events.push(event);
-
-        let new_item = SavedSwapTable {
-            uuid: id,
-            saved_swap: serde_json::to_value(swap_repr).unwrap(),
-        };
-        table.replace_item_by_unique_index("uuid", id, &new_item).await.unwrap();
-        Ok(())
-    }
-
-    async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
-
-    async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
-        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
-        let db = swaps_ctx.swap_db().await.unwrap();
-        let transaction = db.transaction().await.unwrap();
-        let table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
-        let mut item = match table.get_item_by_unique_index("uuid", id).await.unwrap() {
-            Some((_item_id, item)) => item,
-            None => panic!("No swap with uuid {}", id),
-        };
-        item.is_finished = true;
-        table.replace_item_by_unique_index("uuid", id, &item).await.unwrap();
-        Ok(())
+        mark_swap_finished(self.ctx.clone(), id).await
     }
 }
 
