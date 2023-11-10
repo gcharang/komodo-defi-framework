@@ -154,7 +154,7 @@ const NEGOTIATION_TIMEOUT_SEC: u64 = 90;
 
 cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
-    use swap_wasm_db::{InitDbResult, SwapDb};
+    use swap_wasm_db::{InitDbResult, InitDbError, SwapDb};
 
     pub type SwapDbLocked<'a> = DbLocked<'a, SwapDb>;
 }
@@ -1022,16 +1022,46 @@ async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> SqlResult<u8> {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> Result<u8, String> {
+use mm2_db::indexed_db::DbTransactionError;
+#[cfg(target_arch = "wasm32")]
+use mm2_db::indexed_db::DbTransactionResult;
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Display)]
+pub enum SwapV2DbError {
+    DbTransaction(DbTransactionError),
+    InitDb(InitDbError),
+    Serde(serde_json::Error),
+    NoSwapWithUuid(Uuid),
+    UnsupportedSwapType(u8),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<DbTransactionError> for SwapV2DbError {
+    fn from(e: DbTransactionError) -> Self { SwapV2DbError::DbTransaction(e) }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<InitDbError> for SwapV2DbError {
+    fn from(e: InitDbError) -> Self { SwapV2DbError::InitDb(e) }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<serde_json::Error> for SwapV2DbError {
+    fn from(e: serde_json::Error) -> Self { SwapV2DbError::Serde(e) }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> MmResult<u8, SwapV2DbError> {
     use crate::mm2::lp_swap::swap_wasm_db::MySwapsFiltersTable;
 
     let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
-    let db = swaps_ctx.swap_db().await.unwrap();
-    let transaction = db.transaction().await.unwrap();
-    let table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
-    let item = match table.get_item_by_unique_index("uuid", uuid).await.unwrap() {
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+    let table = transaction.table::<MySwapsFiltersTable>().await?;
+    let item = match table.get_item_by_unique_index("uuid", uuid).await? {
         Some((_item_id, item)) => item,
-        None => return Err(format!("No swap with uuid {}", uuid)),
+        None => return MmError::err(SwapV2DbError::NoSwapWithUuid(*uuid)),
     };
     Ok(item.swap_type)
 }
@@ -1096,36 +1126,36 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, _swap_type: u8) -> SqlR
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Result<MySwapForRpc, String> {
+async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> MmResult<MySwapForRpc, SwapV2DbError> {
     use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
     use maker_swap_v2::MakerSwapJsonRepr;
     use taker_swap_v2::TakerSwapJsonRepr;
 
     let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
-    let db = swaps_ctx.swap_db().await.unwrap();
-    let transaction = db.transaction().await.unwrap();
-    let table = transaction.table::<SavedSwapTable>().await.unwrap();
-    let item = match table.get_item_by_unique_index("uuid", uuid).await.unwrap() {
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+    let table = transaction.table::<SavedSwapTable>().await?;
+    let item = match table.get_item_by_unique_index("uuid", uuid).await? {
         Some((_item_id, item)) => item,
-        None => return Err(format!("No swap with uuid {}", uuid)),
+        None => return MmError::err(SwapV2DbError::NoSwapWithUuid(*uuid)),
     };
 
-    let filters_table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
-    let filter_item = match filters_table.get_item_by_unique_index("uuid", uuid).await.unwrap() {
+    let filters_table = transaction.table::<MySwapsFiltersTable>().await?;
+    let filter_item = match filters_table.get_item_by_unique_index("uuid", uuid).await? {
         Some((_item_id, item)) => item,
-        None => return Err(format!("No swap with uuid {}", uuid)),
+        None => return MmError::err(SwapV2DbError::NoSwapWithUuid(*uuid)),
     };
 
     match swap_type {
         MAKER_SWAP_V2_TYPE => {
-            let json_repr: MakerSwapJsonRepr = serde_json::from_value(item.saved_swap).unwrap();
+            let json_repr: MakerSwapJsonRepr = serde_json::from_value(item.saved_swap)?;
             Ok(MySwapForRpc {
                 my_coin: json_repr.maker_coin,
                 other_coin: json_repr.taker_coin,
                 uuid: json_repr.uuid,
                 started_at: json_repr.started_at as i64,
                 is_finished: filter_item.is_finished,
-                events_json: json::to_string(&json_repr.events).unwrap(),
+                events_json: json::to_string(&json_repr.events)?,
                 maker_volume: json_repr.maker_volume.into(),
                 taker_volume: json_repr.taker_volume.into(),
                 premium: json_repr.taker_premium.into(),
@@ -1138,14 +1168,14 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Resul
             })
         },
         TAKER_SWAP_V2_TYPE => {
-            let json_repr: TakerSwapJsonRepr = serde_json::from_value(item.saved_swap).unwrap();
+            let json_repr: TakerSwapJsonRepr = serde_json::from_value(item.saved_swap)?;
             Ok(MySwapForRpc {
                 my_coin: json_repr.taker_coin,
                 other_coin: json_repr.maker_coin,
                 uuid: json_repr.uuid,
                 started_at: json_repr.started_at as i64,
                 is_finished: filter_item.is_finished,
-                events_json: json::to_string(&json_repr.events).unwrap(),
+                events_json: json::to_string(&json_repr.events)?,
                 maker_volume: json_repr.maker_volume.into(),
                 taker_volume: json_repr.taker_volume.into(),
                 premium: json_repr.taker_premium.into(),
@@ -1157,7 +1187,7 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> Resul
                 taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
             })
         },
-        unsupported_type => Err(format!("Got unsupported swap type {}", unsupported_type)),
+        unsupported_type => MmError::err(SwapV2DbError::UnsupportedSwapType(unsupported_type)),
     }
 }
 
