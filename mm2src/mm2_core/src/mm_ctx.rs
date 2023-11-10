@@ -321,7 +321,10 @@ impl MmCtx {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn init_sqlite_connection(&self) -> Result<(), String> {
         let sqlite_file_path = self.dbdir().join("MM2.db");
-        log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        log::debug!(
+            "Trying to open SQLite database file {}",
+            try_s!(sqlite_file_path.canonicalize()).display()
+        );
         let connection = try_s!(Connection::open(sqlite_file_path));
         try_s!(self.sqlite_connection.pin(Arc::new(Mutex::new(connection))));
         Ok(())
@@ -330,7 +333,10 @@ impl MmCtx {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn init_shared_sqlite_conn(&self) -> Result<(), String> {
         let sqlite_file_path = self.shared_dbdir().join("MM2-shared.db");
-        log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        log::debug!(
+            "Trying to open SQLite database file {}",
+            try_s!(sqlite_file_path.canonicalize()).display()
+        );
         let connection = try_s!(Connection::open(sqlite_file_path));
         try_s!(self.shared_sqlite_conn.pin(Arc::new(Mutex::new(connection))));
         Ok(())
@@ -339,7 +345,10 @@ impl MmCtx {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn init_async_sqlite_connection(&self) -> Result<(), String> {
         let sqlite_file_path = self.dbdir().join("KOMODEFI.db");
-        log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        log::debug!(
+            "Trying to open SQLite database file {}",
+            try_s!(sqlite_file_path.canonicalize()).display()
+        );
         let async_conn = try_s!(AsyncConnection::open(sqlite_file_path).await);
         try_s!(self.async_sqlite_connection.pin(Arc::new(AsyncMutex::new(async_conn))));
         Ok(())
