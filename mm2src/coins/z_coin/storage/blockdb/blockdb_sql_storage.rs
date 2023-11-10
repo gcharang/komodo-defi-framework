@@ -9,7 +9,7 @@ use itertools::Itertools;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use protobuf::Message;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
@@ -43,15 +43,14 @@ impl From<ChainError<NoteId>> for ZcoinStorageError {
 
 impl BlockDbImpl {
     #[cfg(all(not(test)))]
-    pub async fn new(_ctx: MmArc, ticker: String, path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
-        let conn = Connection::open(path).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
-        let conn = Arc::new(Mutex::new(conn));
-        let clone_db = conn.clone();
-
+    pub async fn new(_ctx: MmArc, ticker: String, path: PathBuf) -> MmResult<Self, ZcoinStorageError> {
         async_blocking(move || {
-            let clone_db = clone_db.lock().unwrap();
-            run_optimization_pragmas(&clone_db).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
-            clone_db
+            let conn = Connection::open(path).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            let conn = Arc::new(Mutex::new(conn));
+            let conn_clone = conn.clone();
+            let conn_clone = conn_clone.lock().unwrap();
+            run_optimization_pragmas(&conn_clone).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            conn_clone
                 .execute(
                     "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
@@ -67,15 +66,15 @@ impl BlockDbImpl {
     }
 
     #[cfg(all(test))]
-    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
-        let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-        let conn = ctx.sqlite_connection.clone_or(conn);
-        let clone_db = conn.clone();
-
+    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: PathBuf) -> MmResult<Self, ZcoinStorageError> {
         async_blocking(move || {
-            let clone_db = clone_db.lock().unwrap();
-            run_optimization_pragmas(&clone_db).map_err(|err| ZcoinStorageError::DbError(err.to_string()))?;
-            clone_db
+            let conn = ctx
+                .sqlite_connection
+                .clone_or(Arc::new(Mutex::new(Connection::open_in_memory().unwrap())));
+            let conn_clone = conn.clone();
+            let conn_clone = conn_clone.lock().unwrap();
+            run_optimization_pragmas(&conn_clone).map_err(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            conn_clone
                 .execute(
                     "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,

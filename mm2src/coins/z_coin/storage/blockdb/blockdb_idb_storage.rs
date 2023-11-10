@@ -9,7 +9,7 @@ use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, Indexe
 use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
 use mm2_err_handle::prelude::*;
 use protobuf::Message;
-use std::path::Path;
+use std::path::PathBuf;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_extras::WalletRead;
 use zcash_primitives::block::BlockHash;
@@ -68,7 +68,7 @@ impl BlockDbInner {
 }
 
 impl BlockDbImpl {
-    pub async fn new(ctx: MmArc, ticker: String, _path: impl AsRef<Path>) -> MmResult<Self, ZcoinStorageError> {
+    pub async fn new(ctx: MmArc, ticker: String, _path: PathBuf) -> MmResult<Self, ZcoinStorageError> {
         Ok(Self {
             db: ConstructibleDb::new(&ctx).into_shared(),
             ticker,

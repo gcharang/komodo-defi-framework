@@ -24,16 +24,18 @@ pub async fn create_wallet_db(
     evk: ExtendedFullViewingKey,
     continue_from_prev_sync: bool,
 ) -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-    let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
-        .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
-
-    let db_clone = db.inner().clone();
-    async_blocking(move || {
-        let db_clone = db_clone.lock().unwrap();
-        run_optimization_pragmas(db_clone.sql_conn())
+    let db = async_blocking(move || {
+        WalletDbAsync::for_path(wallet_db_path, consensus_params)
+            .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))
     })
-    .await
-    .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))?;
+    .await?;
+    let db_inner = db.inner();
+    async_blocking(move || {
+        let db_inner = db_inner.lock().unwrap();
+        run_optimization_pragmas(db_inner.sql_conn())
+            .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))
+    })
+    .await?;
 
     init_wallet_db(&db)
         .await
