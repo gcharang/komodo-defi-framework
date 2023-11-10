@@ -1,7 +1,6 @@
-use crate::async_sql_conn::{AsyncConnError, AsyncConnection, Result as AsyncConnResult};
+use crate::async_sql_conn::{AsyncConnError, AsyncConnection, InternalError, Result as AsyncConnResult};
 use rusqlite::{ffi, ErrorCode};
 use std::fmt::Display;
-
 #[tokio::test]
 async fn open_in_memory_test() -> AsyncConnResult<()> {
     let conn = AsyncConnection::open_in_memory().await;
@@ -225,15 +224,16 @@ async fn test_ergonomic_errors() -> AsyncConnResult<()> {
     let conn = AsyncConnection::open_in_memory().await?;
 
     let res = conn
-        .call(|conn| failable_func(conn).map_err(|e| AsyncConnError::Other(Box::new(e))))
+        .call(|conn| failable_func(conn).map_err(|e| AsyncConnError::Internal(InternalError(e.to_string()))))
         .await
         .unwrap_err();
 
     let err = std::error::Error::source(&res)
-        .and_then(|e| e.downcast_ref::<MyError>())
-        .unwrap();
+        .and_then(|e| e.downcast_ref::<InternalError>())
+        .unwrap()
+        .to_string();
 
-    assert!(matches!(err, MyError::MySpecificError));
+    assert_eq!(err, MyError::MySpecificError.to_string());
 
     Ok(())
 }

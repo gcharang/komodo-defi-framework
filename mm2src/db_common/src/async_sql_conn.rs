@@ -9,7 +9,7 @@ use std::thread;
 /// Represents the errors specific for AsyncConnection.
 #[derive(Debug)]
 pub enum AsyncConnError {
-    /// The connection to the SQLite has been closed and cannot be queried any more.
+    /// The connection to the SQLite has been closed and cannot be queried anymore.
     ConnectionClosed,
     /// An error occurred while closing the SQLite connection.
     /// This `Error` variant contains the [`AsyncConnection`], which can be used to retry the close operation
@@ -18,7 +18,7 @@ pub enum AsyncConnError {
     /// A `Rusqlite` error occurred.
     Rusqlite(SqlError),
     /// An application-specific error occurred.
-    Other(Box<dyn std::error::Error + Send + Sync + 'static>),
+    Internal(InternalError),
 }
 
 impl Display for AsyncConnError {
@@ -27,7 +27,7 @@ impl Display for AsyncConnError {
             AsyncConnError::ConnectionClosed => write!(f, "ConnectionClosed"),
             AsyncConnError::Close((_, e)) => write!(f, "Close((AsyncConnection, \"{e}\"))"),
             AsyncConnError::Rusqlite(e) => write!(f, "Rusqlite(\"{e}\")"),
-            AsyncConnError::Other(ref e) => write!(f, "Other(\"{e}\")"),
+            AsyncConnError::Internal(e) => write!(f, "Internal(\"{e}\")"),
         }
     }
 }
@@ -38,10 +38,19 @@ impl std::error::Error for AsyncConnError {
             AsyncConnError::ConnectionClosed => None,
             AsyncConnError::Close((_, e)) => Some(e),
             AsyncConnError::Rusqlite(e) => Some(e),
-            AsyncConnError::Other(ref e) => Some(&**e),
+            AsyncConnError::Internal(e) => Some(e),
         }
     }
 }
+
+#[derive(Debug)]
+pub struct InternalError(pub String);
+
+impl fmt::Display for InternalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
+}
+
+impl std::error::Error for InternalError {}
 
 impl From<SqlError> for AsyncConnError {
     fn from(value: SqlError) -> Self { AsyncConnError::Rusqlite(value) }
@@ -278,11 +287,6 @@ where
 
     result_receiver
         .await
-        .map_err(|_| {
-            AsyncConnError::Other(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to receive connection result",
-            )))
-        })
+        .map_err(|e| AsyncConnError::Internal(InternalError(e.to_string())))
         .map(|_| AsyncConnection { sender })
 }

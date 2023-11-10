@@ -184,6 +184,13 @@ async fn process_transfers_confirmations(
     chains: Vec<Chain>,
     history_list: &mut NftsTransferHistoryList,
 ) -> MmResult<(), TransferConfirmationsError> {
+    async fn current_block_impl<Coin: MarketCoinOps>(coin: Coin) -> MmResult<u64, TransferConfirmationsError> {
+        coin.current_block()
+            .compat()
+            .await
+            .map_to_mm(TransferConfirmationsError::GetCurrentBlockErr)
+    }
+
     let futures = chains.into_iter().map(|chain| async move {
         let ticker = chain.to_ticker();
         let coin_enum = lp_coinfind_or_err(ctx, ticker).await?;
@@ -211,17 +218,6 @@ async fn process_transfers_confirmations(
         };
     }
     Ok(())
-}
-
-#[inline(always)]
-async fn current_block_impl<Coin>(coin: Coin) -> MmResult<u64, TransferConfirmationsError>
-where
-    Coin: MarketCoinOps,
-{
-    coin.current_block()
-        .compat()
-        .await
-        .map_to_mm(TransferConfirmationsError::GetCurrentBlockErr)
 }
 
 /// Updates NFT transfer history and NFT list in the DB.

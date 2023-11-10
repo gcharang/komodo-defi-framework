@@ -688,12 +688,11 @@ impl NftCtx {
     pub(crate) async fn lock_db(
         &self,
     ) -> MmResult<impl NftListStorageOps + NftTransferHistoryStorageOps + '_, LockDBError> {
-        let locked_db = self
-            .nft_cache_db
+        self.nft_cache_db
             .get_or_initialize()
             .await
-            .mm_err(WasmNftCacheError::from)?;
-        Ok(locked_db)
+            .mm_err(WasmNftCacheError::from)
+            .mm_err(LockDBError::from)
     }
 }
 
