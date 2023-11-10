@@ -1,3 +1,4 @@
+use super::swap_v2_common::*;
 use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_v2_pb::*;
@@ -23,7 +24,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 cfg_native!(
-    use crate::mm2::database::my_swaps::{get_swap_events, insert_new_swap_v2, set_swap_is_finished, update_swap_events};
+    use crate::mm2::database::my_swaps::{insert_new_swap_v2, set_swap_is_finished};
     use db_common::sqlite::rusqlite::named_params;
 );
 
@@ -112,58 +113,40 @@ pub enum MakerSwapEvent {
     Completed,
 }
 
-/// Represents errors that can be produced by [`MakerSwapStateMachine`] run.
-#[derive(Debug, Display)]
-pub enum MakerSwapStateMachineError {
-    StorageError(String),
-    SerdeError(String),
-}
-
 /// Dummy storage for maker swap events (used temporary).
-pub struct DummyMakerSwapStorage {
+pub struct MakerSwapStorage {
     ctx: MmArc,
 }
 
-impl DummyMakerSwapStorage {
-    pub fn new(ctx: MmArc) -> Self { DummyMakerSwapStorage { ctx } }
+impl MakerSwapStorage {
+    pub fn new(ctx: MmArc) -> Self { MakerSwapStorage { ctx } }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
-impl StateMachineStorage for DummyMakerSwapStorage {
+impl StateMachineStorage for MakerSwapStorage {
     type MachineId = Uuid;
     type Event = MakerSwapEvent;
-    type Error = MmError<MakerSwapStateMachineError>;
+    type Error = MmError<SwapStateMachineError>;
 
     async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
-        let id_str = id.to_string();
-        let events_json = get_swap_events(&self.ctx.sqlite_connection(), &id_str)
-            .map_to_mm(|e| MakerSwapStateMachineError::StorageError(e.to_string()))?;
-        let mut events: Vec<MakerSwapEvent> =
-            serde_json::from_str(&events_json).map_to_mm(|e| MakerSwapStateMachineError::SerdeError(e.to_string()))?;
-        events.push(event);
-        drop_mutability!(events);
-        let serialized_events =
-            serde_json::to_string(&events).map_to_mm(|e| MakerSwapStateMachineError::SerdeError(e.to_string()))?;
-        update_swap_events(&self.ctx.sqlite_connection(), &id_str, &serialized_events)
-            .map_to_mm(|e| MakerSwapStateMachineError::StorageError(e.to_string()))?;
-        Ok(())
+        store_swap_event(&self.ctx, id, event).await
     }
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> { todo!() }
 
     async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
         set_swap_is_finished(&self.ctx.sqlite_connection(), &id.to_string())
-            .map_to_mm(|e| MakerSwapStateMachineError::StorageError(e.to_string()))
+            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 #[async_trait]
-impl StateMachineStorage for DummyMakerSwapStorage {
+impl StateMachineStorage for MakerSwapStorage {
     type MachineId = Uuid;
     type Event = MakerSwapEvent;
-    type Error = MmError<MakerSwapStateMachineError>;
+    type Error = MmError<SwapStateMachineError>;
 
     async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
         let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
@@ -241,7 +224,7 @@ pub struct MakerSwapStateMachine<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: 
     /// MM2 context
     pub ctx: MmArc,
     /// Storage
-    pub storage: DummyMakerSwapStorage,
+    pub storage: MakerSwapStorage,
     /// Maker coin
     pub maker_coin: MakerCoin,
     /// The amount swapped by maker.
@@ -317,7 +300,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> MakerSwa
 impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
     for MakerSwapStateMachine<MakerCoin, TakerCoin>
 {
-    type Storage = DummyMakerSwapStorage;
+    type Storage = MakerSwapStorage;
     type Result = ();
 
     fn storage(&mut self) -> &mut Self::Storage { &mut self.storage }

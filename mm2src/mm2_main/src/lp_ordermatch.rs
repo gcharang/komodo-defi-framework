@@ -72,8 +72,8 @@ use uuid::Uuid;
 use crate::mm2::lp_network::{broadcast_p2p_msg, request_any_relay, request_one_peer, subscribe_to_topic, P2PRequest,
                              P2PRequestError};
 use crate::mm2::lp_swap::detect_secret_hash_algo;
-use crate::mm2::lp_swap::maker_swap_v2::{self, DummyMakerSwapStorage, MakerSwapStateMachine};
-use crate::mm2::lp_swap::taker_swap_v2::{self, DummyTakerSwapStorage, TakerSwapStateMachine};
+use crate::mm2::lp_swap::maker_swap_v2::{self, MakerSwapStateMachine, MakerSwapStorage};
+use crate::mm2::lp_swap::taker_swap_v2::{self, TakerSwapStateMachine, TakerSwapStorage};
 use crate::mm2::lp_swap::{calc_max_maker_vol, check_balance_for_maker_swap, check_balance_for_taker_swap,
                           check_other_coin_balance_for_swap, dex_fee_amount_from_taker_coin, generate_secret,
                           get_max_maker_vol, insert_new_swap_to_db, is_pubkey_banned, lp_atomic_locktime,
@@ -2962,7 +2962,7 @@ fn lp_connect_start_bob(ctx: MmArc, maker_match: MakerMatch, maker_order: MakerO
             match (maker_coin, taker_coin) {
                 (MmCoinEnum::UtxoCoin(m), MmCoinEnum::UtxoCoin(t)) => {
                     let mut maker_swap_state_machine = MakerSwapStateMachine {
-                        storage: DummyMakerSwapStorage::new(ctx.clone()),
+                        storage: MakerSwapStorage::new(ctx.clone()),
                         ctx,
                         started_at: now_sec(),
                         maker_coin: m.clone(),
@@ -3106,7 +3106,7 @@ fn lp_connected_alice(ctx: MmArc, taker_order: TakerOrder, taker_match: TakerMat
             match (maker_coin, taker_coin) {
                 (MmCoinEnum::UtxoCoin(m), MmCoinEnum::UtxoCoin(t)) => {
                     let mut taker_swap_state_machine = TakerSwapStateMachine {
-                        storage: DummyTakerSwapStorage::new(ctx.clone()),
+                        storage: TakerSwapStorage::new(ctx.clone()),
                         ctx,
                         started_at: now,
                         lock_duration: locktime,
