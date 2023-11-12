@@ -1,7 +1,11 @@
+use crate::context::CoinsActivationContext;
 use crate::platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPlatformBalance,
-                                       InitTokensAsMmCoinsError, PlatformWithTokensActivationOps, RegisterTokenInfo,
-                                       TokenActivationParams, TokenActivationRequest, TokenAsMmCoinInitializer,
-                                       TokenInitializer, TokenOf};
+                                       InitPlatformCoinWithTokensStandardAwaitingStatus,
+                                       InitPlatformCoinWithTokensStandardInProgressStatus,
+                                       InitPlatformCoinWithTokensStandardUserAction, InitPlatformCoinWithTokensTask,
+                                       InitPlatformTaskManagerShared, InitTokensAsMmCoinsError,
+                                       PlatformWithTokensActivationOps, RegisterTokenInfo, TokenActivationParams,
+                                       TokenActivationRequest, TokenAsMmCoinInitializer, TokenInitializer, TokenOf};
 use crate::prelude::*;
 use async_trait::async_trait;
 use coins::hd_wallet::HDAccountAddressId;
@@ -18,6 +22,7 @@ use mm2_err_handle::prelude::*;
 use mm2_event_stream::behaviour::{EventBehaviour, EventInitStatus};
 use mm2_event_stream::EventStreamConfiguration;
 use mm2_number::BigDecimal;
+use rpc_task::RpcTaskHandle;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::{HashMap, HashSet};
@@ -128,7 +133,7 @@ impl From<TendermintTokenInitializerErr> for InitTokensAsMmCoinsError {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct TendermintActivationResult {
     ticker: String,
     address: String,
@@ -164,6 +169,10 @@ impl PlatformWithTokensActivationOps for TendermintCoin {
     type PlatformProtocolInfo = TendermintProtocolInfo;
     type ActivationResult = TendermintActivationResult;
     type ActivationError = TendermintInitError;
+
+    type InProgressStatus = InitPlatformCoinWithTokensStandardInProgressStatus;
+    type AwaitingStatus = InitPlatformCoinWithTokensStandardAwaitingStatus;
+    type UserAction = InitPlatformCoinWithTokensStandardUserAction;
 
     async fn enable_platform_coin(
         ctx: MmArc,
@@ -219,6 +228,7 @@ impl PlatformWithTokensActivationOps for TendermintCoin {
 
     async fn get_activation_result(
         &self,
+        _task_handle: Option<&RpcTaskHandle<InitPlatformCoinWithTokensTask<TendermintCoin>>>,
         activation_request: &Self::ActivationRequest,
     ) -> Result<Self::ActivationResult, MmError<Self::ActivationError>> {
         let current_block = self.current_block().compat().await.map_to_mm(|e| TendermintInitError {
@@ -296,5 +306,9 @@ impl PlatformWithTokensActivationOps for TendermintCoin {
             });
         }
         Ok(())
+    }
+    
+    fn rpc_task_manager(_activation_ctx: &CoinsActivationContext) -> &InitPlatformTaskManagerShared<TendermintCoin> {
+        unimplemented!()
     }
 }

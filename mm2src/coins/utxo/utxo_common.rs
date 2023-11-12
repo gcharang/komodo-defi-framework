@@ -383,7 +383,7 @@ pub fn my_public_key(coin: &UtxoCoinFields) -> Result<&Public, MmError<Unexpecte
             ..
         } => Ok(activated_key_pair.public()),
         // Hardware Wallets requires BIP32/BIP44 derivation path to extract a public key.
-        PrivKeyPolicy::Trezor => MmError::err(UnexpectedDerivationMethod::Trezor),
+        PrivKeyPolicy::Trezor { .. } => MmError::err(UnexpectedDerivationMethod::Trezor),
         #[cfg(target_arch = "wasm32")]
         PrivKeyPolicy::Metamask(_) => MmError::err(UnexpectedDerivationMethod::UnsupportedError(
             "`PrivKeyPolicy::Metamask` is not supported in this context".to_string(),
@@ -2677,7 +2677,7 @@ pub fn display_priv_key(coin: &UtxoCoinFields) -> Result<String, String> {
             activated_key: ref activated_key_pair,
             ..
         } => Ok(activated_key_pair.private().to_string()),
-        PrivKeyPolicy::Trezor => ERR!("'display_priv_key' doesn't support Hardware Wallets"),
+        PrivKeyPolicy::Trezor { .. } => ERR!("'display_priv_key' doesn't support Hardware Wallets"),
         #[cfg(target_arch = "wasm32")]
         PrivKeyPolicy::Metamask(_) => ERR!("'display_priv_key' doesn't support Metamask"),
     }
@@ -4489,7 +4489,7 @@ pub fn derive_htlc_key_pair(coin: &UtxoCoinFields, _swap_unique_data: &[u8]) -> 
             activated_key: activated_key_pair,
             ..
         } => activated_key_pair,
-        PrivKeyPolicy::Trezor => todo!(),
+        PrivKeyPolicy::Trezor { .. } => todo!(),
         #[cfg(target_arch = "wasm32")]
         PrivKeyPolicy::Metamask(_) => panic!("`PrivKeyPolicy::Metamask` is not supported for UTXO coins"),
     }

@@ -3,6 +3,7 @@
 pub mod client;
 pub mod device_info;
 pub mod error;
+pub mod eth;
 mod proto;
 pub mod response;
 mod response_processor;

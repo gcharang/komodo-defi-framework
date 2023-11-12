@@ -2337,6 +2337,8 @@ pub enum WithdrawError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
+    #[display(fmt = "chain id not set: {}", _0)]
+    ChainIdRequired(String),
 }
 
 impl HttpStatusCode for WithdrawError {
@@ -2362,7 +2364,8 @@ impl HttpStatusCode for WithdrawError {
             | WithdrawError::AddressMismatchError { .. }
             | WithdrawError::ContractTypeDoesntSupportNftWithdrawing(_)
             | WithdrawError::CoinDoesntSupportNftWithdraw { .. }
-            | WithdrawError::NotEnoughNftsAmount { .. } => StatusCode::BAD_REQUEST,
+            | WithdrawError::NotEnoughNftsAmount { .. }
+            | WithdrawError::ChainIdRequired(_) => StatusCode::BAD_REQUEST,
             WithdrawError::HwError(_) => StatusCode::GONE,
             #[cfg(target_arch = "wasm32")]
             WithdrawError::BroadcastExpected(_) => StatusCode::BAD_REQUEST,
@@ -3244,7 +3247,14 @@ pub enum PrivKeyPolicy<T> {
     ///
     /// Details about how the keys are managed with the Trezor device
     /// are abstracted away and are not directly managed by this policy.
-    Trezor,
+    Trezor {
+        /// path to coin for Trezor, user only for eth. TODO: could we get this from trezor itself?
+        path_to_coin: Option<StandardHDPathToCoin>,
+        /// pubkey for initially derived account, used for Eth only
+        /// TODO: maybe better get pubkey each time when it is needed instead of storing here.
+        /// Also now it is stored as base58 encodes. Maybe better to store as a binary type Secp256k1ExtendedPublicKey
+        activated_pubkey: Option<String>,
+    },
     /// The Metamask private key policy, specific to the WASM target architecture.
     ///
     /// This variant encapsulates details about how keys are managed when interfacing
@@ -3272,7 +3282,7 @@ impl<T> PrivKeyPolicy<T> {
                 activated_key: activated_key_pair,
                 ..
             } => Some(activated_key_pair),
-            PrivKeyPolicy::Trezor => None,
+            PrivKeyPolicy::Trezor { .. } => None,
             #[cfg(target_arch = "wasm32")]
             PrivKeyPolicy::Metamask(_) => None,
         }
@@ -3292,7 +3302,7 @@ impl<T> PrivKeyPolicy<T> {
             PrivKeyPolicy::HDWallet {
                 bip39_secp_priv_key, ..
             } => Some(bip39_secp_priv_key),
-            PrivKeyPolicy::Iguana(_) | PrivKeyPolicy::Trezor => None,
+            PrivKeyPolicy::Iguana(_) | PrivKeyPolicy::Trezor { .. } => None,
             #[cfg(target_arch = "wasm32")]
             PrivKeyPolicy::Metamask(_) => None,
         }
@@ -3314,7 +3324,8 @@ impl<T> PrivKeyPolicy<T> {
                 path_to_coin: derivation_path,
                 ..
             } => Some(derivation_path),
-            PrivKeyPolicy::Iguana(_) | PrivKeyPolicy::Trezor => None,
+            PrivKeyPolicy::Trezor { path_to_coin, .. } => path_to_coin.as_ref(),
+            PrivKeyPolicy::Iguana(_) => None,
             #[cfg(target_arch = "wasm32")]
             PrivKeyPolicy::Metamask(_) => None,
         }
@@ -3337,7 +3348,12 @@ impl<T> PrivKeyPolicy<T> {
             .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
     }
 
-    fn is_trezor(&self) -> bool { matches!(self, PrivKeyPolicy::Trezor) }
+    fn is_trezor(&self) -> bool {
+        matches!(self, PrivKeyPolicy::Trezor {
+            path_to_coin: _,
+            activated_pubkey: _
+        })
+    }
 }
 
 /// 'CoinWithPrivKeyPolicy' trait is used to get the private key policy of a coin.
@@ -4788,5 +4804,63 @@ mod tests {
         let _found = common::block_on(lp_coinfind_any(&ctx, RICK)).unwrap();
 
         assert!(matches!(Some(coin), _found));
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod for_tests {
+    use crate::rpc_command::init_withdraw::WithdrawStatusRequest;
+    use crate::rpc_command::init_withdraw::{init_withdraw, withdraw_status};
+    use crate::{TransactionDetails, WithdrawError, WithdrawFee, WithdrawFrom, WithdrawRequest};
+    use common::executor::Timer;
+    use common::{now_ms, wait_until_ms};
+    use mm2_core::mm_ctx::MmArc;
+    use mm2_err_handle::prelude::MmResult;
+    use mm2_number::BigDecimal;
+    use rpc_task::RpcTaskStatus;
+    use std::str::FromStr;
+
+    /// Helper to call init_withdraw and wait for completion
+    pub async fn test_withdraw_init_loop(
+        ctx: MmArc,
+        //fields: UtxoCoinFields,
+        ticker: &str,
+        to: &str,
+        amount: &str,
+        from_derivation_path: &str,
+        fee: Option<WithdrawFee>,
+    ) -> MmResult<TransactionDetails, WithdrawError> {
+        let withdraw_req = WithdrawRequest {
+            amount: BigDecimal::from_str(amount).unwrap(),
+            from: Some(WithdrawFrom::DerivationPath {
+                derivation_path: from_derivation_path.to_owned(),
+            }),
+            to: to.to_owned(),
+            coin: ticker.to_owned(),
+            max: false,
+            fee,
+            memo: None,
+        };
+        let init = init_withdraw(ctx.clone(), withdraw_req).await.unwrap();
+        let timeout = wait_until_ms(150000);
+        loop {
+            if now_ms() > timeout {
+                panic!("{} init_withdraw timed out", ticker);
+            }
+            let status = withdraw_status(ctx.clone(), WithdrawStatusRequest {
+                task_id: init.task_id,
+                forget_if_finished: true,
+            })
+            .await;
+            if let Ok(status) = status {
+                match status {
+                    RpcTaskStatus::Ok(tx_details) => break Ok(tx_details),
+                    RpcTaskStatus::Error(e) => break Err(e),
+                    _ => Timer::sleep(1.).await,
+                }
+            } else {
+                panic!("{} could not get withdraw_status", ticker)
+            }
+        }
     }
 }

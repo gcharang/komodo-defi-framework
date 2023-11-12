@@ -1,11 +1,12 @@
 #[cfg(all(feature = "zhtlc-native-tests", not(target_arch = "wasm32")))]
 use super::enable_z_coin;
 use crate::integration_tests_common::*;
-use coins::utxo::for_tests::test_withdraw_init_loop;
-use coins::utxo::{utxo_builder::{UtxoArcBuilder, UtxoCoinBuilder},
-                  utxo_standard::UtxoStandardCoin,
-                  UtxoActivationParams};
-use coins::PrivKeyBuildPolicy;
+use coins::eth::{eth_coin_from_conf_and_request, EthCoin, ETH_GAS};
+use coins::for_tests::test_withdraw_init_loop;
+use coins::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps};
+use coins::utxo::{utxo_standard::UtxoStandardCoin, UtxoActivationParams};
+use coins::{lp_coinfind, CoinProtocol, MmCoinEnum, PrivKeyBuildPolicy};
+use coins_activation::platform_for_tests::init_platform_coin_with_tokens_loop;
 use coins_activation::{for_tests::init_standalone_coin_loop, InitStandaloneCoinReq};
 use common::executor::Timer;
 use common::now_ms;
@@ -28,19 +29,20 @@ use mm2_test_helpers::for_tests::init_trezor_rpc;
 use mm2_test_helpers::for_tests::init_trezor_status_rpc;
 #[cfg(all(not(target_arch = "wasm32")))]
 use mm2_test_helpers::for_tests::mm_ctx_with_custom_db_with_conf;
-use mm2_test_helpers::for_tests::{btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
-                                  check_recent_swaps, enable_eth_coin, enable_qrc20, eth_jst_testnet_conf,
-                                  eth_testnet_conf, find_metrics_in_json, from_env_file, get_shared_db_id,
-                                  init_withdraw, mm_spat, morty_conf, rick_conf, sign_message, start_swaps,
-                                  tbtc_legacy_conf, tbtc_segwit_conf, tbtc_with_spv_conf, test_qrc20_history_impl,
-                                  tqrc20_conf, verify_message, wait_for_swap_contract_negotiation,
+use mm2_test_helpers::for_tests::{account_balance, btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
+                                  check_recent_swaps, enable_eth_coin, enable_eth_with_tokens, enable_qrc20,
+                                  enable_utxo_v2_electrum, eth_jst_testnet_conf,
+                                  eth_sepolia_trezor_firmware_compat_conf, eth_testnet_conf, find_metrics_in_json,
+                                  from_env_file, get_new_address, get_shared_db_id, init_withdraw, mm_spat,
+                                  morty_conf, rick_conf, sign_message, start_swaps, tbtc_legacy_conf,
+                                  tbtc_segwit_conf, tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf,
+                                  verify_message, wait_for_swap_contract_negotiation,
                                   wait_for_swap_negotiation_failure, wait_for_swaps_finish_and_check_status,
                                   wait_till_history_has_records, withdraw_status, MarketMakerIt, Mm2InitPrivKeyPolicy,
-                                  Mm2TestConf, Mm2TestConfForSwap, RaiiDump, ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT,
-                                  ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MORTY,
-                                  QRC20_ELECTRUMS, RICK, RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS, enable_utxo_v2_electrum, 
-                                  enable_eth_with_tokens, account_balance, get_new_address, 
-                                  DOC_ELECTRUM_ADDRS, MARTY_ELECTRUM_ADDRS, T_BCH_ELECTRUMS};
+                                  Mm2TestConf, Mm2TestConfForSwap, RaiiDump, DOC_ELECTRUM_ADDRS, ETH_DEV_NODES,
+                                  ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE,
+                                  ETH_MAINNET_SWAP_CONTRACT, ETH_SEPOLIA_NODE, MARTY_ELECTRUM_ADDRS, MORTY,
+                                  QRC20_ELECTRUMS, RICK, RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS, T_BCH_ELECTRUMS};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::*;
 use rpc_task::{rpc_common::RpcTaskStatusRequest, RpcTaskStatus};
@@ -841,8 +843,15 @@ async fn trade_base_rel_electrum(
             log!("enable_morty (alice): {:?}", enable_morty);
         },
         Mm2InitPrivKeyPolicy::GlobalHDAccount => {
-            let enable_rick =
-                enable_utxo_v2_electrum(&mm_alice, "RICK", doc_electrums(), alice_path_to_address.clone(), 60, None).await;
+            let enable_rick = enable_utxo_v2_electrum(
+                &mm_alice,
+                "RICK",
+                doc_electrums(),
+                alice_path_to_address.clone(),
+                60,
+                None,
+            )
+            .await;
             log!("enable_rick (alice): {:?}", enable_rick);
             let enable_morty =
                 enable_utxo_v2_electrum(&mm_alice, "MORTY", marty_electrums(), alice_path_to_address, 60, None).await;
@@ -7351,7 +7360,14 @@ fn test_btc_block_header_sync() {
     let (_dump_log, _dump_dashboard) = mm_bob.mm_dump();
     log!("log path: {}", mm_bob.log_path.display());
 
-    let utxo_bob = block_on(enable_utxo_v2_electrum(&mm_bob, "BTC", btc_electrums(), None, 600, None));
+    let utxo_bob = block_on(enable_utxo_v2_electrum(
+        &mm_bob,
+        "BTC",
+        btc_electrums(),
+        None,
+        600,
+        None,
+    ));
     log!("enable UTXO bob {:?}", utxo_bob);
 
     block_on(mm_bob.stop()).unwrap();
@@ -7456,7 +7472,8 @@ fn test_enable_utxo_with_enable_hd() {
     for _ in 0..8 {
         block_on(get_new_address(&mm_hd_0, "BTC-segwit", 77, Some(Bip44Chain::External)));
     }
-    let account_balance = block_on(account_balance(&mm_hd_0, "BTC-segwit", 77, Bip44Chain::External));
+    let account_balance: HDAccountBalanceResponse =
+        block_on(account_balance(&mm_hd_0, "BTC-segwit", 77, Bip44Chain::External));
     assert_eq!(
         account_balance.addresses[7].address,
         "bc1q0dxnd7afj997a40j86a8a6dq3xs3dwm7rkzams"
@@ -7809,7 +7826,9 @@ pub enum InitTrezorStatus {
 pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
     let ctx = mm_ctx_with_custom_db_with_conf(Some(conf));
 
-    CryptoCtx::init_with_iguana_passphrase(ctx.clone(), "123456").unwrap(); // for now we need passphrase seed for init
+    //CryptoCtx::init_with_iguana_passphrase(ctx.clone(), "123456").unwrap(); // for now we need passphrase seed for init
+    //CryptoCtx::init_with_iguana_passphrase(ctx.clone(), "spice describe gravity federal blast come thank unfair canal monkey style afraid").unwrap(); // for now we need passphrase seed for init
+    CryptoCtx::init_with_global_hd_account(ctx.clone(), "nothing tail captain royal canoe pencil pair arch ice west vintage thumb party task scrub ridge shift argue churn always forget island jelly trumpet").unwrap();
     let req: InitHwRequest = serde_json::from_value(json!({ "device_pubkey": null })).unwrap();
     let res = match init_trezor(ctx.clone(), req).await {
         Ok(res) => res,
@@ -7861,7 +7880,6 @@ fn test_withdraw_from_trezor_segwit_no_rpc() {
     let mm_conf = json!({ "coins": [coin_conf] });
 
     let ctx = block_on(mm_ctx_with_trezor(mm_conf));
-    let priv_key_policy = PrivKeyBuildPolicy::Trezor;
     let enable_req = json!({
         "method": "electrum",
         "coin": ticker,
@@ -7878,22 +7896,14 @@ fn test_withdraw_from_trezor_segwit_no_rpc() {
     block_on(init_standalone_coin_loop::<UtxoStandardCoin>(ctx.clone(), request))
         .expect("coin activation must be successful");
 
-    let builder = UtxoArcBuilder::new(
-        &ctx,
-        ticker,
-        &coin_conf,
-        &activation_params,
-        priv_key_policy,
-        UtxoStandardCoin::from,
-    );
-    let fields = block_on(builder.build_utxo_fields()).unwrap();
     let tx_details = block_on(test_withdraw_init_loop(
         ctx.clone(),
-        fields,
+        //fields,
         ticker,
         "tb1q3zkv6g29ku3jh9vdkhxlpyek44se2s0zrv7ctn",
         "0.00001",
         "m/84'/1'/0'/0/0",
+        None,
     ))
     .expect("withdraw must end successfully");
     log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
@@ -8034,4 +8044,108 @@ fn test_withdraw_from_trezor_p2pkh_rpc() {
         Some(json!({"derivation_path": "m/44'/1'/0'/0/0"})),
     ));
     log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+}
+
+/// We cannot put this code in coins/eth_tests.rs as trezor init needs some structs in mm2_main
+#[test]
+pub fn eth_my_balance() {
+    let req = json!({
+        "method": "enable",
+        "coin": "ETH",
+        "urls": ETH_SEPOLIA_NODE,
+        "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
+        "priv_key_policy": "Trezor",
+    });
+
+    let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
+    eth_conf["mm2"] = 2.into();
+    let mm_conf = json!({ "coins": [eth_conf] });
+
+    let ctx = block_on(mm_ctx_with_trezor(mm_conf));
+    let priv_key_policy = PrivKeyBuildPolicy::Trezor;
+    // this activate method does not create a default hd wallet account what is needed for trezor
+    // maybe make a new account as a separate call?
+    // for that we need get_activation_result() to be called (which calls enable_balance and then create_new_account)
+    let eth_coin = block_on(eth_coin_from_conf_and_request(
+        &ctx,
+        "ETH",
+        &eth_conf,
+        &req,
+        CoinProtocol::ETH,
+        priv_key_policy,
+    ))
+    .unwrap();
+
+    let account_balance = block_on(eth_coin.account_balance_rpc(AccountBalanceParams {
+        account_index: 0,
+        chain: crypto::Bip44Chain::External,
+        limit: Default::default(),
+        paging_options: Default::default(),
+    }))
+    .unwrap();
+    println!("account_balance={:?}", account_balance);
+}
+
+/// Tool to run eth withdraw directly with trezor device or emulator (no rpc version, added for easier debugging)
+/// run cargo test with '--ignored' option
+/// to use trezor emulator add '--features trezor-udp' option to cargo test params
+#[test]
+#[ignore]
+#[cfg(all(not(target_arch = "wasm32")))]
+fn test_eth_withdraw_from_trezor_no_rpc() {
+    use coins::WithdrawFee;
+
+    let ticker = "ETH";
+
+    let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
+    eth_conf["mm2"] = 2.into();
+    let mm_conf = json!({ "coins": [eth_conf] });
+
+    let ctx = block_on(mm_ctx_with_trezor(mm_conf));
+    block_on(init_platform_coin_with_tokens_loop::<EthCoin>(
+        ctx.clone(),
+        json::from_value(json!({
+            "ticker": ticker,
+            "rpc_mode": "Http",
+            "nodes": [
+                {"url": "https://rpc2.sepolia.org"},
+                {"url": "https://rpc.sepolia.org/"}
+            ],
+            "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
+            "erc20_tokens_requests": [],
+            "priv_key_policy": "Trezor"
+        }))
+        .unwrap(),
+    ))
+    .unwrap();
+
+    let coin = block_on(lp_coinfind(&ctx, "ETH")).unwrap();
+    let eth_coin = if let Some(MmCoinEnum::EthCoin(eth_coin)) = coin {
+        eth_coin
+    } else {
+        panic!("eth coin not enabled");
+    };
+    let account_balance = block_on(eth_coin.account_balance_rpc(AccountBalanceParams {
+        account_index: 0,
+        chain: crypto::Bip44Chain::External,
+        limit: 1,
+        paging_options: Default::default(),
+    }))
+    .unwrap();
+    println!("account_balance={:?}", account_balance);
+
+    let tx_details = block_on(test_withdraw_init_loop(
+        ctx.clone(),
+        ticker,
+        "0xc06eFafa6527fc4b3C8F69Afb173964A3780a104",
+        "0.00001",
+        "m/44'/1'/0'/0/0",
+        Some(WithdrawFee::EthGas {
+            gas: ETH_GAS,
+            gas_price: 100_000_000_000_i64.into(),
+        }),
+    ))
+    .expect("withdraw must end successfully");
+    log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+    // TODO: check maybe we need to disconnect trezor somehow
 }

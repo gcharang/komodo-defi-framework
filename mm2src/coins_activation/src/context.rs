@@ -1,3 +1,4 @@
+use crate::eth_with_token_activation::EthTaskManagerShared;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lightning_activation::LightningTaskManagerShared;
 use crate::utxo_activation::{QtumTaskManagerShared, UtxoStandardTaskManagerShared};
@@ -14,6 +15,7 @@ pub struct CoinsActivationContext {
     pub(crate) init_z_coin_task_manager: ZcoinTaskManagerShared,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) init_lightning_task_manager: LightningTaskManagerShared,
+    pub(crate) init_eth_task_manager: EthTaskManagerShared,
 }
 
 impl CoinsActivationContext {
@@ -27,6 +29,7 @@ impl CoinsActivationContext {
                 init_z_coin_task_manager: RpcTaskManager::new_shared(),
                 #[cfg(not(target_arch = "wasm32"))]
                 init_lightning_task_manager: RpcTaskManager::new_shared(),
+                init_eth_task_manager: RpcTaskManager::new_shared(),
             })
         })
     }

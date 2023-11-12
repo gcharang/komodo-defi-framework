@@ -249,6 +249,7 @@ impl RpcTask for InitCreateAccountTask {
             state: CreateAccountState,
             task_handle: &CreateAccountTaskHandle,
             is_trezor: bool,
+            is_eth: bool,
         ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
         where
             Coin: InitCreateAccountRpcOps + Send + Sync,
@@ -263,7 +264,7 @@ impl RpcTask for InitCreateAccountTask {
                     on_passphrase_request: CreateAccountAwaitingStatus::EnterTrezorPassphrase,
                     on_ready: CreateAccountInProgressStatus::RequestingAccountBalance,
                 };
-                Some(CreateAccountXPubExtractor::new(ctx, task_handle, hw_statuses)?)
+                Some(CreateAccountXPubExtractor::new(ctx, task_handle, hw_statuses, is_eth)?)
             } else {
                 None
             };
@@ -279,6 +280,7 @@ impl RpcTask for InitCreateAccountTask {
                     self.task_state.clone(),
                     task_handle,
                     utxo.is_trezor(),
+                    false,
                 )
                 .await
             },
@@ -290,6 +292,7 @@ impl RpcTask for InitCreateAccountTask {
                     self.task_state.clone(),
                     task_handle,
                     qtum.is_trezor(),
+                    false,
                 )
                 .await
             },
@@ -301,6 +304,7 @@ impl RpcTask for InitCreateAccountTask {
                     self.task_state.clone(),
                     task_handle,
                     false,
+                    true,
                 )
                 .await
             },

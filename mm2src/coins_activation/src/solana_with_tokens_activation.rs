@@ -1,4 +1,6 @@
+use crate::context::CoinsActivationContext;
 use crate::platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPlatformBalance,
+                                       InitPlatformCoinWithTokensTask, InitPlatformTaskManagerShared,
                                        InitTokensAsMmCoinsError, PlatformWithTokensActivationOps, RegisterTokenInfo,
                                        TokenActivationParams, TokenActivationRequest, TokenAsMmCoinInitializer,
                                        TokenInitializer, TokenOf};
@@ -14,12 +16,14 @@ use coins::{BalanceError, CoinBalance, CoinProtocol, MarketCoinOps, MmCoinEnum, 
             SolanaActivationParams, SolanaCoin, SplToken};
 use common::Future01CompatExt;
 use common::{drop_mutability, true_f};
+use crypto::hw_rpc_task::{HwConnectStatuses, HwRpcTaskAwaitingStatus, HwRpcTaskUserAction};
 use crypto::CryptoCtxError;
 use futures::future::try_join_all;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_event_stream::EventStreamConfiguration;
 use mm2_number::BigDecimal;
+use rpc_task::{RpcTask, RpcTaskHandle, RpcTaskManagerShared, RpcTaskTypes};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::HashMap;
@@ -183,6 +187,10 @@ impl PlatformWithTokensActivationOps for SolanaCoin {
     type ActivationResult = SolanaWithTokensActivationResult;
     type ActivationError = SolanaWithTokensActivationError;
 
+    type InProgressStatus = InitPlatformCoinWithTokensStandardInProgressStatus;
+    type AwaitingStatus = InitPlatformCoinWithTokensStandardAwaitingStatus;
+    type UserAction = InitPlatformCoinWithTokensStandardUserAction;
+
     async fn enable_platform_coin(
         ctx: MmArc,
         ticker: String,
@@ -222,6 +230,7 @@ impl PlatformWithTokensActivationOps for SolanaCoin {
 
     async fn get_activation_result(
         &self,
+        task_handle: Option<&RpcTaskHandle<InitPlatformCoinWithTokensTask<SolanaCoin>>>,
         activation_request: &Self::ActivationRequest,
     ) -> Result<Self::ActivationResult, MmError<Self::ActivationError>> {
         let current_block = self
@@ -296,4 +305,36 @@ impl PlatformWithTokensActivationOps for SolanaCoin {
     ) -> Result<(), MmError<Self::ActivationError>> {
         Ok(())
     }
+    
+    fn rpc_task_manager(activation_ctx: &CoinsActivationContext) -> &InitPlatformTaskManagerShared<SolanaCoin> {
+        unimplemented!()
+    }
 }
+
+/*
+pub struct InitSolanaTask {}
+
+pub type SolanaTaskManagerShared = RpcTaskManagerShared<InitSolanaTask>;
+pub type SolanaActivationV2AwaitingStatus = HwRpcTaskAwaitingStatus;
+pub type SolanaActivationV2UserAction = HwRpcTaskUserAction;
+
+impl RpcTaskTypes for InitSolanaTask {
+    type Item = ();
+    type Error = ();
+    type InProgressStatus = ();
+    type AwaitingStatus = SolanaActivationV2AwaitingStatus;
+    type UserAction = SolanaActivationV2UserAction;
+}
+
+#[async_trait]
+impl RpcTask for InitSolanaTask {
+    fn initial_status(&self) -> Self::InProgressStatus { todo!() }
+
+    async fn cancel(self) { todo!() }
+
+    async fn run(&mut self, _task_handle: &RpcTaskHandle<InitSolanaTask>) -> Result<Self::Item, MmError<Self::Error>> {
+        Ok(())
+    }
+}
+
+*/

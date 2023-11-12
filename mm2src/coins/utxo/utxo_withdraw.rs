@@ -317,7 +317,7 @@ where
                 activated_key: ref activated_key_pair,
                 ..
             } => SignPolicy::WithKeyPair(activated_key_pair),
-            PrivKeyPolicy::Trezor => {
+            PrivKeyPolicy::Trezor { .. } => {
                 let trezor_session = hw_ctx.trezor().await?;
                 SignPolicy::WithTrezor(trezor_session)
             },

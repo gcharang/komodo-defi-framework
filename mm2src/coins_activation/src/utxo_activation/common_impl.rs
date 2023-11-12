@@ -43,7 +43,7 @@ where
 
     let xpub_extractor = if coin.is_trezor() {
         Some(
-            RpcTaskXPubExtractor::new(ctx, task_handle, xpub_extractor_rpc_statuses())
+            RpcTaskXPubExtractor::new(ctx, task_handle, xpub_extractor_rpc_statuses(), false)
                 .mm_err(|_| InitUtxoStandardError::HwError(HwRpcError::NotInitialized))?,
         )
     } else {

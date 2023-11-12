@@ -351,7 +351,10 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             decimals,
             dust_amount,
             rpc_client,
-            priv_key_policy: PrivKeyPolicy::Trezor,
+            priv_key_policy: PrivKeyPolicy::Trezor {
+                path_to_coin: None,
+                activated_pubkey: None,
+            },
             derivation_method: DerivationMethod::HDWallet(hd_wallet),
             history_sync_state: Mutex::new(initial_history_state),
             tx_cache,
