@@ -309,7 +309,6 @@ pub async fn eth_coin_from_conf_and_request_v2(
         build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &req.path_to_address, req.gap_limit)
             .await?;
     let enabled_address = match priv_key_policy {
-        // TODO: stub for test, remove as we do not use eth_coin_from_conf_and_request_v2 with trezor
         PrivKeyPolicy::Trezor {
             path_to_coin: _,
             ref activated_pubkey,

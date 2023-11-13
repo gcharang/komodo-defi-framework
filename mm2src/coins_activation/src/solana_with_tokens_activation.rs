@@ -310,31 +310,3 @@ impl PlatformWithTokensActivationOps for SolanaCoin {
         unimplemented!()
     }
 }
-
-/*
-pub struct InitSolanaTask {}
-
-pub type SolanaTaskManagerShared = RpcTaskManagerShared<InitSolanaTask>;
-pub type SolanaActivationV2AwaitingStatus = HwRpcTaskAwaitingStatus;
-pub type SolanaActivationV2UserAction = HwRpcTaskUserAction;
-
-impl RpcTaskTypes for InitSolanaTask {
-    type Item = ();
-    type Error = ();
-    type InProgressStatus = ();
-    type AwaitingStatus = SolanaActivationV2AwaitingStatus;
-    type UserAction = SolanaActivationV2UserAction;
-}
-
-#[async_trait]
-impl RpcTask for InitSolanaTask {
-    fn initial_status(&self) -> Self::InProgressStatus { todo!() }
-
-    async fn cancel(self) { todo!() }
-
-    async fn run(&mut self, _task_handle: &RpcTaskHandle<InitSolanaTask>) -> Result<Self::Item, MmError<Self::Error>> {
-        Ok(())
-    }
-}
-
-*/

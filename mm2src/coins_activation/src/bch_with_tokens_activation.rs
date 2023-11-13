@@ -352,30 +352,3 @@ impl PlatformWithTokensActivationOps for BchCoin {
         unimplemented!()
     }
 }
-
-/*
-pub struct InitBchTask {}
-
-pub type BchTaskManagerShared = RpcTaskManagerShared<InitBchTask>;
-pub type BchActivationV2AwaitingStatus = HwRpcTaskAwaitingStatus;
-pub type BchActivationV2UserAction = HwRpcTaskUserAction;
-
-impl RpcTaskTypes for InitBchTask {
-    type Item = ();
-    type Error = ();
-    type InProgressStatus = ();
-    type AwaitingStatus = BchActivationV2AwaitingStatus;
-    type UserAction = BchActivationV2UserAction;
-}
-
-#[async_trait]
-impl RpcTask for InitBchTask {
-    fn initial_status(&self) -> Self::InProgressStatus { todo!() }
-
-    async fn cancel(self) { todo!() }
-
-    async fn run(&mut self, _task_handle: &RpcTaskHandle<InitBchTask>) -> Result<Self::Item, MmError<Self::Error>> {
-        Ok(())
-    }
-}
-*/
