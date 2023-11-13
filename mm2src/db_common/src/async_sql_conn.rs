@@ -1,10 +1,14 @@
 use crate::sqlite::rusqlite::Error as SqlError;
+use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
+use common::executor::{AbortSettings, SpawnAbortable, SpawnFuture};
 use crossbeam_channel::Sender;
 use futures::channel::oneshot::{self};
 use rusqlite::OpenFlags;
 use std::fmt::{self, Debug, Display};
+// use std::future::Future as Future03;
+use futures::Future as Future03;
 use std::path::Path;
-use std::thread;
+// use std::thread;
 
 /// Represents the errors specific for AsyncConnection.
 #[derive(Debug)]
@@ -83,9 +87,9 @@ impl AsyncConnection {
     ///
     /// Will return `Err` if `path` cannot be converted to a C-compatible
     /// string or if the underlying SQLite open call fails.
-    pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub async fn open<P: AsRef<Path>>(path: P, spawner: AsyncConnFutSpawner) -> Result<Self> {
         let path = path.as_ref().to_owned();
-        start(move || rusqlite::Connection::open(path)).await
+        start(move || rusqlite::Connection::open(path), spawner).await
     }
 
     /// Open a new AsyncConnection to an in-memory SQLite database.
@@ -93,7 +97,9 @@ impl AsyncConnection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite open call fails.
-    pub async fn open_in_memory() -> Result<Self> { start(rusqlite::Connection::open_in_memory).await }
+    pub async fn open_in_memory() -> Result<Self> {
+        start(rusqlite::Connection::open_in_memory, AsyncConnFutSpawner::default()).await
+    }
 
     /// Open a new AsyncConnection to a SQLite database.
     ///
@@ -104,9 +110,13 @@ impl AsyncConnection {
     ///
     /// Will return `Err` if `path` cannot be converted to a C-compatible
     /// string or if the underlying SQLite open call fails.
-    pub async fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Self> {
+    pub async fn open_with_flags<P: AsRef<Path>>(
+        path: P,
+        flags: OpenFlags,
+        spawner: AsyncConnFutSpawner,
+    ) -> Result<Self> {
         let path = path.as_ref().to_owned();
-        start(move || rusqlite::Connection::open_with_flags(path, flags)).await
+        start(move || rusqlite::Connection::open_with_flags(path, flags), spawner).await
     }
 
     /// Open a new AsyncConnection to a SQLite database using the specific flags
@@ -119,10 +129,19 @@ impl AsyncConnection {
     ///
     /// Will return `Err` if either `path` or `vfs` cannot be converted to a
     /// C-compatible string or if the underlying SQLite open call fails.
-    pub async fn open_with_flags_and_vfs<P: AsRef<Path>>(path: P, flags: OpenFlags, vfs: &str) -> Result<Self> {
+    pub async fn open_with_flags_and_vfs<P: AsRef<Path>>(
+        path: P,
+        flags: OpenFlags,
+        vfs: &str,
+        spawner: AsyncConnFutSpawner,
+    ) -> Result<Self> {
         let path = path.as_ref().to_owned();
         let vfs = vfs.to_owned();
-        start(move || rusqlite::Connection::open_with_flags_and_vfs(path, flags, &vfs)).await
+        start(
+            move || rusqlite::Connection::open_with_flags_and_vfs(path, flags, &vfs),
+            spawner,
+        )
+        .await
     }
 
     /// Open a new AsyncConnection to an in-memory SQLite database.
@@ -134,7 +153,11 @@ impl AsyncConnection {
     ///
     /// Will return `Err` if the underlying SQLite open call fails.
     pub async fn open_in_memory_with_flags(flags: OpenFlags) -> Result<Self> {
-        start(move || rusqlite::Connection::open_in_memory_with_flags(flags)).await
+        start(
+            move || rusqlite::Connection::open_in_memory_with_flags(flags),
+            AsyncConnFutSpawner::default(),
+        )
+        .await
     }
 
     /// Open a new connection to an in-memory SQLite database using the
@@ -149,7 +172,11 @@ impl AsyncConnection {
     /// string or if the underlying SQLite open call fails.
     pub async fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Self> {
         let vfs = vfs.to_owned();
-        start(move || rusqlite::Connection::open_in_memory_with_flags_and_vfs(flags, &vfs)).await
+        start(
+            move || rusqlite::Connection::open_in_memory_with_flags_and_vfs(flags, &vfs),
+            AsyncConnFutSpawner::default(),
+        )
+        .await
     }
 
     /// Call a function in background thread and get the result asynchronously.
@@ -238,14 +265,14 @@ impl Debug for AsyncConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_struct("AsyncConnection").finish() }
 }
 
-async fn start<F>(open: F) -> Result<AsyncConnection>
+async fn start<F>(open: F, spawner: AsyncConnFutSpawner) -> Result<AsyncConnection>
 where
     F: FnOnce() -> rusqlite::Result<rusqlite::Connection> + Send + 'static,
 {
     let (sender, receiver) = crossbeam_channel::unbounded::<Message>();
     let (result_sender, result_receiver) = oneshot::channel();
 
-    thread::spawn(move || {
+    let fut = async move {
         let mut conn = match open() {
             Ok(c) => c,
             Err(e) => {
@@ -283,10 +310,47 @@ where
                 },
             }
         }
-    });
+    };
+
+    spawner.spawn(fut);
 
     result_receiver
         .await
         .map_err(|e| AsyncConnError::Internal(InternalError(e.to_string())))
         .map(|_| AsyncConnection { sender })
+}
+
+#[derive(Clone)]
+pub struct AsyncConnFutSpawner {
+    inner: WeakSpawner,
+}
+
+impl AsyncConnFutSpawner {
+    pub fn new(system: &AbortableQueue) -> AsyncConnFutSpawner {
+        AsyncConnFutSpawner {
+            inner: system.weak_spawner(),
+        }
+    }
+}
+
+impl Default for AsyncConnFutSpawner {
+    fn default() -> Self { AsyncConnFutSpawner::new(&AbortableQueue::default()) }
+}
+
+impl SpawnFuture for AsyncConnFutSpawner {
+    fn spawn<F>(&self, f: F)
+    where
+        F: Future03<Output = ()> + Send + 'static,
+    {
+        self.inner.spawn(f)
+    }
+}
+
+impl SpawnAbortable for AsyncConnFutSpawner {
+    fn spawn_with_settings<F>(&self, fut: F, settings: AbortSettings)
+    where
+        F: Future03<Output = ()> + Send + 'static,
+    {
+        self.inner.spawn_with_settings(fut, settings)
+    }
 }

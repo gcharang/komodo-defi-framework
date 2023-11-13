@@ -643,6 +643,7 @@ impl From<Nft> for TransferMeta {
 /// This struct provides an interface for interacting with the underlying data structures
 /// required for NFT operations, including guarding against concurrent accesses and
 /// dealing with platform-specific storage mechanisms.
+#[derive(Debug)]
 pub(crate) struct NftCtx {
     /// Platform-specific database for caching NFT data.
     #[cfg(target_arch = "wasm32")]

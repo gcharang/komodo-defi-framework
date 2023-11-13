@@ -27,6 +27,7 @@ cfg_wasm32! {
 
 cfg_native! {
     use db_common::async_sql_conn::AsyncConnection;
+    use db_common::async_sql_conn::AsyncConnFutSpawner;
     use db_common::sqlite::rusqlite::Connection;
     use futures::lock::Mutex as AsyncMutex;
     use futures_rustls::webpki::DNSNameRef;
@@ -349,7 +350,11 @@ impl MmCtx {
             "Trying to open SQLite database file {}",
             try_s!(sqlite_file_path.canonicalize()).display()
         );
-        let async_conn = try_s!(AsyncConnection::open(sqlite_file_path).await);
+        // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,
+        // all spawned futures related to `AsyncConnection` will be aborted as well.
+        let abortable_system = try_s!(self.abortable_system.create_subsystem());
+        let spawner = AsyncConnFutSpawner::new(&abortable_system);
+        let async_conn = try_s!(AsyncConnection::open(sqlite_file_path, spawner).await);
         try_s!(self.async_sqlite_connection.pin(Arc::new(AsyncMutex::new(async_conn))));
         Ok(())
     }
