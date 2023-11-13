@@ -23,13 +23,19 @@ pub trait OnNewState<S>: StateMachineTrait {
     async fn on_new_state(&mut self, state: &S) -> Result<(), <Self as StateMachineTrait>::Error>;
 }
 
+pub trait StateMachineDbRepr {
+    type Event: Send;
+
+    fn add_event(&mut self, event: Self::Event);
+}
+
 /// A trait for the storage of state machine events.
 #[async_trait]
 pub trait StateMachineStorage: Send + Sync {
     /// The type representing a unique identifier for a state machine.
     type MachineId: Send;
-    /// The type representing an event that can be stored.
-    type Event: Send;
+    /// The type representing state machine's DB representation.
+    type DbRepr: StateMachineDbRepr;
     /// The type representing an error that can occur during storage operations.
     type Error: Send;
 
@@ -43,7 +49,11 @@ pub trait StateMachineStorage: Send + Sync {
     /// # Returns
     ///
     /// A `Result` indicating success (`Ok(())`) or an error (`Err(Self::Error)`).
-    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error>;
+    async fn store_event(
+        &mut self,
+        id: Self::MachineId,
+        event: <Self::DbRepr as StateMachineDbRepr>::Event,
+    ) -> Result<(), Self::Error>;
 
     /// Retrieves a list of unfinished state machines.
     ///
@@ -111,7 +121,7 @@ pub trait StorableStateMachine: Send + Sized + 'static {
     /// A `Result` indicating success (`Ok(())`) or an error (`Err(Self::Error)`).
     async fn store_event(
         &mut self,
-        event: <Self::Storage as StateMachineStorage>::Event,
+        event: <<Self::Storage as StateMachineStorage>::DbRepr as StateMachineDbRepr>::Event,
     ) -> Result<(), <Self::Storage as StateMachineStorage>::Error> {
         let id = self.id();
         self.storage().store_event(id, event).await
@@ -151,7 +161,7 @@ pub trait StorableState {
     type StateMachine: StorableStateMachine;
 
     /// Gets the event associated with this state.
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event;
+    fn get_event(&self) -> <<<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::DbRepr as StateMachineDbRepr>::Event;
 }
 
 /// Implementation of `OnNewState` for storable state machines and their related states.
@@ -288,17 +298,25 @@ mod tests {
         ForState4,
     }
 
+    struct TestStateMachineRepr {}
+
+    impl StateMachineDbRepr for TestStateMachineRepr {
+        type Event = TestEvent;
+
+        fn add_event(&mut self, _event: Self::Event) { unimplemented!() }
+    }
+
     #[async_trait]
     impl StateMachineStorage for StorageTest {
         type MachineId = usize;
-        type Event = TestEvent;
+        type DbRepr = TestStateMachineRepr;
         type Error = Infallible;
 
-        async fn store_event(&mut self, machine_id: usize, events: Self::Event) -> Result<(), Self::Error> {
+        async fn store_event(&mut self, machine_id: usize, event: TestEvent) -> Result<(), Self::Error> {
             self.events_unfinished
                 .entry(machine_id)
                 .or_insert_with(Vec::new)
-                .push(events);
+                .push(event);
             Ok(())
         }
 

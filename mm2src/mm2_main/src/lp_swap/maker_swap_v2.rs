@@ -125,11 +125,11 @@ impl MakerSwapStorage {
 #[async_trait]
 impl StateMachineStorage for MakerSwapStorage {
     type MachineId = Uuid;
-    type Event = MakerSwapEvent;
+    type DbRepr = MakerSwapJsonRepr;
     type Error = MmError<SwapStateMachineError>;
 
-    async fn store_event(&mut self, id: Self::MachineId, event: Self::Event) -> Result<(), Self::Error> {
-        store_swap_event(self.ctx.clone(), id, event).await
+    async fn store_event(&mut self, id: Self::MachineId, event: MakerSwapEvent) -> Result<(), Self::Error> {
+        store_swap_event::<MakerSwapJsonRepr>(self.ctx.clone(), id, event).await
     }
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> {
@@ -171,6 +171,12 @@ pub struct MakerSwapJsonRepr {
     pub p2p_keypair: Option<SerializableSecp256k1Keypair>,
     /// Swap events
     pub events: Vec<MakerSwapEvent>,
+}
+
+impl StateMachineDbRepr for MakerSwapJsonRepr {
+    type Event = MakerSwapEvent;
+
+    fn add_event(&mut self, event: Self::Event) { self.events.push(event) }
 }
 
 /// Represents the state machine for maker's side of the Trading Protocol Upgrade swap (v2).
@@ -405,7 +411,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::Initialized {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -617,7 +623,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::WaitingForTakerFunding {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -729,7 +735,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::TakerFundingReceived {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -850,7 +856,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::MakerPaymentSent {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -910,7 +916,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::MakerPaymentRefundRequired {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -1068,7 +1074,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::TakerPaymentConfirmed {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -1112,7 +1118,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::TakerPaymentSpent {
             maker_coin_start_block: self.maker_coin_start_block,
             taker_coin_start_block: self.taker_coin_start_block,
@@ -1179,7 +1185,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
+    fn get_event(&self) -> MakerSwapEvent {
         MakerSwapEvent::Aborted {
             reason: self.reason.clone(),
         }
@@ -1216,9 +1222,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    fn get_event(&self) -> <<Self::StateMachine as StorableStateMachine>::Storage as StateMachineStorage>::Event {
-        MakerSwapEvent::Completed
-    }
+    fn get_event(&self) -> MakerSwapEvent { MakerSwapEvent::Completed }
 }
 
 #[async_trait]
