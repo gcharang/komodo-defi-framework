@@ -1,3 +1,6 @@
+use crate::mm2::lp_network::subscribe_to_topic;
+use crate::mm2::lp_swap::SwapsContext;
+use common::bits256;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
@@ -8,12 +11,11 @@ use uuid::Uuid;
 
 cfg_native!(
     use common::async_blocking;
-    use crate::mm2::database::my_swaps::{get_swap_events, update_swap_events, select_unfinished_swaps_uuids,
-                                     set_swap_is_finished};
+    use crate::mm2::database::my_swaps::{does_swap_exist, get_swap_events, update_swap_events,
+                                     select_unfinished_swaps_uuids, set_swap_is_finished};
 );
 
 cfg_wasm32!(
-    use crate::mm2::lp_swap::SwapsContext;
     use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
     use mm2_db::indexed_db::{InitDbError, DbTransactionError};
 );
@@ -47,6 +49,22 @@ impl From<DbTransactionError> for SwapStateMachineError {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn has_db_record_for(ctx: MmArc, id: &Uuid) -> MmResult<bool, SwapStateMachineError> {
+    let id_str = id.to_string();
+    Ok(async_blocking(move || does_swap_exist(&ctx.sqlite_connection(), &id_str)).await?)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn has_db_record_for(ctx: MmArc, id: &Uuid) -> MmResult<bool, SwapStateMachineError> {
+    let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+    let table = transaction.table::<MySwapsFiltersTable>().await?;
+    let maybe_item = table.get_item_by_unique_index("uuid", id).await?;
+    Ok(maybe_item.is_some())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn store_swap_event<T: StateMachineDbRepr>(
     ctx: MmArc,
     id: Uuid,
@@ -74,7 +92,7 @@ pub(super) async fn store_swap_event<T: StateMachineDbRepr + DeserializeOwned + 
     id: Uuid,
     event: T::Event,
 ) -> MmResult<(), SwapStateMachineError> {
-    let swaps_ctx = SwapsContext::from_ctx(&ctx).unwrap();
+    let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
     let db = swaps_ctx.swap_db().await?;
     let transaction = db.transaction().await?;
     let table = transaction.table::<SavedSwapTable>().await?;
@@ -122,7 +140,7 @@ pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), Swa
 
 #[cfg(target_arch = "wasm32")]
 pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), SwapStateMachineError> {
-    let swaps_ctx = SwapsContext::from_ctx(&ctx).unwrap();
+    let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
     let db = swaps_ctx.swap_db().await?;
     let transaction = db.transaction().await?;
     let table = transaction.table::<MySwapsFiltersTable>().await?;
@@ -133,4 +151,10 @@ pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), Swa
     item.is_finished = true;
     table.replace_item_by_unique_index("uuid", id, &item).await?;
     Ok(())
+}
+
+pub(super) fn init_additional_swaps_context(ctx: &MmArc, p2p_topic: String, uuid: Uuid) {
+    subscribe_to_topic(ctx, p2p_topic);
+    let swap_ctx = SwapsContext::from_ctx(ctx).expect("SwapsContext::from_ctx should not fail");
+    swap_ctx.init_msg_v2_store(uuid, bits256::default());
 }

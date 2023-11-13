@@ -1,17 +1,15 @@
 use super::swap_v2_common::*;
 use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
-use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_v2_pb::*;
 use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_taker_swap, recv_swap_v2_msg, SecretHashAlgo,
-                          SwapConfirmationsSettings, SwapsContext, TransactionIdentifier, MAX_STARTED_AT_DIFF,
-                          TAKER_SWAP_V2_TYPE};
+                          SwapConfirmationsSettings, TransactionIdentifier, MAX_STARTED_AT_DIFF, TAKER_SWAP_V2_TYPE};
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
 use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFundingSpendArgs, GenTakerPaymentSpendArgs,
             MmCoin, SendTakerFundingArgs, SpendPaymentArgs, SwapOpsV2, ToBytes, Transaction, TxPreimageWithSig,
             ValidatePaymentInput, WaitForHTLCTxSpendArgs};
 use common::log::{debug, info, warn};
-use common::{bits256, Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
+use common::{Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::privkey::SerializableSecp256k1Keypair;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
@@ -143,7 +141,62 @@ impl StateMachineStorage for TakerSwapStorage {
     type DbRepr = TakerSwapDbRepr;
     type Error = MmError<SwapStateMachineError>;
 
-    async fn store_repr(&mut self, _id: Self::MachineId, _repr: Self::DbRepr) -> Result<(), Self::Error> { todo!() }
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn store_repr(&mut self, _id: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error> {
+        let sql_params = named_params! {
+            ":my_coin": repr.taker_coin,
+            ":other_coin": repr.maker_coin,
+            ":uuid": repr.uuid.to_string(),
+            ":started_at": repr.started_at,
+            ":swap_type": TAKER_SWAP_V2_TYPE,
+            ":maker_volume": repr.maker_volume.to_fraction_string(),
+            ":taker_volume": repr.taker_volume.to_fraction_string(),
+            ":premium": repr.taker_premium.to_fraction_string(),
+            ":dex_fee": repr.dex_fee.to_fraction_string(),
+            ":secret": repr.taker_secret.0,
+            ":secret_hash": repr.taker_secret_hash.0,
+            ":secret_hash_algo": repr.secret_hash_algo as u8,
+            ":p2p_privkey": repr.p2p_keypair.map(|k| k.priv_key()).unwrap_or_default(),
+            ":lock_duration": repr.lock_duration,
+            ":maker_coin_confs": repr.conf_settings.maker_coin_confs,
+            ":maker_coin_nota": repr.conf_settings.maker_coin_nota,
+            ":taker_coin_confs": repr.conf_settings.taker_coin_confs,
+            ":taker_coin_nota": repr.conf_settings.taker_coin_nota
+        };
+        insert_new_swap_v2(&self.ctx, sql_params)?;
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn store_repr(&mut self, uuid: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error> {
+        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
+        let db = swaps_ctx.swap_db().await?;
+        let transaction = db.transaction().await?;
+
+        let filters_table = transaction.table::<MySwapsFiltersTable>().await?;
+
+        let item = MySwapsFiltersTable {
+            uuid,
+            my_coin: repr.taker_coin.clone(),
+            other_coin: repr.maker_coin.clone(),
+            started_at: repr.started_at as u32,
+            is_finished: false,
+            swap_type: TAKER_SWAP_V2_TYPE,
+        };
+        filters_table.add_item(&item).await?;
+
+        let table = transaction.table::<SavedSwapTable>().await?;
+        let item = SavedSwapTable {
+            uuid,
+            saved_swap: serde_json::to_value(repr)?,
+        };
+        table.add_item(&item).await?;
+        Ok(())
+    }
+
+    async fn has_record_for(&mut self, id: &Self::MachineId) -> Result<bool, Self::Error> {
+        has_db_record_for(self.ctx.clone(), id).await
+    }
 
     async fn store_event(&mut self, id: Self::MachineId, event: TakerSwapEvent) -> Result<(), Self::Error> {
         store_swap_event::<TakerSwapDbRepr>(self.ctx.clone(), id, event).await
@@ -166,6 +219,8 @@ pub struct TakerSwapDbRepr {
     pub maker_volume: MmNumber,
     /// The secret used in taker funding immediate refund path.
     pub taker_secret: BytesJson,
+    /// The hash of taker's secret.
+    pub taker_secret_hash: BytesJson,
     /// Algorithm used to hash the swap secret.
     pub secret_hash_algo: SecretHashAlgo,
     /// The timestamp when the swap was started.
@@ -261,6 +316,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
             maker_coin: self.maker_coin.ticker().into(),
             maker_volume: self.maker_volume.clone(),
             taker_secret: self.taker_secret.to_vec().into(),
+            taker_secret_hash: self.taker_secret_hash().into(),
             secret_hash_algo: self.secret_hash_algo,
             started_at: self.started_at,
             lock_duration: self.lock_duration,
@@ -284,6 +340,10 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
         _storage: Self::Storage,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
         todo!()
+    }
+
+    fn init_additional_context(&mut self) {
+        init_additional_swaps_context(&self.ctx, self.p2p_topic.clone(), self.uuid)
     }
 }
 
@@ -313,60 +373,6 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let sql_params = named_params! {
-                ":my_coin": state_machine.taker_coin.ticker(),
-                ":other_coin": state_machine.maker_coin.ticker(),
-                ":uuid": state_machine.uuid.to_string(),
-                ":started_at": state_machine.started_at,
-                ":swap_type": TAKER_SWAP_V2_TYPE,
-                ":maker_volume": state_machine.maker_volume.to_fraction_string(),
-                ":taker_volume": state_machine.taker_volume.to_fraction_string(),
-                ":premium": state_machine.taker_premium.to_fraction_string(),
-                ":dex_fee": state_machine.dex_fee.to_fraction_string(),
-                ":secret": state_machine.taker_secret.take(),
-                ":secret_hash": state_machine.taker_secret_hash(),
-                ":secret_hash_algo": state_machine.secret_hash_algo as u8,
-                ":p2p_privkey": state_machine.p2p_keypair.map(|k| k.private_bytes()).unwrap_or_default(),
-                ":lock_duration": state_machine.lock_duration,
-                ":maker_coin_confs": state_machine.conf_settings.maker_coin_confs,
-                ":maker_coin_nota": state_machine.conf_settings.maker_coin_nota,
-                ":taker_coin_confs": state_machine.conf_settings.taker_coin_confs,
-                ":taker_coin_nota": state_machine.conf_settings.taker_coin_nota
-            };
-            insert_new_swap_v2(&state_machine.ctx, sql_params).unwrap();
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            let swaps_ctx = SwapsContext::from_ctx(&state_machine.ctx).unwrap();
-            let db = swaps_ctx.swap_db().await.unwrap();
-            let transaction = db.transaction().await.unwrap();
-            let table = transaction.table::<SavedSwapTable>().await.unwrap();
-            let item = SavedSwapTable {
-                uuid: state_machine.uuid,
-                saved_swap: serde_json::to_value(state_machine.to_db_repr()).unwrap(),
-            };
-            table.add_item(&item).await.unwrap();
-
-            let filters_table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
-
-            let item = MySwapsFiltersTable {
-                uuid: state_machine.uuid,
-                my_coin: state_machine.taker_coin.ticker().into(),
-                other_coin: state_machine.maker_coin.ticker().into(),
-                started_at: state_machine.started_at as u32,
-                is_finished: false,
-                swap_type: TAKER_SWAP_V2_TYPE,
-            };
-            filters_table.add_item(&item).await.unwrap();
-        }
-
-        subscribe_to_topic(&state_machine.ctx, state_machine.p2p_topic.clone());
-        let swap_ctx = SwapsContext::from_ctx(&state_machine.ctx).expect("SwapsContext::from_ctx should not fail");
-        swap_ctx.init_msg_v2_store(state_machine.uuid, bits256::default());
-
         let maker_coin_start_block = match state_machine.maker_coin.current_block().compat().await {
             Ok(b) => b,
             Err(e) => {

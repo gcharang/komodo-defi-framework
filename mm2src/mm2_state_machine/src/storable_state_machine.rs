@@ -23,7 +23,7 @@ pub trait OnNewState<S>: StateMachineTrait {
     async fn on_new_state(&mut self, state: &S) -> Result<(), <Self as StateMachineTrait>::Error>;
 }
 
-pub trait StateMachineDbRepr {
+pub trait StateMachineDbRepr: Send {
     type Event: Send;
 
     fn add_event(&mut self, event: Self::Event);
@@ -33,7 +33,7 @@ pub trait StateMachineDbRepr {
 #[async_trait]
 pub trait StateMachineStorage: Send + Sync {
     /// The type representing a unique identifier for a state machine.
-    type MachineId: Send;
+    type MachineId: Send + Sync;
     /// The type representing state machine's DB representation.
     type DbRepr: StateMachineDbRepr;
     /// The type representing an error that can occur during storage operations.
@@ -50,6 +50,17 @@ pub trait StateMachineStorage: Send + Sync {
     ///
     /// A `Result` indicating success (`Ok(())`) or an error (`Err(Self::Error)`).
     async fn store_repr(&mut self, id: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error>;
+
+    /// Returns whether DB stores a state machine with the given id.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: The unique identifier of the state machine.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating the existense of the DB record.
+    async fn has_record_for(&mut self, id: &Self::MachineId) -> Result<bool, Self::Error>;
 
     /// Stores an event for a given state machine.
     ///
@@ -95,7 +106,7 @@ pub struct RestoredMachine<M> {
 
 /// A trait for storable state machines.
 #[async_trait]
-pub trait StorableStateMachine: Send + Sized + 'static {
+pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     /// The type of storage for the state machine.
     type Storage: StateMachineStorage;
     /// The result type of the state machine.
@@ -151,6 +162,9 @@ pub trait StorableStateMachine: Send + Sized + 'static {
         let id = self.id();
         self.storage().mark_finished(id).await
     }
+
+    /// Initializes additional context actions (spawn futures, etc.)
+    fn init_additional_context(&mut self);
 }
 
 // Ensure that StandardStateMachine won't be occasionally implemented for StorableStateMachine.
@@ -164,6 +178,16 @@ impl<T: StorableState> !InitialState for T {}
 impl<T: StorableStateMachine> StateMachineTrait for T {
     type Result = T::Result;
     type Error = <T::Storage as StateMachineStorage>::Error;
+
+    async fn on_start(&mut self) -> Result<(), Self::Error> {
+        let id = self.id();
+        if !self.storage().has_record_for(&id).await? {
+            let repr = self.to_db_repr();
+            self.storage().store_repr(id, repr).await?;
+        }
+        self.init_additional_context();
+        Ok(())
+    }
 
     async fn on_finished(&mut self) -> Result<(), <T::Storage as StateMachineStorage>::Error> {
         self.mark_finished().await
@@ -327,9 +351,9 @@ mod tests {
         type DbRepr = TestStateMachineRepr;
         type Error = Infallible;
 
-        async fn store_repr(&mut self, _id: Self::MachineId, _repr: Self::DbRepr) -> Result<(), Self::Error> {
-            unimplemented!()
-        }
+        async fn store_repr(&mut self, _id: Self::MachineId, _repr: Self::DbRepr) -> Result<(), Self::Error> { Ok(()) }
+
+        async fn has_record_for(&mut self, _id: &Self::MachineId) -> Result<bool, Self::Error> { Ok(false) }
 
         async fn store_event(&mut self, machine_id: usize, event: TestEvent) -> Result<(), Self::Error> {
             self.events_unfinished
@@ -373,6 +397,8 @@ mod tests {
             let machine = StorableStateMachineTest { id, storage };
             Ok(RestoredMachine { machine, current_state })
         }
+
+        fn init_additional_context(&mut self) {}
     }
 
     struct State1 {}

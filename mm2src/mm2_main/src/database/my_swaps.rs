@@ -4,9 +4,9 @@
 use crate::mm2::lp_swap::{MyRecentSwapsUuids, MySwapsFilter, SavedSwap, SavedSwapIo};
 use common::log::debug;
 use common::PagingOptions;
-use db_common::sqlite::offset_by_uuid;
 use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
+use db_common::sqlite::{offset_by_uuid, query_single_row};
 use mm2_core::mm_ctx::MmArc;
 use std::convert::TryInto;
 use uuid::{Error as UuidError, Uuid};
@@ -223,6 +223,13 @@ pub fn select_uuids_by_my_swaps_filter(
         total_count,
         skipped,
     })
+}
+
+/// Returns whether a swap with specified uuid exists in DB
+pub fn does_swap_exist(conn: &Connection, uuid: &str) -> SqlResult<bool> {
+    const SELECT_SWAP_ID_BY_UUID: &str = "SELECT id FROM my_swaps WHERE uuid = :uuid;";
+    let res: Option<i64> = query_single_row(conn, SELECT_SWAP_ID_BY_UUID, &[(":uuid", uuid)], |row| row.get(0))?;
+    Ok(res.is_some())
 }
 
 /// Queries swap events by uuid

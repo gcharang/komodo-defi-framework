@@ -1,16 +1,14 @@
 use super::swap_v2_common::*;
 use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
-use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_v2_pb::*;
 use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_maker_swap, recv_swap_v2_msg, SecretHashAlgo,
-                          SwapConfirmationsSettings, SwapsContext, TransactionIdentifier, MAKER_SWAP_V2_TYPE,
-                          MAX_STARTED_AT_DIFF};
+                          SwapConfirmationsSettings, TransactionIdentifier, MAKER_SWAP_V2_TYPE, MAX_STARTED_AT_DIFF};
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
 use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFundingSpendArgs, GenTakerPaymentSpendArgs,
             MmCoin, SendPaymentArgs, SwapOpsV2, ToBytes, Transaction, TxPreimageWithSig, ValidateTakerFundingArgs};
 use common::log::{debug, info, warn};
-use common::{bits256, Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
+use common::{Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::privkey::SerializableSecp256k1Keypair;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
@@ -181,6 +179,10 @@ impl StateMachineStorage for MakerSwapStorage {
         Ok(())
     }
 
+    async fn has_record_for(&mut self, id: &Self::MachineId) -> Result<bool, Self::Error> {
+        has_db_record_for(self.ctx.clone(), id).await
+    }
+
     async fn store_event(&mut self, id: Self::MachineId, event: MakerSwapEvent) -> Result<(), Self::Error> {
         store_swap_event::<MakerSwapDbRepr>(self.ctx.clone(), id, event).await
     }
@@ -328,6 +330,10 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
         todo!()
     }
+
+    fn init_additional_context(&mut self) {
+        init_additional_swaps_context(&self.ctx, self.p2p_topic.clone(), self.uuid)
+    }
 }
 
 /// Represents a state used to start a new maker swap.
@@ -356,13 +362,6 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
-        let repr = state_machine.to_db_repr();
-        state_machine.storage().store_repr(repr.uuid, repr).await.unwrap();
-
-        subscribe_to_topic(&state_machine.ctx, state_machine.p2p_topic.clone());
-        let swap_ctx = SwapsContext::from_ctx(&state_machine.ctx).expect("SwapsContext::from_ctx should not fail");
-        swap_ctx.init_msg_v2_store(state_machine.uuid, bits256::default());
-
         let maker_coin_start_block = match state_machine.maker_coin.current_block().compat().await {
             Ok(b) => b,
             Err(e) => {
