@@ -140,11 +140,13 @@ impl TakerSwapStorage {
 #[async_trait]
 impl StateMachineStorage for TakerSwapStorage {
     type MachineId = Uuid;
-    type DbRepr = TakerSwapJsonRepr;
+    type DbRepr = TakerSwapDbRepr;
     type Error = MmError<SwapStateMachineError>;
 
+    async fn store_repr(&mut self, _id: Self::MachineId, _repr: Self::DbRepr) -> Result<(), Self::Error> { todo!() }
+
     async fn store_event(&mut self, id: Self::MachineId, event: TakerSwapEvent) -> Result<(), Self::Error> {
-        store_swap_event::<TakerSwapJsonRepr>(self.ctx.clone(), id, event).await
+        store_swap_event::<TakerSwapDbRepr>(self.ctx.clone(), id, event).await
     }
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> {
@@ -157,7 +159,7 @@ impl StateMachineStorage for TakerSwapStorage {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct TakerSwapJsonRepr {
+pub struct TakerSwapDbRepr {
     /// Maker coin
     pub maker_coin: String,
     /// The amount swapped by maker.
@@ -188,7 +190,7 @@ pub struct TakerSwapJsonRepr {
     pub events: Vec<TakerSwapEvent>,
 }
 
-impl StateMachineDbRepr for TakerSwapJsonRepr {
+impl StateMachineDbRepr for TakerSwapDbRepr {
     type Event = TakerSwapEvent;
 
     fn add_event(&mut self, event: Self::Event) { self.events.push(event) }
@@ -246,10 +248,16 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> TakerSwa
             SecretHashAlgo::SHA256 => sha256(self.taker_secret.as_slice()).take().into(),
         }
     }
+}
 
-    #[cfg(target_arch = "wasm32")]
-    fn to_json_repr(&self) -> TakerSwapJsonRepr {
-        TakerSwapJsonRepr {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
+    for TakerSwapStateMachine<MakerCoin, TakerCoin>
+{
+    type Storage = TakerSwapStorage;
+    type Result = ();
+
+    fn to_db_repr(&self) -> TakerSwapDbRepr {
+        TakerSwapDbRepr {
             maker_coin: self.maker_coin.ticker().into(),
             maker_volume: self.maker_volume.clone(),
             taker_secret: self.taker_secret.to_vec().into(),
@@ -266,13 +274,6 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> TakerSwa
             events: Vec::new(),
         }
     }
-}
-
-impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
-    for TakerSwapStateMachine<MakerCoin, TakerCoin>
-{
-    type Storage = TakerSwapStorage;
-    type Result = ();
 
     fn storage(&mut self) -> &mut Self::Storage { &mut self.storage }
 
@@ -345,7 +346,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
             let table = transaction.table::<SavedSwapTable>().await.unwrap();
             let item = SavedSwapTable {
                 uuid: state_machine.uuid,
-                saved_swap: serde_json::to_value(state_machine.to_json_repr()).unwrap(),
+                saved_swap: serde_json::to_value(state_machine.to_db_repr()).unwrap(),
             };
             table.add_item(&item).await.unwrap();
 

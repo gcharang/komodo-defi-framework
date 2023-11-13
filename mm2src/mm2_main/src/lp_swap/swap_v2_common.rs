@@ -27,6 +27,11 @@ pub enum SwapStateMachineError {
     NoSwapWithUuid(Uuid),
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+impl From<db_common::sqlite::rusqlite::Error> for SwapStateMachineError {
+    fn from(e: db_common::sqlite::rusqlite::Error) -> Self { SwapStateMachineError::StorageError(e.to_string()) }
+}
+
 impl From<serde_json::Error> for SwapStateMachineError {
     fn from(e: Error) -> Self { SwapStateMachineError::SerdeError(e.to_string()) }
 }
@@ -52,14 +57,12 @@ where
 {
     let id_str = id.to_string();
     async_blocking(move || {
-        let events_json = get_swap_events(&ctx.sqlite_connection(), &id_str)
-            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))?;
+        let events_json = get_swap_events(&ctx.sqlite_connection(), &id_str)?;
         let mut events: Vec<T::Event> = serde_json::from_str(&events_json)?;
         events.push(event);
         drop_mutability!(events);
         let serialized_events = serde_json::to_string(&events)?;
-        update_swap_events(&ctx.sqlite_connection(), &id_str, &serialized_events)
-            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))?;
+        update_swap_events(&ctx.sqlite_connection(), &id_str, &serialized_events)?;
         Ok(())
     })
     .await
@@ -114,11 +117,7 @@ pub(super) async fn get_unfinished_swaps_uuids(
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), SwapStateMachineError> {
-    async_blocking(move || {
-        set_swap_is_finished(&ctx.sqlite_connection(), &id.to_string())
-            .map_to_mm(|e| SwapStateMachineError::StorageError(e.to_string()))
-    })
-    .await
+    async_blocking(move || Ok(set_swap_is_finished(&ctx.sqlite_connection(), &id.to_string())?)).await
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -143,7 +143,7 @@ impl SerializableSecp256k1Keypair {
 
     pub fn public_slice(&self) -> &[u8] { self.inner.public_slice() }
 
-    fn priv_key(&self) -> [u8; 32] { self.inner.private().secret.take() }
+    pub fn priv_key(&self) -> [u8; 32] { self.inner.private().secret.take() }
 
     pub fn random() -> Self {
         SerializableSecp256k1Keypair {

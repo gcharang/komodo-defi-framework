@@ -39,6 +39,18 @@ pub trait StateMachineStorage: Send + Sync {
     /// The type representing an error that can occur during storage operations.
     type Error: Send;
 
+    /// Stores a DB representation of a given state machine.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: The unique identifier of the state machine.
+    /// - `repr`: The representation to be stored.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success (`Ok(())`) or an error (`Err(Self::Error)`).
+    async fn store_repr(&mut self, id: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error>;
+
     /// Stores an event for a given state machine.
     ///
     /// # Parameters
@@ -88,6 +100,9 @@ pub trait StorableStateMachine: Send + Sized + 'static {
     type Storage: StateMachineStorage;
     /// The result type of the state machine.
     type Result: Send;
+
+    /// Returns State machine's DB representation()
+    fn to_db_repr(&self) -> <Self::Storage as StateMachineStorage>::DbRepr;
 
     /// Gets a mutable reference to the storage for the state machine.
     fn storage(&mut self) -> &mut Self::Storage;
@@ -312,6 +327,10 @@ mod tests {
         type DbRepr = TestStateMachineRepr;
         type Error = Infallible;
 
+        async fn store_repr(&mut self, _id: Self::MachineId, _repr: Self::DbRepr) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
         async fn store_event(&mut self, machine_id: usize, event: TestEvent) -> Result<(), Self::Error> {
             self.events_unfinished
                 .entry(machine_id)
@@ -334,6 +353,8 @@ mod tests {
     impl StorableStateMachine for StorableStateMachineTest {
         type Storage = StorageTest;
         type Result = ();
+
+        fn to_db_repr(&self) -> TestStateMachineRepr { TestStateMachineRepr {} }
 
         fn storage(&mut self) -> &mut Self::Storage { &mut self.storage }
 

@@ -1129,8 +1129,8 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, _swap_type: u8) -> SqlR
 #[cfg(target_arch = "wasm32")]
 async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> MmResult<MySwapForRpc, SwapV2DbError> {
     use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
-    use maker_swap_v2::MakerSwapJsonRepr;
-    use taker_swap_v2::TakerSwapJsonRepr;
+    use maker_swap_v2::MakerSwapDbRepr;
+    use taker_swap_v2::TakerSwapDbRepr;
 
     let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
     let db = swaps_ctx.swap_db().await?;
@@ -1149,7 +1149,7 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> MmRes
 
     match swap_type {
         MAKER_SWAP_V2_TYPE => {
-            let json_repr: MakerSwapJsonRepr = serde_json::from_value(item.saved_swap)?;
+            let json_repr: MakerSwapDbRepr = serde_json::from_value(item.saved_swap)?;
             Ok(MySwapForRpc {
                 my_coin: json_repr.maker_coin,
                 other_coin: json_repr.taker_coin,
@@ -1169,7 +1169,7 @@ async fn get_swap_data_for_rpc(ctx: &MmArc, uuid: &Uuid, swap_type: u8) -> MmRes
             })
         },
         TAKER_SWAP_V2_TYPE => {
-            let json_repr: TakerSwapJsonRepr = serde_json::from_value(item.saved_swap)?;
+            let json_repr: TakerSwapDbRepr = serde_json::from_value(item.saved_swap)?;
             Ok(MySwapForRpc {
                 my_coin: json_repr.taker_coin,
                 other_coin: json_repr.maker_coin,

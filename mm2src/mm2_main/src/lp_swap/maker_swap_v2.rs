@@ -125,11 +125,64 @@ impl MakerSwapStorage {
 #[async_trait]
 impl StateMachineStorage for MakerSwapStorage {
     type MachineId = Uuid;
-    type DbRepr = MakerSwapJsonRepr;
+    type DbRepr = MakerSwapDbRepr;
     type Error = MmError<SwapStateMachineError>;
 
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn store_repr(&mut self, _id: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error> {
+        let sql_params = named_params! {
+            ":my_coin": &repr.maker_coin,
+            ":other_coin": &repr.taker_coin,
+            ":uuid": repr.uuid.to_string(),
+            ":started_at": repr.started_at,
+            ":swap_type": MAKER_SWAP_V2_TYPE,
+            ":maker_volume": repr.maker_volume.to_fraction_string(),
+            ":taker_volume": repr.taker_volume.to_fraction_string(),
+            ":premium": repr.taker_premium.to_fraction_string(),
+            ":dex_fee": repr.dex_fee_amount.to_fraction_string(),
+            ":secret": repr.maker_secret.0,
+            ":secret_hash": repr.maker_secret_hash.0,
+            ":secret_hash_algo": repr.secret_hash_algo as u8,
+            ":p2p_privkey": repr.p2p_keypair.map(|k| k.priv_key()).unwrap_or_default(),
+            ":lock_duration": repr.lock_duration,
+            ":maker_coin_confs": repr.conf_settings.maker_coin_confs,
+            ":maker_coin_nota": repr.conf_settings.maker_coin_nota,
+            ":taker_coin_confs": repr.conf_settings.taker_coin_confs,
+            ":taker_coin_nota": repr.conf_settings.taker_coin_nota
+        };
+        insert_new_swap_v2(&self.ctx, sql_params)?;
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn store_repr(&mut self, uuid: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error> {
+        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
+        let db = swaps_ctx.swap_db().await?;
+        let transaction = db.transaction().await?;
+
+        let filters_table = transaction.table::<MySwapsFiltersTable>().await?;
+
+        let item = MySwapsFiltersTable {
+            uuid,
+            my_coin: repr.maker_coin.clone(),
+            other_coin: repr.taker_coin.clone(),
+            started_at: repr.started_at as u32,
+            is_finished: false,
+            swap_type: MAKER_SWAP_V2_TYPE,
+        };
+        filters_table.add_item(&item).await?;
+
+        let table = transaction.table::<SavedSwapTable>().await?;
+        let item = SavedSwapTable {
+            uuid,
+            saved_swap: serde_json::to_value(repr)?,
+        };
+        table.add_item(&item).await?;
+        Ok(())
+    }
+
     async fn store_event(&mut self, id: Self::MachineId, event: MakerSwapEvent) -> Result<(), Self::Error> {
-        store_swap_event::<MakerSwapJsonRepr>(self.ctx.clone(), id, event).await
+        store_swap_event::<MakerSwapDbRepr>(self.ctx.clone(), id, event).await
     }
 
     async fn get_unfinished(&self) -> Result<Vec<Self::MachineId>, Self::Error> {
@@ -142,13 +195,15 @@ impl StateMachineStorage for MakerSwapStorage {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MakerSwapJsonRepr {
+pub struct MakerSwapDbRepr {
     /// Maker coin
     pub maker_coin: String,
     /// The amount swapped by maker.
     pub maker_volume: MmNumber,
     /// The secret used in HTLC hashlock.
     pub maker_secret: BytesJson,
+    /// The secret's hash in HTLC hashlock.
+    pub maker_secret_hash: BytesJson,
     /// Algorithm used to hash the swap secret.
     pub secret_hash_algo: SecretHashAlgo,
     /// The timestamp when the swap was started.
@@ -173,7 +228,7 @@ pub struct MakerSwapJsonRepr {
     pub events: Vec<MakerSwapEvent>,
 }
 
-impl StateMachineDbRepr for MakerSwapJsonRepr {
+impl StateMachineDbRepr for MakerSwapDbRepr {
     type Event = MakerSwapEvent;
 
     fn add_event(&mut self, event: Self::Event) { self.events.push(event) }
@@ -235,13 +290,20 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> MakerSwa
     /// Returns data that is unique for this swap.
     #[inline]
     fn unique_data(&self) -> Vec<u8> { self.secret_hash() }
+}
 
-    #[cfg(target_arch = "wasm32")]
-    fn to_json_repr(&self) -> MakerSwapJsonRepr {
-        MakerSwapJsonRepr {
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
+    for MakerSwapStateMachine<MakerCoin, TakerCoin>
+{
+    type Storage = MakerSwapStorage;
+    type Result = ();
+
+    fn to_db_repr(&self) -> MakerSwapDbRepr {
+        MakerSwapDbRepr {
             maker_coin: self.maker_coin.ticker().into(),
             maker_volume: self.maker_volume.clone(),
             maker_secret: self.secret.to_vec().into(),
+            maker_secret_hash: self.secret_hash().into(),
             secret_hash_algo: self.secret_hash_algo,
             started_at: self.started_at,
             lock_duration: self.lock_duration,
@@ -255,13 +317,6 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> MakerSwa
             events: Vec::new(),
         }
     }
-}
-
-impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
-    for MakerSwapStateMachine<MakerCoin, TakerCoin>
-{
-    type Storage = MakerSwapStorage;
-    type Result = ();
 
     fn storage(&mut self) -> &mut Self::Storage { &mut self.storage }
 
@@ -301,55 +356,8 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State fo
     type StateMachine = MakerSwapStateMachine<MakerCoin, TakerCoin>;
 
     async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let sql_params = named_params! {
-                ":my_coin": state_machine.maker_coin.ticker(),
-                ":other_coin": state_machine.taker_coin.ticker(),
-                ":uuid": state_machine.uuid.to_string(),
-                ":started_at": state_machine.started_at,
-                ":swap_type": MAKER_SWAP_V2_TYPE,
-                ":maker_volume": state_machine.maker_volume.to_fraction_string(),
-                ":taker_volume": state_machine.taker_volume.to_fraction_string(),
-                ":premium": state_machine.taker_premium.to_fraction_string(),
-                ":dex_fee": state_machine.dex_fee_amount.to_fraction_string(),
-                ":secret": state_machine.secret.take(),
-                ":secret_hash": state_machine.secret_hash(),
-                ":secret_hash_algo": state_machine.secret_hash_algo as u8,
-                ":p2p_privkey": state_machine.p2p_keypair.map(|k| k.private_bytes()).unwrap_or_default(),
-                ":lock_duration": state_machine.lock_duration,
-                ":maker_coin_confs": state_machine.conf_settings.maker_coin_confs,
-                ":maker_coin_nota": state_machine.conf_settings.maker_coin_nota,
-                ":taker_coin_confs": state_machine.conf_settings.taker_coin_confs,
-                ":taker_coin_nota": state_machine.conf_settings.taker_coin_nota
-            };
-            insert_new_swap_v2(&state_machine.ctx, sql_params).unwrap();
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            let swaps_ctx = SwapsContext::from_ctx(&state_machine.ctx).unwrap();
-            let db = swaps_ctx.swap_db().await.unwrap();
-            let transaction = db.transaction().await.unwrap();
-            let table = transaction.table::<SavedSwapTable>().await.unwrap();
-            let item = SavedSwapTable {
-                uuid: state_machine.uuid,
-                saved_swap: serde_json::to_value(state_machine.to_json_repr()).unwrap(),
-            };
-            table.add_item(&item).await.unwrap();
-
-            let filters_table = transaction.table::<MySwapsFiltersTable>().await.unwrap();
-
-            let item = MySwapsFiltersTable {
-                uuid: state_machine.uuid,
-                my_coin: state_machine.maker_coin.ticker().into(),
-                other_coin: state_machine.taker_coin.ticker().into(),
-                started_at: state_machine.started_at as u32,
-                is_finished: false,
-                swap_type: MAKER_SWAP_V2_TYPE,
-            };
-            filters_table.add_item(&item).await.unwrap();
-        }
+        let repr = state_machine.to_db_repr();
+        state_machine.storage().store_repr(repr.uuid, repr).await.unwrap();
 
         subscribe_to_topic(&state_machine.ctx, state_machine.p2p_topic.clone());
         let swap_ctx = SwapsContext::from_ctx(&state_machine.ctx).expect("SwapsContext::from_ctx should not fail");
