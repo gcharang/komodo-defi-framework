@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use super::{checksum_address, get_addr_nonce, get_eth_gas_details, pubkey_from_xpub_str, u256_to_big_decimal,
             wei_from_big_decimal, EthCoinType, EthPrivKeyPolicy, WithdrawError, WithdrawRequest, WithdrawResult,
             ERC20_CONTRACT};
@@ -15,6 +14,7 @@ use ethkey::public_to_address;
 use futures::compat::Future01CompatExt;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::{MapToMmResult, MmError, OrMmError};
+use std::ops::Deref;
 
 #[async_trait]
 pub trait EthWithdraw
@@ -295,7 +295,6 @@ impl<'a> InitEthWithdraw<'a> {
         req: WithdrawRequest,
         task_handle: &'a WithdrawTaskHandle,
     ) -> Result<InitEthWithdraw<'a>, MmError<WithdrawError>> {
-
         Ok(InitEthWithdraw {
             ctx,
             coin,
@@ -337,9 +336,6 @@ impl EthWithdraw for StandardEthWithdraw {
 
 impl StandardEthWithdraw {
     pub fn new(coin: EthCoin, req: WithdrawRequest) -> Result<StandardEthWithdraw, MmError<WithdrawError>> {
-        Ok(StandardEthWithdraw {
-            coin,
-            req,
-        })
+        Ok(StandardEthWithdraw { coin, req })
     }
 }
