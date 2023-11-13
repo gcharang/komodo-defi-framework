@@ -5907,7 +5907,7 @@ pub fn pubkey_from_extended(extended_pubkey: &Secp256k1ExtendedPublicKey) -> Pub
     pubkey_uncompressed
 }
 
-pub fn pubkey_from_xpub_str(xpub: &str) -> Option<Public> {
-    let extended_pubkey = Secp256k1ExtendedPublicKey::from_str(xpub).ok()?;
-    Some(pubkey_from_extended(&extended_pubkey))
+pub fn pubkey_from_xpub_str(xpub: &str) -> Result<Public, String> {
+    let extended_pubkey = Secp256k1ExtendedPublicKey::from_str(xpub).map_err(|e| ERRL!("{}", e))?;
+    Ok(pubkey_from_extended(&extended_pubkey))
 }

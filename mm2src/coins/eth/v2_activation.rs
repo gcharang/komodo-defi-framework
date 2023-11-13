@@ -317,7 +317,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
                 .as_ref()
                 .or_mm_err(|| EthActivationV2Error::InternalError("no pubkey from trezor".to_string()))?;
             let my_pubkey = pubkey_from_xpub_str(my_pubkey)
-                .ok_or_else(|| EthActivationV2Error::InternalError("invalid xpub from trezor".to_string()))?;
+                .map_err(|_| EthActivationV2Error::InternalError("invalid xpub from trezor".to_string()))?;
             public_to_address(&my_pubkey)
         },
         _ => priv_key_policy

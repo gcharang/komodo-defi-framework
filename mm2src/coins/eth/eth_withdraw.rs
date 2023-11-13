@@ -58,7 +58,7 @@ where
                             .as_ref()
                             .or_mm_err(|| WithdrawError::InternalError("no pubkey from trezor".to_string()))?;
                         let my_pubkey = pubkey_from_xpub_str(my_pubkey)
-                            .ok_or_else(|| WithdrawError::InternalError("invalid xpub from trezor".to_string()))?;
+                            .map_err(|_| WithdrawError::InternalError("invalid xpub from trezor".to_string()))?;
                         let address = public_to_address(&my_pubkey);
                         (None, address)
                     },
