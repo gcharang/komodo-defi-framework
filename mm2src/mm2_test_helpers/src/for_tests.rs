@@ -2107,7 +2107,7 @@ pub async fn wait_for_swap_finished(mm: &MarketMakerIt, uuid: &str, wait_sec: i6
         }
 
         if get_utc_timestamp() > wait_until {
-            panic!("Timed out waiting for swap {} status", uuid);
+            panic!("Timed out waiting for swap {} to finish", uuid);
         }
 
         Timer::sleep(0.5).await;

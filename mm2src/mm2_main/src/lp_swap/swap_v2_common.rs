@@ -16,8 +16,8 @@ cfg_native!(
 );
 
 cfg_wasm32!(
-    use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
-    use mm2_db::indexed_db::{InitDbError, DbTransactionError};
+    use crate::mm2::lp_swap::swap_wasm_db::{IS_FINISHED_SWAP_TYPE_INDEX, MySwapsFiltersTable, SavedSwapTable};
+    use mm2_db::indexed_db::{DbTransactionError, InitDbError, MultiIndex};
 );
 
 /// Represents errors that can be produced by [`MakerSwapStateMachine`] or [`TakerSwapStateMachine`] run.
@@ -130,7 +130,17 @@ pub(super) async fn get_unfinished_swaps_uuids(
     ctx: MmArc,
     swap_type: u8,
 ) -> MmResult<Vec<Uuid>, SwapStateMachineError> {
-    unimplemented!()
+    let index = MultiIndex::new(IS_FINISHED_SWAP_TYPE_INDEX)
+        .with_value(false)?
+        .with_value(swap_type)?;
+
+    let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+    let table = transaction.table::<MySwapsFiltersTable>().await?;
+    let table_items = table.get_items_by_multi_index(index).await?;
+
+    Ok(table_items.into_iter().map(|(_item_id, item)| item.uuid).collect())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

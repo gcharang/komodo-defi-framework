@@ -39,6 +39,8 @@ scripts/mm2/seed/unparsed.txt
 /MM_VERSION
 /MM_VERSION.tmp
 /target
+/targettest
+/clippytarget
 
 # Subcrate artefacts
 /mm2src/*/target

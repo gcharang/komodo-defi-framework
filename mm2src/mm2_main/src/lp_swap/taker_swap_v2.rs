@@ -28,6 +28,7 @@ cfg_native!(
 );
 
 cfg_wasm32!(
+    use crate::mm2::lp_swap::SwapsContext;
     use crate::mm2::lp_swap::swap_wasm_db::{MySwapsFiltersTable, SavedSwapTable};
 );
 
@@ -169,7 +170,7 @@ impl StateMachineStorage for TakerSwapStorage {
 
     #[cfg(target_arch = "wasm32")]
     async fn store_repr(&mut self, uuid: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error> {
-        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).unwrap();
+        let swaps_ctx = SwapsContext::from_ctx(&self.ctx).expect("SwapsContext::from_ctx should not fail");
         let db = swaps_ctx.swap_db().await?;
         let transaction = db.transaction().await?;
 

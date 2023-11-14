@@ -11,6 +11,8 @@ pub use tables::{MySwapsFiltersTable, SavedSwapTable, SwapLockTable};
 const DB_NAME: &str = "swap";
 const DB_VERSION: u32 = 2;
 
+pub const IS_FINISHED_SWAP_TYPE_INDEX: &str = "is_finished_swap_type";
+
 pub struct SwapDb {
     inner: IndexedDb,
 }
@@ -105,7 +107,7 @@ pub mod tables {
                     },
                     1 => {
                         let table = upgrader.open_table(Self::table_name())?;
-                        table.create_index("is_finished", false)?;
+                        table.create_multi_index(IS_FINISHED_SWAP_TYPE_INDEX, &["is_finished", "swap_type"], false)?;
                     },
                     unsupported_version => {
                         return MmError::err(OnUpgradeError::UnsupportedVersion {
