@@ -59,6 +59,8 @@
 
 use super::lp_network::P2PRequestResult;
 use crate::mm2::lp_network::{broadcast_p2p_msg, Libp2pPeerId, P2PProcessError, P2PProcessResult, P2PRequestError};
+use crate::mm2::lp_swap::maker_swap_v2::{MakerSwapStateMachine, MakerSwapStorage};
+use crate::mm2::lp_swap::taker_swap_v2::{TakerSwapStateMachine, TakerSwapStorage};
 use bitcrypto::{dhash160, sha256};
 use coins::{lp_coinfind, lp_coinfind_or_err, CoinFindError, MmCoin, MmCoinEnum, TradeFee, TransactionEnum};
 use common::log::{debug, warn};
@@ -74,6 +76,7 @@ use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, pub_sub_topic, PeerId, TopicPrefix};
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
+use mm2_state_machine::storable_state_machine::{StateMachineStorage, StorableStateMachine};
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use secp256k1::{PublicKey, SecretKey, Signature};
@@ -1445,6 +1448,22 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
 
         let fut = kickstart_thread_handler(ctx.clone(), swap, maker_coin_ticker, taker_coin_ticker);
         ctx.spawner().spawn(fut);
+    }
+
+    let maker_swap_storage = MakerSwapStorage::new(ctx.clone());
+    let unfinished_maker_uuids = try_s!(maker_swap_storage.get_unfinished().await);
+    for maker_uuid in unfinished_maker_uuids {
+        debug!("Trying to kickstart maker swap {}", maker_uuid);
+        let maker_state_machine =
+            try_s!(MakerSwapStateMachine::restore_from_storage(maker_uuid, maker_swap_storage.clone()).await);
+    }
+
+    let taker_swap_storage = TakerSwapStorage::new(ctx.clone());
+    let unfinished_taker_uuids = try_s!(taker_swap_storage.get_unfinished().await);
+    for taker_uuid in unfinished_taker_uuids {
+        debug!("Trying to kickstart taker swap {}", taker_uuid);
+        let taker_state_machine =
+            try_s!(TakerSwapStateMachine::restore_from_storage(taker_uuid, taker_swap_storage.clone()).await);
     }
     Ok(coins)
 }

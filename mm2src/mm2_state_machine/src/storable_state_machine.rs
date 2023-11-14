@@ -131,7 +131,7 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     /// # Returns
     ///
     /// A `Result` containing a `RestoredMachine` or an error.
-    fn restore_from_storage(
+    async fn restore_from_storage(
         id: <Self::Storage as StateMachineStorage>::MachineId,
         storage: Self::Storage,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error>;
@@ -374,6 +374,7 @@ mod tests {
         }
     }
 
+    #[async_trait]
     impl StorableStateMachine for StorableStateMachineTest {
         type Storage = StorageTest;
         type Result = ();
@@ -384,7 +385,7 @@ mod tests {
 
         fn id(&self) -> <Self::Storage as StateMachineStorage>::MachineId { self.id }
 
-        fn restore_from_storage(
+        async fn restore_from_storage(
             id: <Self::Storage as StateMachineStorage>::MachineId,
             storage: Self::Storage,
         ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
@@ -495,7 +496,7 @@ mod tests {
         let RestoredMachine {
             mut machine,
             current_state,
-        } = StorableStateMachineTest::restore_from_storage(id, storage).unwrap();
+        } = block_on(StorableStateMachineTest::restore_from_storage(id, storage)).unwrap();
 
         block_on(machine.run(current_state)).unwrap();
 

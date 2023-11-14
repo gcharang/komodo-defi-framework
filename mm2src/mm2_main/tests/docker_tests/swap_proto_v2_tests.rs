@@ -290,12 +290,16 @@ fn test_v2_swap_utxo_utxo_kickstart() {
     bob_conf.conf["log"] = mm_bob.folder.join("mm2_dup.log").to_str().unwrap().into();
 
     let mm_bob = MarketMakerIt::start(bob_conf.conf, bob_conf.rpc_password, None).unwrap();
+    let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm_bob.log_path);
+    log!("Bob log path: {}", mm_bob.log_path.display());
 
     alice_conf.conf["dbdir"] = mm_alice.folder.join("DB").to_str().unwrap().into();
     alice_conf.conf["log"] = mm_alice.folder.join("mm2_dup.log").to_str().unwrap().into();
     alice_conf.conf["seednodes"] = vec![mm_bob.ip.to_string()].into();
 
     let mm_alice = MarketMakerIt::start(alice_conf.conf, alice_conf.rpc_password, None).unwrap();
+    let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
+    log!("Alice log path: {}", mm_alice.log_path.display());
 
     log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
     log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));

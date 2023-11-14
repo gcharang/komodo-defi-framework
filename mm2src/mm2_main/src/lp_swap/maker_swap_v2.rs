@@ -112,7 +112,8 @@ pub enum MakerSwapEvent {
     Completed,
 }
 
-/// Dummy storage for maker swap events (used temporary).
+/// Storage for maker swaps.
+#[derive(Clone)]
 pub struct MakerSwapStorage {
     ctx: MmArc,
 }
@@ -295,6 +296,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> MakerSwa
     fn unique_data(&self) -> Vec<u8> { self.secret_hash() }
 }
 
+#[async_trait]
 impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableStateMachine
     for MakerSwapStateMachine<MakerCoin, TakerCoin>
 {
@@ -325,7 +327,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 
     fn id(&self) -> <Self::Storage as StateMachineStorage>::MachineId { self.uuid }
 
-    fn restore_from_storage(
+    async fn restore_from_storage(
         _id: <Self::Storage as StateMachineStorage>::MachineId,
         _storage: Self::Storage,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
