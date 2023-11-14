@@ -1,10 +1,12 @@
 use crate::sqlite::rusqlite::Error as SqlError;
 use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
 use common::executor::{AbortSettings, SpawnAbortable, SpawnFuture};
-use crossbeam_channel::Sender;
-use futures::channel::oneshot::{self};
+// use futures::channel::oneshot::{self};
+use tokio::sync::oneshot::{self};
 use rusqlite::OpenFlags;
 use std::fmt::{self, Debug, Display};
+// use crossbeam_channel::Sender;
+use tokio::sync::mpsc::{self, UnboundedSender};
 // use std::future::Future as Future03;
 use futures::Future as Future03;
 use std::path::Path;
@@ -70,10 +72,19 @@ enum Message {
     Close(oneshot::Sender<std::result::Result<(), SqlError>>),
 }
 
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Message::Execute(_) => write!(f, "Message::Execute(<function>)"),
+            Message::Close(sender) => f.debug_tuple("Message::Close").field(sender).finish(),
+        }
+    }
+}
+
 /// A handle to call functions in background thread.
 #[derive(Clone)]
 pub struct AsyncConnection {
-    sender: Sender<Message>,
+    sender: UnboundedSender<Message>,
 }
 
 impl AsyncConnection {
@@ -191,14 +202,20 @@ impl AsyncConnection {
     {
         let (sender, receiver) = oneshot::channel::<Result<R>>();
 
+        println!("WE ARE IN CALL \n");
+
         self.sender
             .send(Message::Execute(Box::new(move |conn| {
+                println!("CONN IS ALIVE {:?}", conn);
                 let value = function(conn);
                 let _ = sender.send(value);
             })))
-            .map_err(|_| AsyncConnError::ConnectionClosed)?;
+            .map_err(|_| AsyncConnError::Internal(InternalError("SENDER ERR during send".to_owned())))?;
+        println!("SENDER SENT msg \n");
 
-        receiver.await.map_err(|_| AsyncConnError::ConnectionClosed)?
+        receiver
+            .await
+            .map_err(|_| AsyncConnError::Internal(InternalError("RECEIVER ERR".to_owned())))?
     }
 
     /// Call a function in background thread and get the result asynchronously.
@@ -243,7 +260,7 @@ impl AsyncConnection {
     pub async fn close(self) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<std::result::Result<(), SqlError>>();
 
-        if let Err(crossbeam_channel::SendError(_)) = self.sender.send(Message::Close(sender)) {
+        if let Err(mpsc::error::SendError(_)) = self.sender.send(Message::Close(sender)) {
             // If the channel is closed on the other side, it means the connection closed successfully
             // This is a safeguard against calling close on a `Copy` of the connection
             return Ok(());
@@ -269,10 +286,12 @@ async fn start<F>(open: F, spawner: AsyncConnFutSpawner) -> Result<AsyncConnecti
 where
     F: FnOnce() -> rusqlite::Result<rusqlite::Connection> + Send + 'static,
 {
-    let (sender, receiver) = crossbeam_channel::unbounded::<Message>();
+    let (sender, mut receiver) = mpsc::unbounded_channel::<Message>();
     let (result_sender, result_receiver) = oneshot::channel();
+    println!("WE ARE IN START");
 
     let fut = async move {
+        println!("WE ARE IN let fut = async move \n");
         let mut conn = match open() {
             Ok(c) => c,
             Err(e) => {
@@ -285,9 +304,16 @@ where
             return;
         }
 
-        while let Ok(message) = receiver.recv() {
+        println!("OPENED \n {:?} \n", conn);
+
+        while let Some(message) = receiver.recv().await {
+            println!("WE ARE IN \n while let Ok(message) = receiver.recv() \n");
             match message {
-                Message::Execute(f) => f(&mut conn),
+                Message::Execute(f) => {
+                    println!("Executing message");
+                    f(&mut conn);
+                    println!("Message executed");
+                },
                 Message::Close(s) => {
                     let result = conn.close();
 

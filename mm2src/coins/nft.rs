@@ -238,8 +238,11 @@ pub async fn update_nft(ctx: MmArc, req: UpdateNftReq) -> MmResult<(), UpdateNft
     let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(GetNftInfoError::Internal)?;
 
     let storage = nft_ctx.lock_db().await?;
+    println!("STORAGE CREATED \n");
     for chain in req.chains.iter() {
+        println!("CHAIN \n {:?} \n", chain);
         let transfer_history_initialized = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
+        println!("transfer_history_initialized \n {:?} \n", transfer_history_initialized);
 
         let from_block = if transfer_history_initialized {
             let last_transfer_block = NftTransferHistoryStorageOps::get_last_block_number(&storage, chain).await?;
