@@ -109,10 +109,9 @@ pub trait StateMachineStorage: Send + Sync {
 }
 
 /// A struct representing a restored state machine.
-#[allow(dead_code)]
 pub struct RestoredMachine<M> {
-    machine: M,
-    current_state: Box<dyn State<StateMachine = M>>,
+    pub machine: M,
+    pub current_state: Box<dyn State<StateMachine = M>>,
 }
 
 /// A trait for storable state machines.
@@ -122,8 +121,8 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     type Storage: StateMachineStorage;
     /// The result type of the state machine.
     type Result: Send;
-    /// The additional context required to restore state machine from storage
-    type RestoreCtx: Send;
+    /// The additional context required to recreate state machine.
+    type RecreateCtx: Send;
 
     /// Returns State machine's DB representation()
     fn to_db_repr(&self) -> <Self::Storage as StateMachineStorage>::DbRepr;
@@ -134,20 +133,23 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     /// Gets the unique identifier of the state machine.
     fn id(&self) -> <Self::Storage as StateMachineStorage>::MachineId;
 
-    /// Restores a state machine from storage.
+    /// Recreates a state machine from DB representation.
     ///
     /// # Parameters
     ///
-    /// - `id`: The unique identifier of the state machine to be restored.
-    /// - `storage`: The storage containing the state machine's data.
+    /// - `id`: The unique identifier of the state machine to be recreated.
+    /// - `storage`: Storage instance.
+    /// - `repr`: State machine's DB representation.
+    /// - `from_repr_ctx`: Additional context required to recreate the state machine.
     ///
     /// # Returns
     ///
     /// A `Result` containing a `RestoredMachine` or an error.
-    async fn restore_from_storage(
+    async fn recreate_machine(
         id: <Self::Storage as StateMachineStorage>::MachineId,
         storage: Self::Storage,
-        restore_ctx: Self::RestoreCtx,
+        repr: <Self::Storage as StateMachineStorage>::DbRepr,
+        from_repr_ctx: Self::RecreateCtx,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error>;
 
     /// Stores an event for the state machine.
@@ -396,7 +398,7 @@ mod tests {
     impl StorableStateMachine for StorableStateMachineTest {
         type Storage = StorageTest;
         type Result = ();
-        type RestoreCtx = ();
+        type RecreateCtx = ();
 
         fn to_db_repr(&self) -> TestStateMachineRepr { TestStateMachineRepr {} }
 
@@ -404,10 +406,11 @@ mod tests {
 
         fn id(&self) -> <Self::Storage as StateMachineStorage>::MachineId { self.id }
 
-        async fn restore_from_storage(
+        async fn recreate_machine(
             id: <Self::Storage as StateMachineStorage>::MachineId,
             storage: Self::Storage,
-            _restore_ctx: Self::RestoreCtx,
+            _repr: <Self::Storage as StateMachineStorage>::DbRepr,
+            _recreate_ctx: Self::RecreateCtx,
         ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
             let events = storage.events_unfinished.get(&id).unwrap();
             let current_state: Box<dyn State<StateMachine = Self>> = match events.last() {
@@ -516,7 +519,13 @@ mod tests {
         let RestoredMachine {
             mut machine,
             current_state,
-        } = block_on(StorableStateMachineTest::restore_from_storage(id, storage, ())).unwrap();
+        } = block_on(StorableStateMachineTest::recreate_machine(
+            id,
+            storage,
+            TestStateMachineRepr {},
+            (),
+        ))
+        .unwrap();
 
         block_on(machine.run(current_state)).unwrap();
 

@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 cfg_native!(
-    use crate::mm2::database::my_swaps::{insert_new_swap_v2};
+    use crate::mm2::database::my_swaps::{insert_new_swap_v2, SELECT_MY_SWAP_V2_BY_UUID};
     use db_common::sqlite::rusqlite::{named_params, Result as SqlResult, Row};
 );
 
@@ -33,7 +33,6 @@ cfg_wasm32!(
 );
 
 // This is needed to have Debug on messages
-use crate::mm2::database::my_swaps::SELECT_MY_SWAP_V2_BY_UUID;
 #[allow(unused_imports)] use prost::Message;
 
 /// Negotiation data representation to be stored in DB.
@@ -339,7 +338,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type Storage = MakerSwapStorage;
     type Result = ();
-    type RestoreCtx = SwapRestoreCtx<MakerCoin, TakerCoin>;
+    type RecreateCtx = SwapRecreateCtx<MakerCoin, TakerCoin>;
 
     fn to_db_repr(&self) -> MakerSwapDbRepr {
         MakerSwapDbRepr {
@@ -365,10 +364,11 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 
     fn id(&self) -> <Self::Storage as StateMachineStorage>::MachineId { self.uuid }
 
-    async fn restore_from_storage(
-        _id: <Self::Storage as StateMachineStorage>::MachineId,
-        _storage: Self::Storage,
-        _restore_ctx: Self::RestoreCtx,
+    async fn recreate_machine(
+        id: Uuid,
+        storage: MakerSwapStorage,
+        repr: MakerSwapDbRepr,
+        recreate_ctx: Self::RecreateCtx,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
         todo!()
     }

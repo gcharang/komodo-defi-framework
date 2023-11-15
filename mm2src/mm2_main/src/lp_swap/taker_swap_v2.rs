@@ -349,7 +349,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type Storage = TakerSwapStorage;
     type Result = ();
-    type RestoreCtx = SwapRestoreCtx<MakerCoin, TakerCoin>;
+    type RecreateCtx = SwapRecreateCtx<MakerCoin, TakerCoin>;
 
     fn to_db_repr(&self) -> TakerSwapDbRepr {
         TakerSwapDbRepr {
@@ -375,10 +375,11 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 
     fn id(&self) -> <Self::Storage as StateMachineStorage>::MachineId { self.uuid }
 
-    async fn restore_from_storage(
-        _id: <Self::Storage as StateMachineStorage>::MachineId,
-        _storage: Self::Storage,
-        _restore_ctx: Self::RestoreCtx,
+    async fn recreate_machine(
+        id: Uuid,
+        storage: TakerSwapStorage,
+        repr: TakerSwapDbRepr,
+        recreate_ctx: Self::RecreateCtx,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
         todo!()
     }

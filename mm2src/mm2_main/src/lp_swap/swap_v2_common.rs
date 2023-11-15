@@ -29,9 +29,9 @@ pub enum SwapStateMachineError {
     NoSwapWithUuid(Uuid),
 }
 
-pub struct SwapRestoreCtx<MakerCoin, TakerCoin> {
-    maker_coin: MakerCoin,
-    taker_coin: TakerCoin,
+pub struct SwapRecreateCtx<MakerCoin, TakerCoin> {
+    pub maker_coin: MakerCoin,
+    pub taker_coin: TakerCoin,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
