@@ -235,6 +235,7 @@ pub enum ZCoinBuildError {
     Io(std::io::Error),
     RpcClientInitErr(ZcoinClientInitError),
     ZCashParamsNotFound,
+    ZCashParamsError(String),
     ZDerivationPathNotSet,
     SaplingParamsInvalidChecksum,
 }

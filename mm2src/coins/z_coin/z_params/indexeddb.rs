@@ -1,4 +1,5 @@
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
+use common::log::info;
 
 use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
@@ -11,14 +12,13 @@ const DB_VERSION: u32 = 1;
 pub type ZcashParamsWasmRes<T> = MmResult<T, ZcoinStorageError>;
 pub type ZcashParamsInnerLocked<'a> = DbLocked<'a, ZcashParamsWasmInner>;
 
+//  indexeddb max data =267386880 bytes to save, so we need to split sapling_spend
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ZcashParamsWasmTable {
-    sapling_spend1: Vec<u8>,
-    sapling_spend2: Vec<u8>,
-    sapling_spend3: Vec<u8>,
-    sapling_spend4: Vec<u8>,
-    sapling_spend5: Vec<u8>,
+    sapling_spend_id: u8,
+    sapling_spend: Vec<u8>,
     sapling_output: Vec<u8>,
+    ticker: String,
 }
 
 impl ZcashParamsWasmTable {
@@ -34,6 +34,7 @@ impl TableSignature for ZcashParamsWasmTable {
             table.create_multi_index(Self::SPEND_OUTPUT_INDEX, &["sapling_spend", "sapling_output"], true)?;
             table.create_index("sapling_spend", false)?;
             table.create_index("sapling_output", false)?;
+            table.create_index("ticker", false)?;
         }
 
         Ok(())
@@ -81,21 +82,18 @@ impl ZcashParamsWasmImpl {
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
 
-        let mut sapling_spend_chunks: Vec<Vec<u8>> = sapling_spend.chunks(5).map(|chunk| chunk.to_vec()).collect();
-        // Ensure we have at least 5 chunks
-        while sapling_spend_chunks.len() < 5 {
-            sapling_spend_chunks.push(Vec::new());
+        let sapling_spend_chunks = sapling_spend_to_chunks(sapling_spend);
+        for i in 0..12 {
+            info!("current {i}");
+            let sapling_output = if i > 0 { vec![] } else { sapling_output.to_vec() };
+            let params = ZcashParamsWasmTable {
+                sapling_spend_id: i as u8,
+                sapling_spend: sapling_spend_chunks[i].clone(),
+                sapling_output,
+                ticker: "z_params".to_string(),
+            };
+            params_db.add_item(&params).await?;
         }
-
-        let params = ZcashParamsWasmTable {
-            sapling_spend1: sapling_spend_chunks[0].clone(),
-            sapling_spend2: sapling_spend_chunks[1].clone(),
-            sapling_spend3: sapling_spend_chunks[2].clone(),
-            sapling_spend4: sapling_spend_chunks[3].clone(),
-            sapling_spend5: sapling_spend_chunks[4].clone(),
-            sapling_output: sapling_output.to_vec(),
-        };
-        params_db.add_item(&params).await?;
 
         Ok(())
     }
@@ -107,7 +105,8 @@ impl ZcashParamsWasmImpl {
 
         let maybe_param = params_db
             .cursor_builder()
-            .open_cursor(ZcashParamsWasmTable::SPEND_OUTPUT_INDEX)
+            .only("ticker", "z_params")?
+            .open_cursor("ticker")
             .await?
             .next()
             .await?;
@@ -119,33 +118,42 @@ impl ZcashParamsWasmImpl {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
+        let mut maybe_params = params_db
+            .cursor_builder()
+            .only("ticker", "z_params")?
+            .open_cursor("ticker")
+            .await?;
 
-        let maybe_params = params_db.get_all_items().await?;
-        match maybe_params.first() {
-            Some((_, p)) => {
-                let mut sapling_spend = Vec::with_capacity(
-                    p.sapling_spend1.len()
-                        + p.sapling_spend2.len()
-                        + p.sapling_spend3.len()
-                        + p.sapling_spend4.len()
-                        + p.sapling_spend5.len(),
-                );
+        let mut sapling_spend = vec![];
+        let mut sapling_output = vec![];
 
-                for chunk in [
-                    &p.sapling_spend1,
-                    &p.sapling_spend2,
-                    &p.sapling_spend3,
-                    &p.sapling_spend4,
-                    &p.sapling_spend5,
-                ] {
-                    sapling_spend.extend_from_slice(chunk);
-                }
-
-                Ok((sapling_spend, p.sapling_output.clone()))
-            },
-            None => MmError::err(ZcoinStorageError::CorruptedData(
-                "No z_cash params found in storage".to_string(),
-            )),
+        while let Some((_, params)) = maybe_params.next().await? {
+            sapling_spend.extend_from_slice(&params.sapling_spend);
+            if params.sapling_spend_id < 1 {
+                sapling_output = params.sapling_output
+            }
         }
+
+        Ok((sapling_spend, sapling_output.clone()))
     }
+}
+
+fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
+    // Set the target chunk size
+    let target_chunk_size = 12;
+    // Calculate the target size for each chunk
+    let chunk_size = sapling_spend.len() / target_chunk_size;
+    // Calculate the remainder for cases when the length is not perfectly divisible
+    let remainder = sapling_spend.len() % target_chunk_size;
+    let mut sapling_spend_chunks: Vec<Vec<u8>> = Vec::with_capacity(target_chunk_size);
+    let mut start = 0;
+    for i in 0..target_chunk_size {
+        let end = start + chunk_size + if i < remainder { 1 } else { 0 };
+        // Extract the current chunk from the original vector
+        sapling_spend_chunks.push(sapling_spend[start..end].to_vec());
+        // Move the start index to the next position
+        start = end;
+    }
+
+    sapling_spend_chunks
 }

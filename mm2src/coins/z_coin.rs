@@ -13,6 +13,8 @@ use crate::utxo::{sat_from_big_decimal, utxo_common, ActualTxFee, AdditionalTxDa
                   BroadcastTxErr, FeePolicy, GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList,
                   RecentlySpentOutPointsGuard, UtxoActivationParams, UtxoAddressFormat, UtxoArc, UtxoCoinFields,
                   UtxoCommonOps, UtxoRpcMode, UtxoTxBroadcastOps, UtxoTxGenerationOps, VerboseTransactionFrom};
+#[cfg(target_arch = "wasm32")]
+use crate::z_coin::z_params::{download_parameters, ZcashParamsWasmImpl};
 use crate::TxFeeDetails;
 use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, CoinFutSpawner, ConfirmPaymentInput,
             FeeApproxStage, FoundSwapTxSpend, HistorySyncState, MakerSwapTakerCoin, MarketCoinOps, MmCoin, MmCoinEnum,
@@ -129,9 +131,9 @@ macro_rules! try_ztx_s {
 const DEX_FEE_OVK: OutgoingViewingKey = OutgoingViewingKey([7; 32]);
 const DEX_FEE_Z_ADDR: &str = "zs1rp6426e9r6jkq2nsanl66tkd34enewrmr0uvj0zelhkcwmsy0uvxz2fhm9eu9rl3ukxvgzy2v9f";
 cfg_native!(
-    const BLOCKS_TABLE: &str = "blocks";
     const SAPLING_OUTPUT_NAME: &str = "sapling-output.params";
     const SAPLING_SPEND_NAME: &str = "sapling-spend.params";
+    const BLOCKS_TABLE: &str = "blocks";
     const TRANSACTIONS_TABLE: &str = "transactions";
     const SAPLING_SPEND_EXPECTED_HASH: &str = "8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13";
     const SAPLING_OUTPUT_EXPECTED_HASH: &str = "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4";
@@ -1036,6 +1038,32 @@ impl<'a> ZCoinBuilder<'a> {
         let (spend_buf, output_buf) = wagyu_zcash_parameters::load_sapling_parameters();
         Ok(LocalTxProver::from_bytes(&spend_buf[..], &output_buf[..]))
     }
+    //    async fn z_tx_prover(&self) -> Result<LocalTxProver, MmError<ZCoinBuildError>> {
+    //        let params_db = ZcashParamsWasmImpl::new(self.ctx.clone())
+    //            .await
+    //            .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
+    //        return if !params_db
+    //            .check_params()
+    //            .await
+    //            .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?
+    //        {
+    //            // download params
+    //            let (sapling_spend, sapling_output) = download_parameters().await.unwrap();
+    //            // save params
+    //            params_db
+    //                .save_params(&sapling_spend, &sapling_output)
+    //                .await
+    //                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
+    //            Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))
+    //        } else {
+    //            // get params
+    //            let (sapling_spend, sapling_output) = params_db
+    //                .get_params()
+    //                .await
+    //                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
+    //            Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))
+    //        };
+    //    }
 }
 
 /// Initialize `ZCoin` with a forced `z_spending_key`.
