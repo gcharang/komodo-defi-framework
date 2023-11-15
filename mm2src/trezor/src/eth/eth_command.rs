@@ -112,7 +112,7 @@ fn to_sign_eth_message(
         None
     };
     proto_ethereum::EthereumSignTx {
-        address_n: serialize_derivation_path(derivation_path), // derivation_path.iter().map(|child| child.0).collect(),
+        address_n: serialize_derivation_path(derivation_path),
         nonce: Some(left_trim_u8(&nonce)),
         gas_price: left_trim_u8(&gas_price),
         gas_limit: left_trim_u8(&gas_limit),
@@ -134,10 +134,14 @@ fn extract_eth_signature(tx_request: &proto_ethereum::EthereumTxRequest) -> Trez
         tx_request.signature_v,
     ) {
         (Some(r), Some(s), Some(v)) => {
+            let v_refined = signature::check_replay_protection(v as u64); // remove replay protection added by trezor as the ethcore lib will add it itself
+            if v_refined == 4 {
+                return Err(MmError::new(TrezorError::Failure(OperationFailure::InvalidSignature)));
+            }
             Ok(Signature::from_rsv(
                 &H256::from_slice(r.as_slice()),
                 &H256::from_slice(s.as_slice()),
-                signature::check_replay_protection(v as u64), // remove replay protection added by trezor as the ethcore lib will add it itself
+                v_refined,
             ))
         },
         (_, _, _) => Err(MmError::new(TrezorError::Failure(OperationFailure::InvalidSignature))),
