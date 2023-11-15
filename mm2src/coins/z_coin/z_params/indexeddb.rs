@@ -82,11 +82,11 @@ impl ZcashParamsWasmImpl {
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
 
         let sapling_spend_chunks = sapling_spend_to_chunks(sapling_spend);
-        for i in 0..12 {
+        for (i, item) in sapling_spend_chunks.iter().enumerate() {
             let sapling_output = if i > 0 { vec![] } else { sapling_output.to_vec() };
             let params = ZcashParamsWasmTable {
                 sapling_spend_id: i as u8,
-                sapling_spend: sapling_spend_chunks[i].clone(),
+                sapling_spend: item.clone(),
                 sapling_output,
                 ticker: "z_params".to_string(),
             };
@@ -146,7 +146,7 @@ fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
     let mut sapling_spend_chunks: Vec<Vec<u8>> = Vec::with_capacity(target_chunk_size);
     let mut start = 0;
     for i in 0..target_chunk_size {
-        let end = start + chunk_size + if i < remainder { 1 } else { 0 };
+        let end = start + chunk_size + usize::from(i < remainder);
         // Extract the current chunk from the original vector
         sapling_spend_chunks.push(sapling_spend[start..end].to_vec());
         // Move the start index to the next position

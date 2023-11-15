@@ -1,6 +1,7 @@
 mod indexeddb;
 
 use blake2b_simd::State;
+use common::log::info;
 pub use indexeddb::ZcashParamsWasmImpl;
 use mm2_err_handle::prelude::*;
 use mm2_net::wasm::http::FetchRequest;
@@ -56,6 +57,7 @@ use wasm_bindgen_test::*;
 #[wasm_bindgen_test]
 async fn test_download_save_and_get_params() {
     register_wasm_log();
+    info!("Testing download, save and get params");
     let ctx = mm_ctx_with_custom_db();
     let db = ZcashParamsWasmImpl::new(ctx).await.unwrap();
     // download params
@@ -66,6 +68,7 @@ async fn test_download_save_and_get_params() {
     let (sapling_spend_db, sapling_output_db) = db.get_params().await.unwrap();
     assert_eq!(sapling_spend, sapling_spend_db);
     assert_eq!(sapling_output, sapling_output_db);
+    info!("Testing download, save and get params successful");
 }
 
 #[wasm_bindgen_test]
@@ -75,5 +78,5 @@ async fn test_check_for_no_params() {
     let db = ZcashParamsWasmImpl::new(ctx).await.unwrap();
     // check for no params
     let check_params = db.check_params().await.unwrap();
-    assert_eq!(false, check_params)
+    assert!(!check_params)
 }
