@@ -1043,7 +1043,9 @@ impl<'a> ZCoinBuilder<'a> {
             .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?
         {
             // download params
-            let (sapling_spend, sapling_output) = download_parameters().await.unwrap();
+            let (sapling_spend, sapling_output) = download_parameters()
+                .await
+                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
             // save params
             params_db
                 .save_params(&sapling_spend, &sapling_output)
