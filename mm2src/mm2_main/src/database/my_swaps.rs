@@ -265,6 +265,8 @@ pub fn select_unfinished_swaps_uuids(conn: &Connection, swap_type: u8) -> SqlRes
     Ok(uuids?)
 }
 
+/// The SQL query selecting upgraded swap data and send it to user through RPC API
+/// It omits sensitive data (swap secret, p2p privkey, etc) for security reasons
 pub const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
     my_coin,
     other_coin,
@@ -281,6 +283,30 @@ pub const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
     maker_coin_nota,
     taker_coin_confs,
     taker_coin_nota
+FROM my_swaps
+WHERE uuid = :uuid;
+"#;
+
+/// The SQL query selecting upgraded swap data required to re-initialize the swap e.g., on restart.
+pub const SELECT_MY_SWAP_V2_BY_UUID: &str = r#"SELECT
+    my_coin,
+    other_coin,
+    uuid,
+    started_at,
+    secret,
+    secret_hash,
+    secret_hash_algo,
+    events_json,
+    maker_volume,
+    taker_volume,
+    premium,
+    dex_fee,
+    lock_duration,
+    maker_coin_confs,
+    maker_coin_nota,
+    taker_coin_confs,
+    taker_coin_nota,
+    p2p_privkey
 FROM my_swaps
 WHERE uuid = :uuid;
 "#;

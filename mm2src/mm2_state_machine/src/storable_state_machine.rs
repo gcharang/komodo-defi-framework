@@ -51,6 +51,17 @@ pub trait StateMachineStorage: Send + Sync {
     /// A `Result` indicating success (`Ok(())`) or an error (`Err(Self::Error)`).
     async fn store_repr(&mut self, id: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error>;
 
+    /// Gets a DB representation of a given state machine.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: The unique identifier of the state machine.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing representation (`Ok(Self::DbRepr)`) or an error (`Err(Self::Error)`).
+    async fn get_repr(&self, id: Self::MachineId) -> Result<Self::DbRepr, Self::Error>;
+
     /// Returns whether DB stores a state machine with the given id.
     ///
     /// # Parameters
@@ -111,6 +122,8 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     type Storage: StateMachineStorage;
     /// The result type of the state machine.
     type Result: Send;
+    /// The additional context required to restore state machine from storage
+    type RestoreCtx: Send;
 
     /// Returns State machine's DB representation()
     fn to_db_repr(&self) -> <Self::Storage as StateMachineStorage>::DbRepr;
@@ -134,6 +147,7 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     async fn restore_from_storage(
         id: <Self::Storage as StateMachineStorage>::MachineId,
         storage: Self::Storage,
+        restore_ctx: Self::RestoreCtx,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error>;
 
     /// Stores an event for the state machine.
@@ -353,6 +367,10 @@ mod tests {
 
         async fn store_repr(&mut self, _id: Self::MachineId, _repr: Self::DbRepr) -> Result<(), Self::Error> { Ok(()) }
 
+        async fn get_repr(&self, _id: Self::MachineId) -> Result<Self::DbRepr, Self::Error> {
+            Ok(TestStateMachineRepr {})
+        }
+
         async fn has_record_for(&mut self, _id: &Self::MachineId) -> Result<bool, Self::Error> { Ok(false) }
 
         async fn store_event(&mut self, machine_id: usize, event: TestEvent) -> Result<(), Self::Error> {
@@ -378,6 +396,7 @@ mod tests {
     impl StorableStateMachine for StorableStateMachineTest {
         type Storage = StorageTest;
         type Result = ();
+        type RestoreCtx = ();
 
         fn to_db_repr(&self) -> TestStateMachineRepr { TestStateMachineRepr {} }
 
@@ -388,6 +407,7 @@ mod tests {
         async fn restore_from_storage(
             id: <Self::Storage as StateMachineStorage>::MachineId,
             storage: Self::Storage,
+            _restore_ctx: Self::RestoreCtx,
         ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
             let events = storage.events_unfinished.get(&id).unwrap();
             let current_state: Box<dyn State<StateMachine = Self>> = match events.last() {
@@ -496,7 +516,7 @@ mod tests {
         let RestoredMachine {
             mut machine,
             current_state,
-        } = block_on(StorableStateMachineTest::restore_from_storage(id, storage)).unwrap();
+        } = block_on(StorableStateMachineTest::restore_from_storage(id, storage, ())).unwrap();
 
         block_on(machine.run(current_state)).unwrap();
 

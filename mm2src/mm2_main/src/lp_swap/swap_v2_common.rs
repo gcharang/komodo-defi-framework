@@ -29,6 +29,11 @@ pub enum SwapStateMachineError {
     NoSwapWithUuid(Uuid),
 }
 
+pub struct SwapRestoreCtx<MakerCoin, TakerCoin> {
+    maker_coin: MakerCoin,
+    taker_coin: TakerCoin,
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 impl From<db_common::sqlite::rusqlite::Error> for SwapStateMachineError {
     fn from(e: db_common::sqlite::rusqlite::Error) -> Self { SwapStateMachineError::StorageError(e.to_string()) }

@@ -83,6 +83,7 @@ use secp256k1::{PublicKey, SecretKey, Signature};
 use serde::Serialize;
 use serde_json::{self as json, Value as Json};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -1454,16 +1455,16 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
     let unfinished_maker_uuids = try_s!(maker_swap_storage.get_unfinished().await);
     for maker_uuid in unfinished_maker_uuids {
         debug!("Trying to kickstart maker swap {}", maker_uuid);
-        let maker_state_machine =
-            try_s!(MakerSwapStateMachine::restore_from_storage(maker_uuid, maker_swap_storage.clone()).await);
+        let maker_swap_repr = try_s!(maker_swap_storage.get_repr(maker_uuid).await);
+        debug!("Got maker swap repr {:?}", maker_swap_repr);
     }
 
     let taker_swap_storage = TakerSwapStorage::new(ctx.clone());
     let unfinished_taker_uuids = try_s!(taker_swap_storage.get_unfinished().await);
     for taker_uuid in unfinished_taker_uuids {
         debug!("Trying to kickstart taker swap {}", taker_uuid);
-        let taker_state_machine =
-            try_s!(TakerSwapStateMachine::restore_from_storage(taker_uuid, taker_swap_storage.clone()).await);
+        let taker_swap_repr = try_s!(taker_swap_storage.get_repr(taker_uuid).await);
+        debug!("Got taker swap repr {:?}", taker_swap_repr);
     }
     Ok(coins)
 }
@@ -1631,7 +1632,7 @@ pub async fn active_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>
 }
 
 /// Algorithm used to hash swap secret.
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum SecretHashAlgo {
     /// ripemd160(sha256(secret))
     DHASH160 = 1,
@@ -1641,6 +1642,21 @@ pub enum SecretHashAlgo {
 
 impl Default for SecretHashAlgo {
     fn default() -> Self { SecretHashAlgo::DHASH160 }
+}
+
+#[derive(Debug)]
+pub struct UnsupportedSecretHashAlgo(u8);
+
+impl TryFrom<u8> for SecretHashAlgo {
+    type Error = UnsupportedSecretHashAlgo;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(SecretHashAlgo::DHASH160),
+            2 => Ok(SecretHashAlgo::SHA256),
+            unsupported => Err(UnsupportedSecretHashAlgo(unsupported)),
+        }
+    }
 }
 
 impl SecretHashAlgo {

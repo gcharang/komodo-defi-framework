@@ -19,12 +19,13 @@ use mm2_state_machine::prelude::*;
 use mm2_state_machine::storable_state_machine::*;
 use primitives::hash::H256;
 use rpc::v1::types::Bytes as BytesJson;
+use std::convert::TryInto;
 use std::marker::PhantomData;
 use uuid::Uuid;
 
 cfg_native!(
-    use crate::mm2::database::my_swaps::{insert_new_swap_v2};
-    use db_common::sqlite::rusqlite::named_params;
+    use crate::mm2::database::my_swaps::{insert_new_swap_v2, SELECT_MY_SWAP_V2_BY_UUID};
+    use db_common::sqlite::rusqlite::{named_params, Result as SqlResult, Row};
 );
 
 cfg_wasm32!(
@@ -196,6 +197,14 @@ impl StateMachineStorage for TakerSwapStorage {
         Ok(())
     }
 
+    async fn get_repr(&self, id: Self::MachineId) -> Result<Self::DbRepr, Self::Error> {
+        Ok(self.ctx.sqlite_connection().query_row(
+            SELECT_MY_SWAP_V2_BY_UUID,
+            &[(":uuid", &id.to_string())],
+            TakerSwapDbRepr::from_sql_row,
+        )?)
+    }
+
     async fn has_record_for(&mut self, id: &Self::MachineId) -> Result<bool, Self::Error> {
         has_db_record_for(self.ctx.clone(), id).await
     }
@@ -213,7 +222,7 @@ impl StateMachineStorage for TakerSwapStorage {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TakerSwapDbRepr {
     /// Maker coin
     pub maker_coin: String,
@@ -245,6 +254,33 @@ pub struct TakerSwapDbRepr {
     pub p2p_keypair: Option<SerializableSecp256k1Keypair>,
     /// Swap events
     pub events: Vec<TakerSwapEvent>,
+}
+
+impl TakerSwapDbRepr {
+    fn from_sql_row(row: &Row) -> SqlResult<Self> {
+        Ok(TakerSwapDbRepr {
+            taker_coin: row.get(0)?,
+            maker_coin: row.get(1)?,
+            uuid: row.get::<_, String>(2)?.parse().unwrap(),
+            started_at: row.get(3)?,
+            taker_secret: row.get::<_, Vec<u8>>(4)?.into(),
+            taker_secret_hash: row.get::<_, Vec<u8>>(5)?.into(),
+            secret_hash_algo: row.get::<_, u8>(6)?.try_into().unwrap(),
+            events: serde_json::from_str(&row.get::<_, String>(7)?).unwrap(),
+            maker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(8)?).unwrap(),
+            taker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(9)?).unwrap(),
+            taker_premium: MmNumber::from_fraction_string(&row.get::<_, String>(10)?).unwrap(),
+            dex_fee: MmNumber::from_fraction_string(&row.get::<_, String>(11)?).unwrap(),
+            lock_duration: row.get(12)?,
+            conf_settings: SwapConfirmationsSettings {
+                maker_coin_confs: row.get(13)?,
+                maker_coin_nota: row.get(14)?,
+                taker_coin_confs: row.get(15)?,
+                taker_coin_nota: row.get(16)?,
+            },
+            p2p_keypair: None,
+        })
+    }
 }
 
 impl StateMachineDbRepr for TakerSwapDbRepr {
@@ -313,6 +349,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type Storage = TakerSwapStorage;
     type Result = ();
+    type RestoreCtx = SwapRestoreCtx<MakerCoin, TakerCoin>;
 
     fn to_db_repr(&self) -> TakerSwapDbRepr {
         TakerSwapDbRepr {
@@ -341,6 +378,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
     async fn restore_from_storage(
         _id: <Self::Storage as StateMachineStorage>::MachineId,
         _storage: Self::Storage,
+        _restore_ctx: Self::RestoreCtx,
     ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
         todo!()
     }
