@@ -8093,6 +8093,8 @@ pub fn eth_my_balance() {
 #[ignore]
 #[cfg(all(not(target_arch = "wasm32")))]
 fn test_eth_withdraw_from_trezor_no_rpc() {
+    use std::convert::TryInto;
+
     use coins::WithdrawFee;
 
     let ticker = "ETH";
@@ -8142,7 +8144,7 @@ fn test_eth_withdraw_from_trezor_no_rpc() {
         "m/44'/1'/0'/0/0",
         Some(WithdrawFee::EthGas {
             gas: ETH_GAS,
-            gas_price: 100_000_000_000_i64.into(),
+            gas_price: 0.1_f32.try_into().unwrap(),
         }),
     ))
     .expect("withdraw must end successfully");
