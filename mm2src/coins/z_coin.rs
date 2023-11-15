@@ -1033,37 +1033,32 @@ impl<'a> ZCoinBuilder<'a> {
     }
 
     #[cfg(target_arch = "wasm32")]
-    // TODO: Implement TxProver for WASM using indexed db after merging transport layer PR.
     async fn z_tx_prover(&self) -> Result<LocalTxProver, MmError<ZCoinBuildError>> {
-        let (spend_buf, output_buf) = wagyu_zcash_parameters::load_sapling_parameters();
-        Ok(LocalTxProver::from_bytes(&spend_buf[..], &output_buf[..]))
+        let params_db = ZcashParamsWasmImpl::new(self.ctx.clone())
+            .await
+            .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
+        return if !params_db
+            .check_params()
+            .await
+            .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?
+        {
+            // download params
+            let (sapling_spend, sapling_output) = download_parameters().await.unwrap();
+            // save params
+            params_db
+                .save_params(&sapling_spend, &sapling_output)
+                .await
+                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
+            Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))
+        } else {
+            // get params
+            let (sapling_spend, sapling_output) = params_db
+                .get_params()
+                .await
+                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
+            Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))
+        };
     }
-    //    async fn z_tx_prover(&self) -> Result<LocalTxProver, MmError<ZCoinBuildError>> {
-    //        let params_db = ZcashParamsWasmImpl::new(self.ctx.clone())
-    //            .await
-    //            .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
-    //        return if !params_db
-    //            .check_params()
-    //            .await
-    //            .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?
-    //        {
-    //            // download params
-    //            let (sapling_spend, sapling_output) = download_parameters().await.unwrap();
-    //            // save params
-    //            params_db
-    //                .save_params(&sapling_spend, &sapling_output)
-    //                .await
-    //                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
-    //            Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))
-    //        } else {
-    //            // get params
-    //            let (sapling_spend, sapling_output) = params_db
-    //                .get_params()
-    //                .await
-    //                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
-    //            Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))
-    //        };
-    //    }
 }
 
 /// Initialize `ZCoin` with a forced `z_spending_key`.

@@ -1,5 +1,4 @@
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
-use common::log::info;
 
 use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
@@ -84,7 +83,6 @@ impl ZcashParamsWasmImpl {
 
         let sapling_spend_chunks = sapling_spend_to_chunks(sapling_spend);
         for i in 0..12 {
-            info!("current {i}");
             let sapling_output = if i > 0 { vec![] } else { sapling_output.to_vec() };
             let params = ZcashParamsWasmTable {
                 sapling_spend_id: i as u8,
@@ -129,7 +127,7 @@ impl ZcashParamsWasmImpl {
 
         while let Some((_, params)) = maybe_params.next().await? {
             sapling_spend.extend_from_slice(&params.sapling_spend);
-            if params.sapling_spend_id < 1 {
+            if params.sapling_spend_id == 0 {
                 sapling_output = params.sapling_output
             }
         }
