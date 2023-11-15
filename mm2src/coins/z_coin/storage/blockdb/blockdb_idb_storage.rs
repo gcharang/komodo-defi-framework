@@ -4,9 +4,8 @@ use crate::z_coin::z_coin_errors::ZcoinStorageError;
 
 use async_trait::async_trait;
 use mm2_core::mm_ctx::MmArc;
-use mm2_db::indexed_db::{BeBigUint, DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, InitDbResult,
-                         MultiIndex, OnUpgradeResult, TableSignature};
-use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
+use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb,
+                         IndexedDbBuilder, InitDbResult, MultiIndex, OnUpgradeResult, TableSignature};
 use mm2_err_handle::prelude::*;
 use protobuf::Message;
 use std::path::Path;
