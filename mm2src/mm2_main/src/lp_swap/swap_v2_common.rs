@@ -7,6 +7,7 @@ use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Error;
+use rpc::v1::types::Bytes as BytesJson;
 use uuid::Uuid;
 
 cfg_native!(
@@ -19,6 +20,12 @@ cfg_wasm32!(
     use crate::mm2::lp_swap::swap_wasm_db::{IS_FINISHED_SWAP_TYPE_INDEX, MySwapsFiltersTable, SavedSwapTable};
     use mm2_db::indexed_db::{DbTransactionError, InitDbError, MultiIndex};
 );
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct StoredPreimage {
+    pub preimage: BytesJson,
+    pub signature: BytesJson,
+}
 
 /// Represents errors that can be produced by [`MakerSwapStateMachine`] or [`TakerSwapStateMachine`] run.
 #[derive(Debug, Display)]
