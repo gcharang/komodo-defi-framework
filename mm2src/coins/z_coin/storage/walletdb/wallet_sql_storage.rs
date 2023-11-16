@@ -1,4 +1,4 @@
-use crate::z_coin::storage::WalletDbShared;
+use crate::z_coin::storage::{WalletDbShared, ZcoinStorageRes};
 use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinClientInitError, ZcoinConsensusParams, ZcoinStorageError};
 use common::async_blocking;
 use common::log::info;
@@ -83,7 +83,7 @@ impl<'a> WalletDbShared {
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
         continue_from_prev_sync: bool,
-    ) -> MmResult<Self, ZcoinStorageError> {
+    ) -> ZcoinStorageRes<Self> {
         let ticker = builder.ticker;
         let consensus_params = builder.protocol_info.consensus_params.clone();
         let wallet_db = create_wallet_db(
@@ -105,7 +105,7 @@ impl<'a> WalletDbShared {
         })
     }
 
-    pub async fn is_tx_imported(&self, tx_id: TxId) -> MmResult<bool, ZcoinStorageError> {
+    pub async fn is_tx_imported(&self, tx_id: TxId) -> ZcoinStorageRes<bool> {
         let db = self.db.inner();
         async_blocking(move || {
             let conn = db.lock().unwrap();

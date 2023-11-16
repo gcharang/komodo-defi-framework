@@ -1,4 +1,4 @@
-use crate::z_coin::{ValidateBlocksError, ZcoinConsensusParams};
+use crate::z_coin::{ValidateBlocksError, ZcoinConsensusParams, ZcoinStorageError};
 
 pub mod blockdb;
 pub use blockdb::*;
@@ -6,6 +6,7 @@ pub use blockdb::*;
 pub mod walletdb;
 pub use walletdb::*;
 
+use mm2_err_handle::mm_error::MmResult;
 #[cfg(target_arch = "wasm32")]
 use walletdb::wasm::storage::DataConnStmtCacheWasm;
 #[cfg(debug_assertions)]
@@ -22,6 +23,8 @@ use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::merkle_tree::CommitmentTree;
 use zcash_primitives::sapling::Nullifier;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+
+pub type ZcoinStorageRes<T> = MmResult<T, ZcoinStorageError>;
 
 #[derive(Clone)]
 pub struct DataConnStmtCacheWrapper {

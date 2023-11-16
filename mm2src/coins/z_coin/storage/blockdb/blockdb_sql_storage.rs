@@ -1,4 +1,5 @@
-use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow};
+use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow,
+                             ZcoinStorageRes};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::ZcoinConsensusParams;
 
@@ -43,7 +44,7 @@ impl From<ChainError<NoteId>> for ZcoinStorageError {
 
 impl BlockDbImpl {
     #[cfg(all(not(test)))]
-    pub async fn new(_ctx: MmArc, ticker: String, path: PathBuf) -> MmResult<Self, ZcoinStorageError> {
+    pub async fn new(_ctx: MmArc, ticker: String, path: PathBuf) -> ZcoinStorageRes<Self> {
         async_blocking(move || {
             let conn = Connection::open(path).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
             let conn = Arc::new(Mutex::new(conn));
@@ -66,7 +67,7 @@ impl BlockDbImpl {
     }
 
     #[cfg(all(test))]
-    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: PathBuf) -> MmResult<Self, ZcoinStorageError> {
+    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: PathBuf) -> ZcoinStorageRes<Self> {
         async_blocking(move || {
             let conn = ctx
                 .sqlite_connection
@@ -89,7 +90,7 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn get_latest_block(&self) -> MmResult<u32, ZcashClientError> {
+    pub(crate) async fn get_latest_block(&self) -> ZcoinStorageRes<u32> {
         let db = self.db.clone();
         Ok(async_blocking(move || {
             query_single_row(
@@ -99,11 +100,12 @@ impl BlockDbImpl {
                 |row| row.get(0),
             )
         })
-        .await?
+        .await
+        .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?
         .unwrap_or(0))
     }
 
-    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> MmResult<usize, ZcoinStorageError> {
+    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> ZcoinStorageRes<usize> {
         let db = self.db.clone();
         async_blocking(move || {
             let db = db.lock().unwrap();
@@ -118,7 +120,7 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
+    pub(crate) async fn rewind_to_height(&self, height: u32) -> ZcoinStorageRes<usize> {
         let db = self.db.clone();
         async_blocking(move || {
             db.lock()
@@ -129,7 +131,7 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn get_earliest_block(&self) -> Result<u32, ZcashClientError> {
+    pub(crate) async fn get_earliest_block(&self) -> ZcoinStorageRes<u32> {
         let db = self.db.clone();
         Ok(async_blocking(move || {
             query_single_row(
@@ -139,7 +141,8 @@ impl BlockDbImpl {
                 |row| row.get::<_, Option<u32>>(0),
             )
         })
-        .await?
+        .await
+        .map_to_mm(|err| ZcoinStorageError::GetFromStorageError(err.to_string()))?
         .flatten()
         .unwrap_or(0))
     }
@@ -148,7 +151,7 @@ impl BlockDbImpl {
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-    ) -> MmResult<Vec<rusqlite::Result<CompactBlockRow>>, ZcoinStorageError> {
+    ) -> ZcoinStorageRes<Vec<rusqlite::Result<CompactBlockRow>>> {
         let db = self.db.clone();
         async_blocking(move || {
             // Fetch the CompactBlocks we need to scan
@@ -183,7 +186,7 @@ impl BlockDbImpl {
         mode: BlockProcessingMode,
         validate_from: Option<(BlockHeight, BlockHash)>,
         limit: Option<u32>,
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let ticker = self.ticker.to_owned();
         let mut from_height = match &mode {
             BlockProcessingMode::Validate => validate_from

@@ -5,6 +5,7 @@ use crate::z_coin::storage::wasm::{to_spendable_note, SpendableNoteConstructor};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::{CheckPointBlockInfo, WalletDbShared, ZCoinBuilder, ZcoinConsensusParams};
 
+use crate::z_coin::storage::ZcoinStorageRes;
 use async_trait::async_trait;
 use common::log::info;
 use ff::PrimeField;
@@ -37,7 +38,6 @@ use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 const DB_NAME: &str = "wallet_db_cache";
 const DB_VERSION: u32 = 1;
 
-pub type WalletDbRes<T> = MmResult<T, ZcoinStorageError>;
 pub type WalletDbInnerLocked<'a> = DbLocked<'a, WalletDbInner>;
 
 macro_rules! num_to_bigint {
@@ -56,7 +56,7 @@ impl<'a> WalletDbShared {
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
         continue_from_prev_sync: bool,
-    ) -> MmResult<Self, ZcoinStorageError> {
+    ) -> ZcoinStorageRes<Self> {
         let ticker = builder.ticker;
         let consensus_params = builder.protocol_info.consensus_params.clone();
         let db = WalletIndexedDb::new(builder.ctx, ticker, consensus_params).await?;
@@ -146,14 +146,14 @@ impl<'a> WalletIndexedDb {
         Ok(db)
     }
 
-    async fn lock_db(&self) -> WalletDbRes<WalletDbInnerLocked<'_>> {
+    async fn lock_db(&self) -> ZcoinStorageRes<WalletDbInnerLocked<'_>> {
         self.db
             .get_or_initialize()
             .await
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
     }
 
-    pub async fn is_tx_imported(&self, tx_id: TxId) -> MmResult<bool, ZcoinStorageError> {
+    pub async fn is_tx_imported(&self, tx_id: TxId) -> ZcoinStorageRes<bool> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
 
@@ -170,10 +170,7 @@ impl<'a> WalletIndexedDb {
         }
     }
 
-    pub(crate) async fn init_accounts_table(
-        &self,
-        extfvks: &[ExtendedFullViewingKey],
-    ) -> MmResult<(), ZcoinStorageError> {
+    pub(crate) async fn init_accounts_table(&self, extfvks: &[ExtendedFullViewingKey]) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let walletdb_account_table = db_transaction.table::<WalletDbAccountsTable>().await?;
@@ -225,7 +222,7 @@ impl<'a> WalletIndexedDb {
         hash: BlockHash,
         time: u32,
         sapling_tree: &[u8],
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let walletdb_account_table = db_transaction.table::<WalletDbBlocksTable>().await?;
@@ -272,7 +269,7 @@ impl WalletIndexedDb {
         block_hash: BlockHash,
         block_time: u32,
         commitment_tree: &CommitmentTree<Node>,
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let walletdb_blocks_table = db_transaction.table::<WalletDbBlocksTable>().await?;
@@ -299,7 +296,7 @@ impl WalletIndexedDb {
             .map(|_| ())?)
     }
 
-    pub async fn get_balance(&self, account: AccountId) -> MmResult<Amount, ZcoinStorageError> {
+    pub async fn get_balance(&self, account: AccountId) -> ZcoinStorageRes<Amount> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let rec_note_table = db_transaction.table::<WalletDbReceivedNotesTable>().await?;
@@ -335,7 +332,7 @@ impl WalletIndexedDb {
         }
     }
 
-    pub async fn put_tx_data(&self, tx: &Transaction, created_at: Option<String>) -> MmResult<i64, ZcoinStorageError> {
+    pub async fn put_tx_data(&self, tx: &Transaction, created_at: Option<String>) -> ZcoinStorageRes<i64> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
@@ -382,7 +379,7 @@ impl WalletIndexedDb {
             .into())
     }
 
-    pub async fn put_tx_meta<N>(&self, tx: &WalletTx<N>, height: BlockHeight) -> MmResult<i64, ZcoinStorageError> {
+    pub async fn put_tx_meta<N>(&self, tx: &WalletTx<N>, height: BlockHeight) -> ZcoinStorageRes<i64> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let tx_table = db_transaction.table::<WalletDbTransactionsTable>().await?;
@@ -427,7 +424,7 @@ impl WalletIndexedDb {
             .into())
     }
 
-    pub async fn mark_spent(&self, tx_ref: i64, nf: &Nullifier) -> MmResult<(), ZcoinStorageError> {
+    pub async fn mark_spent(&self, tx_ref: i64, nf: &Nullifier) -> ZcoinStorageRes<()> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -460,11 +457,7 @@ impl WalletIndexedDb {
         MmError::err(ZcoinStorageError::GetFromStorageError("note not found".to_string()))
     }
 
-    pub async fn put_received_note<T: ShieldedOutput>(
-        &self,
-        output: &T,
-        tx_ref: i64,
-    ) -> MmResult<NoteId, ZcoinStorageError> {
+    pub async fn put_received_note<T: ShieldedOutput>(&self, output: &T, tx_ref: i64) -> ZcoinStorageRes<NoteId> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
 
@@ -533,7 +526,7 @@ impl WalletIndexedDb {
         note_id: i64,
         witness: &IncrementalWitness<Node>,
         height: BlockHeight,
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
@@ -552,7 +545,7 @@ impl WalletIndexedDb {
         Ok(witness_table.add_item(&witness).await.map(|_| ())?)
     }
 
-    pub async fn prune_witnesses(&self, below_height: BlockHeight) -> MmResult<(), ZcoinStorageError> {
+    pub async fn prune_witnesses(&self, below_height: BlockHeight) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let witness_table = db_transaction.table::<WalletDbSaplingWitnessesTable>().await?;
@@ -571,7 +564,7 @@ impl WalletIndexedDb {
         Ok(())
     }
 
-    pub async fn update_expired_notes(&self, height: BlockHeight) -> MmResult<(), ZcoinStorageError> {
+    pub async fn update_expired_notes(&self, height: BlockHeight) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         // fetch received_notes.
@@ -613,7 +606,7 @@ impl WalletIndexedDb {
         Ok(())
     }
 
-    pub async fn put_sent_note(&self, output: &DecryptedOutput, tx_ref: i64) -> MmResult<(), ZcoinStorageError> {
+    pub async fn put_sent_note(&self, output: &DecryptedOutput, tx_ref: i64) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
 
@@ -665,7 +658,7 @@ impl WalletIndexedDb {
         to: &RecipientAddress,
         value: Amount,
         memo: Option<&MemoBytes>,
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let sent_note_table = db_transaction.table::<WalletDbSentNotesTable>().await?;
@@ -699,7 +692,7 @@ impl WalletIndexedDb {
 
     /// Asynchronously rewinds the storage to a specified block height, effectively
     /// removing data beyond the specified height from the storage.    
-    pub async fn rewind_to_height(&self, block_height: BlockHeight) -> MmResult<(), ZcoinStorageError> {
+    pub async fn rewind_to_height(&self, block_height: BlockHeight) -> ZcoinStorageRes<()> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
 
