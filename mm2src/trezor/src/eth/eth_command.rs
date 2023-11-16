@@ -1,12 +1,12 @@
 use crate::proto::messages_ethereum as proto_ethereum;
 use crate::result_handler::ResultHandler;
 use crate::{serialize_derivation_path, OperationFailure, TrezorError, TrezorResponse, TrezorResult, TrezorSession};
-use bip32::DerivationPath;
 use ethcore_transaction::{signature, Action, Transaction as UnSignedEthTx, UnverifiedTransaction as UnverifiedEthTx};
+use ethereum_types::H256;
 use ethkey::Signature;
+use hw_common::primitives::DerivationPath;
 use hw_common::primitives::XPub;
 use mm2_err_handle::prelude::MmError;
-use primitive_types::H256;
 
 impl<'a> TrezorSession<'a> {
     pub async fn get_eth_address(&mut self, derivation_path: DerivationPath) -> TrezorResult<Option<String>> {
