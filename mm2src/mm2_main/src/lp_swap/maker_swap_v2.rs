@@ -1,5 +1,5 @@
 use super::swap_v2_common::*;
-use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC, swap_v2_topic};
+use super::{swap_v2_topic, NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
 use crate::mm2::lp_swap::swap_v2_pb::*;
 use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_maker_swap, recv_swap_v2_msg, SecretHashAlgo,
                           SwapConfirmationsSettings, TransactionIdentifier, MAKER_SWAP_V2_TYPE, MAX_STARTED_AT_DIFF};
@@ -74,7 +74,7 @@ pub enum MakerSwapEvent {
         taker_coin_start_block: u64,
         negotiation_data: StoredNegotiationData,
         maker_payment: TransactionIdentifier,
-        funding_spend_preimage: StoredPreimage,
+        funding_spend_preimage: StoredTxPreimage,
     },
     /// Something went wrong, so maker payment refund is required.
     MakerPaymentRefundRequired {
@@ -332,6 +332,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
     type Storage = MakerSwapStorage;
     type Result = ();
     type RecreateCtx = SwapRecreateCtx<MakerCoin, TakerCoin>;
+    type RecreateError = MmError<SwapRecreateError>;
 
     fn to_db_repr(&self) -> MakerSwapDbRepr {
         MakerSwapDbRepr {
@@ -362,110 +363,134 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
         storage: MakerSwapStorage,
         mut repr: MakerSwapDbRepr,
         recreate_ctx: Self::RecreateCtx,
-    ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
+    ) -> Result<RestoredMachine<Self>, Self::RecreateError> {
+        if repr.events.is_empty() {
+            return MmError::err(SwapRecreateError::ReprEventsEmpty);
+        }
+
         let current_state: Box<dyn State<StateMachine = Self>> = match repr.events.remove(repr.events.len() - 1) {
-            MakerSwapEvent::Initialized { maker_coin_start_block, taker_coin_start_block } => {
-                Box::new(Initialized {
-                    maker_coin: Default::default(),
-                    taker_coin: Default::default(),
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                })
-            },
-            MakerSwapEvent::WaitingForTakerFunding { maker_coin_start_block, taker_coin_start_block, negotiation_data } => {
-                Box::new(WaitingForTakerFunding {
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                    negotiation_data: NegotiationData {
-                        taker_payment_locktime: negotiation_data.taker_payment_locktime,
-                        taker_funding_locktime: negotiation_data.taker_funding_locktime,
-                        maker_coin_htlc_pub_from_taker: recreate_ctx.maker_coin.parse_pubkey(&negotiation_data.maker_coin_htlc_pub_from_taker.0).unwrap(),
-                        taker_coin_htlc_pub_from_taker: recreate_ctx.taker_coin.parse_pubkey(&negotiation_data.taker_coin_htlc_pub_from_taker.0).unwrap(),
-                        maker_coin_swap_contract: None,
-                        taker_coin_swap_contract: None,
-                        taker_secret_hash: negotiation_data.taker_secret_hash.into(),
-                    },
-                })
-            },
-            MakerSwapEvent::TakerFundingReceived { maker_coin_start_block, taker_coin_start_block, negotiation_data, taker_funding } => {
-                Box::new(TakerFundingReceived {
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                    negotiation_data: NegotiationData {
-                        taker_payment_locktime: negotiation_data.taker_payment_locktime,
-                        taker_funding_locktime: negotiation_data.taker_funding_locktime,
-                        maker_coin_htlc_pub_from_taker: recreate_ctx.maker_coin.parse_pubkey(&negotiation_data.maker_coin_htlc_pub_from_taker.0).unwrap(),
-                        taker_coin_htlc_pub_from_taker: recreate_ctx.taker_coin.parse_pubkey(&negotiation_data.taker_coin_htlc_pub_from_taker.0).unwrap(),
-                        maker_coin_swap_contract: None,
-                        taker_coin_swap_contract: None,
-                        taker_secret_hash: negotiation_data.taker_secret_hash.into(),
-                    },
-                    taker_funding: recreate_ctx.taker_coin.parse_tx(&taker_funding.tx_hex.0).unwrap(),
-                })
-            },
-            MakerSwapEvent::MakerPaymentSentFundingSpendGenerated { maker_coin_start_block, taker_coin_start_block, negotiation_data, maker_payment, funding_spend_preimage } => {
-                Box::new(MakerPaymentSentFundingSpendGenerated {
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                    negotiation_data: NegotiationData {
-                        taker_payment_locktime: negotiation_data.taker_payment_locktime,
-                        taker_funding_locktime: negotiation_data.taker_funding_locktime,
-                        maker_coin_htlc_pub_from_taker: recreate_ctx.maker_coin.parse_pubkey(&negotiation_data.maker_coin_htlc_pub_from_taker.0).unwrap(),
-                        taker_coin_htlc_pub_from_taker: recreate_ctx.taker_coin.parse_pubkey(&negotiation_data.taker_coin_htlc_pub_from_taker.0).unwrap(),
-                        maker_coin_swap_contract: None,
-                        taker_coin_swap_contract: None,
-                        taker_secret_hash: negotiation_data.taker_secret_hash.into(),
-                    },
-                    funding_spend_preimage: TxPreimageWithSig { preimage: recreate_ctx.taker_coin.parse_preimage(&funding_spend_preimage.preimage.0).unwrap(), signature: recreate_ctx.taker_coin.parse_signature(&funding_spend_preimage.signature.0).unwrap() },
-                    maker_payment,
-                })
-            },
-            MakerSwapEvent::MakerPaymentRefundRequired { maker_coin_start_block, taker_coin_start_block, negotiation_data, maker_payment, reason } => {
-                Box::new(MakerPaymentRefundRequired {
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                    negotiation_data: NegotiationData {
-                        taker_payment_locktime: negotiation_data.taker_payment_locktime,
-                        taker_funding_locktime: negotiation_data.taker_funding_locktime,
-                        maker_coin_htlc_pub_from_taker: recreate_ctx.maker_coin.parse_pubkey(&negotiation_data.maker_coin_htlc_pub_from_taker.0).unwrap(),
-                        taker_coin_htlc_pub_from_taker: recreate_ctx.taker_coin.parse_pubkey(&negotiation_data.taker_coin_htlc_pub_from_taker.0).unwrap(),
-                        maker_coin_swap_contract: None,
-                        taker_coin_swap_contract: None,
-                        taker_secret_hash: negotiation_data.taker_secret_hash.into(),
-                    },
-                    maker_payment,
-                    reason,
-                })
-            },
-            MakerSwapEvent::TakerPaymentConfirmed { maker_coin_start_block, taker_coin_start_block, negotiation_data, maker_payment, taker_payment } => {
-                Box::new(TakerPaymentConfirmed {
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                    maker_payment,
-                    taker_payment: recreate_ctx.taker_coin.parse_tx(&taker_payment.tx_hex.0).unwrap(),
-                    negotiation_data: NegotiationData {
-                        taker_payment_locktime: negotiation_data.taker_payment_locktime,
-                        taker_funding_locktime: negotiation_data.taker_funding_locktime,
-                        maker_coin_htlc_pub_from_taker: recreate_ctx.maker_coin.parse_pubkey(&negotiation_data.maker_coin_htlc_pub_from_taker.0).unwrap(),
-                        taker_coin_htlc_pub_from_taker: recreate_ctx.taker_coin.parse_pubkey(&negotiation_data.taker_coin_htlc_pub_from_taker.0).unwrap(),
-                        maker_coin_swap_contract: None,
-                        taker_coin_swap_contract: None,
-                        taker_secret_hash: negotiation_data.taker_secret_hash.into(),
-                    },
-                })
-            },
-            MakerSwapEvent::TakerPaymentSpent { maker_coin_start_block, taker_coin_start_block, maker_payment, taker_payment, taker_payment_spend } => {
-                Box::new(TakerPaymentSpent {
-                    maker_coin: Default::default(),
-                    maker_coin_start_block,
-                    taker_coin_start_block,
-                    maker_payment,
-                    taker_payment: recreate_ctx.taker_coin.parse_tx(&taker_payment.tx_hex.0).unwrap(),
-                    taker_payment_spend,
-                })
-            },
-            MakerSwapEvent::Aborted { .. } => unimplemented!(),
-            MakerSwapEvent::Completed => unimplemented!(),
+            MakerSwapEvent::Initialized {
+                maker_coin_start_block,
+                taker_coin_start_block,
+            } => Box::new(Initialized {
+                maker_coin: Default::default(),
+                taker_coin: Default::default(),
+                maker_coin_start_block,
+                taker_coin_start_block,
+            }),
+            MakerSwapEvent::WaitingForTakerFunding {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data,
+            } => Box::new(WaitingForTakerFunding {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data: NegotiationData::from_stored_data(
+                    negotiation_data,
+                    &recreate_ctx.maker_coin,
+                    &recreate_ctx.taker_coin,
+                )?,
+            }),
+            MakerSwapEvent::TakerFundingReceived {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data,
+                taker_funding,
+            } => Box::new(TakerFundingReceived {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data: NegotiationData::from_stored_data(
+                    negotiation_data,
+                    &recreate_ctx.maker_coin,
+                    &recreate_ctx.taker_coin,
+                )?,
+                taker_funding: recreate_ctx
+                    .taker_coin
+                    .parse_tx(&taker_funding.tx_hex.0)
+                    .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+            }),
+            MakerSwapEvent::MakerPaymentSentFundingSpendGenerated {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data,
+                maker_payment,
+                funding_spend_preimage,
+            } => Box::new(MakerPaymentSentFundingSpendGenerated {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data: NegotiationData::from_stored_data(
+                    negotiation_data,
+                    &recreate_ctx.maker_coin,
+                    &recreate_ctx.taker_coin,
+                )?,
+                funding_spend_preimage: TxPreimageWithSig {
+                    preimage: recreate_ctx
+                        .taker_coin
+                        .parse_preimage(&funding_spend_preimage.preimage.0)
+                        .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+                    signature: recreate_ctx
+                        .taker_coin
+                        .parse_signature(&funding_spend_preimage.signature.0)
+                        .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+                },
+                maker_payment,
+            }),
+            MakerSwapEvent::MakerPaymentRefundRequired {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data,
+                maker_payment,
+                reason,
+            } => Box::new(MakerPaymentRefundRequired {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data: NegotiationData::from_stored_data(
+                    negotiation_data,
+                    &recreate_ctx.maker_coin,
+                    &recreate_ctx.taker_coin,
+                )?,
+                maker_payment,
+                reason,
+            }),
+            MakerSwapEvent::TakerPaymentConfirmed {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                negotiation_data,
+                maker_payment,
+                taker_payment,
+            } => Box::new(TakerPaymentConfirmed {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                maker_payment,
+                taker_payment: recreate_ctx
+                    .taker_coin
+                    .parse_tx(&taker_payment.tx_hex.0)
+                    .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+                negotiation_data: NegotiationData::from_stored_data(
+                    negotiation_data,
+                    &recreate_ctx.maker_coin,
+                    &recreate_ctx.taker_coin,
+                )?,
+            }),
+            MakerSwapEvent::TakerPaymentSpent {
+                maker_coin_start_block,
+                taker_coin_start_block,
+                maker_payment,
+                taker_payment,
+                taker_payment_spend,
+            } => Box::new(TakerPaymentSpent {
+                maker_coin: Default::default(),
+                maker_coin_start_block,
+                taker_coin_start_block,
+                maker_payment,
+                taker_payment: recreate_ctx
+                    .taker_coin
+                    .parse_tx(&taker_payment.tx_hex.0)
+                    .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+                taker_payment_spend,
+            }),
+            MakerSwapEvent::Aborted { .. } => return MmError::err(SwapRecreateError::SwapAborted),
+            MakerSwapEvent::Completed => return MmError::err(SwapRecreateError::SwapCompleted),
         };
 
         let machine = MakerSwapStateMachine {
@@ -487,10 +512,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
             p2p_keypair: None,
         };
 
-        Ok(RestoredMachine {
-            machine,
-            current_state,
-        })
+        Ok(RestoredMachine { machine, current_state })
     }
 
     fn init_additional_context(&mut self) {
@@ -718,6 +740,26 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> NegotiationData<Maker
             taker_coin_swap_contract: self.taker_coin_swap_contract.clone().map(|b| b.into()),
             taker_secret_hash: self.taker_secret_hash.clone().into(),
         }
+    }
+
+    fn from_stored_data(
+        stored: StoredNegotiationData,
+        maker_coin: &MakerCoin,
+        taker_coin: &TakerCoin,
+    ) -> Result<Self, MmError<SwapRecreateError>> {
+        Ok(NegotiationData {
+            taker_payment_locktime: stored.taker_payment_locktime,
+            taker_funding_locktime: stored.taker_funding_locktime,
+            maker_coin_htlc_pub_from_taker: maker_coin
+                .parse_pubkey(&stored.maker_coin_htlc_pub_from_taker.0)
+                .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+            taker_coin_htlc_pub_from_taker: taker_coin
+                .parse_pubkey(&stored.taker_coin_htlc_pub_from_taker.0)
+                .map_err(|e| SwapRecreateError::FailedToParseData(e.to_string()))?,
+            maker_coin_swap_contract: None,
+            taker_coin_swap_contract: None,
+            taker_secret_hash: stored.taker_secret_hash.into(),
+        })
     }
 }
 
@@ -1032,7 +1074,10 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
             taker_coin_start_block: self.taker_coin_start_block,
             negotiation_data: self.negotiation_data.to_stored_data(),
             maker_payment: self.maker_payment.clone(),
-            funding_spend_preimage: StoredPreimage { preimage: self.funding_spend_preimage.preimage.to_bytes().into(), signature: self.funding_spend_preimage.signature.to_bytes().into() },
+            funding_spend_preimage: StoredTxPreimage {
+                preimage: self.funding_spend_preimage.preimage.to_bytes().into(),
+                signature: self.funding_spend_preimage.signature.to_bytes().into(),
+            },
         }
     }
 }

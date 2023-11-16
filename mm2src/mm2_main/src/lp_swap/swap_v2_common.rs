@@ -4,10 +4,10 @@ use common::bits256;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
+use rpc::v1::types::Bytes as BytesJson;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Error;
-use rpc::v1::types::Bytes as BytesJson;
 use uuid::Uuid;
 
 cfg_native!(
@@ -21,10 +21,24 @@ cfg_wasm32!(
     use mm2_db::indexed_db::{DbTransactionError, InitDbError, MultiIndex};
 );
 
+/// DB representation of tx preimage with signature
 #[derive(Debug, Deserialize, Serialize)]
-pub struct StoredPreimage {
+pub struct StoredTxPreimage {
     pub preimage: BytesJson,
     pub signature: BytesJson,
+}
+
+/// Represents error variants, which can happen on swaps re-creation
+#[derive(Debug, Display)]
+pub enum SwapRecreateError {
+    /// DB representation has empty events
+    ReprEventsEmpty,
+    /// Failed to parse some data from DB representation (e.g. transactions, pubkeys, etc.)
+    FailedToParseData(String),
+    /// Swap has been aborted
+    SwapAborted,
+    /// Swap has been completed
+    SwapCompleted,
 }
 
 /// Represents errors that can be produced by [`MakerSwapStateMachine`] or [`TakerSwapStateMachine`] run.

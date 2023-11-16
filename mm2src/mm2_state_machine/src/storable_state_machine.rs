@@ -123,6 +123,8 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     type Result: Send;
     /// The additional context required to recreate state machine.
     type RecreateCtx: Send;
+    /// Type representing the error, which can happen during state machine's re-creaction
+    type RecreateError: Send;
 
     /// Returns State machine's DB representation()
     fn to_db_repr(&self) -> <Self::Storage as StateMachineStorage>::DbRepr;
@@ -150,7 +152,7 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
         storage: Self::Storage,
         repr: <Self::Storage as StateMachineStorage>::DbRepr,
         from_repr_ctx: Self::RecreateCtx,
-    ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error>;
+    ) -> Result<RestoredMachine<Self>, Self::RecreateError>;
 
     /// Stores an event for the state machine.
     ///
@@ -399,6 +401,7 @@ mod tests {
         type Storage = StorageTest;
         type Result = ();
         type RecreateCtx = ();
+        type RecreateError = Infallible;
 
         fn to_db_repr(&self) -> TestStateMachineRepr { TestStateMachineRepr {} }
 
@@ -411,7 +414,7 @@ mod tests {
             storage: Self::Storage,
             _repr: <Self::Storage as StateMachineStorage>::DbRepr,
             _recreate_ctx: Self::RecreateCtx,
-        ) -> Result<RestoredMachine<Self>, <Self::Storage as StateMachineStorage>::Error> {
+        ) -> Result<RestoredMachine<Self>, Infallible> {
             let events = storage.events_unfinished.get(&id).unwrap();
             let current_state: Box<dyn State<StateMachine = Self>> = match events.last() {
                 None => Box::new(State1 {}),
