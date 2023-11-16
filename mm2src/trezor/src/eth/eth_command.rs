@@ -47,7 +47,7 @@ impl<'a> TrezorSession<'a> {
         while let Some(data_length) = tx_request.data_length {
             if data_length > 0 {
                 let req = proto_ethereum::EthereumTxAck {
-                    data_chunk: data.splice(..std::cmp::min(1024, data.len()), []).collect(),
+                    data_chunk: data.splice(..data_length as usize, []).collect(),
                 };
                 tx_request = self.send_eth_tx_ack(req).await?.ack_all().await?;
             } else {
@@ -105,12 +105,13 @@ fn to_sign_eth_message(
     unsigned_tx.gas.to_big_endian(&mut gas_limit);
     unsigned_tx.value.to_big_endian(&mut value);
 
-    *data = unsigned_tx.data.clone();
     let addr_hex = if let Action::Call(addr) = unsigned_tx.action {
         Some(format!("{:X}", addr))
     } else {
         None
     };
+    *data = unsigned_tx.data.clone();
+    let data_length = if data.is_empty() { None } else { Some(data.len() as u32) };
     proto_ethereum::EthereumSignTx {
         address_n: serialize_derivation_path(derivation_path),
         nonce: Some(left_trim_u8(&nonce)),
@@ -119,7 +120,7 @@ fn to_sign_eth_message(
         to: addr_hex,
         value: Some(left_trim_u8(&value)),
         data_initial_chunk: Some(data.splice(..std::cmp::min(1024, data.len()), []).collect()),
-        data_length: if data.is_empty() { None } else { Some(data.len() as u32) },
+        data_length,
         chain_id,
         tx_type: None,
         definitions: None,
