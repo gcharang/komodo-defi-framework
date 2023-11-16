@@ -722,6 +722,8 @@ mod wasm_test {
 
     fn network() -> Network { Network::TestNetwork }
 
+    // Todo: Uncomment after improving tx creation time
+    // https://github.com/KomodoPlatform/komodo-defi-framework/issues/2000
     //    #[wasm_bindgen_test]
     //    async fn create_to_address_fails_on_unverified_notes() {
     //        // init blocks_db
@@ -984,7 +986,9 @@ mod wasm_test {
         }
     }
 
-    //        #[wasm_bindgen_test]
+    // Todo: Uncomment after improving tx creation time
+    // https://github.com/KomodoPlatform/komodo-defi-framework/issues/2000
+    //    #[wasm_bindgen_test]
     //    async fn test_create_to_address_fails_on_locked_notes() {
     //        register_wasm_log();
     //
