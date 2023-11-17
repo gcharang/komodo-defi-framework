@@ -1,10 +1,12 @@
 use crate::sqlite::rusqlite::Error as SqlError;
 use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
 use common::executor::{AbortSettings, SpawnAbortable, SpawnFuture};
-use crossbeam_channel::Sender;
-use futures::channel::oneshot::{self};
+// use futures::channel::oneshot::{self};
+use tokio::sync::oneshot::{self};
 use rusqlite::OpenFlags;
 use std::fmt::{self, Debug, Display};
+// use crossbeam_channel::Sender;
+use tokio::sync::mpsc::{self, UnboundedSender};
 // use std::future::Future as Future03;
 use futures::Future as Future03;
 use std::path::Path;
@@ -70,10 +72,19 @@ enum Message {
     Close(oneshot::Sender<std::result::Result<(), SqlError>>),
 }
 
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Message::Execute(_) => write!(f, "Message::Execute(<function>)"),
+            Message::Close(sender) => f.debug_tuple("Message::Close").field(sender).finish(),
+        }
+    }
+}
+
 /// A handle to call functions in background thread.
 #[derive(Clone)]
 pub struct AsyncConnection {
-    sender: Sender<Message>,
+    sender: UnboundedSender<Message>,
 }
 
 impl AsyncConnection {
@@ -243,7 +254,7 @@ impl AsyncConnection {
     pub async fn close(self) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<std::result::Result<(), SqlError>>();
 
-        if let Err(crossbeam_channel::SendError(_)) = self.sender.send(Message::Close(sender)) {
+        if let Err(mpsc::error::SendError(_)) = self.sender.send(Message::Close(sender)) {
             // If the channel is closed on the other side, it means the connection closed successfully
             // This is a safeguard against calling close on a `Copy` of the connection
             return Ok(());
@@ -269,7 +280,7 @@ async fn start<F>(open: F, spawner: AsyncConnFutSpawner) -> Result<AsyncConnecti
 where
     F: FnOnce() -> rusqlite::Result<rusqlite::Connection> + Send + 'static,
 {
-    let (sender, receiver) = crossbeam_channel::unbounded::<Message>();
+    let (sender, mut receiver) = mpsc::unbounded_channel::<Message>();
     let (result_sender, result_receiver) = oneshot::channel();
 
     let fut = async move {
@@ -285,7 +296,7 @@ where
             return;
         }
 
-        while let Ok(message) = receiver.recv() {
+        while let Some(message) = receiver.recv().await {
             match message {
                 Message::Execute(f) => f(&mut conn),
                 Message::Close(s) => {
