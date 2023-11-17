@@ -10,10 +10,10 @@ use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinFutSpawner, 
             TakerSwapMakerCoin, TradePreimageFut, TradePreimageResult, TradePreimageValue, TransactionDetails,
             TransactionFut, TransactionResult, TransactionType, TxMarshalingErr, UnexpectedDerivationMethod,
             ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr,
-            ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, VerificationResult,
-            WaitForHTLCTxSpendArgs, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawError, WithdrawFut, WithdrawRequest,
-            WithdrawResult};
+            ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, ValidateWatcherSpendInput,
+            VerificationResult, WaitForHTLCTxSpendArgs, WatcherReward, WatcherRewardError,
+            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput,
+            WithdrawError, WithdrawFut, WithdrawRequest, WithdrawResult};
 use async_trait::async_trait;
 use base58::ToBase58;
 use bincode::{deserialize, serialize};
@@ -646,6 +646,10 @@ impl WatcherOps for SolanaCoin {
 
     fn watcher_validate_taker_payment(&self, _input: WatcherValidatePaymentInput) -> ValidatePaymentFut<()> {
         unimplemented!();
+    }
+
+    fn taker_validates_payment_spend_or_refund(&self, _input: ValidateWatcherSpendInput) -> ValidatePaymentFut<()> {
+        unimplemented!()
     }
 
     async fn watcher_search_for_swap_tx_spend(

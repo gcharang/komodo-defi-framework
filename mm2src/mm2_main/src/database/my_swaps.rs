@@ -5,7 +5,7 @@ use crate::mm2::lp_swap::{MyRecentSwapsUuids, SavedSwap, SavedSwapIo};
 use common::log::debug;
 use common::PagingOptions;
 use db_common::sqlite::offset_by_uuid;
-use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, ToSql};
+use db_common::sqlite::rusqlite::{Connection, Error as SqlError, Result as SqlResult, Row, ToSql};
 use db_common::sqlite::sql_builder::SqlBuilder;
 use mm2_core::mm_ctx::MmArc;
 use mm2_rpc::data::legacy::MySwapsFilter;
@@ -28,6 +28,31 @@ macro_rules! CREATE_MY_SWAPS_TABLE {
         );"
     };
 }
+
+/// Adds new fields required for trading protocol upgrade implementation (swap v2)
+pub const TRADING_PROTO_UPGRADE_MIGRATION: &[&str] = &[
+    "ALTER TABLE my_swaps ADD COLUMN is_finished BOOLEAN NOT NULL DEFAULT 0;",
+    "ALTER TABLE my_swaps ADD COLUMN events_json TEXT NOT NULL DEFAULT '[]';",
+    "ALTER TABLE my_swaps ADD COLUMN swap_type INTEGER NOT NULL DEFAULT 0;",
+    // Storing rational numbers as text to maintain precision
+    "ALTER TABLE my_swaps ADD COLUMN maker_volume TEXT;",
+    // Storing rational numbers as text to maintain precision
+    "ALTER TABLE my_swaps ADD COLUMN taker_volume TEXT;",
+    // Storing rational numbers as text to maintain precision
+    "ALTER TABLE my_swaps ADD COLUMN premium TEXT;",
+    // Storing rational numbers as text to maintain precision
+    "ALTER TABLE my_swaps ADD COLUMN dex_fee TEXT;",
+    "ALTER TABLE my_swaps ADD COLUMN secret BLOB;",
+    "ALTER TABLE my_swaps ADD COLUMN secret_hash BLOB;",
+    "ALTER TABLE my_swaps ADD COLUMN secret_hash_algo INTEGER;",
+    "ALTER TABLE my_swaps ADD COLUMN p2p_privkey BLOB;",
+    "ALTER TABLE my_swaps ADD COLUMN lock_duration INTEGER;",
+    "ALTER TABLE my_swaps ADD COLUMN maker_coin_confs INTEGER;",
+    "ALTER TABLE my_swaps ADD COLUMN maker_coin_nota BOOLEAN;",
+    "ALTER TABLE my_swaps ADD COLUMN taker_coin_confs INTEGER;",
+    "ALTER TABLE my_swaps ADD COLUMN taker_coin_nota BOOLEAN;",
+];
+
 const INSERT_MY_SWAP: &str = "INSERT INTO my_swaps (my_coin, other_coin, uuid, started_at) VALUES (?1, ?2, ?3, ?4)";
 
 pub fn insert_new_swap(ctx: &MmArc, my_coin: &str, other_coin: &str, uuid: &str, started_at: &str) -> SqlResult<()> {
@@ -35,6 +60,51 @@ pub fn insert_new_swap(ctx: &MmArc, my_coin: &str, other_coin: &str, uuid: &str,
     let conn = ctx.sqlite_connection();
     let params = [my_coin, other_coin, uuid, started_at];
     conn.execute(INSERT_MY_SWAP, params).map(|_| ())
+}
+
+const INSERT_MY_SWAP_V2: &str = r#"INSERT INTO my_swaps (
+    my_coin,
+    other_coin,
+    uuid,
+    started_at,
+    swap_type,
+    maker_volume,
+    taker_volume,
+    premium,
+    dex_fee,
+    secret,
+    secret_hash,
+    secret_hash_algo,
+    p2p_privkey,
+    lock_duration,
+    maker_coin_confs,
+    maker_coin_nota,
+    taker_coin_confs,
+    taker_coin_nota
+) VALUES (
+    :my_coin,
+    :other_coin,
+    :uuid,
+    :started_at,
+    :swap_type,
+    :maker_volume,
+    :taker_volume,
+    :premium,
+    :dex_fee,
+    :secret,
+    :secret_hash,
+    :secret_hash_algo,
+    :p2p_privkey,
+    :lock_duration,
+    :maker_coin_confs,
+    :maker_coin_nota,
+    :taker_coin_confs,
+    :taker_coin_nota
+);"#;
+
+pub fn insert_new_swap_v2(ctx: &MmArc, params: &[(&str, &dyn ToSql)]) -> SqlResult<()> {
+    let conn = ctx.sqlite_connection();
+    conn.execute(INSERT_MY_SWAP_V2, params).map(|_| ())
 }
 
 /// Returns SQL statements to initially fill my_swaps table using existing DB with JSON files
@@ -154,4 +224,109 @@ pub fn select_uuids_by_my_swaps_filter(
         total_count,
         skipped,
     })
+}
+
+/// Queries swap type by uuid
+pub fn get_swap_type(conn: &Connection, uuid: &str) -> SqlResult<u8> {
+    const SELECT_SWAP_TYPE_BY_UUID: &str = "SELECT swap_type FROM my_swaps WHERE uuid = :uuid;";
+    let mut stmt = conn.prepare(SELECT_SWAP_TYPE_BY_UUID)?;
+    let swap_type = stmt.query_row(&[(":uuid", uuid)], |row| row.get(0))?;
+    Ok(swap_type)
+}
+
+/// Queries swap events by uuid
+pub fn get_swap_events(conn: &Connection, uuid: &str) -> SqlResult<String> {
+    const SELECT_SWAP_EVENTS_BY_UUID: &str = "SELECT events_json FROM my_swaps WHERE uuid = :uuid;";
+    let mut stmt = conn.prepare(SELECT_SWAP_EVENTS_BY_UUID)?;
+    let swap_type = stmt.query_row(&[(":uuid", uuid)], |row| row.get(0))?;
+    Ok(swap_type)
+}
+
+/// Updates swap events by uuid
+pub fn update_swap_events(conn: &Connection, uuid: &str, events_json: &str) -> SqlResult<()> {
+    const UPDATE_SWAP_EVENTS_BY_UUID: &str = "UPDATE my_swaps SET events_json = :events_json WHERE uuid = :uuid;";
+    let mut stmt = conn.prepare(UPDATE_SWAP_EVENTS_BY_UUID)?;
+    stmt.execute(&[(":uuid", uuid), (":events_json", events_json)])
+        .map(|_| ())
+}
+
+pub fn set_swap_is_finished(conn: &Connection, uuid: &str) -> SqlResult<()> {
+    const UPDATE_SWAP_IS_FINISHED_BY_UUID: &str = "UPDATE my_swaps SET is_finished = 1 WHERE uuid = :uuid;";
+    let mut stmt = conn.prepare(UPDATE_SWAP_IS_FINISHED_BY_UUID)?;
+    stmt.execute(&[(":uuid", uuid)]).map(|_| ())
+}
+
+const SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID: &str = r#"SELECT
+    my_coin,
+    other_coin,
+    uuid,
+    started_at,
+    is_finished,
+    events_json,
+    maker_volume,
+    taker_volume,
+    premium,
+    dex_fee,
+    secret_hash,
+    secret_hash_algo,
+    lock_duration,
+    maker_coin_confs,
+    maker_coin_nota,
+    taker_coin_confs,
+    taker_coin_nota
+FROM my_swaps
+WHERE uuid = :uuid;
+"#;
+
+/// Represents data of the swap used for RPC, omits fields that should be kept in secret
+#[derive(Debug, Serialize)]
+pub struct MySwapForRpc {
+    my_coin: String,
+    other_coin: String,
+    uuid: String,
+    started_at: i64,
+    is_finished: bool,
+    events_json: String,
+    maker_volume: String,
+    taker_volume: String,
+    premium: String,
+    dex_fee: String,
+    secret_hash: Vec<u8>,
+    secret_hash_algo: i64,
+    lock_duration: i64,
+    maker_coin_confs: i64,
+    maker_coin_nota: bool,
+    taker_coin_confs: i64,
+    taker_coin_nota: bool,
+}
+
+impl MySwapForRpc {
+    fn from_row(row: &Row) -> SqlResult<Self> {
+        Ok(Self {
+            my_coin: row.get(0)?,
+            other_coin: row.get(1)?,
+            uuid: row.get(2)?,
+            started_at: row.get(3)?,
+            is_finished: row.get(4)?,
+            events_json: row.get(5)?,
+            maker_volume: row.get(6)?,
+            taker_volume: row.get(7)?,
+            premium: row.get(8)?,
+            dex_fee: row.get(9)?,
+            secret_hash: row.get(10)?,
+            secret_hash_algo: row.get(11)?,
+            lock_duration: row.get(12)?,
+            maker_coin_confs: row.get(13)?,
+            maker_coin_nota: row.get(14)?,
+            taker_coin_confs: row.get(15)?,
+            taker_coin_nota: row.get(16)?,
+        })
+    }
+}
+
+/// Queries `MySwapForRpc` by uuid
+pub fn get_swap_data_for_rpc(conn: &Connection, uuid: &str) -> SqlResult<MySwapForRpc> {
+    let mut stmt = conn.prepare(SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID)?;
+    let swap_data = stmt.query_row(&[(":uuid", uuid)], MySwapForRpc::from_row)?;
+    Ok(swap_data)
 }
