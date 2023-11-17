@@ -213,7 +213,7 @@ impl AsyncConnection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite close call fails.
-    pub async fn close(self) -> Result<()> {
+    pub async fn close(&mut self) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<std::result::Result<(), SqlError>>();
 
         if let Err(crossbeam_channel::SendError(_)) = self.sender.send(Message::Close(sender)) {
@@ -230,7 +230,7 @@ impl AsyncConnection {
             return Ok(());
         }
 
-        result.unwrap().map_err(|e| AsyncConnError::Close((self, e)))
+        result.unwrap().map_err(|e| AsyncConnError::Close((self.clone(), e)))
     }
 }
 
