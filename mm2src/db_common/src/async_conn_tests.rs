@@ -1,6 +1,7 @@
 use crate::async_sql_conn::{AsyncConnError, AsyncConnection, InternalError, Result as AsyncConnResult};
 use rusqlite::{ffi, ErrorCode};
 use std::fmt::Display;
+
 #[tokio::test]
 async fn open_in_memory_test() -> AsyncConnResult<()> {
     let conn = AsyncConnection::open_in_memory().await;
@@ -74,7 +75,7 @@ async fn call_failure_test() -> AsyncConnResult<()> {
 
 #[tokio::test]
 async fn close_success_test() -> AsyncConnResult<()> {
-    let conn = AsyncConnection::open_in_memory().await?;
+    let mut conn = AsyncConnection::open_in_memory().await?;
 
     assert!(conn.close().await.is_ok());
 
@@ -83,9 +84,9 @@ async fn close_success_test() -> AsyncConnResult<()> {
 
 #[tokio::test]
 async fn double_close_test() -> AsyncConnResult<()> {
-    let conn = AsyncConnection::open_in_memory().await?;
+    let mut conn = AsyncConnection::open_in_memory().await?;
 
-    let conn2 = conn.clone();
+    let mut conn2 = conn.clone();
 
     assert!(conn.close().await.is_ok());
     assert!(conn2.close().await.is_ok());
@@ -95,7 +96,7 @@ async fn double_close_test() -> AsyncConnResult<()> {
 
 #[tokio::test]
 async fn close_call_test() -> AsyncConnResult<()> {
-    let conn = AsyncConnection::open_in_memory().await?;
+    let mut conn = AsyncConnection::open_in_memory().await?;
 
     let conn2 = conn.clone();
 
@@ -113,7 +114,7 @@ async fn close_call_test() -> AsyncConnResult<()> {
 #[tokio::test]
 #[should_panic]
 async fn close_call_unwrap_test() {
-    let conn = AsyncConnection::open_in_memory().await.unwrap();
+    let mut conn = AsyncConnection::open_in_memory().await.unwrap();
 
     let conn2 = conn.clone();
 
@@ -124,7 +125,7 @@ async fn close_call_unwrap_test() {
 
 #[tokio::test]
 async fn close_failure_test() -> AsyncConnResult<()> {
-    let conn = AsyncConnection::open_in_memory().await?;
+    let mut conn = AsyncConnection::open_in_memory().await?;
 
     conn.call(|conn| {
         conn.execute(
