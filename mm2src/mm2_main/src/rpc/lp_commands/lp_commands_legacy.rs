@@ -28,9 +28,8 @@ use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
 use mm2_net::p2p::P2PContext;
-use mm2_number::construct_detailed;
-use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, CoinInitResponse, MinTradingVolResponse, Mm2RpcResult,
-                            MmVersionResponse, Status};
+use mm2_rpc::data::legacy::{BalanceRequest, BalanceResponse, CancelBy, CoinInitResponse, MinTradingVolResponse,
+                            Mm2RpcResult, MmVersionResponse, Status};
 use serde_json::{self as json, Value as Json};
 use std::borrow::Cow;
 use std::collections::HashSet;

@@ -6781,9 +6781,9 @@ checksum = "68a406c1882ed7f29cd5e248c9848a80e7cb6ae0fea82346d2746f2f941c07e1"
 name = "skip_serializing_none"
 version = "0.1.0"
 dependencies = [
- "proc-macro2 1.0.58",
- "quote 1.0.27",
- "syn 2.0.16",
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.23",
 ]
 
 [[package]]
