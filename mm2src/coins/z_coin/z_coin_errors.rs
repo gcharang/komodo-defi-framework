@@ -55,10 +55,6 @@ impl From<SqliteClientError> for UpdateBlocksCacheErr {
     fn from(err: SqliteClientError) -> Self { UpdateBlocksCacheErr::ZcashDBError(err.to_string()) }
 }
 
-impl From<ZcoinStorageError> for UpdateBlocksCacheErr {
-    fn from(err: ZcoinStorageError) -> Self { UpdateBlocksCacheErr::ZcashDBError(err.to_string()) }
-}
-
 impl From<UtxoRpcError> for UpdateBlocksCacheErr {
     fn from(err: UtxoRpcError) -> Self { UpdateBlocksCacheErr::UtxoRpcError(err) }
 }
@@ -83,15 +79,11 @@ pub enum ZcoinClientInitError {
 }
 
 impl From<ZcoinStorageError> for ZcoinClientInitError {
-    fn from(err: ZcoinStorageError) -> Self { ZcoinClientInitError::ZcashDBError(err.to_string()) }
+    fn from(err: ZcoinStorageError) -> Self { ZcoinClientInitError::ZcoinStorageError(err.to_string()) }
 }
 
 impl From<UpdateBlocksCacheErr> for ZcoinClientInitError {
     fn from(err: UpdateBlocksCacheErr) -> Self { ZcoinClientInitError::UpdateBlocksCacheErr(err) }
-}
-
-impl From<ZcoinStorageError> for ZcoinClientInitError {
-    fn from(err: ZcoinStorageError) -> Self { ZcoinClientInitError::ZcoinStorageError(err.to_string()) }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

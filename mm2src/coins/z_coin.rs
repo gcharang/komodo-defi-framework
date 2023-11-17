@@ -1011,7 +1011,7 @@ impl<'a> ZCoinBuilder<'a> {
         let ticker = self.ticker.to_string();
 
         BlockDbImpl::new(ctx, ticker, cache_db_path)
-            .map_err(|err| MmError::new(ZcoinClientInitError::ZcashDBError(err.to_string())))
+            .map_err(|err| MmError::new(ZcoinClientInitError::ZcoinStorageError(err.to_string())))
             .await
     }
 
