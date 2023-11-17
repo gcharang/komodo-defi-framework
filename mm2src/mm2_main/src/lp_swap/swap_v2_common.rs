@@ -1,6 +1,7 @@
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::SwapsContext;
 use common::bits256;
+use common::bool_as_int::BoolAsInt;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
@@ -139,6 +140,22 @@ pub(super) async fn store_swap_event<T: StateMachineDbRepr + DeserializeOwned + 
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn get_swap_repr<T: DeserializeOwned>(ctx: &MmArc, id: Uuid) -> MmResult<T, SwapStateMachineError> {
+    let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+
+    let table = transaction.table::<SavedSwapTable>().await?;
+    let saved_swap_json = match table.get_item_by_unique_index("uuid", id).await? {
+        Some((_item_id, SavedSwapTable { saved_swap, .. })) => saved_swap,
+        None => return MmError::err(SwapStateMachineError::NoSwapWithUuid(id)),
+    };
+
+    let swap_repr = serde_json::from_value(saved_swap_json)?;
+    Ok(swap_repr)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn get_unfinished_swaps_uuids(
     ctx: MmArc,
@@ -157,7 +174,7 @@ pub(super) async fn get_unfinished_swaps_uuids(
     swap_type: u8,
 ) -> MmResult<Vec<Uuid>, SwapStateMachineError> {
     let index = MultiIndex::new(IS_FINISHED_SWAP_TYPE_INDEX)
-        .with_value(false)?
+        .with_value(BoolAsInt::new(false))?
         .with_value(swap_type)?;
 
     let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
@@ -184,7 +201,7 @@ pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), Swa
         Some((_item_id, item)) => item,
         None => return MmError::err(SwapStateMachineError::NoSwapWithUuid(id)),
     };
-    item.is_finished = true;
+    item.is_finished = true.into();
     table.replace_item_by_unique_index("uuid", id, &item).await?;
     Ok(())
 }

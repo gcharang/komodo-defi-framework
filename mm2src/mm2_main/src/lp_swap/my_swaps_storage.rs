@@ -176,7 +176,7 @@ mod wasm_impl {
                 my_coin: my_coin.to_owned(),
                 other_coin: other_coin.to_owned(),
                 started_at: started_at as u32,
-                is_finished: false,
+                is_finished: false.into(),
                 swap_type: LEGACY_SWAP_TYPE,
             };
             my_swaps_table.add_item(&item).await?;

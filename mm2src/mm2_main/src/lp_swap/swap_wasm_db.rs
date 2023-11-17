@@ -41,6 +41,7 @@ impl Deref for SwapDb {
 
 pub mod tables {
     use super::*;
+    use common::bool_as_int::BoolAsInt;
     use mm2_err_handle::prelude::MmError;
     use serde_json::Value as Json;
 
@@ -82,7 +83,7 @@ pub mod tables {
         pub other_coin: String,
         pub started_at: u32,
         #[serde(default)]
-        pub is_finished: bool,
+        pub is_finished: BoolAsInt,
         #[serde(default)]
         pub swap_type: u8,
     }

@@ -161,7 +161,7 @@ impl StateMachineStorage for MakerSwapStorage {
             my_coin: repr.maker_coin.clone(),
             other_coin: repr.taker_coin.clone(),
             started_at: repr.started_at as u32,
-            is_finished: false,
+            is_finished: false.into(),
             swap_type: MAKER_SWAP_V2_TYPE,
         };
         filters_table.add_item(&item).await?;
@@ -175,12 +175,18 @@ impl StateMachineStorage for MakerSwapStorage {
         Ok(())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     async fn get_repr(&self, id: Self::MachineId) -> Result<Self::DbRepr, Self::Error> {
         Ok(self.ctx.sqlite_connection().query_row(
             SELECT_MY_SWAP_V2_BY_UUID,
             &[(":uuid", &id.to_string())],
             MakerSwapDbRepr::from_sql_row,
         )?)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn get_repr(&self, id: Self::MachineId) -> Result<Self::DbRepr, Self::Error> {
+        get_swap_repr(&self.ctx, id).await
     }
 
     async fn has_record_for(&mut self, id: &Self::MachineId) -> Result<bool, Self::Error> {
@@ -240,6 +246,7 @@ impl StateMachineDbRepr for MakerSwapDbRepr {
     fn add_event(&mut self, event: Self::Event) { self.events.push(event) }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl MakerSwapDbRepr {
     fn from_sql_row(row: &Row) -> SqlResult<Self> {
         Ok(MakerSwapDbRepr {
