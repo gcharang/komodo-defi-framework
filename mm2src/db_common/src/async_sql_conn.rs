@@ -1,10 +1,10 @@
 use crate::sqlite::rusqlite::Error as SqlError;
 use common::executor::abortable_queue::{AbortableQueue, WeakSpawner};
 use common::executor::{AbortSettings, SpawnAbortable, SpawnFuture};
-// use futures::channel::oneshot::{self};
-use tokio::sync::oneshot::{self};
 use rusqlite::OpenFlags;
 use std::fmt::{self, Debug, Display};
+// use futures::channel::oneshot::{self};
+use tokio::sync::oneshot::{self};
 // use crossbeam_channel::Sender;
 use tokio::sync::mpsc::{self, UnboundedSender};
 // use std::future::Future as Future03;
@@ -100,7 +100,7 @@ impl AsyncConnection {
     /// string or if the underlying SQLite open call fails.
     pub async fn open<P: AsRef<Path>>(path: P, spawner: AsyncConnFutSpawner) -> Result<Self> {
         let path = path.as_ref().to_owned();
-        start(move || rusqlite::Connection::open(path), spawner).await
+        start(move || rusqlite::Connection::open(path.clone()), spawner).await
     }
 
     /// Open a new AsyncConnection to an in-memory SQLite database.
@@ -127,7 +127,11 @@ impl AsyncConnection {
         spawner: AsyncConnFutSpawner,
     ) -> Result<Self> {
         let path = path.as_ref().to_owned();
-        start(move || rusqlite::Connection::open_with_flags(path, flags), spawner).await
+        start(
+            move || rusqlite::Connection::open_with_flags(path.clone(), flags),
+            spawner,
+        )
+        .await
     }
 
     /// Open a new AsyncConnection to a SQLite database using the specific flags
@@ -149,7 +153,7 @@ impl AsyncConnection {
         let path = path.as_ref().to_owned();
         let vfs = vfs.to_owned();
         start(
-            move || rusqlite::Connection::open_with_flags_and_vfs(path, flags, &vfs),
+            move || rusqlite::Connection::open_with_flags_and_vfs(path.clone(), flags, &vfs),
             spawner,
         )
         .await
@@ -202,16 +206,12 @@ impl AsyncConnection {
     {
         let (sender, receiver) = oneshot::channel::<Result<R>>();
 
-        println!("WE ARE IN CALL \n");
-
         self.sender
             .send(Message::Execute(Box::new(move |conn| {
-                println!("CONN IS ALIVE {:?}", conn);
                 let value = function(conn);
                 let _ = sender.send(value);
             })))
             .map_err(|_| AsyncConnError::Internal(InternalError("SENDER ERR during send".to_owned())))?;
-        println!("SENDER SENT msg \n");
 
         receiver
             .await
@@ -282,68 +282,65 @@ impl Debug for AsyncConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_struct("AsyncConnection").finish() }
 }
 
-async fn start<F>(open: F, spawner: AsyncConnFutSpawner) -> Result<AsyncConnection>
+async fn start<F>(mut open: F, spawner: AsyncConnFutSpawner) -> Result<AsyncConnection>
 where
-    F: FnOnce() -> rusqlite::Result<rusqlite::Connection> + Send + 'static,
+    F: FnMut() -> rusqlite::Result<rusqlite::Connection> + Send + 'static,
 {
     let (sender, mut receiver) = mpsc::unbounded_channel::<Message>();
-    let (result_sender, result_receiver) = oneshot::channel();
-    println!("WE ARE IN START");
+    let (result_sender, mut result_receiver) = mpsc::channel(1);
 
     let fut = async move {
-        println!("WE ARE IN let fut = async move \n");
-        let mut conn = match open() {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = result_sender.send(Err(e));
+        loop {
+            let mut conn = match open() {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = result_sender.send(Err(e));
+                    return;
+                },
+            };
+
+            if let Err(_e) = result_sender.send(Ok(())).await {
                 return;
-            },
-        };
+            }
 
-        if let Err(_e) = result_sender.send(Ok(())) {
-            return;
-        }
-
-        println!("OPENED \n {:?} \n", conn);
-
-        while let Some(message) = receiver.recv().await {
-            println!("WE ARE IN \n while let Ok(message) = receiver.recv() \n");
-            match message {
-                Message::Execute(f) => {
-                    println!("Executing message");
-                    f(&mut conn);
-                    println!("Message executed");
-                },
-                Message::Close(s) => {
-                    let result = conn.close();
-
-                    match result {
-                        Ok(v) => {
-                            if s.send(Ok(v)).is_err() {
-                                // terminate the thread
-                                return;
-                            }
-                            break;
-                        },
-                        Err((c, e)) => {
-                            conn = c;
-                            if s.send(Err(e)).is_err() {
-                                // terminate the thread
-                                return;
-                            }
-                        },
-                    }
-                },
+            while let Some(message) = receiver.recv().await {
+                match message {
+                    Message::Execute(f) => {
+                        f(&mut conn);
+                    },
+                    Message::Close(s) => {
+                        let result = conn.close();
+                        match result {
+                            Ok(v) => {
+                                if s.send(Ok(v)).is_err() {
+                                    // terminate the thread
+                                    return;
+                                }
+                                break;
+                            },
+                            Err((_, e)) => {
+                                if s.send(Err(e)).is_err() {
+                                    // terminate the thread
+                                    return;
+                                }
+                            },
+                        }
+                        break;
+                    },
+                }
             }
         }
     };
 
     spawner.spawn(fut);
 
-    result_receiver
-        .await
-        .map_err(|e| AsyncConnError::Internal(InternalError(e.to_string())))
-        .map(|_| AsyncConnection { sender })
+    match result_receiver.recv().await {
+        Some(Ok(())) => Ok(AsyncConnection { sender }),
+        Some(Err(e)) => Err(AsyncConnError::Internal(InternalError(e.to_string()))),
+        None => Err(AsyncConnError::Internal(InternalError(
+            "Status channel closed unexpectedly".to_string(),
+        ))),
+    }
 }
 
 #[derive(Clone)]

@@ -1,6 +1,7 @@
 use crate::async_sql_conn::{AsyncConnError, AsyncConnection, InternalError, Result as AsyncConnResult};
 use rusqlite::{ffi, ErrorCode};
 use std::fmt::Display;
+
 #[tokio::test]
 async fn open_in_memory_test() -> AsyncConnResult<()> {
     let conn = AsyncConnection::open_in_memory().await;
