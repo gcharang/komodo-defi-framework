@@ -1,12 +1,60 @@
-use crate::proto::messages_ethereum as proto_ethereum;
+use crate::proto::{messages_ethereum as proto_ethereum, messages_ethereum_definitions as proto_ethereum_definitions};
 use crate::result_handler::ResultHandler;
 use crate::{serialize_derivation_path, OperationFailure, TrezorError, TrezorResponse, TrezorResult, TrezorSession};
 use ethcore_transaction::{signature, Action, Transaction as UnSignedEthTx, UnverifiedTransaction as UnverifiedEthTx};
 use ethereum_types::H256;
 use ethkey::Signature;
-use hw_common::primitives::DerivationPath;
-use hw_common::primitives::XPub;
+use hw_common::primitives::{DerivationPath, XPub};
+use lazy_static::lazy_static;
 use mm2_err_handle::prelude::MmError;
+use std::collections::BTreeMap;
+
+type ChainId = u64;
+type StaticDefinitionBytes = &'static [u8];
+type StaticAddressBytes = &'static [u8];
+
+// new supported eth networks:
+const SEPOLIA_ID: u64 = 11155111;
+
+lazy_static! {
+
+    // Add definitions for lesser known networks
+    static ref ETH_NETWORK_DEFS: BTreeMap<ChainId, StaticDefinitionBytes> = [
+        (SEPOLIA_ID, SEPOLIA_NETORK_DEF.as_ref())
+        // add more fresh supported network defs (i.e. if they are not known in the trezor firmware but already exist on their web site)
+    ].iter().cloned().collect();
+
+    static ref ETH_TOKEN_DEFS: BTreeMap<StaticAddressBytes, (ChainId, StaticDefinitionBytes)> = [
+        // add more fresh supported token defs (i.e. if they are not known in the trezor firmware but already exist on their web site)
+    ].iter().cloned().collect();
+
+    static ref SEPOLIA_NETORK_DEF: Vec<u8> = include_bytes!("definitions/sepolia.dat").to_vec();
+    // add more files with network or token definitions
+}
+
+/// get network definition by chain id
+fn get_eth_network_def(chain_id: ChainId) -> Option<Vec<u8>> {
+    ETH_NETWORK_DEFS
+        .iter()
+        .find(|(id, _def)| id == &&chain_id)
+        .map(|found| found.1.to_vec())
+}
+
+/// get token definition by token contract address and chain id
+#[warn(dead_code)]
+fn get_eth_token_def(address_bytes: &[u8], chain_id: ChainId) -> Option<Vec<u8>> {
+    ETH_TOKEN_DEFS
+        .iter()
+        .find(|(address, def)| address == &&address_bytes && def.0 == chain_id)
+        .map(|found| found.1 .1.to_vec())
+}
+
+/// trim leading zeros in array
+macro_rules! trim_left {
+    ($param:expr) => {{
+        $param.iter().skip_while(|el| el == &&0).cloned().collect::<Vec<_>>()
+    }};
+}
 
 impl<'a> TrezorSession<'a> {
     pub async fn get_eth_address(&mut self, derivation_path: DerivationPath) -> TrezorResult<Option<String>> {
@@ -76,25 +124,18 @@ impl<'a> TrezorSession<'a> {
     }
 }
 
-/// TODO: maybe there is a more standard way
-fn left_trim_u8(arr: &[u8]) -> Vec<u8> {
-    let mut z = 0;
-    for i in arr {
-        if i == &0 {
-            z += 1;
-        } else {
-            break;
-        }
-    }
-    arr[z..].to_vec()
-}
-
 fn to_sign_eth_message(
     unsigned_tx: &UnSignedEthTx,
     derivation_path: &DerivationPath,
     chain_id: u64,
     data: &mut Vec<u8>,
 ) -> proto_ethereum::EthereumSignTx {
+    // if we have it, pass network or token definition info to show on the device screen:
+    let eth_defs = proto_ethereum_definitions::EthereumDefinitions {
+        encoded_network: get_eth_network_def(chain_id),
+        encoded_token: None, // TODO add looking for tokens defs
+    };
+
     let mut nonce: [u8; 32] = [0; 32];
     let mut gas_price: [u8; 32] = [0; 32];
     let mut gas_limit: [u8; 32] = [0; 32];
@@ -114,16 +155,16 @@ fn to_sign_eth_message(
     let data_length = if data.is_empty() { None } else { Some(data.len() as u32) };
     proto_ethereum::EthereumSignTx {
         address_n: serialize_derivation_path(derivation_path),
-        nonce: Some(left_trim_u8(&nonce)),
-        gas_price: left_trim_u8(&gas_price),
-        gas_limit: left_trim_u8(&gas_limit),
+        nonce: Some(trim_left!(nonce)),
+        gas_price: trim_left!(gas_price),
+        gas_limit: trim_left!(gas_limit),
         to: addr_hex,
-        value: Some(left_trim_u8(&value)),
+        value: Some(trim_left!(value)),
         data_initial_chunk: Some(data.splice(..std::cmp::min(1024, data.len()), []).collect()),
         data_length,
         chain_id,
         tx_type: None,
-        definitions: None,
+        definitions: Some(eth_defs),
         chunkify: if data.is_empty() { None } else { Some(true) },
     }
 }

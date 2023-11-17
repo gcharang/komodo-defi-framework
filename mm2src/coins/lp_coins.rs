@@ -4823,7 +4823,6 @@ pub mod for_tests {
     /// Helper to call init_withdraw and wait for completion
     pub async fn test_withdraw_init_loop(
         ctx: MmArc,
-        //fields: UtxoCoinFields,
         ticker: &str,
         to: &str,
         amount: &str,

@@ -25,6 +25,7 @@ ethereum-types = { version = "0.13", default-features = false, features = ["std"
 ethkey = { git = "https://github.com/KomodoPlatform/mm2-parity-ethereum.git" }
 # primitive-types = "0.11.1"
 bip32 = { version = "0.2.2", default-features = false, features = ["alloc", "secp256k1-ffi"] }
+lazy_static = "1.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-std = { version = "1.5" }
