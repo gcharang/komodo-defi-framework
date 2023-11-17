@@ -1010,7 +1010,9 @@ impl<'a> ZCoinBuilder<'a> {
         let ctx = self.ctx.clone();
         let ticker = self.ticker.to_string();
 
-        Ok(BlockDbImpl::new(ctx, ticker, Some(cache_db_path)).await?)
+        BlockDbImpl::new(ctx, ticker, cache_db_path)
+            .map_err(|err| MmError::new(ZcoinClientInitError::ZcashDBError(err.to_string())))
+            .await
     }
 
     #[cfg(not(target_arch = "wasm32"))]

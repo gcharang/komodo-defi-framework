@@ -2,12 +2,11 @@ cfg_native!(
     use crate::z_coin::ZcoinConsensusParams;
 
     pub mod wallet_sql_storage;
+
     use zcash_client_sqlite::for_async::WalletDbAsync;
 );
 
-#[cfg(target_arch = "wasm32")]
-#[cfg(target_family = "wasm")]
-pub mod wasm;
+#[cfg(target_arch = "wasm32")] pub mod wasm;
 #[cfg(target_arch = "wasm32")]
 use wasm::storage::WalletIndexedDb;
 

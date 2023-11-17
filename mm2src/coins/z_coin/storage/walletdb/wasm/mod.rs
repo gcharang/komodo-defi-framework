@@ -78,6 +78,7 @@ mod wasm_test {
     use crate::ZcoinProtocolInfo;
     use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
     use protobuf::Message;
+    use std::path::PathBuf;
     use wasm_bindgen_test::*;
     use zcash_client_backend::wallet::{AccountId, OvkPolicy};
     use zcash_extras::fake_compact_block;
@@ -202,7 +203,7 @@ mod wasm_test {
     async fn test_valid_chain_state() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -308,7 +309,7 @@ mod wasm_test {
     async fn invalid_chain_cache_disconnected() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -395,7 +396,7 @@ mod wasm_test {
     async fn test_invalid_chain_reorg() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -482,7 +483,7 @@ mod wasm_test {
     async fn test_data_db_rewinding() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -546,7 +547,7 @@ mod wasm_test {
     async fn test_scan_cached_blocks_requires_sequential_blocks() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -612,7 +613,7 @@ mod wasm_test {
     async fn test_scan_cached_blokcs_finds_received_notes() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -663,7 +664,7 @@ mod wasm_test {
     async fn test_scan_cached_blocks_finds_change_notes() {
         // init blocks_db
         let ctx = mm_ctx_with_custom_db();
-        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
 
         // init walletdb.
         let walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -721,11 +722,13 @@ mod wasm_test {
 
     fn network() -> Network { Network::TestNetwork }
 
+    // Todo: Uncomment after improving tx creation time
+    // https://github.com/KomodoPlatform/komodo-defi-framework/issues/2000
     //    #[wasm_bindgen_test]
     //    async fn create_to_address_fails_on_unverified_notes() {
     //        // init blocks_db
     //        let ctx = mm_ctx_with_custom_db();
-    //        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+    //        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
     //
     //        // init walletdb.
     //        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;
@@ -983,13 +986,15 @@ mod wasm_test {
         }
     }
 
-    //        #[wasm_bindgen_test]
+    // Todo: Uncomment after improving tx creation time
+    // https://github.com/KomodoPlatform/komodo-defi-framework/issues/2000
+    //    #[wasm_bindgen_test]
     //    async fn test_create_to_address_fails_on_locked_notes() {
     //        register_wasm_log();
     //
     //        // init blocks_db
     //        let ctx = mm_ctx_with_custom_db();
-    //        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), Some("")).await.unwrap();
+    //        let blockdb = BlockDbImpl::new(ctx, TICKER.to_string(), PathBuf::new()).await.unwrap();
     //
     //        // init walletdb.
     //        let mut walletdb = wallet_db_from_zcoin_builder_for_test(TICKER).await;

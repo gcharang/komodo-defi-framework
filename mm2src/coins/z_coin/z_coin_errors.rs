@@ -10,11 +10,17 @@ use common::jsonrpc_client::JsonRpcError;
 use db_common::sqlite::rusqlite::Error as SqliteError;
 use derive_more::Display;
 use http::uri::InvalidUri;
+#[cfg(target_arch = "wasm32")]
+use mm2_db::indexed_db::cursor_prelude::*;
+#[cfg(target_arch = "wasm32")]
+use mm2_db::indexed_db::{DbTransactionError, InitDbError};
+use mm2_err_handle::mm_error::MmError;
 use mm2_number::BigDecimal;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use zcash_client_backend::data_api::error::ChainInvalid;
 #[cfg(not(target_arch = "wasm32"))]
 use zcash_client_sqlite::error::SqliteClientError;
+#[cfg(target_arch = "wasm32")] use zcash_extras::NoteId;
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::builder::Error as ZTxBuilderError;
 
@@ -49,6 +55,10 @@ impl From<SqliteClientError> for UpdateBlocksCacheErr {
     fn from(err: SqliteClientError) -> Self { UpdateBlocksCacheErr::ZcashDBError(err.to_string()) }
 }
 
+impl From<ZcoinStorageError> for UpdateBlocksCacheErr {
+    fn from(err: ZcoinStorageError) -> Self { UpdateBlocksCacheErr::ZcashDBError(err.to_string()) }
+}
+
 impl From<UtxoRpcError> for UpdateBlocksCacheErr {
     fn from(err: UtxoRpcError) -> Self { UpdateBlocksCacheErr::UtxoRpcError(err) }
 }
@@ -70,6 +80,10 @@ pub enum ZcoinClientInitError {
     UrlIterFailure(Vec<UrlIterError>),
     UpdateBlocksCacheErr(UpdateBlocksCacheErr),
     UtxoCoinBuildError(UtxoCoinBuildError),
+}
+
+impl From<ZcoinStorageError> for ZcoinClientInitError {
+    fn from(err: ZcoinStorageError) -> Self { ZcoinClientInitError::ZcashDBError(err.to_string()) }
 }
 
 impl From<UpdateBlocksCacheErr> for ZcoinClientInitError {
@@ -416,11 +430,6 @@ pub enum ZcoinStorageError {
 impl From<UpdateBlocksCacheErr> for ZcoinStorageError {
     fn from(err: UpdateBlocksCacheErr) -> Self { ZcoinStorageError::DbError(err.to_string()) }
 }
-
-#[cfg(target_arch = "wasm32")]
-use mm2_db::indexed_db::{CursorError, DbTransactionError, InitDbError};
-use mm2_err_handle::mm_error::MmError;
-#[cfg(target_arch = "wasm32")] use zcash_extras::NoteId;
 
 #[cfg(target_arch = "wasm32")]
 impl From<zcash_client_backend::data_api::error::Error<NoteId>> for ZcoinStorageError {

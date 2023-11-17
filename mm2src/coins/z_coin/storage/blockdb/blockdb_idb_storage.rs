@@ -1,5 +1,5 @@
 use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow,
-                             ZcoinConsensusParams};
+                             ZcoinConsensusParams, ZcoinStorageRes};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 
 use async_trait::async_trait;
@@ -8,7 +8,7 @@ use mm2_db::indexed_db::{BeBigUint, ConstructibleDb, DbIdentifier, DbInstance, D
                          IndexedDbBuilder, InitDbResult, MultiIndex, OnUpgradeResult, TableSignature};
 use mm2_err_handle::prelude::*;
 use protobuf::Message;
-use std::path::Path;
+use std::path::PathBuf;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_extras::WalletRead;
 use zcash_primitives::block::BlockHash;
@@ -17,7 +17,6 @@ use zcash_primitives::consensus::BlockHeight;
 const DB_NAME: &str = "z_compactblocks_cache";
 const DB_VERSION: u32 = 1;
 
-pub type BlockDbRes<T> = MmResult<T, ZcoinStorageError>;
 pub type BlockDbInnerLocked<'a> = DbLocked<'a, BlockDbInner>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -67,14 +66,14 @@ impl BlockDbInner {
 }
 
 impl BlockDbImpl {
-    pub async fn new(ctx: MmArc, ticker: String, _path: Option<impl AsRef<Path>>) -> MmResult<Self, ZcoinStorageError> {
+    pub async fn new(ctx: MmArc, ticker: String, _path: PathBuf) -> ZcoinStorageRes<Self> {
         Ok(Self {
             db: ConstructibleDb::new(&ctx).into_shared(),
             ticker,
         })
     }
 
-    async fn lock_db(&self) -> BlockDbRes<BlockDbInnerLocked<'_>> {
+    async fn lock_db(&self) -> ZcoinStorageRes<BlockDbInnerLocked<'_>> {
         self.db
             .get_or_initialize()
             .await
@@ -82,7 +81,7 @@ impl BlockDbImpl {
     }
 
     /// Get latest block of the current active ZCOIN.
-    pub async fn get_latest_block(&self) -> MmResult<u32, ZcoinStorageError> {
+    pub async fn get_latest_block(&self) -> ZcoinStorageRes<u32> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -101,7 +100,7 @@ impl BlockDbImpl {
     }
 
     /// Insert new block to BlockDbTable given the provided data.
-    pub async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> MmResult<usize, ZcoinStorageError> {
+    pub async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> ZcoinStorageRes<usize> {
         let ticker = self.ticker.clone();
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -121,7 +120,7 @@ impl BlockDbImpl {
 
     /// Asynchronously rewinds the storage to a specified block height, effectively
     /// removing data beyond the specified height from the storage.    
-    pub async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
+    pub async fn rewind_to_height(&self, height: u32) -> ZcoinStorageRes<usize> {
         let ticker = self.ticker.clone();
         let latest_height = self.get_latest_block().await?;
 
@@ -142,7 +141,7 @@ impl BlockDbImpl {
     }
 
     #[allow(unused)]
-    pub(crate) async fn get_earliest_block(&self) -> MmResult<u32, ZcoinStorageError> {
+    pub(crate) async fn get_earliest_block(&self) -> ZcoinStorageRes<u32> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
@@ -164,7 +163,7 @@ impl BlockDbImpl {
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-    ) -> MmResult<Vec<CompactBlockRow>, ZcoinStorageError> {
+    ) -> ZcoinStorageRes<Vec<CompactBlockRow>> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let block_db = db_transaction.table::<BlockDbTable>().await?;
@@ -205,7 +204,7 @@ impl BlockDbImpl {
         mode: BlockProcessingMode,
         validate_from: Option<(BlockHeight, BlockHash)>,
         limit: Option<u32>,
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let mut from_height = match &mode {
             BlockProcessingMode::Validate => validate_from
                 .map(|(height, _)| height)
@@ -237,7 +236,7 @@ impl BlockDbImpl {
                     validate_chain(block, &mut prev_height, &mut prev_hash).await?;
                 },
                 BlockProcessingMode::Scan(data) => {
-                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                    scan_cached_block(data, &params, &block, &mut from_height).await?;
                 },
             }
         }

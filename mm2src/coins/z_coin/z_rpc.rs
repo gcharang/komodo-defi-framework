@@ -45,6 +45,13 @@ cfg_native!(
     use futures::compat::Future01CompatExt;
     use group::GroupEncoding;
     use http::Uri;
+    use prost::Message;
+    use std::convert::TryFrom;
+    use rpc::v1::types::{Bytes, H256 as H256Json};
+    use std::convert::TryInto;
+    use std::num::TryFromIntError;
+    use std::pin::Pin;
+    use std::str::FromStr;
     use tonic::transport::{Channel, ClientTlsConfig};
     use tonic::codegen::StdError;
 
@@ -244,7 +251,7 @@ impl ZRpcOps for LightRpcClient {
         while let Some(block) = Pin::new(&mut response).get_mut().message().await? {
             debug!("Got block {:?}", block);
             let height = u32::try_from(block.height)
-                .map_err(|_| UpdateBlocksCacheErr::InternalError("Block height too large".to_string()))?;
+                .map_err(|_| UpdateBlocksCacheErr::DecodeError("Block height too large".to_string()))?;
             db.insert_block(height, block.encode_to_vec())
                 .await
                 .map_err(|err| UpdateBlocksCacheErr::ZcashDBError(err.to_string()))?;
@@ -387,7 +394,11 @@ impl ZRpcOps for NativeClient {
                 header: Vec::new(),
                 vtx: compact_txs,
             };
-            db.insert_block(compact_block.height as u32, compact_block.encode_to_vec())
+            let height: u32 = compact_block
+                .height
+                .try_into()
+                .map_to_mm(|err: TryFromIntError| UpdateBlocksCacheErr::DecodeError(err.to_string()))?;
+            db.insert_block(height, compact_block.encode_to_vec())
                 .await
                 .map_err(|err| UpdateBlocksCacheErr::ZcashDBError(err.to_string()))?;
             handler.notify_blocks_cache_status(compact_block.height, last_block);

@@ -1,4 +1,4 @@
-use crate::z_coin::storage::WalletDbShared;
+use crate::z_coin::storage::{WalletDbShared, ZcoinStorageRes};
 use crate::z_coin::{CheckPointBlockInfo, ZCoinBuilder, ZcoinClientInitError, ZcoinConsensusParams, ZcoinStorageError};
 use common::async_blocking;
 use common::log::info;
@@ -13,13 +13,6 @@ use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
-fn run_optimization_pragmas_helper(w: &WalletDbAsync<ZcoinConsensusParams>) -> MmResult<(), ZcoinClientInitError> {
-    let conn = w.inner();
-    let conn = conn.lock().unwrap();
-    run_optimization_pragmas(conn.sql_conn()).map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
-    Ok(())
-}
-
 /// `create_wallet_db` is responsible for creating a new Zcoin wallet database, initializing it
 /// with the provided parameters, and executing various initialization steps. These steps include checking and
 /// potentially rewinding the database to a specified synchronization height, performing optimizations, and
@@ -31,10 +24,19 @@ pub async fn create_wallet_db(
     evk: ExtendedFullViewingKey,
     continue_from_prev_sync: bool,
 ) -> Result<WalletDbAsync<ZcoinConsensusParams>, MmError<ZcoinClientInitError>> {
-    let db = WalletDbAsync::for_path(wallet_db_path, consensus_params)
-        .map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
+    let db = async_blocking(move || {
+        WalletDbAsync::for_path(wallet_db_path, consensus_params)
+            .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))
+    })
+    .await?;
+    let db_inner = db.inner();
+    async_blocking(move || {
+        let db_inner = db_inner.lock().unwrap();
+        run_optimization_pragmas(db_inner.sql_conn())
+            .map_to_mm(|err| ZcoinClientInitError::ZcashDBError(err.to_string()))
+    })
+    .await?;
 
-    run_optimization_pragmas_helper(&db)?;
     init_wallet_db(&db)
         .await
         .map_to_mm(|err| ZcoinClientInitError::ZcoinStorageError(err.to_string()))?;
@@ -81,7 +83,7 @@ impl<'a> WalletDbShared {
         checkpoint_block: Option<CheckPointBlockInfo>,
         z_spending_key: &ExtendedSpendingKey,
         continue_from_prev_sync: bool,
-    ) -> MmResult<Self, ZcoinStorageError> {
+    ) -> ZcoinStorageRes<Self> {
         let ticker = builder.ticker;
         let consensus_params = builder.protocol_info.consensus_params.clone();
         let wallet_db = create_wallet_db(
@@ -103,7 +105,7 @@ impl<'a> WalletDbShared {
         })
     }
 
-    pub async fn is_tx_imported(&self, tx_id: TxId) -> MmResult<bool, ZcoinStorageError> {
+    pub async fn is_tx_imported(&self, tx_id: TxId) -> ZcoinStorageRes<bool> {
         let db = self.db.inner();
         async_blocking(move || {
             let conn = db.lock().unwrap();

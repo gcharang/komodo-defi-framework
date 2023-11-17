@@ -1,4 +1,5 @@
-use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow};
+use crate::z_coin::storage::{scan_cached_block, validate_chain, BlockDbImpl, BlockProcessingMode, CompactBlockRow,
+                             ZcoinStorageRes};
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
 use crate::z_coin::ZcoinConsensusParams;
 
@@ -9,7 +10,7 @@ use itertools::Itertools;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use protobuf::Message;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use zcash_client_backend::data_api::error::Error as ChainError;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
@@ -43,38 +44,38 @@ impl From<ChainError<NoteId>> for ZcoinStorageError {
 
 impl BlockDbImpl {
     #[cfg(all(not(test)))]
-    pub async fn new(_ctx: MmArc, ticker: String, path: Option<impl AsRef<Path>>) -> MmResult<Self, ZcoinStorageError> {
-        let conn = Connection::open(path.unwrap()).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
-        run_optimization_pragmas(&conn).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS compactblocks (
+    pub async fn new(_ctx: MmArc, ticker: String, path: PathBuf) -> ZcoinStorageRes<Self> {
+        async_blocking(move || {
+            let conn = Connection::open(path).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            let conn = Arc::new(Mutex::new(conn));
+            let conn_clone = conn.clone();
+            let conn_clone = conn_clone.lock().unwrap();
+            run_optimization_pragmas(&conn_clone).map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            conn_clone
+                .execute(
+                    "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
             data BLOB NOT NULL
         )",
-            [],
-        )
-        .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
+                    [],
+                )
+                .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?;
 
-        Ok(Self {
-            db: Arc::new(Mutex::new(conn)),
-            ticker,
+            Ok(Self { db: conn, ticker })
         })
+        .await
     }
 
     #[cfg(all(test))]
-    pub(crate) async fn new(
-        ctx: MmArc,
-        ticker: String,
-        _path: Option<impl AsRef<Path>>,
-    ) -> MmResult<Self, ZcoinStorageError> {
-        let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-        let conn = ctx.sqlite_connection.clone_or(conn);
-        let clone_db = conn.clone();
-
+    pub(crate) async fn new(ctx: MmArc, ticker: String, _path: PathBuf) -> ZcoinStorageRes<Self> {
         async_blocking(move || {
-            let clone_db = clone_db.lock().unwrap();
-            run_optimization_pragmas(&clone_db).map_err(|err| ZcoinStorageError::DbError(err.to_string()))?;
-            clone_db
+            let conn = ctx
+                .sqlite_connection
+                .clone_or(Arc::new(Mutex::new(Connection::open_in_memory().unwrap())));
+            let conn_clone = conn.clone();
+            let conn_clone = conn_clone.lock().unwrap();
+            run_optimization_pragmas(&conn_clone).map_err(|err| ZcoinStorageError::DbError(err.to_string()))?;
+            conn_clone
                 .execute(
                     "CREATE TABLE IF NOT EXISTS compactblocks (
             height INTEGER PRIMARY KEY,
@@ -89,17 +90,22 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn get_latest_block(&self) -> MmResult<u32, ZcashClientError> {
-        Ok(query_single_row(
-            &self.db.lock().unwrap(),
-            "SELECT height FROM compactblocks ORDER BY height DESC LIMIT 1",
-            [],
-            |row| row.get(0),
-        )?
+    pub(crate) async fn get_latest_block(&self) -> ZcoinStorageRes<u32> {
+        let db = self.db.clone();
+        Ok(async_blocking(move || {
+            query_single_row(
+                &db.lock().unwrap(),
+                "SELECT height FROM compactblocks ORDER BY height DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .await
+        .map_to_mm(|err| ZcoinStorageError::DbError(err.to_string()))?
         .unwrap_or(0))
     }
 
-    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> MmResult<usize, ZcoinStorageError> {
+    pub(crate) async fn insert_block(&self, height: u32, cb_bytes: Vec<u8>) -> ZcoinStorageRes<usize> {
         let db = self.db.clone();
         async_blocking(move || {
             let db = db.lock().unwrap();
@@ -114,21 +120,29 @@ impl BlockDbImpl {
         .await
     }
 
-    pub(crate) async fn rewind_to_height(&self, height: u32) -> MmResult<usize, ZcoinStorageError> {
-        self.db
-            .lock()
-            .unwrap()
-            .execute("DELETE from compactblocks WHERE height > ?1", [height])
-            .map_to_mm(|err| ZcoinStorageError::RemoveFromStorageErr(err.to_string()))
+    pub(crate) async fn rewind_to_height(&self, height: u32) -> ZcoinStorageRes<usize> {
+        let db = self.db.clone();
+        async_blocking(move || {
+            db.lock()
+                .unwrap()
+                .execute("DELETE from compactblocks WHERE height > ?1", [height])
+                .map_to_mm(|err| ZcoinStorageError::RemoveFromStorageErr(err.to_string()))
+        })
+        .await
     }
 
-    pub(crate) async fn get_earliest_block(&self) -> Result<u32, ZcashClientError> {
-        Ok(query_single_row(
-            &self.db.lock().unwrap(),
-            "SELECT MIN(height) from compactblocks",
-            [],
-            |row| row.get::<_, Option<u32>>(0),
-        )?
+    pub(crate) async fn get_earliest_block(&self) -> ZcoinStorageRes<u32> {
+        let db = self.db.clone();
+        Ok(async_blocking(move || {
+            query_single_row(
+                &db.lock().unwrap(),
+                "SELECT MIN(height) from compactblocks",
+                [],
+                |row| row.get::<_, Option<u32>>(0),
+            )
+        })
+        .await
+        .map_to_mm(|err| ZcoinStorageError::GetFromStorageError(err.to_string()))?
         .flatten()
         .unwrap_or(0))
     }
@@ -137,7 +151,7 @@ impl BlockDbImpl {
         &self,
         from_height: BlockHeight,
         limit: Option<u32>,
-    ) -> MmResult<Vec<rusqlite::Result<CompactBlockRow>>, ZcoinStorageError> {
+    ) -> ZcoinStorageRes<Vec<rusqlite::Result<CompactBlockRow>>> {
         let db = self.db.clone();
         async_blocking(move || {
             // Fetch the CompactBlocks we need to scan
@@ -172,7 +186,7 @@ impl BlockDbImpl {
         mode: BlockProcessingMode,
         validate_from: Option<(BlockHeight, BlockHash)>,
         limit: Option<u32>,
-    ) -> MmResult<(), ZcoinStorageError> {
+    ) -> ZcoinStorageRes<()> {
         let ticker = self.ticker.to_owned();
         let mut from_height = match &mode {
             BlockProcessingMode::Validate => validate_from
@@ -210,7 +224,7 @@ impl BlockDbImpl {
                     validate_chain(block, &mut prev_height, &mut prev_hash).await?;
                 },
                 BlockProcessingMode::Scan(data) => {
-                    scan_cached_block(data.clone(), &params, &block, &mut from_height).await?;
+                    scan_cached_block(data, &params, &block, &mut from_height).await?;
                 },
             }
         }
