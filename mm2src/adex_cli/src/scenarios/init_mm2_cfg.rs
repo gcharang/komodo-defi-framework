@@ -19,6 +19,9 @@ const DEFAULT_GID: &str = "komodefi-cli";
 const DEFAULT_OPTION_PLACEHOLDER: &str = "Tap enter to skip";
 const RPC_PORT_MIN: u16 = 1024;
 const RPC_PORT_MAX: u16 = 49151;
+const DEFAULT_RPC_PORT: u16 = 7783;
+const DEFAULT_RPC_IP: &str = "127.0.0.1";
+
 
 pub(crate) fn init_mm2_cfg(cfg_file: &str) -> Result<()> {
     let mut mm2_cfg = Mm2Cfg::new();
@@ -226,9 +229,12 @@ impl Mm2Cfg {
 
     #[inline]
     fn inquire_rpcip(&mut self) -> Result<()> {
+        let default_ip: Ipv4Addr = DEFAULT_RPC_IP.parse().map_err(|error| error_anyhow!("Failed pass default rpcip: {error}"))?;
+
         self.rpcip = CustomType::<InquireOption<Ipv4Addr>>::new("What is rpcip:")
             .with_placeholder(DEFAULT_OPTION_PLACEHOLDER)
             .with_help_message("IP address to bind to for RPC server. Optional, defaults to 127.0.0.1")
+            .with_default(InquireOption::Some(default_ip))
             .prompt()
             .map_err(|error| error_anyhow!("Failed to get rpcip: {error}"))?
             .into();
@@ -255,6 +261,7 @@ impl Mm2Cfg {
             .with_help_message(r#"Port to use for RPC communication. Optional, defaults to 7783"#)
             .with_validator(validator)
             .with_placeholder(DEFAULT_OPTION_PLACEHOLDER)
+            .with_default(InquireOption::Some(DEFAULT_RPC_PORT))
             .prompt()
             .map_err(|error| error_anyhow!("Failed to get rpcport: {error}"))?
             .into();
