@@ -13,8 +13,6 @@ use crate::utxo::{sat_from_big_decimal, utxo_common, ActualTxFee, AdditionalTxDa
                   BroadcastTxErr, FeePolicy, GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList,
                   RecentlySpentOutPointsGuard, UtxoActivationParams, UtxoAddressFormat, UtxoArc, UtxoCoinFields,
                   UtxoCommonOps, UtxoRpcMode, UtxoTxBroadcastOps, UtxoTxGenerationOps, VerboseTransactionFrom};
-#[cfg(target_arch = "wasm32")]
-use crate::z_coin::z_params::{download_parameters, ZcashParamsWasmImpl};
 use crate::TxFeeDetails;
 use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, CoinFutSpawner, ConfirmPaymentInput,
             FeeApproxStage, FoundSwapTxSpend, HistorySyncState, MakerSwapTakerCoin, MarketCoinOps, MmCoin, MmCoinEnum,
@@ -67,8 +65,7 @@ use z_rpc::{SaplingSyncConnector, SaplingSyncGuard};
 use zcash_client_backend::encoding::{decode_payment_address, encode_extended_spending_key, encode_payment_address};
 use zcash_client_backend::wallet::{AccountId, SpendableNote};
 use zcash_extras::WalletRead;
-use zcash_primitives::consensus;
-use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters, H0};
+use zcash_primitives::consensus::{BlockHeight, BranchId, NetworkUpgrade, Parameters, H0};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::sapling::keys::OutgoingViewingKey;
 use zcash_primitives::sapling::note_encryption::try_sapling_output_recovery;
@@ -89,7 +86,6 @@ pub use z_rpc::{FirstSyncBlock, SyncStatus};
 
 cfg_native!(
     use crate::utxo::utxo_common::{addresses_from_script, big_decimal_from_sat};
-
     use common::{async_blocking, sha256_digest, calc_total_pages, PagingOptionsEnum};
     use db_common::sqlite::offset_by_id;
     use db_common::sqlite::rusqlite::{Error as SqlError, Row};
@@ -98,6 +94,13 @@ cfg_native!(
     use zcash_client_sqlite::wallet::get_balance;
     use zcash_proofs::default_params_folder;
     use z_rpc::{init_native_client};
+);
+
+cfg_wasm32!(
+    use crate::z_coin::z_params::{download_parameters, ZcashParamsWasmImpl};
+    use futures::channel::oneshot;
+    use rand::rngs::OsRng;
+    use zcash_primitives::transaction::builder::TransactionMetadata;
 );
 
 #[allow(unused)] mod z_coin_errors;
@@ -489,11 +492,14 @@ impl ZCoin {
         #[cfg(not(target_arch = "wasm32"))]
         let (tx, _) = async_blocking({
             let prover = self.z_fields.z_tx_prover.clone();
-            move || tx_builder.build(consensus::BranchId::Sapling, prover.as_ref())
+            move || tx_builder.build(BranchId::Sapling, prover.as_ref())
         })
         .await?;
+
         #[cfg(target_arch = "wasm32")]
-        let (tx, _) = tx_builder.build(consensus::BranchId::Sapling, self.z_fields.z_tx_prover.clone().as_ref())?;
+        let (tx, _) =
+            TxBuilderSpawner::request_tx_result(tx_builder, BranchId::Sapling, self.z_fields.z_tx_prover.clone())
+                .await?;
 
         let additional_data = AdditionalTxData {
             received_by_me,
@@ -756,6 +762,42 @@ impl ZCoin {
 
 impl AsRef<UtxoCoinFields> for ZCoin {
     fn as_ref(&self) -> &UtxoCoinFields { &self.utxo_arc }
+}
+
+#[cfg(target_arch = "wasm32")]
+struct TxBuilderSpawner;
+
+#[cfg(target_arch = "wasm32")]
+impl TxBuilderSpawner {
+    fn spawn_build_tx(
+        builder: ZTxBuilder<'static, ZcoinConsensusParams, OsRng>,
+        branch_id: BranchId,
+        prover: Arc<LocalTxProver>,
+        sender: oneshot::Sender<
+            MmResult<(zcash_primitives::transaction::Transaction, TransactionMetadata), GenTxError>,
+        >,
+    ) {
+        let fut = async move {
+            let build = builder
+                .build(branch_id, prover.as_ref())
+                .map_to_mm(GenTxError::TxBuilderError);
+            sender.send(build).ok();
+        };
+
+        common::executor::spawn_local(fut)
+    }
+
+    async fn request_tx_result(
+        builder: ZTxBuilder<'static, ZcoinConsensusParams, OsRng>,
+        branch_id: BranchId,
+        prover: Arc<LocalTxProver>,
+    ) -> MmResult<(zcash_primitives::transaction::Transaction, TransactionMetadata), GenTxError> {
+        let (tx, rx) = oneshot::channel();
+        Self::spawn_build_tx(builder, branch_id, prover, tx);
+
+        rx.await
+            .map_to_mm(|_| GenTxError::Internal("Spawned future has been canceled".to_owned()))?
+    }
 }
 
 /// SyncStartPoint represents the starting point for synchronizing a wallet's blocks and transaction history.
