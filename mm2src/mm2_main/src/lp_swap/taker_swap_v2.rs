@@ -26,7 +26,8 @@ use uuid::Uuid;
 
 cfg_native!(
     use crate::mm2::database::my_swaps::{insert_new_swap_v2, SELECT_MY_SWAP_V2_BY_UUID};
-    use db_common::sqlite::rusqlite::{named_params, Result as SqlResult, Row};
+    use db_common::sqlite::rusqlite::{named_params, Error as SqlError, Result as SqlResult, Row};
+    use db_common::sqlite::rusqlite::types::Type as SqlType;
 );
 
 cfg_wasm32!(
@@ -272,16 +273,27 @@ impl TakerSwapDbRepr {
         Ok(TakerSwapDbRepr {
             taker_coin: row.get(0)?,
             maker_coin: row.get(1)?,
-            uuid: row.get::<_, String>(2)?.parse().unwrap(),
+            uuid: row
+                .get::<_, String>(2)?
+                .parse()
+                .map_err(|e| SqlError::FromSqlConversionFailure(2, SqlType::Text, Box::new(e)))?,
             started_at: row.get(3)?,
             taker_secret: row.get::<_, [u8; 32]>(4)?.into(),
             taker_secret_hash: row.get::<_, Vec<u8>>(5)?.into(),
-            secret_hash_algo: row.get::<_, u8>(6)?.try_into().unwrap(),
-            events: serde_json::from_str(&row.get::<_, String>(7)?).unwrap(),
-            maker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(8)?).unwrap(),
-            taker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(9)?).unwrap(),
-            taker_premium: MmNumber::from_fraction_string(&row.get::<_, String>(10)?).unwrap(),
-            dex_fee: MmNumber::from_fraction_string(&row.get::<_, String>(11)?).unwrap(),
+            secret_hash_algo: row
+                .get::<_, u8>(6)?
+                .try_into()
+                .map_err(|e| SqlError::FromSqlConversionFailure(6, SqlType::Integer, Box::new(e)))?,
+            events: serde_json::from_str(&row.get::<_, String>(7)?)
+                .map_err(|e| SqlError::FromSqlConversionFailure(7, SqlType::Text, Box::new(e)))?,
+            maker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(8)?)
+                .map_err(|e| SqlError::FromSqlConversionFailure(8, SqlType::Text, Box::new(e)))?,
+            taker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(9)?)
+                .map_err(|e| SqlError::FromSqlConversionFailure(9, SqlType::Text, Box::new(e)))?,
+            taker_premium: MmNumber::from_fraction_string(&row.get::<_, String>(10)?)
+                .map_err(|e| SqlError::FromSqlConversionFailure(10, SqlType::Text, Box::new(e)))?,
+            dex_fee: MmNumber::from_fraction_string(&row.get::<_, String>(11)?)
+                .map_err(|e| SqlError::FromSqlConversionFailure(11, SqlType::Text, Box::new(e)))?,
             lock_duration: row.get(12)?,
             conf_settings: SwapConfirmationsSettings {
                 maker_coin_confs: row.get(13)?,
@@ -289,7 +301,15 @@ impl TakerSwapDbRepr {
                 taker_coin_confs: row.get(15)?,
                 taker_coin_nota: row.get(16)?,
             },
-            p2p_keypair: None,
+            p2p_keypair: row.get::<_, [u8; 32]>(17).and_then(|maybe_key| {
+                if maybe_key == [0; 32] {
+                    Ok(None)
+                } else {
+                    Ok(Some(SerializableSecp256k1Keypair::new(maybe_key).map_err(|e| {
+                        SqlError::FromSqlConversionFailure(17, SqlType::Blob, Box::new(e))
+                    })?))
+                }
+            })?,
         })
     }
 }

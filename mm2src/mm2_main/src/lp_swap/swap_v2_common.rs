@@ -1,7 +1,6 @@
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::SwapsContext;
 use common::bits256;
-use common::bool_as_int::BoolAsInt;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
@@ -18,6 +17,7 @@ cfg_native!(
 );
 
 cfg_wasm32!(
+    use common::bool_as_int::BoolAsInt;
     use crate::mm2::lp_swap::swap_wasm_db::{IS_FINISHED_SWAP_TYPE_INDEX, MySwapsFiltersTable, SavedSwapTable};
     use mm2_db::indexed_db::{DbTransactionError, InitDbError, MultiIndex};
 );

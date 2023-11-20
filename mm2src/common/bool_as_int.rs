@@ -1,7 +1,7 @@
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A wrapper struct representing a boolean value as an integer (0 or 1).
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BoolAsInt(bool);
 
 impl BoolAsInt {
@@ -10,10 +10,6 @@ impl BoolAsInt {
 
     /// Retrieves the inner boolean value.
     pub fn as_bool(&self) -> bool { self.0 }
-}
-
-impl Default for BoolAsInt {
-    fn default() -> Self { BoolAsInt(false) }
 }
 
 impl From<bool> for BoolAsInt {
@@ -89,6 +85,6 @@ mod tests {
     #[test]
     fn test_as_bool() {
         let bool_value = BoolAsInt::new(true);
-        assert_eq!(bool_value.as_bool(), true);
+        assert!(bool_value.as_bool());
     }
 }

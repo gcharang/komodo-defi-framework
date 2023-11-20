@@ -1776,8 +1776,10 @@ impl Default for SecretHashAlgo {
     fn default() -> Self { SecretHashAlgo::DHASH160 }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub struct UnsupportedSecretHashAlgo(u8);
+
+impl std::error::Error for UnsupportedSecretHashAlgo {}
 
 impl TryFrom<u8> for SecretHashAlgo {
     type Error = UnsupportedSecretHashAlgo;
