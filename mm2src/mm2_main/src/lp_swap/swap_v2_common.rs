@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Error;
 use uuid::Uuid;
+use crate::mm2::lp_swap::swap_lock::SwapLockError;
 
 cfg_native!(
     use common::async_blocking;
@@ -47,13 +48,15 @@ pub enum SwapRecreateError {
 pub enum SwapStateMachineError {
     StorageError(String),
     SerdeError(String),
+    SwapLock(SwapLockError),
     #[cfg(target_arch = "wasm32")]
     NoSwapWithUuid(Uuid),
 }
 
-pub struct SwapRecreateCtx<MakerCoin, TakerCoin> {
-    pub maker_coin: MakerCoin,
-    pub taker_coin: TakerCoin,
+impl From<SwapLockError> for SwapStateMachineError {
+    fn from(e: SwapLockError) -> Self {
+        SwapStateMachineError::SwapLock(e)
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -73,6 +76,11 @@ impl From<InitDbError> for SwapStateMachineError {
 #[cfg(target_arch = "wasm32")]
 impl From<DbTransactionError> for SwapStateMachineError {
     fn from(e: DbTransactionError) -> Self { SwapStateMachineError::StorageError(e.to_string()) }
+}
+
+pub struct SwapRecreateCtx<MakerCoin, TakerCoin> {
+    pub maker_coin: MakerCoin,
+    pub taker_coin: TakerCoin,
 }
 
 #[cfg(not(target_arch = "wasm32"))]

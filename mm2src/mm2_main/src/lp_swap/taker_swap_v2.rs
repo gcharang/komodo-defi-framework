@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 cfg_native!(
     use crate::mm2::database::my_swaps::{insert_new_swap_v2, SELECT_MY_SWAP_V2_BY_UUID};
+    use common::async_blocking;
     use db_common::sqlite::rusqlite::{named_params, Error as SqlError, Result as SqlResult, Row};
     use db_common::sqlite::rusqlite::types::Type as SqlType;
 );
@@ -37,6 +38,7 @@ cfg_wasm32!(
 
 // This is needed to have Debug on messages
 #[allow(unused_imports)] use prost::Message;
+use crate::mm2::lp_swap::swap_lock::{SwapLock, SwapLockOps};
 
 /// Negotiation data representation to be stored in DB.
 #[derive(Debug, Deserialize, Serialize)]
@@ -151,28 +153,32 @@ impl StateMachineStorage for TakerSwapStorage {
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn store_repr(&mut self, _id: Self::MachineId, repr: Self::DbRepr) -> Result<(), Self::Error> {
-        let sql_params = named_params! {
-            ":my_coin": repr.taker_coin,
-            ":other_coin": repr.maker_coin,
-            ":uuid": repr.uuid.to_string(),
-            ":started_at": repr.started_at,
-            ":swap_type": TAKER_SWAP_V2_TYPE,
-            ":maker_volume": repr.maker_volume.to_fraction_string(),
-            ":taker_volume": repr.taker_volume.to_fraction_string(),
-            ":premium": repr.taker_premium.to_fraction_string(),
-            ":dex_fee": repr.dex_fee.to_fraction_string(),
-            ":secret": repr.taker_secret.0,
-            ":secret_hash": repr.taker_secret_hash.0,
-            ":secret_hash_algo": repr.secret_hash_algo as u8,
-            ":p2p_privkey": repr.p2p_keypair.map(|k| k.priv_key()).unwrap_or_default(),
-            ":lock_duration": repr.lock_duration,
-            ":maker_coin_confs": repr.conf_settings.maker_coin_confs,
-            ":maker_coin_nota": repr.conf_settings.maker_coin_nota,
-            ":taker_coin_confs": repr.conf_settings.taker_coin_confs,
-            ":taker_coin_nota": repr.conf_settings.taker_coin_nota
-        };
-        insert_new_swap_v2(&self.ctx, sql_params)?;
-        Ok(())
+        let ctx = self.ctx.clone();
+
+        async_blocking(move || {
+            let sql_params = named_params! {
+                ":my_coin": repr.taker_coin,
+                ":other_coin": repr.maker_coin,
+                ":uuid": repr.uuid.to_string(),
+                ":started_at": repr.started_at,
+                ":swap_type": TAKER_SWAP_V2_TYPE,
+                ":maker_volume": repr.maker_volume.to_fraction_string(),
+                ":taker_volume": repr.taker_volume.to_fraction_string(),
+                ":premium": repr.taker_premium.to_fraction_string(),
+                ":dex_fee": repr.dex_fee.to_fraction_string(),
+                ":secret": repr.taker_secret.0,
+                ":secret_hash": repr.taker_secret_hash.0,
+                ":secret_hash_algo": repr.secret_hash_algo as u8,
+                ":p2p_privkey": repr.p2p_keypair.map(|k| k.priv_key()).unwrap_or_default(),
+                ":lock_duration": repr.lock_duration,
+                ":maker_coin_confs": repr.conf_settings.maker_coin_confs,
+                ":maker_coin_nota": repr.conf_settings.maker_coin_nota,
+                ":taker_coin_confs": repr.conf_settings.taker_coin_confs,
+                ":taker_coin_nota": repr.conf_settings.taker_coin_nota
+            };
+            insert_new_swap_v2(&ctx, sql_params)?;
+            Ok(())
+        }).await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -204,11 +210,14 @@ impl StateMachineStorage for TakerSwapStorage {
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn get_repr(&self, id: Self::MachineId) -> Result<Self::DbRepr, Self::Error> {
-        Ok(self.ctx.sqlite_connection().query_row(
+        let ctx = self.ctx.clone();
+        let id_str = id.to_string();
+
+        async_blocking(move || Ok(ctx.sqlite_connection().query_row(
             SELECT_MY_SWAP_V2_BY_UUID,
-            &[(":uuid", &id.to_string())],
+            &[(":uuid", &id_str)],
             TakerSwapDbRepr::from_sql_row,
-        )?)
+        )?)).await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -380,6 +389,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 {
     type Storage = TakerSwapStorage;
     type Result = ();
+    type Error = MmError<SwapStateMachineError>;
     type RecreateCtx = SwapRecreateCtx<MakerCoin, TakerCoin>;
     type RecreateError = MmError<SwapRecreateError>;
 
@@ -633,6 +643,13 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 
     fn init_additional_context(&mut self) {
         init_additional_swaps_context(&self.ctx, self.p2p_topic.clone(), self.uuid)
+    }
+
+    async fn startup_checks(&mut self) -> Result<(), Self::Error> {
+        match SwapLock::lock(&self.ctx, self.uuid, 40.).await? {
+            Some(_) => Ok(()),
+            None => unimplemented!(),
+        }
     }
 }
 

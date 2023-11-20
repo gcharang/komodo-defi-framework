@@ -121,9 +121,11 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     type Storage: StateMachineStorage;
     /// The result type of the state machine.
     type Result: Send;
+    /// The error type of the state machine
+    type Error: From<<Self::Storage as StateMachineStorage>::Error> + Send;
     /// The additional context required to recreate state machine.
     type RecreateCtx: Send;
-    /// Type representing the error, which can happen during state machine's re-creaction
+    /// Type representing the error, which can happen during state machine's re-creation
     type RecreateError: Send;
 
     /// Returns State machine's DB representation()
@@ -183,6 +185,9 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
 
     /// Initializes additional context actions (spawn futures, etc.)
     fn init_additional_context(&mut self);
+
+    /// Performs additional startup checks
+    async fn startup_checks(&mut self) -> Result<(), Self::Error>;
 }
 
 // Ensure that StandardStateMachine won't be occasionally implemented for StorableStateMachine.
@@ -195,9 +200,10 @@ impl<T: StorableState> !InitialState for T {}
 #[async_trait]
 impl<T: StorableStateMachine> StateMachineTrait for T {
     type Result = T::Result;
-    type Error = <T::Storage as StateMachineStorage>::Error;
+    type Error = T::Error;
 
     async fn on_start(&mut self) -> Result<(), Self::Error> {
+        self.startup_checks().await?;
         let id = self.id();
         if !self.storage().has_record_for(&id).await? {
             let repr = self.to_db_repr();
@@ -207,8 +213,8 @@ impl<T: StorableStateMachine> StateMachineTrait for T {
         Ok(())
     }
 
-    async fn on_finished(&mut self) -> Result<(), <T::Storage as StateMachineStorage>::Error> {
-        self.mark_finished().await
+    async fn on_finished(&mut self) -> Result<(), T::Error> {
+        Ok(self.mark_finished().await?)
     }
 }
 
@@ -233,9 +239,9 @@ impl<T: StorableStateMachine + Sync, S: StorableState<StateMachine = T> + Sync> 
     /// # Returns
     ///
     /// A `Result` indicating success (`Ok(())`) or an error (`Err(Self::Error)`).
-    async fn on_new_state(&mut self, state: &S) -> Result<(), <T::Storage as StateMachineStorage>::Error> {
+    async fn on_new_state(&mut self, state: &S) -> Result<(), T::Error> {
         let event = state.get_event();
-        self.store_event(event).await
+        Ok(self.store_event(event).await?)
     }
 }
 
@@ -400,6 +406,7 @@ mod tests {
     impl StorableStateMachine for StorableStateMachineTest {
         type Storage = StorageTest;
         type Result = ();
+        type Error = Infallible;
         type RecreateCtx = ();
         type RecreateError = Infallible;
 
@@ -426,6 +433,10 @@ mod tests {
         }
 
         fn init_additional_context(&mut self) {}
+
+        async fn startup_checks(&mut self) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
 
     struct State1 {}
