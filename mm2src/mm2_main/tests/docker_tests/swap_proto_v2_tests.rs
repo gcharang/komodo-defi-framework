@@ -314,3 +314,69 @@ fn test_v2_swap_utxo_utxo_kickstart() {
         block_on(wait_for_swap_finished(&mm_alice, &uuid, 30));
     }
 }
+
+#[test]
+fn test_v2_swap_utxo_utxo_file_lock() {
+    let (_ctx, _, bob_priv_key) = generate_utxo_coin_with_random_privkey(MYCOIN, 1000.into());
+    let (_ctx, _, alice_priv_key) = generate_utxo_coin_with_random_privkey(MYCOIN1, 1000.into());
+    let coins = json!([mycoin_conf(1000), mycoin1_conf(1000)]);
+
+    let mut bob_conf = Mm2TestConf::seednode_trade_v2(&format!("0x{}", hex::encode(bob_priv_key)), &coins);
+    let mut mm_bob = MarketMakerIt::start(bob_conf.conf.clone(), bob_conf.rpc_password.clone(), None).unwrap();
+    let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm_bob.log_path);
+    log!("Bob log path: {}", mm_bob.log_path.display());
+
+    let mut alice_conf =
+        Mm2TestConf::light_node_trade_v2(&format!("0x{}", hex::encode(alice_priv_key)), &coins, &[&mm_bob
+            .ip
+            .to_string()]);
+    let mut mm_alice = MarketMakerIt::start(alice_conf.conf.clone(), alice_conf.rpc_password.clone(), None).unwrap();
+    let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
+    log!("Alice log path: {}", mm_alice.log_path.display());
+
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+
+    let uuids = block_on(start_swaps(
+        &mut mm_bob,
+        &mut mm_alice,
+        &[(MYCOIN, MYCOIN1)],
+        1.0,
+        1.0,
+        100.,
+    ));
+    println!("{:?}", uuids);
+
+    for uuid in uuids.iter() {
+        block_on(wait_for_swap_status(&mm_bob, uuid, 10));
+        block_on(wait_for_swap_status(&mm_alice, uuid, 10));
+    }
+
+    bob_conf.conf["dbdir"] = mm_bob.folder.join("DB").to_str().unwrap().into();
+    bob_conf.conf["log"] = mm_bob.folder.join("mm2_dup.log").to_str().unwrap().into();
+
+    let mut mm_bob_dup = MarketMakerIt::start(bob_conf.conf, bob_conf.rpc_password, None).unwrap();
+    let (_bob_dump_log, _bob_dump_dashboard) = mm_dump(&mm_bob_dup.log_path);
+    log!("Bob dup log path: {}", mm_bob_dup.log_path.display());
+
+    alice_conf.conf["dbdir"] = mm_alice.folder.join("DB").to_str().unwrap().into();
+    alice_conf.conf["log"] = mm_alice.folder.join("mm2_dup.log").to_str().unwrap().into();
+    alice_conf.conf["seednodes"] = vec![mm_bob.ip.to_string()].into();
+
+    let mut mm_alice_dup = MarketMakerIt::start(alice_conf.conf, alice_conf.rpc_password, None).unwrap();
+    let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice_dup.log_path);
+    log!("Alice dup log path: {}", mm_alice_dup.log_path.display());
+
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_dup, "MYCOIN", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_dup, "MYCOIN1", &[], None)));
+
+    for uuid in uuids {
+        let expected_log = format!("Swap {} file lock already acquired", uuid);
+        block_on(mm_bob_dup.wait_for_log(22., |log| log.contains(&expected_log))).unwrap();
+        block_on(mm_alice_dup.wait_for_log(22., |log| log.contains(&expected_log))).unwrap();
+    }
+}

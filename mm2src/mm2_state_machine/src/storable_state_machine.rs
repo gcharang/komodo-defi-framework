@@ -123,6 +123,8 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
     type Result: Send;
     /// The error type of the state machine
     type Error: From<<Self::Storage as StateMachineStorage>::Error> + Send;
+    /// The reentrancy lock type of the state machine
+    type ReentrancyLock: Send;
     /// The additional context required to recreate state machine.
     type RecreateCtx: Send;
     /// Type representing the error, which can happen during state machine's re-creation
@@ -183,11 +185,19 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
         self.storage().mark_finished(id).await
     }
 
+    /// Attempts to acquire reentrancy lock for a state machine
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing reentrancy lock guard success (`Ok(Self::ReentrancyLock)`) or an error (`Err(Self::Error)`).
+    async fn acquire_reentrancy_lock(&self) -> Result<Self::ReentrancyLock, Self::Error>;
+
+    /// Spawns the thread or future renewing the reentrancy lock.
+    /// Graceful shutdown of this activity is responsibility of an actual implementation.
+    fn spawn_reentrancy_lock_renew(&mut self, guard: Self::ReentrancyLock);
+
     /// Initializes additional context actions (spawn futures, etc.)
     fn init_additional_context(&mut self);
-
-    /// Performs additional startup checks
-    async fn startup_checks(&mut self) -> Result<(), Self::Error>;
 }
 
 // Ensure that StandardStateMachine won't be occasionally implemented for StorableStateMachine.
@@ -203,19 +213,18 @@ impl<T: StorableStateMachine> StateMachineTrait for T {
     type Error = T::Error;
 
     async fn on_start(&mut self) -> Result<(), Self::Error> {
-        self.startup_checks().await?;
+        let reentrancy_lock = self.acquire_reentrancy_lock().await?;
         let id = self.id();
         if !self.storage().has_record_for(&id).await? {
             let repr = self.to_db_repr();
             self.storage().store_repr(id, repr).await?;
         }
+        self.spawn_reentrancy_lock_renew(reentrancy_lock);
         self.init_additional_context();
         Ok(())
     }
 
-    async fn on_finished(&mut self) -> Result<(), T::Error> {
-        Ok(self.mark_finished().await?)
-    }
+    async fn on_finished(&mut self) -> Result<(), T::Error> { Ok(self.mark_finished().await?) }
 }
 
 /// A trait for storable states.
@@ -407,6 +416,7 @@ mod tests {
         type Storage = StorageTest;
         type Result = ();
         type Error = Infallible;
+        type ReentrancyLock = ();
         type RecreateCtx = ();
         type RecreateError = Infallible;
 
@@ -432,11 +442,11 @@ mod tests {
             Ok(RestoredMachine { machine, current_state })
         }
 
-        fn init_additional_context(&mut self) {}
+        async fn acquire_reentrancy_lock(&self) -> Result<Self::ReentrancyLock, Self::Error> { Ok(()) }
 
-        async fn startup_checks(&mut self) -> Result<(), Self::Error> {
-            Ok(())
-        }
+        fn spawn_reentrancy_lock_renew(&mut self, _guard: Self::ReentrancyLock) {}
+
+        fn init_additional_context(&mut self) {}
     }
 
     struct State1 {}

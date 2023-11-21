@@ -1,5 +1,6 @@
 use super::swap_v2_common::*;
 use super::{NEGOTIATE_SEND_INTERVAL, NEGOTIATION_TIMEOUT_SEC};
+use crate::mm2::lp_swap::swap_lock::SwapLock;
 use crate::mm2::lp_swap::swap_v2_pb::*;
 use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_taker_swap, recv_swap_v2_msg, swap_v2_topic,
                           SecretHashAlgo, SwapConfirmationsSettings, TransactionIdentifier, MAX_STARTED_AT_DIFF,
@@ -9,6 +10,8 @@ use bitcrypto::{dhash160, sha256};
 use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFundingSpendArgs, GenTakerPaymentSpendArgs,
             MmCoin, SendTakerFundingArgs, SpendPaymentArgs, SwapOpsV2, ToBytes, Transaction, TxPreimageWithSig,
             ValidatePaymentInput, WaitForHTLCTxSpendArgs};
+use common::executor::abortable_queue::AbortableQueue;
+use common::executor::AbortableSystem;
 use common::log::{debug, info, warn};
 use common::{Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::privkey::SerializableSecp256k1Keypair;
@@ -38,7 +41,6 @@ cfg_wasm32!(
 
 // This is needed to have Debug on messages
 #[allow(unused_imports)] use prost::Message;
-use crate::mm2::lp_swap::swap_lock::{SwapLock, SwapLockOps};
 
 /// Negotiation data representation to be stored in DB.
 #[derive(Debug, Deserialize, Serialize)]
@@ -178,7 +180,8 @@ impl StateMachineStorage for TakerSwapStorage {
             };
             insert_new_swap_v2(&ctx, sql_params)?;
             Ok(())
-        }).await
+        })
+        .await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -213,11 +216,14 @@ impl StateMachineStorage for TakerSwapStorage {
         let ctx = self.ctx.clone();
         let id_str = id.to_string();
 
-        async_blocking(move || Ok(ctx.sqlite_connection().query_row(
-            SELECT_MY_SWAP_V2_BY_UUID,
-            &[(":uuid", &id_str)],
-            TakerSwapDbRepr::from_sql_row,
-        )?)).await
+        async_blocking(move || {
+            Ok(ctx.sqlite_connection().query_row(
+                SELECT_MY_SWAP_V2_BY_UUID,
+                &[(":uuid", &id_str)],
+                TakerSwapDbRepr::from_sql_row,
+            )?)
+        })
+        .await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -363,6 +369,8 @@ pub struct TakerSwapStateMachine<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: 
     pub p2p_keypair: Option<KeyPair>,
     /// The secret used for immediate taker funding tx reclaim if maker back-outs
     pub taker_secret: H256,
+    /// Abortable queue used to spawn related activities
+    pub abortable_system: AbortableQueue,
 }
 
 impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> TakerSwapStateMachine<MakerCoin, TakerCoin> {
@@ -390,6 +398,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
     type Storage = TakerSwapStorage;
     type Result = ();
     type Error = MmError<SwapStateMachineError>;
+    type ReentrancyLock = SwapLock;
     type RecreateCtx = SwapRecreateCtx<MakerCoin, TakerCoin>;
     type RecreateError = MmError<SwapRecreateError>;
 
@@ -622,6 +631,11 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
 
         let machine = TakerSwapStateMachine {
             ctx: storage.ctx.clone(),
+            abortable_system: storage
+                .ctx
+                .abortable_system
+                .create_subsystem()
+                .expect("create_subsystem should not fail"),
             storage,
             started_at: repr.started_at,
             lock_duration: repr.lock_duration,
@@ -641,16 +655,15 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
         Ok(RestoredMachine { machine, current_state })
     }
 
-    fn init_additional_context(&mut self) {
-        init_additional_swaps_context(&self.ctx, self.p2p_topic.clone(), self.uuid)
+    async fn acquire_reentrancy_lock(&self) -> Result<Self::ReentrancyLock, Self::Error> {
+        acquire_reentrancy_lock_impl(&self.ctx, self.uuid).await
     }
 
-    async fn startup_checks(&mut self) -> Result<(), Self::Error> {
-        match SwapLock::lock(&self.ctx, self.uuid, 40.).await? {
-            Some(_) => Ok(()),
-            None => unimplemented!(),
-        }
+    fn spawn_reentrancy_lock_renew(&mut self, guard: Self::ReentrancyLock) {
+        spawn_reentrancy_lock_renew_impl(&self.abortable_system, self.uuid, guard)
     }
+
+    fn init_additional_context(&mut self) { init_additional_context_impl(&self.ctx, self.p2p_topic.clone(), self.uuid) }
 }
 
 /// Represents a state used to start a new taker swap.

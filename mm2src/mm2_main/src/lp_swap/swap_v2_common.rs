@@ -1,6 +1,10 @@
 use crate::mm2::lp_network::subscribe_to_topic;
+use crate::mm2::lp_swap::swap_lock::{SwapLock, SwapLockError, SwapLockOps};
 use crate::mm2::lp_swap::SwapsContext;
 use common::bits256;
+use common::executor::abortable_queue::AbortableQueue;
+use common::executor::{SpawnFuture, Timer};
+use common::log::warn;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
@@ -9,7 +13,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Error;
 use uuid::Uuid;
-use crate::mm2::lp_swap::swap_lock::SwapLockError;
 
 cfg_native!(
     use common::async_blocking;
@@ -48,15 +51,14 @@ pub enum SwapRecreateError {
 pub enum SwapStateMachineError {
     StorageError(String),
     SerdeError(String),
+    SwapLockAlreadyAcquired,
     SwapLock(SwapLockError),
     #[cfg(target_arch = "wasm32")]
     NoSwapWithUuid(Uuid),
 }
 
 impl From<SwapLockError> for SwapStateMachineError {
-    fn from(e: SwapLockError) -> Self {
-        SwapStateMachineError::SwapLock(e)
-    }
+    fn from(e: SwapLockError) -> Self { SwapStateMachineError::SwapLock(e) }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -214,8 +216,39 @@ pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), Swa
     Ok(())
 }
 
-pub(super) fn init_additional_swaps_context(ctx: &MmArc, p2p_topic: String, uuid: Uuid) {
+pub(super) fn init_additional_context_impl(ctx: &MmArc, p2p_topic: String, uuid: Uuid) {
     subscribe_to_topic(ctx, p2p_topic);
     let swap_ctx = SwapsContext::from_ctx(ctx).expect("SwapsContext::from_ctx should not fail");
     swap_ctx.init_msg_v2_store(uuid, bits256::default());
+}
+
+pub(super) async fn acquire_reentrancy_lock_impl(ctx: &MmArc, uuid: Uuid) -> MmResult<SwapLock, SwapStateMachineError> {
+    let mut attempts = 0;
+    loop {
+        match SwapLock::lock(ctx, uuid, 40.).await? {
+            Some(l) => break Ok(l),
+            None => {
+                if attempts >= 1 {
+                    break MmError::err(SwapStateMachineError::SwapLockAlreadyAcquired);
+                } else {
+                    warn!("Swap {} file lock already acquired, retrying in 40 seconds", uuid);
+                    attempts += 1;
+                    Timer::sleep(40.).await;
+                }
+            },
+        }
+    }
+}
+
+pub(super) fn spawn_reentrancy_lock_renew_impl(abortable_system: &AbortableQueue, uuid: Uuid, guard: SwapLock) {
+    let fut = async move {
+        loop {
+            match guard.touch().await {
+                Ok(_) => (),
+                Err(e) => warn!("Swap {} file lock error: {}", uuid, e),
+            };
+            Timer::sleep(30.).await;
+        }
+    };
+    abortable_system.weak_spawner().spawn(fut);
 }
