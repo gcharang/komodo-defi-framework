@@ -98,6 +98,7 @@ cfg_native!(
 
 cfg_wasm32!(
     use crate::z_coin::z_params::{download_parameters, ZcashParamsWasmImpl};
+    use common::executor::AbortOnDropHandle;
     use futures::channel::oneshot;
     use rand::rngs::OsRng;
     use zcash_primitives::transaction::builder::TransactionMetadata;
@@ -499,7 +500,8 @@ impl ZCoin {
         #[cfg(target_arch = "wasm32")]
         let (tx, _) =
             TxBuilderSpawner::request_tx_result(tx_builder, BranchId::Sapling, self.z_fields.z_tx_prover.clone())
-                .await?;
+                .await?
+                .tx_result?;
 
         let additional_data = AdditionalTxData {
             received_by_me,
@@ -765,7 +767,14 @@ impl AsRef<UtxoCoinFields> for ZCoin {
 }
 
 #[cfg(target_arch = "wasm32")]
-struct TxBuilderSpawner;
+type TxResult = MmResult<(zcash_primitives::transaction::Transaction, TransactionMetadata), GenTxError>;
+
+#[cfg(target_arch = "wasm32")]
+/// Spawns an asynchronous task to build a transaction and sends the result through a oneshot channel.
+struct TxBuilderSpawner {
+    pub tx_result: TxResult,
+    _abort_handle: AbortOnDropHandle,
+}
 
 #[cfg(target_arch = "wasm32")]
 impl TxBuilderSpawner {
@@ -773,30 +782,37 @@ impl TxBuilderSpawner {
         builder: ZTxBuilder<'static, ZcoinConsensusParams, OsRng>,
         branch_id: BranchId,
         prover: Arc<LocalTxProver>,
-        sender: oneshot::Sender<
-            MmResult<(zcash_primitives::transaction::Transaction, TransactionMetadata), GenTxError>,
-        >,
-    ) {
+        sender: oneshot::Sender<TxResult>,
+    ) -> AbortOnDropHandle {
         let fut = async move {
-            let build = builder
-                .build(branch_id, prover.as_ref())
-                .map_to_mm(GenTxError::TxBuilderError);
-            sender.send(build).ok();
+            sender
+                .send(
+                    builder
+                        .build(branch_id, prover.as_ref())
+                        .map_to_mm(GenTxError::TxBuilderError),
+                )
+                .ok();
         };
 
-        common::executor::spawn_local(fut)
+        common::executor::spawn_local_abortable(fut)
     }
 
+    /// Requests a transaction asynchronously using the provided builder, branch ID, and prover.
     async fn request_tx_result(
         builder: ZTxBuilder<'static, ZcoinConsensusParams, OsRng>,
         branch_id: BranchId,
         prover: Arc<LocalTxProver>,
-    ) -> MmResult<(zcash_primitives::transaction::Transaction, TransactionMetadata), GenTxError> {
+    ) -> MmResult<Self, GenTxError> {
+        // Create a oneshot channel for communication between the spawned task and this function
         let (tx, rx) = oneshot::channel();
-        Self::spawn_build_tx(builder, branch_id, prover, tx);
+        let abort_handle = Self::spawn_build_tx(builder, branch_id, prover, tx);
 
-        rx.await
-            .map_to_mm(|_| GenTxError::Internal("Spawned future has been canceled".to_owned()))?
+        Ok(Self {
+            tx_result: rx
+                .await
+                .map_to_mm(|_| GenTxError::Internal("Spawned future has been canceled".to_owned()))?,
+            _abort_handle: abort_handle,
+        })
     }
 }
 
