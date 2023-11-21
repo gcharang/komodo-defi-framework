@@ -97,7 +97,7 @@ cfg_native!(
 );
 
 cfg_wasm32!(
-    use crate::z_coin::z_params::{download_parameters, ZcashParamsWasmImpl};
+    use crate::z_coin::z_params::ZcashParamsWasmImpl;
     use common::executor::AbortOnDropHandle;
     use futures::channel::oneshot;
     use rand::rngs::OsRng;
@@ -1102,13 +1102,9 @@ impl<'a> ZCoinBuilder<'a> {
             .await
             .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?
         {
-            // download params
-            let (sapling_spend, sapling_output) = download_parameters()
-                .await
-                .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
             // save params
-            params_db
-                .save_params(&sapling_spend, &sapling_output)
+            let (sapling_spend, sapling_output) = params_db
+                .download_and_save_params()
                 .await
                 .mm_err(|err| ZCoinBuildError::ZCashParamsError(err.to_string()))?;
             Ok(LocalTxProver::from_bytes(&sapling_spend[..], &sapling_output[..]))

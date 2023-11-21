@@ -76,22 +76,23 @@ impl ZcashParamsWasmImpl {
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
     }
 
-    pub async fn save_params(&self, sapling_spend: &[u8], sapling_output: &[u8]) -> MmResult<(), ZcoinStorageError> {
+    pub async fn save_params(
+        &self,
+        sapling_spend_id: u8,
+        sapling_spend: &[u8],
+        sapling_output: &[u8],
+    ) -> MmResult<(), ZcoinStorageError> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
+        let params = ZcashParamsWasmTable {
+            sapling_spend_id,
+            sapling_spend: sapling_spend.to_vec(),
+            sapling_output: sapling_output.to_vec(),
+            ticker: "z_params".to_string(),
+        };
 
-        let sapling_spend_chunks = sapling_spend_to_chunks(sapling_spend);
-        for (i, item) in sapling_spend_chunks.iter().enumerate() {
-            let sapling_output = if i > 0 { vec![] } else { sapling_output.to_vec() };
-            let params = ZcashParamsWasmTable {
-                sapling_spend_id: i as u8,
-                sapling_spend: item.clone(),
-                sapling_output,
-                ticker: "z_params".to_string(),
-            };
-            params_db.add_item(&params).await?;
-        }
+        params_db.add_item(&params).await?;
 
         Ok(())
     }
@@ -134,9 +135,23 @@ impl ZcashParamsWasmImpl {
 
         Ok((sapling_spend, sapling_output.clone()))
     }
+
+    pub async fn download_and_save_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
+        let (sapling_spend, sapling_output) = super::download_parameters().await.unwrap();
+        let spends = sapling_spend_to_chunks(&sapling_spend);
+        for (i, spend) in spends.into_iter().enumerate() {
+            if i == 0 {
+                self.save_params(i as u8, &spend, &sapling_output).await?
+            } else {
+                self.save_params(i as u8, &spend, &[]).await?
+            }
+        }
+
+        Ok((sapling_spend, sapling_output))
+    }
 }
 
-fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
+pub fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
     // Set the target chunk size
     let target_chunk_size = 12;
     // Calculate the target size for each chunk

@@ -1,10 +1,14 @@
 mod indexeddb;
+pub use indexeddb::{sapling_spend_to_chunks, ZcashParamsWasmImpl};
 
 use blake2b_simd::State;
 use common::log::info;
-pub use indexeddb::ZcashParamsWasmImpl;
+use common::log::wasm_log::register_wasm_log;
+use mm2_err_handle::prelude::MmResult;
 use mm2_err_handle::prelude::*;
 use mm2_net::wasm::http::FetchRequest;
+use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
+use wasm_bindgen_test::*;
 
 const DOWNLOAD_URL: &str = "https://komodoplatform.com/downloads";
 const SAPLING_SPEND_NAME: &str = "sapling-spend.params";
@@ -42,17 +46,12 @@ async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, Zcas
     Ok(file)
 }
 
-pub async fn download_parameters() -> MmResult<(Vec<u8>, Vec<u8>), ZcashParamsBytesError> {
+pub(crate) async fn download_parameters() -> MmResult<(Vec<u8>, Vec<u8>), ZcashParamsBytesError> {
     Ok((
         fetch_params(SAPLING_SPEND_NAME, SAPLING_SPEND_HASH).await?,
         fetch_params(SAPLING_OUTPUT_NAME, SAPLING_OUTPUT_HASH).await?,
     ))
 }
-
-use common::log::wasm_log::register_wasm_log;
-use mm2_err_handle::prelude::MmResult;
-use mm2_test_helpers::for_tests::mm_ctx_with_custom_db;
-use wasm_bindgen_test::*;
 
 #[wasm_bindgen_test]
 async fn test_download_save_and_get_params() {
@@ -60,10 +59,8 @@ async fn test_download_save_and_get_params() {
     info!("Testing download, save and get params");
     let ctx = mm_ctx_with_custom_db();
     let db = ZcashParamsWasmImpl::new(ctx).await.unwrap();
-    // download params
-    let (sapling_spend, sapling_output) = download_parameters().await.unwrap();
     // save params
-    db.save_params(&sapling_spend, &sapling_output).await.unwrap();
+    let (sapling_spend, sapling_output) = db.download_and_save_params().await.unwrap();
     // get params
     let (sapling_spend_db, sapling_output_db) = db.get_params().await.unwrap();
     assert_eq!(sapling_spend, sapling_spend_db);
