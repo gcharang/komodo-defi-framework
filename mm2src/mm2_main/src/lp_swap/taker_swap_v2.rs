@@ -335,6 +335,12 @@ impl StateMachineDbRepr for TakerSwapDbRepr {
     fn add_event(&mut self, event: Self::Event) { self.events.push(event) }
 }
 
+impl GetSwapCoins for TakerSwapDbRepr {
+    fn maker_coin(&self) -> &str { &self.maker_coin }
+
+    fn taker_coin(&self) -> &str { &self.taker_coin }
+}
+
 /// Represents the state machine for taker's side of the Trading Protocol Upgrade swap (v2).
 pub struct TakerSwapStateMachine<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> {
     /// MM2 context.

@@ -262,6 +262,12 @@ impl StateMachineDbRepr for MakerSwapDbRepr {
     fn add_event(&mut self, event: Self::Event) { self.events.push(event) }
 }
 
+impl GetSwapCoins for MakerSwapDbRepr {
+    fn maker_coin(&self) -> &str { &self.maker_coin }
+
+    fn taker_coin(&self) -> &str { &self.taker_coin }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 impl MakerSwapDbRepr {
     fn from_sql_row(row: &Row) -> SqlResult<Self> {

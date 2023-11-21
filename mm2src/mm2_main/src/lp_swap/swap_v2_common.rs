@@ -1,13 +1,17 @@
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_lock::{SwapLock, SwapLockError, SwapLockOps};
 use crate::mm2::lp_swap::SwapsContext;
+use coins::utxo::utxo_standard::UtxoStandardCoin;
+use coins::{lp_coinfind, MmCoinEnum};
 use common::bits256;
 use common::executor::abortable_queue::AbortableQueue;
 use common::executor::{SpawnFuture, Timer};
-use common::log::warn;
+use common::log::{error, info, warn};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use mm2_state_machine::storable_state_machine::StateMachineDbRepr;
+use mm2_state_machine::prelude::*;
+use mm2_state_machine::storable_state_machine::{RestoredMachine, StateMachineDbRepr, StateMachineStorage,
+                                                StorableStateMachine};
 use rpc::v1::types::Bytes as BytesJson;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -251,4 +255,89 @@ pub(super) fn spawn_reentrancy_lock_renew_impl(abortable_system: &AbortableQueue
         }
     };
     abortable_system.weak_spawner().spawn(fut);
+}
+
+pub(super) trait GetSwapCoins {
+    fn maker_coin(&self) -> &str;
+
+    fn taker_coin(&self) -> &str;
+}
+
+/// Generic function for upgraded swaps kickstart handling.
+/// It is implemented only for UtxoStandardCoin/UtxoStandardCoin case temporary.
+pub(super) async fn swap_kickstart_handler<
+    T: StorableStateMachine<RecreateCtx = SwapRecreateCtx<UtxoStandardCoin, UtxoStandardCoin>>,
+>(
+    ctx: MmArc,
+    swap_repr: <T::Storage as StateMachineStorage>::DbRepr,
+    storage: T::Storage,
+    uuid: <T::Storage as StateMachineStorage>::MachineId,
+) where
+    <T::Storage as StateMachineStorage>::MachineId: Copy + std::fmt::Display,
+    <T::Storage as StateMachineStorage>::DbRepr: GetSwapCoins,
+    T::Error: std::fmt::Display,
+    T::RecreateError: std::fmt::Display,
+{
+    let taker_coin_ticker = swap_repr.taker_coin();
+
+    let taker_coin = loop {
+        match lp_coinfind(&ctx, taker_coin_ticker).await {
+            Ok(Some(c)) => break c,
+            Ok(None) => {
+                info!(
+                    "Can't kickstart the swap {} until the coin {} is activated",
+                    uuid, taker_coin_ticker,
+                );
+                Timer::sleep(5.).await;
+            },
+            Err(e) => {
+                error!("Error {} on {} find attempt", e, taker_coin_ticker);
+                return;
+            },
+        };
+    };
+
+    let maker_coin_ticker = swap_repr.maker_coin();
+
+    let maker_coin = loop {
+        match lp_coinfind(&ctx, maker_coin_ticker).await {
+            Ok(Some(c)) => break c,
+            Ok(None) => {
+                info!(
+                    "Can't kickstart the swap {} until the coin {} is activated",
+                    uuid, maker_coin_ticker,
+                );
+                Timer::sleep(5.).await;
+            },
+            Err(e) => {
+                error!("Error {} on {} find attempt", e, maker_coin_ticker);
+                return;
+            },
+        };
+    };
+
+    let (maker_coin, taker_coin) = match (maker_coin, taker_coin) {
+        (MmCoinEnum::UtxoCoin(m), MmCoinEnum::UtxoCoin(t)) => (m, t),
+        _ => {
+            error!(
+                "V2 swaps are not currently supported for {}/{} pair",
+                maker_coin_ticker, taker_coin_ticker
+            );
+            return;
+        },
+    };
+
+    let recreate_context = SwapRecreateCtx { maker_coin, taker_coin };
+
+    let (mut state_machine, state) = match T::recreate_machine(uuid, storage, swap_repr, recreate_context).await {
+        Ok(RestoredMachine { machine, current_state }) => (machine, current_state),
+        Err(e) => {
+            error!("Error {} on trying to recreate the swap {}", e, uuid);
+            return;
+        },
+    };
+
+    if let Err(e) = state_machine.run(state).await {
+        error!("Error {} on trying to run the swap {}", e, uuid);
+    }
 }

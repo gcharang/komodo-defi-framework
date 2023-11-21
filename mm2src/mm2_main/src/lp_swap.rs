@@ -59,8 +59,8 @@
 
 use super::lp_network::P2PRequestResult;
 use crate::mm2::lp_network::{broadcast_p2p_msg, Libp2pPeerId, P2PProcessError, P2PProcessResult, P2PRequestError};
-use crate::mm2::lp_swap::maker_swap_v2::{MakerSwapDbRepr, MakerSwapStateMachine, MakerSwapStorage};
-use crate::mm2::lp_swap::taker_swap_v2::{TakerSwapDbRepr, TakerSwapStateMachine, TakerSwapStorage};
+use crate::mm2::lp_swap::maker_swap_v2::{MakerSwapStateMachine, MakerSwapStorage};
+use crate::mm2::lp_swap::taker_swap_v2::{TakerSwapStateMachine, TakerSwapStorage};
 use bitcrypto::{dhash160, sha256};
 use coins::{lp_coinfind, lp_coinfind_or_err, CoinFindError, MmCoin, MmCoinEnum, TradeFee, TransactionEnum};
 use common::log::{debug, warn};
@@ -76,8 +76,7 @@ use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_err_handle::prelude::*;
 use mm2_libp2p::{decode_signed, encode_and_sign, pub_sub_topic, PeerId, TopicPrefix};
 use mm2_number::{BigDecimal, BigRational, MmNumber, MmNumberMultiRepr};
-use mm2_state_machine::prelude::StateMachineTrait;
-use mm2_state_machine::storable_state_machine::{RestoredMachine, StateMachineStorage, StorableStateMachine};
+use mm2_state_machine::storable_state_machine::StateMachineStorage;
 use parking_lot::Mutex as PaMutex;
 use rpc::v1::types::{Bytes as BytesJson, H256 as H256Json};
 use secp256k1::{PublicKey, SecretKey, Signature};
@@ -120,6 +119,7 @@ pub(crate) mod taker_restart;
 mod swap_wasm_db;
 
 pub use check_balance::{check_other_coin_balance_for_swap, CheckBalanceError, CheckBalanceResult};
+use coins::utxo::utxo_standard::UtxoStandardCoin;
 use crypto::CryptoCtx;
 use keys::{KeyPair, SECP_SIGN, SECP_VERIFY};
 use maker_swap::MakerSwapEvent;
@@ -1027,7 +1027,7 @@ async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> SqlResult<u8> {
     Ok(swap_type)
 }
 
-use crate::mm2::lp_swap::swap_v2_common::SwapRecreateCtx;
+use crate::mm2::lp_swap::swap_v2_common::swap_kickstart_handler;
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::DbTransactionError;
 #[cfg(target_arch = "wasm32")]
@@ -1459,7 +1459,12 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
         debug!("Trying to kickstart maker swap {}", maker_uuid);
         let maker_swap_repr = try_s!(maker_swap_storage.get_repr(maker_uuid).await);
         debug!("Got maker swap repr {:?}", maker_swap_repr);
-        let fut = maker_kickstart_thread_handler_v2(ctx.clone(), maker_swap_repr, maker_swap_storage.clone());
+        let fut = swap_kickstart_handler::<MakerSwapStateMachine<UtxoStandardCoin, UtxoStandardCoin>>(
+            ctx.clone(),
+            maker_swap_repr,
+            maker_swap_storage.clone(),
+            maker_uuid,
+        );
         ctx.spawner().spawn(fut);
     }
 
@@ -1469,7 +1474,12 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
         debug!("Trying to kickstart taker swap {}", taker_uuid);
         let taker_swap_repr = try_s!(taker_swap_storage.get_repr(taker_uuid).await);
         debug!("Got taker swap repr {:?}", taker_swap_repr);
-        let fut = taker_kickstart_thread_handler_v2(ctx.clone(), taker_swap_repr, taker_swap_storage.clone());
+        let fut = swap_kickstart_handler::<TakerSwapStateMachine<UtxoStandardCoin, UtxoStandardCoin>>(
+            ctx.clone(),
+            taker_swap_repr,
+            taker_swap_storage.clone(),
+            taker_uuid,
+        );
         ctx.spawner().spawn(fut);
     }
     Ok(coins)
@@ -1534,132 +1544,6 @@ async fn kickstart_thread_handler(ctx: MmArc, swap: SavedSwap, maker_coin_ticker
             )
             .await;
         },
-    }
-}
-
-async fn maker_kickstart_thread_handler_v2(ctx: MmArc, swap: MakerSwapDbRepr, storage: MakerSwapStorage) {
-    let taker_coin = loop {
-        match lp_coinfind(&ctx, &swap.taker_coin).await {
-            Ok(Some(c)) => break c,
-            Ok(None) => {
-                info!(
-                    "Can't kickstart the swap {} until the coin {} is activated",
-                    swap.uuid, swap.taker_coin,
-                );
-                Timer::sleep(5.).await;
-            },
-            Err(e) => {
-                error!("Error {} on {} find attempt", e, swap.taker_coin);
-                return;
-            },
-        };
-    };
-
-    let maker_coin = loop {
-        match lp_coinfind(&ctx, &swap.maker_coin).await {
-            Ok(Some(c)) => break c,
-            Ok(None) => {
-                info!(
-                    "Can't kickstart the swap {} until the coin {} is activated",
-                    swap.uuid, swap.maker_coin
-                );
-                Timer::sleep(5.).await;
-            },
-            Err(e) => {
-                error!("Error {} on {} find attempt", e, swap.maker_coin);
-                return;
-            },
-        };
-    };
-
-    let (maker_coin, taker_coin) = match (maker_coin, taker_coin) {
-        (MmCoinEnum::UtxoCoin(m), MmCoinEnum::UtxoCoin(t)) => (m, t),
-        _ => {
-            error!(
-                "V2 swaps are not currently supported for {}/{} pair",
-                swap.maker_coin, swap.taker_coin
-            );
-            return;
-        },
-    };
-
-    let recreate_context = SwapRecreateCtx { maker_coin, taker_coin };
-
-    let uuid = swap.uuid;
-    let (mut state_machine, state) =
-        match MakerSwapStateMachine::recreate_machine(swap.uuid, storage, swap, recreate_context).await {
-            Ok(RestoredMachine { machine, current_state }) => (machine, current_state),
-            Err(e) => {
-                error!("Error {} on trying to recreate the swap {}", e, uuid);
-                return;
-            },
-        };
-
-    if let Err(e) = state_machine.run(state).await {
-        error!("Error {} on trying to run the swap {}", e, state_machine.uuid);
-    }
-}
-
-async fn taker_kickstart_thread_handler_v2(ctx: MmArc, swap: TakerSwapDbRepr, storage: TakerSwapStorage) {
-    let taker_coin = loop {
-        match lp_coinfind(&ctx, &swap.taker_coin).await {
-            Ok(Some(c)) => break c,
-            Ok(None) => {
-                info!(
-                    "Can't kickstart the swap {} until the coin {} is activated",
-                    swap.uuid, swap.taker_coin,
-                );
-                Timer::sleep(5.).await;
-            },
-            Err(e) => {
-                error!("Error {} on {} find attempt", e, swap.taker_coin);
-                return;
-            },
-        };
-    };
-
-    let maker_coin = loop {
-        match lp_coinfind(&ctx, &swap.maker_coin).await {
-            Ok(Some(c)) => break c,
-            Ok(None) => {
-                info!(
-                    "Can't kickstart the swap {} until the coin {} is activated",
-                    swap.uuid, swap.maker_coin
-                );
-                Timer::sleep(5.).await;
-            },
-            Err(e) => {
-                error!("Error {} on {} find attempt", e, swap.maker_coin);
-                return;
-            },
-        };
-    };
-
-    let (maker_coin, taker_coin) = match (maker_coin, taker_coin) {
-        (MmCoinEnum::UtxoCoin(m), MmCoinEnum::UtxoCoin(t)) => (m, t),
-        _ => {
-            error!(
-                "V2 swaps are not currently supported for {}/{} pair",
-                swap.maker_coin, swap.taker_coin
-            );
-            return;
-        },
-    };
-
-    let recreate_context = SwapRecreateCtx { maker_coin, taker_coin };
-
-    let uuid = swap.uuid;
-    let (mut state_machine, state) =
-        match TakerSwapStateMachine::recreate_machine(swap.uuid, storage, swap, recreate_context).await {
-            Ok(RestoredMachine { machine, current_state }) => (machine, current_state),
-            Err(e) => {
-                error!("Error {} on trying to recreate the swap {}", e, uuid);
-                return;
-            },
-        };
-
-    if let Err(e) = state_machine.run(state).await {
-        error!("Error {} on trying to run the swap {}", e, state_machine.uuid);
     }
 }
 
