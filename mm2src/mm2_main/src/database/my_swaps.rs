@@ -248,8 +248,8 @@ pub fn update_swap_events(conn: &Connection, uuid: &str, events_json: &str) -> S
         .map(|_| ())
 }
 
+const UPDATE_SWAP_IS_FINISHED_BY_UUID: &str = "UPDATE my_swaps SET is_finished = 1 WHERE uuid = :uuid;";
 pub fn set_swap_is_finished(conn: &Connection, uuid: &str) -> SqlResult<()> {
-    const UPDATE_SWAP_IS_FINISHED_BY_UUID: &str = "UPDATE my_swaps SET is_finished = 1 WHERE uuid = :uuid;";
     let mut stmt = conn.prepare(UPDATE_SWAP_IS_FINISHED_BY_UUID)?;
     stmt.execute(&[(":uuid", uuid)]).map(|_| ())
 }
@@ -310,3 +310,18 @@ pub const SELECT_MY_SWAP_V2_BY_UUID: &str = r#"SELECT
 FROM my_swaps
 WHERE uuid = :uuid;
 "#;
+
+/// Returns SQL statements to set is_finished to 1 for completed legacy swaps
+pub async fn set_is_finished_for_legacy_swaps_statements(ctx: &MmArc) -> Vec<(&'static str, Vec<String>)> {
+    let swaps = SavedSwap::load_all_my_swaps_from_db(ctx).await.unwrap_or_default();
+    swaps
+        .into_iter()
+        .filter_map(|swap| {
+            if swap.is_finished() {
+                Some((UPDATE_SWAP_IS_FINISHED_BY_UUID, vec![swap.uuid().to_string()]))
+            } else {
+                None
+            }
+        })
+        .collect()
+}

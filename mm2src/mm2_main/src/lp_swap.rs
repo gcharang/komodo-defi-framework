@@ -1027,7 +1027,7 @@ async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> SqlResult<u8> {
     Ok(swap_type)
 }
 
-use crate::mm2::lp_swap::swap_v2_common::swap_kickstart_handler;
+use crate::mm2::lp_swap::swap_v2_common::{get_unfinished_swaps_uuids, swap_kickstart_handler};
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::DbTransactionError;
 #[cfg(target_arch = "wasm32")]
@@ -1424,13 +1424,19 @@ pub async fn my_recent_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
 /// Return the tickers of coins that must be enabled for swaps to continue
 pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
     let mut coins = HashSet::new();
-    let swaps = try_s!(SavedSwap::load_all_my_swaps_from_db(&ctx).await);
-    for swap in swaps {
-        if swap.is_finished() {
-            info!("{} {}", SWAP_FINISHED_LOG, swap.uuid());
-            continue;
-        }
-
+    let legacy_unfinished_uuids = try_s!(get_unfinished_swaps_uuids(ctx.clone(), LEGACY_SWAP_TYPE).await);
+    for uuid in legacy_unfinished_uuids {
+        let swap = match SavedSwap::load_my_swap_from_db(&ctx, uuid).await {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                warn!("Swap {} is indexed, but doesn't exist in DB", uuid);
+                continue;
+            },
+            Err(e) => {
+                error!("Error {} on getting swap {} data from DB", e, uuid);
+                continue;
+            },
+        };
         info!("Kick starting the swap {}", swap.uuid());
         let maker_coin_ticker = match swap.maker_coin_ticker() {
             Ok(t) => t,
