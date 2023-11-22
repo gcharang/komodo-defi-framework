@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 pub use mm2_db::indexed_db::{cursor_prelude, DbTransactionError, DbTransactionResult, InitDbError, InitDbResult,
                              ItemId};
-pub use tables::{MySwapsFiltersTable, SavedSwapTable, SwapLockTable};
+pub use tables::{MySwapsFiltersTable, SavedSwapTable, SwapLockTable, SwapsMigrationTable};
 
 const DB_NAME: &str = "swap";
 const DB_VERSION: u32 = 2;
@@ -27,6 +27,7 @@ impl DbInstance for SwapDb {
             .with_table::<SwapLockTable>()
             .with_table::<SavedSwapTable>()
             .with_table::<MySwapsFiltersTable>()
+            .with_table::<SwapsMigrationTable>()
             .build()
             .await?;
         Ok(SwapDb { inner })
@@ -153,5 +154,18 @@ pub mod tables {
             old_version += 1;
         }
         Ok(())
+    }
+
+    #[derive(Deserialize, Serialize)]
+    pub struct SwapsMigrationTable {
+        current_migration: u32,
+    }
+
+    impl TableSignature for SwapsMigrationTable {
+        fn table_name() -> &'static str { "swaps_migration" }
+
+        fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+            todo!()
+        }
     }
 }
