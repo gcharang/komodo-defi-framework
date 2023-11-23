@@ -345,6 +345,8 @@ pub trait UtxoRpcClientOps: fmt::Debug + Send + Sync + 'static {
     /// Submits the raw `tx` transaction (serialized, hex-encoded) to blockchain network.
     fn send_raw_transaction(&self, tx: BytesJson) -> UtxoRpcFut<H256Json>;
 
+    fn blockchain_scripthash_subscribe(&self, scripthash: String) -> UtxoRpcFut<Json>;
+
     /// Returns raw transaction (serialized, hex-encoded) by the given `txid`.
     fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson>;
 
@@ -701,12 +703,12 @@ impl JsonRpcClient for NativeClientImpl {
             .body(Vec::from(request_body))
             .map_err(|e| JsonRpcErrorType::InvalidRequest(e.to_string())));
 
-        let event_handles = self.event_handlers.clone();
+        let event_handlers = self.event_handlers.clone();
         Box::new(slurp_req(http_request).boxed().compat().then(
             move |result| -> Result<(JsonRpcRemoteAddr, JsonRpcResponseEnum), JsonRpcErrorType> {
                 let res = result.map_err(|e| e.into_inner())?;
                 // measure now only body length, because the `hyper` crate doesn't allow to get total HTTP packet length
-                event_handles.on_incoming_response(&res.2);
+                event_handlers.on_incoming_response(&res.2);
 
                 let body =
                     std::str::from_utf8(&res.2).map_err(|e| JsonRpcErrorType::parse_error(&uri, e.to_string()))?;
@@ -804,6 +806,13 @@ impl UtxoRpcClientOps for NativeClient {
     /// https://developer.bitcoin.org/reference/rpc/sendrawtransaction
     fn send_raw_transaction(&self, tx: BytesJson) -> UtxoRpcFut<H256Json> {
         Box::new(rpc_func!(self, "sendrawtransaction", tx).map_to_mm_fut(UtxoRpcError::from))
+    }
+
+    fn blockchain_scripthash_subscribe(&self, _scripthash: String) -> UtxoRpcFut<Json> {
+        return Box::new(futures01::future::err(
+            UtxoRpcError::Internal("blockchain_scripthash_subscribe` is not supported for Native Clients".to_owned())
+                .into(),
+        ));
     }
 
     fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson> {
@@ -1787,6 +1796,8 @@ impl Deref for ElectrumClient {
 
 const BLOCKCHAIN_HEADERS_SUB_ID: &str = "blockchain.headers.subscribe";
 
+const BLOCKCHAIN_SCRIPTHASH_SUB_ID: &str = "blockchain.scripthash.subscribe";
+
 impl UtxoJsonRpcClientInfo for ElectrumClient {
     fn coin_name(&self) -> &str { self.coin_ticker.as_str() }
 }
@@ -2236,6 +2247,10 @@ impl UtxoRpcClientOps for ElectrumClient {
         )
     }
 
+    fn blockchain_scripthash_subscribe(&self, scripthash: String) -> UtxoRpcFut<Json> {
+        Box::new(rpc_func!(self, BLOCKCHAIN_SCRIPTHASH_SUB_ID, scripthash).map_to_mm_fut(UtxoRpcError::from))
+    }
+
     /// https://electrumx.readthedocs.io/en/latest/protocol-methods.html#blockchain-transaction-get
     /// returns transaction bytes by default
     fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson> {
@@ -2465,6 +2480,7 @@ async fn electrum_process_json(raw_json: Json, arc: &JsonRpcPendingRequestsShare
         ElectrumRpcResponseEnum::SubscriptionNotification(req) => {
             let id = match req.method.as_ref() {
                 BLOCKCHAIN_HEADERS_SUB_ID => BLOCKCHAIN_HEADERS_SUB_ID,
+                BLOCKCHAIN_SCRIPTHASH_SUB_ID => BLOCKCHAIN_SCRIPTHASH_SUB_ID,
                 _ => {
                     error!("Couldn't get id of request {:?}", req);
                     return;

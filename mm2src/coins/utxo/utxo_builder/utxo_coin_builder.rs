@@ -247,6 +247,7 @@ where
         block_headers_status_notifier,
         block_headers_status_watcher,
         abortable_system,
+        transaction_event_notifier: todo!(),
     };
     Ok(coin)
 }
@@ -320,6 +321,7 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             block_headers_status_notifier,
             block_headers_status_watcher,
             abortable_system,
+            transaction_event_notifier: todo!(),
         };
         Ok(coin)
     }
