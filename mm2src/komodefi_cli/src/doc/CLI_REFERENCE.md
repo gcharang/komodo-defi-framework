@@ -6,7 +6,7 @@ The `komodefi-cli` binary file can be built in the root of the project using the
 
 ```sh
 export PATH=${PATH}:$(pwd)/bin
-cargo build --manifest-path=mm2src/adex_cli/Cargo.toml --out-dir bin -Z unstable-options
+cargo build --manifest-path=mm2src/komodefi_cli/Cargo.toml --out-dir bin -Z unstable-options
 ```
 
 Now `komodefi-cli` is built and available in the `bin` directory and can be called, as is done in the current reference examples.

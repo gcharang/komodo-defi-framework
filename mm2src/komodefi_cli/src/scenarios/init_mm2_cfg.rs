@@ -2,9 +2,11 @@ use anyhow::{anyhow, Result};
 use bip39::{Language, Mnemonic, MnemonicType};
 use common::log::{error, info};
 use common::password_policy;
+use crypto::KeyPairPolicyBuilder;
 use inquire::{validator::Validation, Confirm, CustomType, CustomUserError, Text};
 use passwords::PasswordGenerator;
 use serde::Serialize;
+use std::env::current_dir;
 use std::net::Ipv4Addr;
 use std::ops::Not;
 use std::path::Path;
@@ -22,11 +24,12 @@ const RPC_PORT_MAX: u16 = 49151;
 const DEFAULT_RPC_PORT: u16 = 7783;
 const DEFAULT_RPC_IP: &str = "127.0.0.1";
 
-
 pub(crate) fn init_mm2_cfg(cfg_file: &str) -> Result<()> {
     let mut mm2_cfg = Mm2Cfg::new();
     info!("Start collecting mm2_cfg into: {cfg_file}");
     mm2_cfg.inquire()?;
+    // write default config args(dbdir, ip, port)
+    mm2_cfg.write_default_args()?;
     helpers::rewrite_json_file(&mm2_cfg, cfg_file)?;
     info!("mm2_cfg has been writen into: {cfg_file}");
 
@@ -132,7 +135,6 @@ impl Mm2Cfg {
         self.netid = CustomType::<u16>::new("What is the network `mm2` is going to be a part, netid:")
                 .with_default(DEFAULT_NET_ID)
                 .with_help_message(r#"Network ID number, telling the AtomicDEX API which network to join. 8762 is the current main network, though alternative netids can be used for testing or "private" trades"#)
-                .with_placeholder(format!("{DEFAULT_NET_ID}").as_str())
                 .prompt()
                 .map_err(|error|
                     error_anyhow!("Failed to get netid: {error}")
@@ -229,12 +231,9 @@ impl Mm2Cfg {
 
     #[inline]
     fn inquire_rpcip(&mut self) -> Result<()> {
-        let default_ip: Ipv4Addr = DEFAULT_RPC_IP.parse().map_err(|error| error_anyhow!("Failed pass default rpcip: {error}"))?;
-
         self.rpcip = CustomType::<InquireOption<Ipv4Addr>>::new("What is rpcip:")
             .with_placeholder(DEFAULT_OPTION_PLACEHOLDER)
             .with_help_message("IP address to bind to for RPC server. Optional, defaults to 127.0.0.1")
-            .with_default(InquireOption::Some(default_ip))
             .prompt()
             .map_err(|error| error_anyhow!("Failed to get rpcip: {error}"))?
             .into();
@@ -331,5 +330,45 @@ impl Mm2Cfg {
                 )?
                 .into();
         Ok(())
+    }
+
+    fn write_default_args(&mut self) -> Result<()> {
+        if self.rpcip.is_none() {
+            let default_ip: Ipv4Addr = DEFAULT_RPC_IP
+                .parse()
+                .map_err(|error| error_anyhow!("Failed pass default rpcip: {error}"))?;
+            self.rpcip = Some(default_ip)
+        }
+
+        if self.rpcport.is_none() {
+            self.rpcport = Some(DEFAULT_RPC_PORT)
+        }
+
+        if self.dbdir.is_none() {
+            self.dbdir = Some(self.generate_default_db_path()?)
+        }
+        Ok(())
+    }
+
+    fn generate_default_db_path(&self) -> Result<String> {
+        let seed = self
+            .seed_phrase
+            .as_ref()
+            .ok_or_else(|| error_anyhow!("No seed phrase detected in config"))?;
+        let policy_builder = if let Some(false) = self.enable_hd {
+            KeyPairPolicyBuilder::GlobalHDAccount
+        } else {
+            KeyPairPolicyBuilder::Iguana
+        };
+
+        let (key, _) = policy_builder
+            .build(seed)
+            .map_err(|error| error_anyhow!("Failed pass default rpcip: {error}"))?;
+        let rmd160 = key.public().address_hash();
+
+        let current_dir = current_dir().map_err(|error| error_anyhow!("Failed to load your current dir: {error}"))?;
+        let current_dir = current_dir.parent().unwrap().to_string_lossy().to_string();
+
+        Ok(format!("{current_dir}/DB/{rmd160}"))
     }
 }
