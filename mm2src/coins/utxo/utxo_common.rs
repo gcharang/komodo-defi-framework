@@ -8,7 +8,7 @@ use crate::hd_wallet::{AccountUpdatingError, AddressDerivingResult, HDAccountMut
                        NewAccountCreatingError, NewAddressDeriveConfirmError, NewAddressDerivingError};
 use crate::hd_wallet_storage::{HDWalletCoinWithStorageOps, HDWalletStorageResult};
 use crate::lp_price::get_base_price_in_rel;
-use crate::rpc_command::init_withdraw::WithdrawTaskHandle;
+use crate::rpc_command::init_withdraw::WithdrawTaskHandleShared;
 use crate::utxo::rpc_clients::{electrum_script_hash, BlockHashOrHeight, UnspentInfo, UnspentMap, UtxoRpcClientEnum,
                                UtxoRpcClientOps, UtxoRpcResult};
 use crate::utxo::spv::SimplePaymentVerification;
@@ -3001,7 +3001,7 @@ pub async fn init_withdraw<T>(
     ctx: MmArc,
     coin: T,
     req: WithdrawRequest,
-    task_handle: &WithdrawTaskHandle,
+    task_handle: WithdrawTaskHandleShared,
 ) -> WithdrawResult
 where
     T: UtxoCommonOps

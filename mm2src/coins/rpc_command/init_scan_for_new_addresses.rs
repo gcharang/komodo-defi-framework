@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::coin_balance::HDAddressBalance;
 use crate::rpc_command::hd_account_balance_rpc_error::HDAccountBalanceRpcError;
 use crate::{lp_coinfind_or_err, CoinsContext, MmCoinEnum};
@@ -15,6 +17,7 @@ pub type ScanAddressesAwaitingStatus = SerdeInfallible;
 pub type ScanAddressesTaskManager = RpcTaskManager<InitScanAddressesTask>;
 pub type ScanAddressesTaskManagerShared = RpcTaskManagerShared<InitScanAddressesTask>;
 pub type ScanAddressesTaskHandle = RpcTaskHandle<InitScanAddressesTask>;
+pub type ScanAddressesTaskHandleShared = Arc<ScanAddressesTaskHandle>;
 pub type ScanAddressesRpcTaskStatus = RpcTaskStatus<
     ScanAddressesResponse,
     HDAccountBalanceRpcError,
@@ -78,7 +81,7 @@ impl RpcTask for InitScanAddressesTask {
     // Do nothing if the task has been cancelled.
     async fn cancel(self) {}
 
-    async fn run(&mut self, _task_handle: &ScanAddressesTaskHandle) -> Result<Self::Item, MmError<Self::Error>> {
+    async fn run(&mut self, _task_handle: ScanAddressesTaskHandleShared) -> Result<Self::Item, MmError<Self::Error>> {
         match self.coin {
             MmCoinEnum::UtxoCoin(ref utxo) => utxo.init_scan_for_new_addresses_rpc(self.req.params.clone()).await,
             MmCoinEnum::QtumCoin(ref qtum) => qtum.init_scan_for_new_addresses_rpc(self.req.params.clone()).await,

@@ -24,10 +24,11 @@ pub type CreateAccountAwaitingStatus = HwRpcTaskAwaitingStatus;
 pub type CreateAccountTaskManager = RpcTaskManager<InitCreateAccountTask>;
 pub type CreateAccountTaskManagerShared = RpcTaskManagerShared<InitCreateAccountTask>;
 pub type CreateAccountTaskHandle = RpcTaskHandle<InitCreateAccountTask>;
+pub type CreateAccountTaskHandleShared = Arc<CreateAccountTaskHandle>;
 pub type CreateAccountRpcTaskStatus =
     RpcTaskStatus<HDAccountBalance, CreateAccountRpcError, CreateAccountInProgressStatus, CreateAccountAwaitingStatus>;
 
-type CreateAccountXPubExtractor<'task> = RpcTaskXPubExtractor<'task, InitCreateAccountTask>;
+type CreateAccountXPubExtractor = RpcTaskXPubExtractor<InitCreateAccountTask>;
 
 #[derive(Clone, Debug, Display, EnumFromTrait, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
@@ -155,7 +156,7 @@ impl HttpStatusCode for CreateAccountRpcError {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct CreateNewAccountRequest {
     coin: String,
     #[serde(flatten)]
@@ -210,6 +211,7 @@ pub trait InitCreateAccountRpcOps {
     async fn revert_creating_account(&self, account_id: u32);
 }
 
+#[derive(Clone)]
 pub struct InitCreateAccountTask {
     ctx: MmArc,
     coin: MmCoinEnum,
@@ -241,13 +243,13 @@ impl RpcTask for InitCreateAccountTask {
         };
     }
 
-    async fn run(&mut self, task_handle: &CreateAccountTaskHandle) -> Result<Self::Item, MmError<Self::Error>> {
+    async fn run(&mut self, task_handle: CreateAccountTaskHandleShared) -> Result<Self::Item, MmError<Self::Error>> {
         async fn create_new_account_helper<Coin>(
             ctx: &MmArc,
             coin: &Coin,
             params: CreateNewAccountParams,
             state: CreateAccountState,
-            task_handle: &CreateAccountTaskHandle,
+            task_handle: CreateAccountTaskHandleShared,
         ) -> MmResult<HDAccountBalance, CreateAccountRpcError>
         where
             Coin: InitCreateAccountRpcOps + Send + Sync,

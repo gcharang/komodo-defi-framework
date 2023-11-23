@@ -20,9 +20,11 @@ use mm2_metrics::MetricsArc;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub type QtumTaskManagerShared = InitStandaloneCoinTaskManagerShared<QtumCoin>;
 pub type QtumRpcTaskHandle = InitStandaloneCoinTaskHandle<QtumCoin>;
+pub type QtumRpcTaskHandleShared = Arc<QtumRpcTaskHandle>;
 
 #[derive(Clone)]
 pub struct QtumProtocolInfo;
@@ -59,7 +61,7 @@ impl InitStandaloneCoinActivationOps for QtumCoin {
         coin_conf: Json,
         activation_request: &Self::ActivationRequest,
         _protocol_info: Self::StandaloneProtocol,
-        _task_handle: &QtumRpcTaskHandle,
+        _task_handle: QtumRpcTaskHandleShared,
     ) -> Result<Self, MmError<Self::ActivationError>> {
         let priv_key_policy = priv_key_build_policy(&ctx, activation_request.priv_key_policy)?;
 
@@ -73,7 +75,7 @@ impl InitStandaloneCoinActivationOps for QtumCoin {
     async fn get_activation_result(
         &self,
         ctx: MmArc,
-        task_handle: &QtumRpcTaskHandle,
+        task_handle: QtumRpcTaskHandleShared,
         activation_request: &Self::ActivationRequest,
     ) -> MmResult<Self::ActivationResult, InitUtxoStandardError> {
         get_activation_result(&ctx, self, task_handle, activation_request).await

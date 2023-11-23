@@ -250,6 +250,7 @@ impl From<HwProcessingError<RpcTaskError>> for MmInitError {
         match e {
             HwProcessingError::HwError(hw) => MmInitError::from(hw),
             HwProcessingError::ProcessorError(rpc_task) => MmInitError::from(rpc_task),
+            HwProcessingError::InternalError(err) => MmInitError::Internal(err),
         }
     }
 }

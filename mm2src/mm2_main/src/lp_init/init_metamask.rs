@@ -21,6 +21,7 @@ pub type InitMetamaskStatus =
 type InitMetamaskUserAction = SerdeInfallible;
 type InitMetamaskAwaitingStatus = SerdeInfallible;
 type InitMetamaskTaskHandle = RpcTaskHandle<InitMetamaskTask>;
+type InitMetamaskTaskHandleShared = Arc<InitMetamaskTaskHandle>;
 
 #[derive(Clone, Display, EnumFromTrait, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
@@ -119,7 +120,7 @@ impl RpcTask for InitMetamaskTask {
         }
     }
 
-    async fn run(&mut self, _task_handle: &InitMetamaskTaskHandle) -> Result<Self::Item, MmError<Self::Error>> {
+    async fn run(&mut self, task_handle: InitMetamaskTaskHandleShared) -> Result<Self::Item, MmError<Self::Error>> {
         let crypto_ctx = CryptoCtx::from_ctx(&self.ctx)?;
 
         let metamask = crypto_ctx.init_metamask_ctx(self.req.project.clone()).await?;

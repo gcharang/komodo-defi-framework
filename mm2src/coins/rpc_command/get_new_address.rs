@@ -14,7 +14,9 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use rpc_task::rpc_common::{CancelRpcTaskError, CancelRpcTaskRequest, InitRpcTaskResponse, RpcTaskStatusError,
                            RpcTaskStatusRequest, RpcTaskUserActionError};
-use rpc_task::{RpcTask, RpcTaskError, RpcTaskHandle, RpcTaskManager, RpcTaskManagerShared, RpcTaskStatus, RpcTaskTypes};
+use rpc_task::{RpcTask, RpcTaskError, RpcTaskHandle, RpcTaskHandleShared, RpcTaskManager, RpcTaskManagerShared,
+               RpcTaskStatus, RpcTaskTypes};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub type GetNewAddressUserAction = HwRpcTaskUserAction;
@@ -22,6 +24,7 @@ pub type GetNewAddressAwaitingStatus = HwRpcTaskAwaitingStatus;
 pub type GetNewAddressTaskManager = RpcTaskManager<InitGetNewAddressTask>;
 pub type GetNewAddressTaskManagerShared = RpcTaskManagerShared<InitGetNewAddressTask>;
 pub type GetNewAddressTaskHandle = RpcTaskHandle<InitGetNewAddressTask>;
+pub type GetNewAddressTaskHandleArc = Arc<RpcTaskHandle<InitGetNewAddressTask>>;
 pub type GetNewAddressRpcTaskStatus = RpcTaskStatus<
     GetNewAddressResponse,
     GetNewAddressRpcError,
@@ -190,7 +193,7 @@ impl HttpStatusCode for GetNewAddressRpcError {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct GetNewAddressRequest {
     coin: String,
     #[serde(flatten)]
@@ -251,6 +254,7 @@ pub trait GetNewAddressRpcOps {
         ConfirmAddress: HDConfirmAddress;
 }
 
+#[derive(Clone)]
 pub struct InitGetNewAddressTask {
     ctx: MmArc,
     coin: MmCoinEnum,
@@ -272,12 +276,12 @@ impl RpcTask for InitGetNewAddressTask {
     // Do nothing if the task has been cancelled.
     async fn cancel(self) {}
 
-    async fn run(&mut self, task_handle: &RpcTaskHandle<Self>) -> Result<Self::Item, MmError<Self::Error>> {
+    async fn run(&mut self, task_handle: RpcTaskHandleShared<Self>) -> Result<Self::Item, MmError<Self::Error>> {
         async fn get_new_address_helper<Coin>(
             ctx: &MmArc,
             coin: &Coin,
             params: GetNewAddressParams,
-            task_handle: &GetNewAddressTaskHandle,
+            task_handle: GetNewAddressTaskHandleArc,
         ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
         where
             Coin: GetNewAddressRpcOps + Send + Sync,
@@ -291,7 +295,7 @@ impl RpcTask for InitGetNewAddressTask {
                 on_passphrase_request: GetNewAddressAwaitingStatus::EnterTrezorPassphrase,
                 on_ready: GetNewAddressInProgressStatus::RequestingAccountBalance,
             };
-            let confirm_address: RpcTaskConfirmAddress<'_, InitGetNewAddressTask> =
+            let confirm_address: RpcTaskConfirmAddress<InitGetNewAddressTask> =
                 RpcTaskConfirmAddress::new(ctx, task_handle, hw_statuses)?;
             coin.get_new_address_rpc(params, &confirm_address).await
         }

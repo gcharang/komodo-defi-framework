@@ -21,9 +21,11 @@ use mm2_metrics::MetricsArc;
 use mm2_number::BigDecimal;
 use serde_json::Value as Json;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub type UtxoStandardTaskManagerShared = InitStandaloneCoinTaskManagerShared<UtxoStandardCoin>;
 pub type UtxoStandardRpcTaskHandle = InitStandaloneCoinTaskHandle<UtxoStandardCoin>;
+pub type UtxoStandardRpcTaskHandleShared = Arc<UtxoStandardRpcTaskHandle>;
 
 #[derive(Clone)]
 pub struct UtxoStandardProtocolInfo;
@@ -60,7 +62,7 @@ impl InitStandaloneCoinActivationOps for UtxoStandardCoin {
         coin_conf: Json,
         activation_request: &Self::ActivationRequest,
         _protocol_info: Self::StandaloneProtocol,
-        task_handle: &UtxoStandardRpcTaskHandle,
+        task_handle: UtxoStandardRpcTaskHandleShared,
     ) -> MmResult<Self, InitUtxoStandardError> {
         let priv_key_policy = priv_key_build_policy(&ctx, activation_request.priv_key_policy)?;
 
@@ -114,7 +116,7 @@ impl InitStandaloneCoinActivationOps for UtxoStandardCoin {
     async fn get_activation_result(
         &self,
         ctx: MmArc,
-        task_handle: &UtxoStandardRpcTaskHandle,
+        task_handle: UtxoStandardRpcTaskHandleShared,
         activation_request: &Self::ActivationRequest,
     ) -> MmResult<Self::ActivationResult, InitUtxoStandardError> {
         get_activation_result(&ctx, self, task_handle, activation_request).await

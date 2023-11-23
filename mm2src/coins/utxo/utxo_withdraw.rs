@@ -1,4 +1,4 @@
-use crate::rpc_command::init_withdraw::{WithdrawInProgressStatus, WithdrawTaskHandle};
+use crate::rpc_command::init_withdraw::{WithdrawInProgressStatus, WithdrawTaskHandleShared};
 use crate::utxo::utxo_common::{big_decimal_from_sat, UtxoTxBuilder};
 use crate::utxo::{output_script, sat_from_big_decimal, ActualTxFee, Address, FeePolicy, GetUtxoListOps, PrivKeyPolicy,
                   UtxoAddressFormat, UtxoCoinFields, UtxoCommonOps, UtxoFeeDetails, UtxoTx, UTXO_LOCK};
@@ -8,6 +8,8 @@ use async_trait::async_trait;
 use chain::TransactionOutput;
 use common::log::info;
 use common::now_sec;
+use crypto::hw_rpc_task::HwRpcTaskAwaitingStatus;
+use crypto::trezor::trezor_rpc_task::{TrezorRequestStatuses, TrezorRpcTaskProcessor};
 use crypto::trezor::{TrezorError, TrezorProcessingError};
 use crypto::{from_hw_error, CryptoCtx, CryptoCtxError, DerivationPath, HwError, HwProcessingError, HwRpcError};
 use keys::{AddressFormat, AddressHashEnum, KeyPair, Private, Public as PublicKey, Type as ScriptType};
@@ -18,6 +20,7 @@ use rpc_task::RpcTaskError;
 use script::{Builder, Script, SignatureVersion, TransactionInputSigner};
 use serialization::{serialize, serialize_with_flags, SERIALIZE_TRANSACTION_WITNESS};
 use std::iter::once;
+use std::sync::Arc;
 use utxo_signer::sign_params::{OutputDestination, SendingOutputInfo, SpendingInputInfo, UtxoSignTxParamsBuilder};
 use utxo_signer::{with_key_pair, UtxoSignTxError};
 use utxo_signer::{SignPolicy, UtxoSignerOps};
@@ -38,6 +41,7 @@ impl From<HwProcessingError<RpcTaskError>> for WithdrawError {
         match e {
             HwProcessingError::HwError(hw) => WithdrawError::from(hw),
             HwProcessingError::ProcessorError(rpc_task) => WithdrawError::from(rpc_task),
+            HwProcessingError::InternalError(err) => WithdrawError::InternalError(err),
         }
     }
 }
@@ -217,10 +221,10 @@ where
     }
 }
 
-pub struct InitUtxoWithdraw<'a, Coin> {
+pub struct InitUtxoWithdraw<Coin> {
     ctx: MmArc,
     coin: Coin,
-    task_handle: &'a WithdrawTaskHandle,
+    task_handle: WithdrawTaskHandleShared,
     req: WithdrawRequest,
     from_address: Address,
     /// Displayed [`InitUtxoWithdraw::from_address`].
@@ -232,7 +236,7 @@ pub struct InitUtxoWithdraw<'a, Coin> {
 }
 
 #[async_trait]
-impl<'a, Coin> UtxoWithdraw<Coin> for InitUtxoWithdraw<'a, Coin>
+impl<Coin> UtxoWithdraw<Coin> for InitUtxoWithdraw<Coin>
 where
     Coin: UtxoCommonOps + GetUtxoListOps + UtxoSignerOps,
 {
@@ -330,7 +334,15 @@ where
                 ..
             } => SignPolicy::WithKeyPair(activated_key_pair),
             PrivKeyPolicy::Trezor => {
-                let trezor_session = hw_ctx.trezor().await?;
+                let trezor_statuses = TrezorRequestStatuses {
+                    on_button_request: WithdrawInProgressStatus::FollowHwDeviceInstructions,
+                    on_pin_request: HwRpcTaskAwaitingStatus::EnterTrezorPin,
+                    on_passphrase_request: HwRpcTaskAwaitingStatus::EnterTrezorPassphrase,
+                    on_ready: WithdrawInProgressStatus::FollowHwDeviceInstructions,
+                };
+                let sign_processor = TrezorRpcTaskProcessor::new(self.task_handle.clone(), trezor_statuses);
+                let sign_processor = Arc::new(sign_processor); //as &dyn TrezorRequestProcessor<Error = RpcTaskError>
+                let trezor_session = hw_ctx.trezor(sign_processor).await?;
                 SignPolicy::WithTrezor(trezor_session)
             },
             #[cfg(target_arch = "wasm32")]
@@ -349,13 +361,13 @@ where
     }
 }
 
-impl<'a, Coin> InitUtxoWithdraw<'a, Coin> {
+impl<Coin> InitUtxoWithdraw<Coin> {
     pub async fn new(
         ctx: MmArc,
         coin: Coin,
         req: WithdrawRequest,
-        task_handle: &'a WithdrawTaskHandle,
-    ) -> Result<InitUtxoWithdraw<'a, Coin>, MmError<WithdrawError>>
+        task_handle: WithdrawTaskHandleShared,
+    ) -> Result<InitUtxoWithdraw<Coin>, MmError<WithdrawError>>
     where
         Coin: CoinWithDerivationMethod + GetWithdrawSenderAddress<Address = Address, Pubkey = PublicKey>,
     {
@@ -376,7 +388,7 @@ impl<'a, Coin> InitUtxoWithdraw<'a, Coin> {
         Ok(InitUtxoWithdraw {
             ctx,
             coin,
-            task_handle,
+            task_handle: task_handle.clone(),
             req,
             from_address: from.address,
             from_address_string,

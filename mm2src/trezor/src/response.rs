@@ -5,7 +5,9 @@ use crate::user_interaction::TrezorUserInteraction;
 use crate::{TrezorError, TrezorResult};
 use async_trait::async_trait;
 use mm2_err_handle::prelude::*;
+use rpc_task::RpcTaskError;
 use std::fmt;
+use std::sync::Arc;
 
 pub use crate::proto::messages_common::button_request::ButtonRequestType;
 pub use crate::proto::messages_common::pin_matrix_request::PinMatrixRequestType;
@@ -131,25 +133,26 @@ impl<'a, 'b, T> ProcessTrezorResponse<T> for TrezorResponse<'a, 'b, T>
 where
     T: Send + Sync + 'static,
 {
-    async fn process<Processor>(self, processor: &Processor) -> MmResult<T, TrezorProcessingError<Processor::Error>>
-    where
-        Processor: TrezorRequestProcessor + Sync,
-    {
+    async fn process(
+        self,
+        processor: Arc<dyn TrezorRequestProcessor<Error = RpcTaskError>>,
+    ) -> MmResult<T, TrezorProcessingError<RpcTaskError>> {
+        let processor_req = processor.clone();
         let fut = async move {
             let mut response = self;
             loop {
                 response = match response {
                     TrezorResponse::Ready(result) => return Ok(result),
                     TrezorResponse::ButtonRequest(button_req) => {
-                        processor.on_button_request().await?;
+                        processor_req.on_button_request().await?;
                         button_req.ack().await?
                     },
                     TrezorResponse::PinMatrixRequest(pin_req) => {
-                        let pin_response = processor.on_pin_request().await?;
+                        let pin_response = processor_req.on_pin_request().await?;
                         pin_req.ack_pin(pin_response.pin).await?
                     },
                     TrezorResponse::PassphraseRequest(passphrase_req) => {
-                        let passphrase_response = processor.on_passphrase_request().await?;
+                        let passphrase_response = processor_req.on_passphrase_request().await?;
                         passphrase_req.ack_passphrase(passphrase_response.passphrase).await?
                     },
                 };

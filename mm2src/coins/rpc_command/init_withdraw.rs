@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{lp_coinfind_or_err, CoinsContext, MmCoinEnum, WithdrawError};
 use crate::{TransactionDetails, WithdrawRequest};
 use async_trait::async_trait;
@@ -19,6 +21,7 @@ pub type WithdrawUserActionRequest = HwRpcTaskUserActionRequest;
 pub type WithdrawTaskManager = RpcTaskManager<WithdrawTask>;
 pub type WithdrawTaskManagerShared = RpcTaskManagerShared<WithdrawTask>;
 pub type WithdrawTaskHandle = RpcTaskHandle<WithdrawTask>;
+pub type WithdrawTaskHandleShared = Arc<WithdrawTaskHandle>;
 pub type WithdrawRpcStatus = RpcTaskStatusAlias<WithdrawTask>;
 pub type WithdrawInitResult<T> = Result<T, MmError<WithdrawError>>;
 
@@ -28,7 +31,7 @@ pub trait CoinWithdrawInit {
     fn init_withdraw(
         ctx: MmArc,
         req: WithdrawRequest,
-        rpc_task_handle: &WithdrawTaskHandle,
+        rpc_task_handle: WithdrawTaskHandleShared,
     ) -> WithdrawInitResult<TransactionDetails>;
 }
 
@@ -101,7 +104,7 @@ pub trait InitWithdrawCoin {
         &self,
         ctx: MmArc,
         req: WithdrawRequest,
-        task_handle: &WithdrawTaskHandle,
+        task_handle: WithdrawTaskHandleShared,
     ) -> Result<TransactionDetails, MmError<WithdrawError>>;
 }
 
@@ -126,7 +129,7 @@ impl RpcTask for WithdrawTask {
     // Do nothing if the task has been cancelled.
     async fn cancel(self) {}
 
-    async fn run(&mut self, task_handle: &WithdrawTaskHandle) -> Result<Self::Item, MmError<Self::Error>> {
+    async fn run(&mut self, task_handle: WithdrawTaskHandleShared) -> Result<Self::Item, MmError<Self::Error>> {
         let ctx = self.ctx.clone();
         let request = self.request.clone();
         match self.coin {

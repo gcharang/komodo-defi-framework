@@ -5,5 +5,5 @@ pub use init_standalone_coin::{cancel_init_standalone_coin, init_standalone_coin
                                init_standalone_coin_user_action, InitStandaloneCoinActivationOps,
                                InitStandaloneCoinInitialStatus, InitStandaloneCoinReq,
                                InitStandaloneCoinStatusRequest, InitStandaloneCoinTask, InitStandaloneCoinTaskHandle,
-                               InitStandaloneCoinTaskManagerShared};
+                               InitStandaloneCoinTaskHandleShared, InitStandaloneCoinTaskManagerShared};
 pub use init_standalone_coin_error::InitStandaloneCoinError;

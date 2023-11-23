@@ -38,6 +38,7 @@ const DEFAULT_LISTENING_PORT: u16 = 9735;
 
 pub type LightningTaskManagerShared = InitL2TaskManagerShared<LightningCoin>;
 pub type LightningRpcTaskHandle = InitL2TaskHandle<LightningCoin>;
+pub type LightningRpcTaskHandleShared = Arc<LightningRpcTaskHandle>;
 pub type LightningAwaitingStatus = HwRpcTaskAwaitingStatus;
 pub type LightningUserAction = HwRpcTaskUserAction;
 
@@ -295,7 +296,7 @@ impl InitL2ActivationOps for LightningCoin {
         validated_params: Self::ValidatedParams,
         protocol_conf: Self::ProtocolInfo,
         coin_conf: Self::CoinConf,
-        task_handle: &LightningRpcTaskHandle,
+        task_handle: LightningRpcTaskHandleShared,
     ) -> Result<(Self, Self::ActivationResult), MmError<Self::ActivationError>> {
         let lightning_coin = start_lightning(
             ctx,
@@ -329,7 +330,7 @@ async fn start_lightning(
     protocol_conf: LightningProtocolConf,
     conf: LightningCoinConf,
     params: LightningValidatedParams,
-    task_handle: &LightningRpcTaskHandle,
+    task_handle: LightningRpcTaskHandleShared,
 ) -> EnableLightningResult<LightningCoin> {
     // Todo: add support for Hardware wallets for funding transactions and spending spendable outputs (channel closing transactions)
     if let coins::DerivationMethod::HDWallet(_) = platform_coin.as_ref().derivation_method {

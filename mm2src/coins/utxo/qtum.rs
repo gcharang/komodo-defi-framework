@@ -17,7 +17,7 @@ use crate::rpc_command::init_create_account::{self, CreateAccountRpcError, Creat
                                               InitCreateAccountRpcOps};
 use crate::rpc_command::init_scan_for_new_addresses::{self, InitScanAddressesRpcOps, ScanAddressesParams,
                                                       ScanAddressesResponse};
-use crate::rpc_command::init_withdraw::{InitWithdrawCoin, WithdrawTaskHandle};
+use crate::rpc_command::init_withdraw::{InitWithdrawCoin, WithdrawTaskHandleShared};
 use crate::tx_history_storage::{GetTxHistoryFilters, WalletId};
 use crate::utxo::utxo_builder::{MergeUtxoArcOps, UtxoCoinBuildError, UtxoCoinBuilder, UtxoCoinBuilderCommonOps,
                                 UtxoFieldsWithGlobalHDBuilder, UtxoFieldsWithHardwareWalletBuilder,
@@ -1001,7 +1001,7 @@ impl InitWithdrawCoin for QtumCoin {
         &self,
         ctx: MmArc,
         req: WithdrawRequest,
-        task_handle: &WithdrawTaskHandle,
+        task_handle: WithdrawTaskHandleShared,
     ) -> Result<TransactionDetails, MmError<WithdrawError>> {
         utxo_common::init_withdraw(ctx, self.clone(), req, task_handle).await
     }
