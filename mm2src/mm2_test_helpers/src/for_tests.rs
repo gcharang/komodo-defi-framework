@@ -3136,6 +3136,23 @@ pub async fn get_locked_amount(mm: &MarketMakerIt, coin: &str) -> GetLockedAmoun
     response.result
 }
 
+pub async fn coins_needed_for_kickstart(mm: &MarketMakerIt) -> Vec<String> {
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "coins_needed_for_kick_start",
+        "params": []
+    });
+    let response = mm.rpc(&request).await.unwrap();
+    assert_eq!(
+        response.0,
+        StatusCode::OK,
+        "'coins_needed_for_kick_start' failed: {}",
+        response.1
+    );
+    let result: CoinsNeededForKickstartResponse = json::from_str(&response.1).unwrap();
+    result.result
+}
+
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn test_parse_env_file() {

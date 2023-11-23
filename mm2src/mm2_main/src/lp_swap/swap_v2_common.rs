@@ -1,6 +1,6 @@
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_swap::swap_lock::{SwapLock, SwapLockError, SwapLockOps};
-use crate::mm2::lp_swap::SwapsContext;
+use crate::mm2::lp_swap::{swap_v2_topic, SwapsContext};
 use coins::utxo::utxo_standard::UtxoStandardCoin;
 use coins::{lp_coinfind, MmCoinEnum};
 use common::bits256;
@@ -29,6 +29,13 @@ cfg_wasm32!(
     use crate::mm2::lp_swap::swap_wasm_db::{IS_FINISHED_SWAP_TYPE_INDEX, MySwapsFiltersTable, SavedSwapTable};
     use mm2_db::indexed_db::{DbTransactionError, InitDbError, MultiIndex};
 );
+
+/// Information about active swap to be stored in swaps context
+pub struct ActiveSwapV2Info {
+    pub uuid: Uuid,
+    pub maker_coin: String,
+    pub taker_coin: String,
+}
 
 /// DB representation of tx preimage with signature
 #[derive(Debug, Deserialize, Serialize)]
@@ -220,10 +227,15 @@ pub(super) async fn mark_swap_finished(ctx: MmArc, id: Uuid) -> MmResult<(), Swa
     Ok(())
 }
 
-pub(super) fn init_additional_context_impl(ctx: &MmArc, p2p_topic: String, uuid: Uuid) {
-    subscribe_to_topic(ctx, p2p_topic);
+pub(super) fn init_additional_context_impl(ctx: &MmArc, swap_info: ActiveSwapV2Info) {
+    subscribe_to_topic(ctx, swap_v2_topic(&swap_info.uuid));
     let swap_ctx = SwapsContext::from_ctx(ctx).expect("SwapsContext::from_ctx should not fail");
-    swap_ctx.init_msg_v2_store(uuid, bits256::default());
+    swap_ctx.init_msg_v2_store(swap_info.uuid, bits256::default());
+    swap_ctx
+        .active_swaps_v2_infos
+        .lock()
+        .unwrap()
+        .insert(swap_info.uuid, swap_info);
 }
 
 pub(super) async fn acquire_reentrancy_lock_impl(ctx: &MmArc, uuid: Uuid) -> MmResult<SwapLock, SwapStateMachineError> {

@@ -572,7 +572,13 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
         Ok(RestoredMachine { machine, current_state })
     }
 
-    fn init_additional_context(&mut self) { init_additional_context_impl(&self.ctx, self.p2p_topic.clone(), self.uuid) }
+    fn init_additional_context(&mut self) {
+        init_additional_context_impl(&self.ctx, ActiveSwapV2Info {
+            uuid: self.uuid,
+            maker_coin: self.maker_coin.ticker().into(),
+            taker_coin: self.taker_coin.ticker().into(),
+        })
+    }
 
     async fn acquire_reentrancy_lock(&self) -> Result<Self::ReentrancyLock, Self::Error> {
         acquire_reentrancy_lock_impl(&self.ctx, self.uuid).await

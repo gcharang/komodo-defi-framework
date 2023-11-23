@@ -132,6 +132,7 @@ use pubkey_banning::BanReason;
 pub use pubkey_banning::{ban_pubkey_rpc, is_pubkey_banned, list_banned_pubkeys_rpc, unban_pubkeys_rpc};
 pub use recreate_swap_data::recreate_swap_data;
 pub use saved_swap::{SavedSwap, SavedSwapError, SavedSwapIo, SavedSwapResult};
+use swap_v2_common::{get_unfinished_swaps_uuids, swap_kickstart_handler, ActiveSwapV2Info};
 use swap_v2_pb::*;
 pub use swap_watcher::{process_watcher_msg, watcher_topic, TakerSwapWatcherData, MAKER_PAYMENT_SPEND_FOUND_LOG,
                        MAKER_PAYMENT_SPEND_SENT_LOG, TAKER_PAYMENT_REFUND_SENT_LOG, TAKER_SWAP_ENTRY_TIMEOUT_SEC,
@@ -492,6 +493,7 @@ impl From<TakerSwapEvent> for SwapEvent {
 
 struct SwapsContext {
     running_swaps: Mutex<Vec<Weak<dyn AtomicSwap>>>,
+    active_swaps_v2_infos: Mutex<HashMap<Uuid, ActiveSwapV2Info>>,
     banned_pubkeys: Mutex<HashMap<H256Json, BanReason>>,
     swap_msgs: Mutex<HashMap<Uuid, SwapMsgStore>>,
     swap_v2_msgs: Mutex<HashMap<Uuid, SwapV2MsgStore>>,
@@ -506,6 +508,7 @@ impl SwapsContext {
         Ok(try_s!(from_ctx(&ctx.swaps_ctx, move || {
             Ok(SwapsContext {
                 running_swaps: Mutex::new(vec![]),
+                active_swaps_v2_infos: Mutex::new(HashMap::new()),
                 banned_pubkeys: Mutex::new(HashMap::new()),
                 swap_msgs: Mutex::new(HashMap::new()),
                 swap_v2_msgs: Mutex::new(HashMap::new()),
@@ -644,6 +647,14 @@ pub fn active_swaps_using_coins(ctx: &MmArc, coins: &HashSet<String>) -> Result<
             if coins.contains(&swap.maker_coin().to_string()) || coins.contains(&swap.taker_coin().to_string()) {
                 uuids.push(*swap.uuid())
             }
+        }
+    }
+    drop(swaps);
+
+    let swaps_v2 = try_s!(swap_ctx.active_swaps_v2_infos.lock());
+    for (uuid, info) in swaps_v2.iter() {
+        if coins.contains(&info.maker_coin) || coins.contains(&info.taker_coin) {
+            uuids.push(*uuid);
         }
     }
     Ok(uuids)
@@ -1028,7 +1039,6 @@ async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> SqlResult<u8> {
     Ok(swap_type)
 }
 
-use crate::mm2::lp_swap::swap_v2_common::{get_unfinished_swaps_uuids, swap_kickstart_handler};
 #[cfg(target_arch = "wasm32")]
 use mm2_db::indexed_db::DbTransactionError;
 #[cfg(target_arch = "wasm32")]
@@ -1469,6 +1479,10 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
         debug!("Trying to kickstart maker swap {}", maker_uuid);
         let maker_swap_repr = try_s!(maker_swap_storage.get_repr(maker_uuid).await);
         debug!("Got maker swap repr {:?}", maker_swap_repr);
+
+        coins.insert(maker_swap_repr.maker_coin.clone());
+        coins.insert(maker_swap_repr.taker_coin.clone());
+
         let fut = swap_kickstart_handler::<MakerSwapStateMachine<UtxoStandardCoin, UtxoStandardCoin>>(
             ctx.clone(),
             maker_swap_repr,
@@ -1484,6 +1498,10 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
         debug!("Trying to kickstart taker swap {}", taker_uuid);
         let taker_swap_repr = try_s!(taker_swap_storage.get_repr(taker_uuid).await);
         debug!("Got taker swap repr {:?}", taker_swap_repr);
+
+        coins.insert(taker_swap_repr.maker_coin.clone());
+        coins.insert(taker_swap_repr.taker_coin.clone());
+
         let fut = swap_kickstart_handler::<TakerSwapStateMachine<UtxoStandardCoin, UtxoStandardCoin>>(
             ctx.clone(),
             taker_swap_repr,

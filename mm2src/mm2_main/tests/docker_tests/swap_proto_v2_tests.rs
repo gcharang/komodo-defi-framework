@@ -4,10 +4,12 @@ use coins::utxo::UtxoCommonOps;
 use coins::{GenTakerFundingSpendArgs, RefundFundingSecretArgs, RefundPaymentArgs, SendTakerFundingArgs, SwapOpsV2,
             Transaction, ValidateTakerFundingArgs};
 use common::{block_on, now_sec};
-use mm2_test_helpers::for_tests::{enable_native, mm_dump, my_swap_status, mycoin1_conf, mycoin_conf, start_swaps,
-                                  wait_for_swap_finished, wait_for_swap_status, MarketMakerIt, Mm2TestConf};
+use mm2_test_helpers::for_tests::{coins_needed_for_kickstart, disable_coin, disable_coin_err, enable_native, mm_dump,
+                                  my_swap_status, mycoin1_conf, mycoin_conf, start_swaps, wait_for_swap_finished,
+                                  wait_for_swap_status, MarketMakerIt, Mm2TestConf};
 use script::{Builder, Opcode};
 use serialization::serialize;
+use uuid::Uuid;
 
 #[test]
 fn send_and_refund_taker_funding_timelock() {
@@ -208,10 +210,10 @@ fn test_v2_swap_utxo_utxo() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
     log!("Alice log path: {}", mm_alice.log_path.display());
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN1, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN1, &[], None)));
 
     let uuids = block_on(start_swaps(
         &mut mm_bob,
@@ -222,6 +224,20 @@ fn test_v2_swap_utxo_utxo() {
         100.,
     ));
     println!("{:?}", uuids);
+
+    let parsed_uuids: Vec<Uuid> = uuids.iter().map(|u| u.parse().unwrap()).collect();
+    // disabling coins used in active swaps must not work
+    let err = block_on(disable_coin_err(&mm_bob, MYCOIN, false));
+    assert_eq!(err.active_swaps, parsed_uuids);
+
+    let err = block_on(disable_coin_err(&mm_bob, MYCOIN1, false));
+    assert_eq!(err.active_swaps, parsed_uuids);
+
+    let err = block_on(disable_coin_err(&mm_alice, MYCOIN, false));
+    assert_eq!(err.active_swaps, parsed_uuids);
+
+    let err = block_on(disable_coin_err(&mm_alice, MYCOIN1, false));
+    assert_eq!(err.active_swaps, parsed_uuids);
 
     for uuid in uuids {
         block_on(wait_for_swap_status(&mm_bob, &uuid, 10));
@@ -236,6 +252,17 @@ fn test_v2_swap_utxo_utxo() {
         let taker_swap_status = block_on(my_swap_status(&mm_alice, &uuid));
         println!("{:?}", taker_swap_status);
     }
+
+    // Disabling coins will fail for Bob because his order is still active, but active_swaps must be empty at this point
+    let err = block_on(disable_coin_err(&mm_bob, MYCOIN, false));
+    assert!(err.active_swaps.is_empty());
+
+    let err = block_on(disable_coin_err(&mm_bob, MYCOIN1, false));
+    assert!(err.active_swaps.is_empty());
+
+    // Disabling coins on Alice side should be successful at this point
+    block_on(disable_coin(&mm_alice, MYCOIN, false));
+    block_on(disable_coin(&mm_alice, MYCOIN1, false));
 }
 
 #[test]
@@ -257,10 +284,10 @@ fn test_v2_swap_utxo_utxo_kickstart() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
     log!("Alice log path: {}", mm_alice.log_path.display());
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN1, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN1, &[], None)));
 
     let uuids = block_on(start_swaps(
         &mut mm_bob,
@@ -301,10 +328,18 @@ fn test_v2_swap_utxo_utxo_kickstart() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
     log!("Alice log path: {}", mm_alice.log_path.display());
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    let mut coins_needed_for_kickstart_bob = block_on(coins_needed_for_kickstart(&mm_bob));
+    coins_needed_for_kickstart_bob.sort();
+    assert_eq!(coins_needed_for_kickstart_bob, [MYCOIN, MYCOIN1]);
+
+    let mut coins_needed_for_kickstart_alice = block_on(coins_needed_for_kickstart(&mm_alice));
+    coins_needed_for_kickstart_alice.sort();
+    assert_eq!(coins_needed_for_kickstart_alice, [MYCOIN, MYCOIN1]);
+
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN1, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN1, &[], None)));
 
     for uuid in uuids {
         block_on(wait_for_swap_status(&mm_bob, &uuid, 10));
@@ -334,10 +369,10 @@ fn test_v2_swap_utxo_utxo_file_lock() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice.log_path);
     log!("Alice log path: {}", mm_alice.log_path.display());
 
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_bob, "MYCOIN1", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob, MYCOIN1, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice, MYCOIN1, &[], None)));
 
     let uuids = block_on(start_swaps(
         &mut mm_bob,
@@ -369,10 +404,10 @@ fn test_v2_swap_utxo_utxo_file_lock() {
     let (_alice_dump_log, _alice_dump_dashboard) = mm_dump(&mm_alice_dup.log_path);
     log!("Alice dup log path: {}", mm_alice_dup.log_path.display());
 
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_bob_dup, "MYCOIN1", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice_dup, "MYCOIN", &[], None)));
-    log!("{:?}", block_on(enable_native(&mm_alice_dup, "MYCOIN1", &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_bob_dup, MYCOIN1, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_dup, MYCOIN, &[], None)));
+    log!("{:?}", block_on(enable_native(&mm_alice_dup, MYCOIN1, &[], None)));
 
     for uuid in uuids {
         let expected_log = format!("Swap {} file lock already acquired", uuid);
