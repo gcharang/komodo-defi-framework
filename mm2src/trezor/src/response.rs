@@ -51,33 +51,6 @@ impl<'a, 'b, T: 'static> TrezorResponse<'a, 'b, T> {
         }
     }
 
-    /// Agrees to wait for all `HW button press` requests and returns final `Result`.
-    ///
-    /// # Error
-    ///
-    /// Will error if it receives requests, which require input like: `PinMatrixRequest`.
-    pub async fn ack_all(self) -> TrezorResult<T> {
-        let mut resp = self;
-        loop {
-            resp = match resp {
-                Self::Ready(val) => {
-                    return Ok(val);
-                },
-                Self::ButtonRequest(req) => req.ack().await?,
-                Self::PinMatrixRequest(_) => {
-                    return MmError::err(TrezorError::UnexpectedInteractionRequest(
-                        TrezorUserInteraction::PinMatrix3x3,
-                    ));
-                },
-                Self::PassphraseRequest(_) => {
-                    return MmError::err(TrezorError::UnexpectedInteractionRequest(
-                        TrezorUserInteraction::PassphraseRequest,
-                    ));
-                },
-            };
-        }
-    }
-
     /// Returns `Some(T)` if the result is ready, otherwise cancels the request.
     pub async fn cancel_if_not_ready(self) -> Option<T> {
         match self {
@@ -184,9 +157,6 @@ impl<'a, 'b, T: 'static> ButtonRequest<'a, 'b, T> {
         let req = proto_common::ButtonAck {};
         self.session.call(req, self.result_handler).await
     }
-
-    /// TODO add an optional `timeout` param.
-    pub async fn ack_all(self) -> TrezorResult<T> { self.ack().await?.ack_all().await }
 
     pub async fn cancel(self) { self.session.cancel_last_op().await }
 }
