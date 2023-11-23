@@ -20,7 +20,7 @@ use common::{now_sec, small_rng};
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, StandardHDPathError,
              StandardHDPathToCoin};
 use derive_more::Display;
-use futures::channel::mpsc::{channel, unbounded, Receiver as AsyncReceiver, UnboundedReceiver};
+use futures::channel::mpsc::{channel, unbounded, Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedReceiver};
 use futures::compat::Future01CompatExt;
 use futures::lock::Mutex as AsyncMutex;
 use futures::StreamExt;
@@ -215,11 +215,20 @@ where
     let my_script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
     let derivation_method = DerivationMethod::SingleAddress(my_address);
 
+    // TODO
+    let (scripthash_notification_sender, scripthash_notification_receiver): (AsyncSender<()>, AsyncReceiver<()>) =
+        channel(1);
+
+    let scripthash_notification_sender = Some(Arc::new(AsyncMutex::new(scripthash_notification_sender)));
+    let scripthash_notification_receiver = Some(Arc::new(AsyncMutex::new(scripthash_notification_receiver)));
+
     // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,
     // all spawned futures related to this `UTXO` coin will be aborted as well.
     let abortable_system: AbortableQueue = builder.ctx().abortable_system.create_subsystem()?;
 
-    let rpc_client = builder.rpc_client(abortable_system.create_subsystem()?).await?;
+    let rpc_client = builder
+        .rpc_client(scripthash_notification_sender, abortable_system.create_subsystem()?)
+        .await?;
     let tx_fee = builder.tx_fee(&rpc_client).await?;
     let decimals = builder.decimals(&rpc_client).await?;
     let dust_amount = builder.dust_amount();
@@ -247,8 +256,9 @@ where
         block_headers_status_notifier,
         block_headers_status_watcher,
         abortable_system,
-        transaction_event_notifier: todo!(),
+        scripthash_notification_receiver,
     };
+
     Ok(coin)
 }
 
@@ -289,11 +299,20 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             gap_limit,
         };
 
+        // TODO
+        let (scripthash_notification_sender, scripthash_notification_receiver): (AsyncSender<()>, AsyncReceiver<()>) =
+            channel(1);
+
+        let scripthash_notification_sender = Some(Arc::new(AsyncMutex::new(scripthash_notification_sender)));
+        let scripthash_notification_receiver = Some(Arc::new(AsyncMutex::new(scripthash_notification_receiver)));
+
         // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,
         // all spawned futures related to this `UTXO` coin will be aborted as well.
         let abortable_system: AbortableQueue = self.ctx().abortable_system.create_subsystem()?;
 
-        let rpc_client = self.rpc_client(abortable_system.create_subsystem()?).await?;
+        let rpc_client = self
+            .rpc_client(scripthash_notification_sender, abortable_system.create_subsystem()?)
+            .await?;
         let tx_fee = self.tx_fee(&rpc_client).await?;
         let decimals = self.decimals(&rpc_client).await?;
         let dust_amount = self.dust_amount();
@@ -321,7 +340,7 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             block_headers_status_notifier,
             block_headers_status_watcher,
             abortable_system,
-            transaction_event_notifier: todo!(),
+            scripthash_notification_receiver,
         };
         Ok(coin)
     }
@@ -466,7 +485,11 @@ pub trait UtxoCoinBuilderCommonOps {
         }
     }
 
-    async fn rpc_client(&self, abortable_system: AbortableQueue) -> UtxoCoinBuildResult<UtxoRpcClientEnum> {
+    async fn rpc_client(
+        &self,
+        scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+        abortable_system: AbortableQueue,
+    ) -> UtxoCoinBuildResult<UtxoRpcClientEnum> {
         match self.activation_params().mode.clone() {
             UtxoRpcMode::Native => {
                 #[cfg(target_arch = "wasm32")]
@@ -481,7 +504,12 @@ pub trait UtxoCoinBuilderCommonOps {
             },
             UtxoRpcMode::Electrum { servers } => {
                 let electrum = self
-                    .electrum_client(abortable_system, ElectrumBuilderArgs::default(), servers)
+                    .electrum_client(
+                        abortable_system,
+                        ElectrumBuilderArgs::default(),
+                        servers,
+                        scripthash_notification_sender,
+                    )
                     .await?;
                 Ok(UtxoRpcClientEnum::Electrum(electrum))
             },
@@ -495,6 +523,7 @@ pub trait UtxoCoinBuilderCommonOps {
         abortable_system: AbortableQueue,
         args: ElectrumBuilderArgs,
         mut servers: Vec<ElectrumRpcRequest>,
+        scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
     ) -> UtxoCoinBuildResult<ElectrumClient> {
         let (on_event_tx, on_event_rx) = unbounded();
         let ticker = self.ticker().to_owned();
@@ -526,6 +555,7 @@ pub trait UtxoCoinBuilderCommonOps {
             block_headers_storage,
             abortable_system,
             args.negotiate_version,
+            scripthash_notification_sender,
         );
         for server in servers.iter() {
             match client.add_server(server).await {

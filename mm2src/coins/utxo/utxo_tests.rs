@@ -84,7 +84,7 @@ pub fn electrum_client_for_test(servers: &[&str]) -> ElectrumClient {
 
     let servers = servers.into_iter().map(|s| json::from_value(s).unwrap()).collect();
     let abortable_system = AbortableQueue::default();
-    block_on(builder.electrum_client(abortable_system, args, servers)).unwrap()
+    block_on(builder.electrum_client(abortable_system, args, servers, None)).unwrap()
 }
 
 /// Returned client won't work by default, requires some mocks to be usable
@@ -469,6 +469,7 @@ fn test_wait_for_payment_spend_timeout_electrum() {
         block_headers_storage,
         abortable_system,
         true,
+        None,
     );
     let client = UtxoRpcClientEnum::Electrum(ElectrumClient(Arc::new(client)));
     let coin = utxo_coin_for_test(client, None, false);
@@ -1482,13 +1483,14 @@ fn test_network_info_negative_time_offset() {
 #[test]
 fn test_unavailable_electrum_proto_version() {
     ElectrumClientImpl::new.mock_safe(
-        |coin_ticker, event_handlers, block_headers_storage, abortable_system, _| {
+        |coin_ticker, event_handlers, block_headers_storage, abortable_system, _, _| {
             MockResult::Return(ElectrumClientImpl::with_protocol_version(
                 coin_ticker,
                 event_handlers,
                 OrdRange::new(1.8, 1.9).unwrap(),
                 block_headers_storage,
                 abortable_system,
+                None,
             ))
         },
     );

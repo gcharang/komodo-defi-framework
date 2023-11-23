@@ -14,6 +14,19 @@ impl EventBehaviour for UtxoStandardCoin {
 
     async fn handle(self, _interval: f64, _tx: oneshot::Sender<EventInitStatus>) {
         loop {
+            let coin = self.clone();
+            if let Ok(Some(_)) = coin
+                .as_ref()
+                .scripthash_notification_receiver
+                .as_ref()
+                .unwrap()
+                .lock()
+                .await
+                .try_next()
+            {
+                println!("Received scripthash notification.");
+            };
+
             // TODO
         }
     }
@@ -33,9 +46,10 @@ impl EventBehaviour for UtxoStandardCoin {
                 AbortSettings::info_on_abort(format!("{} event is stopped for {}.", Self::EVENT_NAME, self.ticker()));
             self.spawner().spawn_with_settings(fut, settings);
 
-            rx.await.unwrap_or_else(|e| {
-                EventInitStatus::Failed(format!("Event initialization status must be received: {}", e))
-            })
+            // rx.await.unwrap_or_else(|e| {
+            //     EventInitStatus::Failed(format!("Event initialization status must be received: {}", e))
+            // })
+            EventInitStatus::Success
         } else {
             EventInitStatus::Inactive
         }

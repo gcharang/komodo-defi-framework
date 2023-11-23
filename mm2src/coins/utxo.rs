@@ -32,11 +32,11 @@ pub mod rpc_clients;
 pub mod slp;
 pub mod spv;
 pub mod swap_proto_v2_scripts;
+pub mod utxo_balance_events;
 pub mod utxo_block_header_storage;
 pub mod utxo_builder;
 pub mod utxo_common;
 pub mod utxo_standard;
-pub mod utxo_balance_events;
 pub mod utxo_tx_history_v2;
 pub mod utxo_withdraw;
 
@@ -608,14 +608,12 @@ pub struct UtxoCoinFields {
     /// The watcher/receiver of the block headers synchronization status,
     /// initialized only for non-native mode if spv is enabled for the coin.
     pub block_headers_status_watcher: Option<AsyncMutex<AsyncReceiver<UtxoSyncStatus>>>,
-    /// TODO
-    pub transaction_event_notifier: Option<TxEventNotifier>,
     /// This abortable system is used to spawn coin's related futures that should be aborted on coin deactivation
     /// and on [`MmArc::stop`].
     pub abortable_system: AbortableQueue,
+    /// TODO: doc & type
+    scripthash_notification_receiver: Option<Arc<AsyncMutex<AsyncReceiver<()>>>>,
 }
-/// TODO
-pub struct TxEventNotifier(AsyncSender<()>, AsyncReceiver<()>);
 
 #[derive(Debug, Display)]
 pub enum UnsupportedAddr {
