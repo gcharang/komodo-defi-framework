@@ -158,14 +158,35 @@ pub mod tables {
 
     #[derive(Deserialize, Serialize)]
     pub struct SwapsMigrationTable {
-        current_migration: u32,
+        pub(crate) migration: u32,
     }
 
     impl TableSignature for SwapsMigrationTable {
         fn table_name() -> &'static str { "swaps_migration" }
 
-        fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-            todo!()
+        fn on_upgrade_needed(upgrader: &DbUpgrader, mut old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+            while old_version < new_version {
+                match old_version {
+                    0 => {
+                        // do nothing explicitly because the table should be created on upgrade
+                        // from version 1 to 2 in order to avoid breaking existing databases
+                    },
+                    1 => {
+                        let table = upgrader.create_table(Self::table_name())?;
+                        table.create_index("migration", true)?;
+                    },
+                    unsupported_version => {
+                        return MmError::err(OnUpgradeError::UnsupportedVersion {
+                            unsupported_version,
+                            old_version,
+                            new_version,
+                        })
+                    },
+                }
+
+                old_version += 1;
+            }
+            Ok(())
         }
     }
 }

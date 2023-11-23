@@ -160,6 +160,7 @@ const NEGOTIATION_TIMEOUT_SEC: u64 = 90;
 
 cfg_wasm32! {
     use mm2_db::indexed_db::{ConstructibleDb, DbLocked};
+    use saved_swap::migrate_swaps_data;
     use swap_wasm_db::{InitDbResult, InitDbError, SwapDb};
 
     pub type SwapDbLocked<'a> = DbLocked<'a, SwapDb>;
@@ -1423,6 +1424,9 @@ pub async fn my_recent_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
 /// Find out the swaps that need to be kick-started, continue from the point where swap was interrupted
 /// Return the tickers of coins that must be enabled for swaps to continue
 pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
+    #[cfg(target_arch = "wasm32")]
+    try_s!(migrate_swaps_data(&ctx).await);
+
     let mut coins = HashSet::new();
     let legacy_unfinished_uuids = try_s!(get_unfinished_swaps_uuids(ctx.clone(), LEGACY_SWAP_TYPE).await);
     for uuid in legacy_unfinished_uuids {
