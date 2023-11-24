@@ -7,6 +7,7 @@ mod hw_client;
 mod hw_ctx;
 mod hw_error;
 pub mod hw_rpc_task;
+pub mod mnemonic;
 pub mod privkey;
 mod shared_db_id;
 mod standard_hd_path;
@@ -26,6 +27,7 @@ pub use hw_common::primitives::{Bip32Error, ChildNumber, DerivationPath, EcdsaCu
 pub use hw_ctx::{HardwareWalletArc, HardwareWalletCtx};
 pub use hw_error::{from_hw_error, HwError, HwResult, HwRpcError, WithHwRpcError};
 pub use keys::Secret as Secp256k1Secret;
+pub use mnemonic::{decrypt_mnemonic, encrypt_mnemonic, generate_mnemonic, EncryptedMnemonicData, MnemonicError};
 pub use standard_hd_path::{Bip44Chain, StandardHDCoinAddress, StandardHDPath, StandardHDPathError,
                            StandardHDPathToAccount, StandardHDPathToCoin, UnknownChainError};
 pub use trezor;

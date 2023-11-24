@@ -255,6 +255,16 @@ impl MmCtx {
             })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn wallet_file_path(&self, wallet_name: &str) -> PathBuf {
+        let db_root = path_to_db_root(self.conf["dbdir"].as_str());
+        db_root.join(wallet_name.to_string() + ".dat")
+    }
+
+    /// Checks if a wallet with the given name exists.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn check_if_wallet_exists(&self, wallet_name: &str) -> bool { self.wallet_file_path(wallet_name).exists() }
+
     /// MM database path.  
     /// Defaults to a relative "DB".
     ///
@@ -361,15 +371,21 @@ impl Drop for MmCtx {
     }
 }
 
+/// Returns the path to the MM database root.
+#[cfg(not(target_arch = "wasm32"))]
+fn path_to_db_root(db_root: Option<&str>) -> &Path {
+    const DEFAULT_ROOT: &str = "DB";
+
+    match db_root {
+        Some(dbdir) if !dbdir.is_empty() => Path::new(dbdir),
+        _ => Path::new(DEFAULT_ROOT),
+    }
+}
+
 /// This function can be used later by an FFI function to open a GUI storage.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn path_to_dbdir(db_root: Option<&str>, db_id: &H160) -> PathBuf {
-    const DEFAULT_ROOT: &str = "DB";
-
-    let path = match db_root {
-        Some(dbdir) if !dbdir.is_empty() => Path::new(dbdir),
-        _ => Path::new(DEFAULT_ROOT),
-    };
+    let path = path_to_db_root(db_root);
 
     path.join(hex::encode(db_id.as_slice()))
 }

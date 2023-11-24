@@ -7,9 +7,12 @@ edition = "2018"
 doctest = false
 
 [dependencies]
+argon2 = { version = "0.5.2", features = ["zeroize"] }
 arrayref = "0.3"
 async-trait = "0.1"
+base64 = "0.11.0"
 bip32 = { version = "0.2.2", default-features = false, features = ["alloc", "secp256k1-ffi"] }
+bip39 = { version = "2.0.0", features = ["rand_core", "zeroize"], default-features = false }
 bitcrypto = { path = "../mm2_bitcoin/crypto" }
 bs58 = "0.4.0"
 common = { path = "../common" }
@@ -18,6 +21,7 @@ enum_from = { path = "../derives/enum_from" }
 enum-primitive-derive = "0.2"
 futures = "0.3"
 hex = "0.4.2"
+hmac = "0.12.1"
 http = "0.2"
 hw_common = { path = "../hw_common" }
 keys = { path = "../mm2_bitcoin/keys" }
@@ -25,6 +29,7 @@ lazy_static = "1.4"
 mm2_core = { path = "../mm2_core" }
 mm2_err_handle = { path = "../mm2_err_handle" }
 num-traits = "0.2"
+openssl = "0.10.60"
 parking_lot = { version = "0.12.0", features = ["nightly"] }
 primitives = { path = "../mm2_bitcoin/primitives" }
 rpc = { path = "../mm2_bitcoin/rpc" }
@@ -36,8 +41,9 @@ ser_error_derive = { path = "../derives/ser_error_derive" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
-tiny-bip39 = "0.8.0"
+sha2 = "0.10"
 trezor = { path = "../trezor" }
+zeroize = { version = "1.5", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 mm2_eth = { path = "../mm2_eth" }
