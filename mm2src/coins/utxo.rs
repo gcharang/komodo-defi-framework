@@ -66,7 +66,7 @@ pub use keys::{Address, AddressFormat as UtxoAddressFormat, AddressHashEnum, Key
                Type as ScriptType};
 #[cfg(not(target_arch = "wasm32"))]
 use lightning_invoice::Currency as LightningCurrency;
-use mm2_core::mm_ctx::MmArc;
+use mm2_core::mm_ctx::{MmArc, MmWeak};
 use mm2_err_handle::prelude::*;
 use mm2_metrics::MetricsArc;
 use mm2_number::BigDecimal;
@@ -613,6 +613,7 @@ pub struct UtxoCoinFields {
     pub abortable_system: AbortableQueue,
     /// TODO: doc & type
     scripthash_notification_receiver: Option<Arc<AsyncMutex<AsyncReceiver<()>>>>,
+    pub(crate) ctx: MmWeak,
 }
 
 #[derive(Debug, Display)]

@@ -4,8 +4,9 @@ use async_trait::async_trait;
 use common::{executor::{AbortSettings, SpawnAbortable, Timer},
              log, Future01CompatExt};
 use futures::channel::oneshot::{self, Receiver, Sender};
+use mm2_core::mm_ctx::MmArc;
 use mm2_event_stream::{behaviour::{EventBehaviour, EventInitStatus},
-                       EventStreamConfiguration};
+                       Event, EventStreamConfiguration};
 use mm2_number::BigDecimal;
 
 use super::utxo_standard::UtxoStandardCoin;
@@ -17,6 +18,16 @@ impl EventBehaviour for UtxoStandardCoin {
     const EVENT_NAME: &'static str = "COIN_BALANCE";
 
     async fn handle(self, _interval: f64, tx: oneshot::Sender<EventInitStatus>) {
+        let ctx = match MmArc::from_weak(&self.as_ref().ctx) {
+            Some(ctx) => ctx,
+            None => {
+                let msg = "MM context must have been initialized already.";
+                tx.send(EventInitStatus::Failed(msg.to_owned()))
+                    .expect("Receiver is dropped, which should never happen.");
+                panic!("{}", msg);
+            },
+        };
+
         let addresses = match self.my_addresses().await {
             Ok(t) => t,
             Err(e) => {
@@ -86,6 +97,18 @@ impl EventBehaviour for UtxoStandardCoin {
                 .collect();
 
             println!("UPDATED VALUES {:?}", updated_parts);
+
+            for (address, balance) in updated_parts {
+                let payload = json!({
+                    "ticker": self.ticker(),
+                    "address": address,
+                    "balance": { "spendable": balance, "unspendable": BigDecimal::default()  }
+                });
+
+                ctx.stream_channel_controller
+                    .broadcast(Event::new(Self::EVENT_NAME.to_string(), payload.to_string()))
+                    .await;
+            }
 
             current_balances = new_balances;
         }

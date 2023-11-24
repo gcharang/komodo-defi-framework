@@ -121,7 +121,7 @@ where
         }
 
         if let Some(stream_config) = &self.ctx().event_stream_configuration {
-            // TODO: error handling
+            // TODO: error handling + return error if client is native
             if let EventInitStatus::Failed(err) =
                 EventBehaviour::spawn_if_active(UtxoStandardCoin::from(utxo_arc.clone()), stream_config).await
             {
