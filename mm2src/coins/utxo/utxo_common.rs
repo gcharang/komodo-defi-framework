@@ -15,7 +15,7 @@ use crate::utxo::spv::SimplePaymentVerification;
 use crate::utxo::tx_cache::TxCacheResult;
 use crate::utxo::utxo_withdraw::{InitUtxoWithdraw, StandardUtxoWithdraw, UtxoWithdraw};
 use crate::watcher_common::validate_watcher_reward;
-use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPaymentInput, GenPreimageResult,
+use crate::{CanRefundHtlc, CoinBalance, CoinWithDerivationMethod, ConfirmPaymentInput, DexFee, GenPreimageResult,
             GenTakerFundingSpendArgs, GenTakerPaymentSpendArgs, GetWithdrawSenderAddress, HDAccountAddressId,
             RawTransactionError, RefundFundingSecretArgs, RefundPaymentArgs, RewardTarget, SearchForSwapTxSpendInput,
             SendMakerPaymentSpendPreimageInput, SendPaymentArgs, SendTakerFundingArgs, SignatureError,
@@ -1668,7 +1668,7 @@ pub async fn sign_and_broadcast_taker_payment_spend<T: UtxoCommonOps>(
     Ok(final_tx.into())
 }
 
-pub fn send_taker_fee<T>(coin: T, fee_pub_key: &[u8], amount: BigDecimal) -> TransactionFut
+pub fn send_taker_fee<T>(coin: T, fee_pub_key: &[u8], dex_fee: DexFee) -> TransactionFut
 where
     T: UtxoCommonOps + GetUtxoListOps,
 {
@@ -1680,12 +1680,36 @@ where
         coin.as_ref().conf.bech32_hrp.clone(),
         coin.addr_format().clone(),
     ));
-    let amount = try_tx_fus!(sat_from_big_decimal(&amount, coin.as_ref().decimals));
-    let output = TransactionOutput {
-        value: amount,
-        script_pubkey: Builder::build_p2pkh(&address.hash).to_bytes(),
-    };
-    send_outputs_from_my_address(coin, vec![output])
+
+    let outputs = try_tx_fus!(generate_taker_fee_tx_outputs(
+        coin.as_ref().decimals,
+        &address.hash,
+        dex_fee,
+    ));
+
+    send_outputs_from_my_address(coin, outputs)
+}
+
+fn generate_taker_fee_tx_outputs(
+    decimals: u8,
+    address_hash: &AddressHashEnum,
+    dex_fee: DexFee,
+) -> Result<Vec<TransactionOutput>, MmError<NumConversError>> {
+    let fee_amount = dex_fee.fee_uamount(decimals)?;
+
+    let mut outputs = vec![TransactionOutput {
+        value: fee_amount,
+        script_pubkey: Builder::build_p2pkh(address_hash).to_bytes(),
+    }];
+
+    if let Some(burn_amount) = dex_fee.burn_uamount(decimals)? {
+        outputs.push(TransactionOutput {
+            value: burn_amount,
+            script_pubkey: Builder::default().push_opcode(Opcode::OP_RETURN).into_bytes(),
+        });
+    }
+
+    Ok(outputs)
 }
 
 pub fn send_maker_payment<T>(coin: T, args: SendPaymentArgs) -> TransactionFut
@@ -2329,11 +2353,10 @@ pub fn validate_fee<T: UtxoCommonOps>(
     tx: UtxoTx,
     output_index: usize,
     sender_pubkey: &[u8],
-    amount: &BigDecimal,
+    dex_amount: &DexFee,
     min_block_number: u64,
     fee_addr: &[u8],
 ) -> ValidatePaymentFut<()> {
-    let amount = amount.clone();
     let address = try_f!(address_from_raw_pubkey(
         fee_addr,
         coin.as_ref().conf.pub_addr_prefix,
@@ -2354,8 +2377,10 @@ pub fn validate_fee<T: UtxoCommonOps>(
         ));
     }
 
+    let fee_amount = try_f!(dex_amount.fee_uamount(coin.as_ref().decimals));
+    let burn_amount = try_f!(dex_amount.burn_uamount(coin.as_ref().decimals));
+
     let fut = async move {
-        let amount = sat_from_big_decimal(&amount, coin.as_ref().decimals)?;
         let tx_from_rpc = coin
             .as_ref()
             .rpc_client
@@ -2391,10 +2416,10 @@ pub fn validate_fee<T: UtxoCommonOps>(
                         INVALID_RECEIVER_ERR_LOG, out.script_pubkey, expected_script_pubkey
                     )));
                 }
-                if out.value < amount {
+                if out.value < fee_amount {
                     return MmError::err(ValidatePaymentError::WrongPaymentTx(format!(
                         "Provided dex fee tx output value is less than expected {:?} {:?}",
-                        out.value, amount
+                        out.value, fee_amount
                     )));
                 }
             },
@@ -2405,6 +2430,35 @@ pub fn validate_fee<T: UtxoCommonOps>(
                 )))
             },
         }
+
+        if let Some(burn_amount) = burn_amount {
+            match tx.outputs.get(output_index + 1) {
+                Some(out) => {
+                    let expected_script_pubkey = Builder::default().push_opcode(Opcode::OP_RETURN).into_bytes();
+
+                    if out.script_pubkey != expected_script_pubkey {
+                        return MmError::err(ValidatePaymentError::WrongPaymentTx(format!(
+                            "{}: Provided burn tx output script_pubkey doesn't match expected {:?} {:?}",
+                            INVALID_RECEIVER_ERR_LOG, out.script_pubkey, expected_script_pubkey
+                        )));
+                    }
+
+                    if out.value < burn_amount {
+                        return MmError::err(ValidatePaymentError::WrongPaymentTx(format!(
+                            "Provided burn tx output value is less than expected {:?} {:?}",
+                            out.value, burn_amount
+                        )));
+                    }
+                },
+                None => {
+                    return MmError::err(ValidatePaymentError::WrongPaymentTx(format!(
+                        "Provided burn tx output {:?} does not have output {}",
+                        tx, output_index
+                    )))
+                },
+            }
+        }
+
         Ok(())
     };
     Box::new(fut.boxed().compat())
@@ -3999,21 +4053,19 @@ pub fn get_receiver_trade_fee<T: UtxoCommonOps>(coin: T) -> TradePreimageFut<Tra
 
 pub async fn get_fee_to_send_taker_fee<T>(
     coin: &T,
-    dex_fee_amount: BigDecimal,
+    dex_fee: DexFee,
     stage: FeeApproxStage,
 ) -> TradePreimageResult<TradeFee>
 where
     T: MarketCoinOps + UtxoCommonOps,
 {
     let decimals = coin.as_ref().decimals;
-    let value = sat_from_big_decimal(&dex_fee_amount, decimals)?;
-    let output = TransactionOutput {
-        value,
-        script_pubkey: Builder::build_p2pkh(&AddressHashEnum::default_address_hash()).to_bytes(),
-    };
+
+    let outputs = generate_taker_fee_tx_outputs(decimals, &AddressHashEnum::default_address_hash(), dex_fee)?;
+
     let gas_fee = None;
     let fee_amount = coin
-        .preimage_trade_fee_required_to_send_outputs(vec![output], FeePolicy::SendExact, gas_fee, &stage)
+        .preimage_trade_fee_required_to_send_outputs(outputs, FeePolicy::SendExact, gas_fee, &stage)
         .await?;
     Ok(TradeFee {
         coin: coin.ticker().to_owned(),
@@ -5056,4 +5108,43 @@ fn test_tx_v_size() {
     let tx: UtxoTx = "010000000001023b7308e5ca5d02000b743441f7653c1110e07275b7ab0e983f489e92bfdd2b360100000000ffffffffd6c4f22e9b1090b2584a82cf4cb6f85595dd13c16ad065711a7585cc373ae2e50000000000ffffffff02947b2a00000000001600148474e72f396d44504cd30b1e7b992b65344240c609050700000000001600141b891309c8fe1338786fa3476d5d1a9718d43a0202483045022100bfae465fcd8d2636b2513f68618eb4996334c94d47e285cb538e3416eaf4521b02201b953f46ff21c8715a0997888445ca814dfdb834ef373a29e304bee8b32454d901210226bde3bca3fe7c91e4afb22c4bc58951c60b9bd73514081b6bd35f5c09b8c9a602483045022100ba48839f7becbf8f91266140f9727edd08974fcc18017661477af1d19603ed31022042fd35af1b393eeb818b420e3a5922079776cc73f006d26dd67be932e1b4f9000121034b6a54040ad2175e4c198370ac36b70d0b0ab515b59becf100c4cd310afbfd0c00000000".into();
     let v_size = tx_size_in_v_bytes(&UtxoAddressFormat::Segwit, &tx);
     assert_eq!(v_size, 209)
+}
+
+#[test]
+fn test_generate_taker_fee_tx_outputs() {
+    let amount = BigDecimal::from(6150);
+    let fee_amount = sat_from_big_decimal(&amount, 8).unwrap();
+
+    let outputs = generate_taker_fee_tx_outputs(
+        8,
+        &AddressHashEnum::default_address_hash(),
+        DexFee::Standard(amount.into()),
+    )
+    .unwrap();
+
+    assert_eq!(outputs.len(), 1);
+
+    assert_eq!(outputs[0].value, fee_amount);
+}
+
+#[test]
+fn test_generate_taker_fee_tx_outputs_with_burn() {
+    let fee_amount = BigDecimal::from(6150);
+    let burn_amount = &(&fee_amount / &BigDecimal::from_str("0.75").unwrap()) - &fee_amount;
+
+    let fee_uamount = sat_from_big_decimal(&fee_amount, 8).unwrap();
+    let burn_uamount = sat_from_big_decimal(&burn_amount, 8).unwrap();
+
+    let outputs = generate_taker_fee_tx_outputs(
+        8,
+        &AddressHashEnum::default_address_hash(),
+        DexFee::with_burn(fee_amount.into(), burn_amount.into()),
+    )
+    .unwrap();
+
+    assert_eq!(outputs.len(), 2);
+
+    assert_eq!(outputs[0].value, fee_uamount);
+
+    assert_eq!(outputs[1].value, burn_uamount);
 }

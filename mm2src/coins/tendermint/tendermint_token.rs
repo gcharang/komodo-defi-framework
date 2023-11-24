@@ -20,7 +20,7 @@ use crate::{big_decimal_from_sat_unsigned, utxo::sat_from_big_decimal, BalanceFu
             VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherSearchForSwapTxSpendInput,
             WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawError, WithdrawFrom, WithdrawFut,
             WithdrawRequest};
-use crate::{MmCoinEnum, PaymentInstructionArgs, ValidateWatcherSpendInput, WatcherReward, WatcherRewardError};
+use crate::{DexFee, MmCoinEnum, PaymentInstructionArgs, ValidateWatcherSpendInput, WatcherReward, WatcherRewardError};
 use async_trait::async_trait;
 use bitcrypto::sha256;
 use common::executor::abortable_queue::AbortableQueue;
@@ -269,9 +269,14 @@ impl TendermintToken {
 #[async_trait]
 #[allow(unused_variables)]
 impl SwapOps for TendermintToken {
-    fn send_taker_fee(&self, fee_addr: &[u8], amount: BigDecimal, uuid: &[u8]) -> TransactionFut {
-        self.platform_coin
-            .send_taker_fee_for_denom(fee_addr, amount, self.denom.clone(), self.decimals, uuid)
+    fn send_taker_fee(&self, fee_addr: &[u8], dex_fee: DexFee, uuid: &[u8]) -> TransactionFut {
+        self.platform_coin.send_taker_fee_for_denom(
+            fee_addr,
+            dex_fee.fee_amount().into(),
+            self.denom.clone(),
+            self.decimals,
+            uuid,
+        )
     }
 
     fn send_maker_payment(&self, maker_payment_args: SendPaymentArgs) -> TransactionFut {
@@ -323,7 +328,7 @@ impl SwapOps for TendermintToken {
             validate_fee_args.fee_tx,
             validate_fee_args.expected_sender,
             validate_fee_args.fee_addr,
-            validate_fee_args.amount,
+            &validate_fee_args.dex_fee.fee_amount().into(),
             self.decimals,
             validate_fee_args.uuid,
             self.denom.to_string(),
@@ -836,7 +841,7 @@ impl MmCoin for TendermintToken {
 
     async fn get_fee_to_send_taker_fee(
         &self,
-        dex_fee_amount: BigDecimal,
+        dex_fee_amount: DexFee,
         _stage: FeeApproxStage,
     ) -> TradePreimageResult<TradeFee> {
         self.platform_coin
