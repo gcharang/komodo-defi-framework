@@ -198,6 +198,9 @@ pub trait StorableStateMachine: Send + Sync + Sized + 'static {
 
     /// Initializes additional context actions (spawn futures, etc.)
     fn init_additional_context(&mut self);
+
+    /// Cleans additional context up
+    fn clean_up_context(&mut self);
 }
 
 // Ensure that StandardStateMachine won't be occasionally implemented for StorableStateMachine.
@@ -224,7 +227,11 @@ impl<T: StorableStateMachine> StateMachineTrait for T {
         Ok(())
     }
 
-    async fn on_finished(&mut self) -> Result<(), T::Error> { Ok(self.mark_finished().await?) }
+    async fn on_finished(&mut self) -> Result<(), T::Error> {
+        self.mark_finished().await?;
+        self.clean_up_context();
+        Ok(())
+    }
 }
 
 /// A trait for storable states.
@@ -447,6 +454,8 @@ mod tests {
         fn spawn_reentrancy_lock_renew(&mut self, _guard: Self::ReentrancyLock) {}
 
         fn init_additional_context(&mut self) {}
+
+        fn clean_up_context(&mut self) {}
     }
 
     struct State1 {}

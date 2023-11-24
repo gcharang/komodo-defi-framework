@@ -532,6 +532,9 @@ impl SwapsContext {
         self.swap_v2_msgs.lock().unwrap().insert(uuid, store);
     }
 
+    /// Removes storage for the swap with specific uuid.
+    pub fn remove_msg_v2_store(&self, uuid: &Uuid) { self.swap_v2_msgs.lock().unwrap().remove(uuid); }
+
     #[cfg(target_arch = "wasm32")]
     pub async fn swap_db(&self) -> InitDbResult<SwapDbLocked<'_>> { self.swap_db.get_or_initialize().await }
 }

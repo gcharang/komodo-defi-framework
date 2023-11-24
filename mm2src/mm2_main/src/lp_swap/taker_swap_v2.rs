@@ -676,6 +676,8 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
             taker_coin: self.taker_coin.ticker().into(),
         })
     }
+
+    fn clean_up_context(&mut self) { clean_up_context_impl(&self.ctx, &self.uuid) }
 }
 
 /// Represents a state used to start a new taker swap.

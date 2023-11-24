@@ -1,4 +1,4 @@
-use crate::mm2::lp_network::subscribe_to_topic;
+use crate::mm2::lp_network::{subscribe_to_topic, unsubscribe_from_topic};
 use crate::mm2::lp_swap::swap_lock::{SwapLock, SwapLockError, SwapLockOps};
 use crate::mm2::lp_swap::{swap_v2_topic, SwapsContext};
 use coins::utxo::utxo_standard::UtxoStandardCoin;
@@ -55,6 +55,8 @@ pub enum SwapRecreateError {
     SwapAborted,
     /// Swap has been completed
     SwapCompleted,
+    /// Swap has been finished with refund
+    SwapFinishedWithRefund,
 }
 
 /// Represents errors that can be produced by [`MakerSwapStateMachine`] or [`TakerSwapStateMachine`] run.
@@ -236,6 +238,13 @@ pub(super) fn init_additional_context_impl(ctx: &MmArc, swap_info: ActiveSwapV2I
         .lock()
         .unwrap()
         .insert(swap_info.uuid, swap_info);
+}
+
+pub(super) fn clean_up_context_impl(ctx: &MmArc, uuid: &Uuid) {
+    unsubscribe_from_topic(ctx, swap_v2_topic(uuid));
+    let swap_ctx = SwapsContext::from_ctx(ctx).expect("SwapsContext::from_ctx should not fail");
+    swap_ctx.remove_msg_v2_store(uuid);
+    swap_ctx.active_swaps_v2_infos.lock().unwrap().remove(uuid);
 }
 
 pub(super) async fn acquire_reentrancy_lock_impl(ctx: &MmArc, uuid: Uuid) -> MmResult<SwapLock, SwapStateMachineError> {

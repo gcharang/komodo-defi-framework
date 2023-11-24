@@ -253,14 +253,9 @@ fn test_v2_swap_utxo_utxo() {
         println!("{:?}", taker_swap_status);
     }
 
-    // Disabling coins will fail for Bob because his order is still active, but active_swaps must be empty at this point
-    let err = block_on(disable_coin_err(&mm_bob, MYCOIN, false));
-    assert!(err.active_swaps.is_empty());
-
-    let err = block_on(disable_coin_err(&mm_bob, MYCOIN1, false));
-    assert!(err.active_swaps.is_empty());
-
-    // Disabling coins on Alice side should be successful at this point
+    // Disabling coins on both nodes should be successful at this point
+    block_on(disable_coin(&mm_bob, MYCOIN, false));
+    block_on(disable_coin(&mm_bob, MYCOIN1, false));
     block_on(disable_coin(&mm_alice, MYCOIN, false));
     block_on(disable_coin(&mm_alice, MYCOIN1, false));
 }
