@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use common::{executor::{AbortSettings, SpawnAbortable, Timer},
              log, Future01CompatExt};
 use futures::channel::oneshot::{self, Receiver, Sender};
 use mm2_event_stream::{behaviour::{EventBehaviour, EventInitStatus},
                        EventStreamConfiguration};
+use mm2_number::BigDecimal;
 
 use super::utxo_standard::UtxoStandardCoin;
 use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_tx_history_v2::UtxoTxHistoryOps},
@@ -44,8 +47,9 @@ impl EventBehaviour for UtxoStandardCoin {
         tx.send(EventInitStatus::Success)
             .expect("Receiver is dropped, which should never happen.");
 
+        let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
         loop {
-            if let Ok(Some(_)) = self
+            match self
                 .as_ref()
                 .scripthash_notification_receiver
                 .as_ref()
@@ -54,10 +58,36 @@ impl EventBehaviour for UtxoStandardCoin {
                 .await
                 .try_next()
             {
-                println!("Received scripthash notification.");
+                Ok(Some(_)) => {},
+                _ => {
+                    Timer::sleep(0.1).await;
+                    continue;
+                },
+            };
+
+            println!("CURRENT VALUES {:?}", current_balances);
+
+            let new_balances = self.my_addresses_balances().await.unwrap();
+
+            println!("NEW VALUES {:?}", new_balances);
+
+            if new_balances == current_balances {
+                continue;
             }
 
-            Timer::sleep(0.5).await;
+            // Get the differences
+            let updated_parts: HashMap<String, BigDecimal> = new_balances
+                .iter()
+                .filter_map(|(key, new_value)| match current_balances.get(key) {
+                    Some(current_value) if new_value != current_value => Some((key.clone(), new_value.clone())),
+                    None => Some((key.clone(), new_value.clone())),
+                    _ => None,
+                })
+                .collect();
+
+            println!("UPDATED VALUES {:?}", updated_parts);
+
+            current_balances = new_balances;
         }
     }
 
