@@ -7,12 +7,13 @@ use crate::mm2::lp_swap::{broadcast_swap_v2_msg_every, check_balance_for_taker_s
                           TAKER_SWAP_V2_TYPE};
 use async_trait::async_trait;
 use bitcrypto::{dhash160, sha256};
-use coins::{CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFundingSpendArgs, GenTakerPaymentSpendArgs,
-            MmCoin, SendTakerFundingArgs, SpendPaymentArgs, SwapOpsV2, ToBytes, Transaction, TxPreimageWithSig,
-            ValidatePaymentInput, WaitForHTLCTxSpendArgs};
+use coins::{CanRefundHtlc, CoinAssocTypes, ConfirmPaymentInput, FeeApproxStage, GenTakerFundingSpendArgs,
+            GenTakerPaymentSpendArgs, MmCoin, RefundFundingSecretArgs, RefundPaymentArgs, SendTakerFundingArgs,
+            SpendPaymentArgs, SwapOpsV2, ToBytes, Transaction, TxPreimageWithSig, ValidatePaymentInput,
+            WaitForHTLCTxSpendArgs};
 use common::executor::abortable_queue::AbortableQueue;
-use common::executor::AbortableSystem;
-use common::log::{debug, info, warn};
+use common::executor::{AbortableSystem, Timer};
+use common::log::{debug, error, info, warn};
 use common::{Future01CompatExt, DEX_FEE_ADDR_RAW_PUBKEY};
 use crypto::privkey::SerializableSecp256k1Keypair;
 use keys::KeyPair;
@@ -130,6 +131,18 @@ pub enum TakerSwapEvent {
         taker_payment: TransactionIdentifier,
         taker_payment_spend: TransactionIdentifier,
         maker_payment_spend: TransactionIdentifier,
+    },
+    /// Swap has been finished with taker funding tx refund
+    TakerFundingRefunded {
+        funding_tx: TransactionIdentifier,
+        funding_tx_refund: TransactionIdentifier,
+        reason: TakerFundingRefundReason,
+    },
+    /// Swap has been finished with taker payment tx refund
+    TakerPaymentRefunded {
+        taker_payment: TransactionIdentifier,
+        taker_payment_refund: TransactionIdentifier,
+        reason: TakerPaymentRefundReason,
     },
     /// Swap has been aborted before taker payment was sent.
     Aborted { reason: AbortReason },
@@ -633,6 +646,12 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
             }),
             TakerSwapEvent::Aborted { .. } => return MmError::err(SwapRecreateError::SwapAborted),
             TakerSwapEvent::Completed => return MmError::err(SwapRecreateError::SwapCompleted),
+            TakerSwapEvent::TakerFundingRefunded { .. } => {
+                return MmError::err(SwapRecreateError::SwapFinishedWithRefund)
+            },
+            TakerSwapEvent::TakerPaymentRefunded { .. } => {
+                return MmError::err(SwapRecreateError::SwapFinishedWithRefund)
+            },
         };
 
         let machine = TakerSwapStateMachine {
@@ -1378,8 +1397,41 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
 {
     type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
 
-    async fn on_changed(self: Box<Self>, _state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
-        todo!()
+    async fn on_changed(self: Box<Self>, state_machine: &mut Self::StateMachine) -> StateResult<Self::StateMachine> {
+        warn!(
+            "Entered TakerFundingRefundRequired state for swap {} with reason {:?}",
+            state_machine.uuid, self.reason
+        );
+
+        let secret_hash = state_machine.taker_secret_hash();
+        let unique_data = state_machine.unique_data();
+
+        let refund_args = RefundFundingSecretArgs {
+            funding_tx: &self.taker_funding,
+            time_lock: state_machine.taker_funding_locktime(),
+            maker_pubkey: &self.negotiation_data.taker_coin_htlc_pub_from_maker,
+            taker_secret: state_machine.taker_secret.as_slice(),
+            taker_secret_hash: &secret_hash,
+            swap_contract_address: &None,
+            swap_unique_data: &unique_data,
+            watcher_reward: false,
+        };
+
+        let funding_refund_tx = match state_machine.taker_coin.refund_taker_funding_secret(refund_args).await {
+            Ok(tx) => tx,
+            Err(e) => {
+                let reason = AbortReason::TakerFundingRefundFailed(e.get_plain_text_format());
+                return Self::change_state(Aborted::new(reason), state_machine).await;
+            },
+        };
+
+        let next_state = TakerFundingRefunded {
+            maker_coin: Default::default(),
+            funding_tx: self.taker_funding,
+            funding_refund_tx,
+            reason: self.reason,
+        };
+        Self::change_state(next_state, state_machine).await
     }
 }
 
@@ -1435,7 +1487,55 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> State
             "Entered TakerPaymentRefundRequired state for swap {} with reason {:?}",
             state_machine.uuid, self.reason
         );
-        unimplemented!()
+
+        loop {
+            match state_machine
+                .taker_coin
+                .can_refund_htlc(state_machine.taker_payment_locktime())
+                .compat()
+                .await
+            {
+                Ok(CanRefundHtlc::CanRefundNow) => break,
+                Ok(CanRefundHtlc::HaveToWait(to_sleep)) => Timer::sleep(to_sleep as f64).await,
+                Err(e) => {
+                    error!("Error {} on can_refund_htlc, retrying in 30 seconds", e);
+                    Timer::sleep(30.).await;
+                },
+            }
+        }
+
+        let payment_tx_bytes = self.taker_payment.tx_hex();
+        let unique_data = state_machine.unique_data();
+        let other_pub = self.negotiation_data.taker_coin_htlc_pub_from_maker.to_bytes();
+
+        let args = RefundPaymentArgs {
+            payment_tx: &payment_tx_bytes,
+            time_lock: state_machine.taker_payment_locktime(),
+            other_pubkey: &other_pub,
+            secret_hash: &self.negotiation_data.maker_secret_hash,
+            swap_contract_address: &None,
+            swap_unique_data: &unique_data,
+            watcher_reward: false,
+        };
+
+        let taker_payment_refund_tx = match state_machine.taker_coin.refund_combined_taker_payment(args).await {
+            Ok(tx) => tx,
+            Err(e) => {
+                let reason = AbortReason::TakerPaymentRefundFailed(e.get_plain_text_format());
+                return Self::change_state(Aborted::new(reason), state_machine).await;
+            },
+        };
+
+        let next_state = TakerPaymentRefunded {
+            maker_coin: Default::default(),
+            taker_payment: self.taker_payment,
+            taker_payment_refund: TransactionIdentifier {
+                tx_hex: taker_payment_refund_tx.tx_hex().into(),
+                tx_hash: taker_payment_refund_tx.tx_hash(),
+            },
+            reason: self.reason,
+        };
+        Self::change_state(next_state, state_machine).await
     }
 }
 
@@ -1592,7 +1692,6 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
     }
 }
 
-#[allow(dead_code)]
 struct TakerPaymentSpent<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> {
     maker_coin_start_block: u64,
     taker_coin_start_block: u64,
@@ -1760,6 +1859,8 @@ pub enum AbortReason {
     FailedToSendTakerFunding(String),
     CouldNotExtractSecret(String),
     FailedToSpendMakerPayment(String),
+    TakerFundingRefundFailed(String),
+    TakerPaymentRefundFailed(String),
 }
 
 struct Aborted<MakerCoin, TakerCoin> {
@@ -1812,6 +1913,14 @@ impl<MakerCoin: CoinAssocTypes, TakerCoin: SwapOpsV2> TransitionFrom<TakerPaymen
     for Aborted<MakerCoin, TakerCoin>
 {
 }
+impl<MakerCoin: CoinAssocTypes, TakerCoin: SwapOpsV2> TransitionFrom<TakerFundingRefundRequired<MakerCoin, TakerCoin>>
+    for Aborted<MakerCoin, TakerCoin>
+{
+}
+impl<MakerCoin: CoinAssocTypes, TakerCoin: SwapOpsV2> TransitionFrom<TakerPaymentRefundRequired<MakerCoin, TakerCoin>>
+    for Aborted<MakerCoin, TakerCoin>
+{
+}
 
 struct Completed<MakerCoin, TakerCoin> {
     maker_coin: PhantomData<MakerCoin>,
@@ -1849,5 +1958,100 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> LastStat
 
 impl<MakerCoin, TakerCoin: CoinAssocTypes> TransitionFrom<MakerPaymentSpent<MakerCoin, TakerCoin>>
     for Completed<MakerCoin, TakerCoin>
+{
+}
+
+struct TakerFundingRefunded<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> {
+    maker_coin: PhantomData<MakerCoin>,
+    funding_tx: TakerCoin::Tx,
+    funding_refund_tx: TakerCoin::Tx,
+    reason: TakerFundingRefundReason,
+}
+
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
+    for TakerFundingRefunded<MakerCoin, TakerCoin>
+{
+    type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
+
+    fn get_event(&self) -> TakerSwapEvent {
+        TakerSwapEvent::TakerFundingRefunded {
+            funding_tx: TransactionIdentifier {
+                tx_hex: self.funding_tx.tx_hex().into(),
+                tx_hash: self.funding_tx.tx_hash(),
+            },
+            funding_tx_refund: TransactionIdentifier {
+                tx_hex: self.funding_refund_tx.tx_hex().into(),
+                tx_hash: self.funding_refund_tx.tx_hash(),
+            },
+            reason: self.reason.clone(),
+        }
+    }
+}
+
+#[async_trait]
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> LastState
+    for TakerFundingRefunded<MakerCoin, TakerCoin>
+{
+    type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
+
+    async fn on_changed(
+        self: Box<Self>,
+        state_machine: &mut Self::StateMachine,
+    ) -> <Self::StateMachine as StateMachineTrait>::Result {
+        info!(
+            "Swap {} has been completed with taker funding refund",
+            state_machine.uuid
+        );
+    }
+}
+
+impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes>
+    TransitionFrom<TakerFundingRefundRequired<MakerCoin, TakerCoin>> for TakerFundingRefunded<MakerCoin, TakerCoin>
+{
+}
+
+struct TakerPaymentRefunded<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes> {
+    maker_coin: PhantomData<MakerCoin>,
+    taker_payment: TakerCoin::Tx,
+    taker_payment_refund: TransactionIdentifier,
+    reason: TakerPaymentRefundReason,
+}
+
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> StorableState
+    for TakerPaymentRefunded<MakerCoin, TakerCoin>
+{
+    type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
+
+    fn get_event(&self) -> TakerSwapEvent {
+        TakerSwapEvent::TakerPaymentRefunded {
+            taker_payment: TransactionIdentifier {
+                tx_hex: self.taker_payment.tx_hex().into(),
+                tx_hash: self.taker_payment.tx_hash(),
+            },
+            taker_payment_refund: self.taker_payment_refund.clone(),
+            reason: self.reason.clone(),
+        }
+    }
+}
+
+#[async_trait]
+impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> LastState
+    for TakerPaymentRefunded<MakerCoin, TakerCoin>
+{
+    type StateMachine = TakerSwapStateMachine<MakerCoin, TakerCoin>;
+
+    async fn on_changed(
+        self: Box<Self>,
+        state_machine: &mut Self::StateMachine,
+    ) -> <Self::StateMachine as StateMachineTrait>::Result {
+        info!(
+            "Swap {} has been completed with taker payment refund",
+            state_machine.uuid
+        );
+    }
+}
+
+impl<MakerCoin: CoinAssocTypes, TakerCoin: CoinAssocTypes>
+    TransitionFrom<TakerPaymentRefundRequired<MakerCoin, TakerCoin>> for TakerPaymentRefunded<MakerCoin, TakerCoin>
 {
 }
