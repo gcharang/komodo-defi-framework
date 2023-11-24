@@ -14,7 +14,7 @@ use common::log::{debug, error, info, warn};
 use futures::compat::Future01CompatExt;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use mm2_event_stream::behaviour::EventBehaviour;
+use mm2_event_stream::behaviour::{EventBehaviour, EventInitStatus};
 #[cfg(test)] use mocktopus::macros::*;
 use rand::Rng;
 use script::Builder;
@@ -122,7 +122,10 @@ where
 
         if let Some(stream_config) = &self.ctx().event_stream_configuration {
             // TODO: error handling
-            EventBehaviour::spawn_if_active(UtxoStandardCoin::from(utxo_arc.clone()), stream_config).await;
+            if let EventInitStatus::Failed(err) =
+                EventBehaviour::spawn_if_active(UtxoStandardCoin::from(utxo_arc.clone()), stream_config).await
+            {
+            }
         }
 
         Ok(result_coin)

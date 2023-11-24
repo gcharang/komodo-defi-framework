@@ -78,24 +78,6 @@ pub async fn utxo_standard_coin_with_policy(
         .build()
         .await
     );
-    let x = coin.my_addresses().await.unwrap();
-
-    for t in x {
-        let script = output_script(&t, ScriptType::P2PKH);
-        let script_hash = electrum_script_hash(&script);
-        let a = hex::encode(script_hash);
-        println!("SCRIPTHASH {:?}", a);
-    }
-
-    let x = coin
-        .as_ref()
-        .rpc_client
-        .blockchain_scripthash_subscribe("a71d9e0b85784be548f65074683dc626c9fd863dad2dcae9608c2a5a2d75bafe".to_string())
-        .compat()
-        .await
-        .unwrap();
-
-    println!("000000000000000000000000000000000000000000 {:?}", x);
 
     Ok(coin)
 }
