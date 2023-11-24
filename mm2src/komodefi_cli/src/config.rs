@@ -184,7 +184,14 @@ impl KomodefiConfigImpl {
                 "Configuration file: '{}' - does not comply to the expected mode: {:o}, the actual one is: {:o}",
                 file_path, CFG_FILE_PERM_MODE, mode
             );
+
+            // Update permissions to the desired mode
+            info!("Updating permission...");
+            let new_perms = fs::Permissions::from_mode(CFG_FILE_PERM_MODE);
+            fs::set_permissions(Path::new(file_path), new_perms)?;
+            info!("Permission Updated!, new permission: {mode}");
         };
+
         Ok(())
     }
 
