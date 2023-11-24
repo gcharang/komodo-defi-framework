@@ -345,30 +345,29 @@ impl Mm2Cfg {
         }
 
         if self.dbdir.is_none() {
-            self.dbdir = Some(self.generate_default_db_path()?)
+            let seed = self
+                .seed_phrase
+                .as_ref()
+                .ok_or_else(|| error_anyhow!("No seed phrase detected in config"))?;
+            let policy_builder = if let Some(true) = self.enable_hd {
+                KeyPairPolicyBuilder::GlobalHDAccount
+            } else {
+                KeyPairPolicyBuilder::Iguana
+            };
+
+            let (key, _) = policy_builder
+                .build(seed)
+                .map_err(|error| error_anyhow!("Failed pass default rpcip: {error}"))?;
+            let rmd160 = key.public().address_hash();
+
+            let current_dir =
+                current_dir().map_err(|error| error_anyhow!("Failed to load your current dir: {error}"))?;
+            let current_dir = current_dir.parent().unwrap().to_string_lossy().to_string();
+
+            let db_path = format!("{current_dir}/DB/{rmd160}");
+
+            self.dbdir = Some(db_path)
         }
         Ok(())
-    }
-
-    fn generate_default_db_path(&self) -> Result<String> {
-        let seed = self
-            .seed_phrase
-            .as_ref()
-            .ok_or_else(|| error_anyhow!("No seed phrase detected in config"))?;
-        let policy_builder = if let Some(false) = self.enable_hd {
-            KeyPairPolicyBuilder::GlobalHDAccount
-        } else {
-            KeyPairPolicyBuilder::Iguana
-        };
-
-        let (key, _) = policy_builder
-            .build(seed)
-            .map_err(|error| error_anyhow!("Failed pass default rpcip: {error}"))?;
-        let rmd160 = key.public().address_hash();
-
-        let current_dir = current_dir().map_err(|error| error_anyhow!("Failed to load your current dir: {error}"))?;
-        let current_dir = current_dir.parent().unwrap().to_string_lossy().to_string();
-
-        Ok(format!("{current_dir}/DB/{rmd160}"))
     }
 }

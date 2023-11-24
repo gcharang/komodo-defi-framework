@@ -2,7 +2,7 @@ use std::env;
 use std::io::Write;
 
 use super::cli;
-use super::komodefi_config::KomodefiConfigImpl;
+use super::config::KomodefiConfigImpl;
 use super::komodefi_proc::ResponseHandlerImpl;
 
 pub(super) struct KomodefiApp {

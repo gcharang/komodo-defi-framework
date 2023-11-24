@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::mem::take;
 
-use crate::komodefi_config::{get_config, set_config, KomodefiConfig};
+use crate::config::{get_config, set_config, KomodefiConfig};
 use crate::komodefi_proc::{KomodefiProc, ResponseHandler};
 use crate::scenarios::{get_status, init, start_process, stop_process};
 use crate::transport::SlurpTransport;
@@ -92,9 +92,7 @@ impl Cli {
             Command::Mm2(Mm2Commands::Kill) => stop_process(),
             Command::Mm2(Mm2Commands::Status) => get_status(),
             Command::Mm2(Mm2Commands::Stop) => proc.send_stop().await?,
-            Command::Config(ConfigSubcommand::Set(SetConfigArgs { password, uri })) => {
-                set_config(*password, uri.take())?
-            },
+            Command::Config(ConfigSubcommand::Set(config)) => set_config(config)?,
             Command::Config(ConfigSubcommand::Get) => get_config(),
             Command::Coin(CoinCommands::Enable(args)) => {
                 proc.enable(&args.coin, args.keep_progress, args.tx_history).await?

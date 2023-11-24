@@ -1,3 +1,8 @@
+use crate::cli_cmd_args::prelude::SetConfigArgs;
+use crate::helpers::rewrite_json_file;
+use crate::komodefi_proc::SmartFractPrecision;
+use crate::logging::{error_anyhow, warn_bail};
+
 use anyhow::{anyhow, bail, Result};
 use common::log::{error, info, warn};
 use directories::ProjectDirs;
@@ -7,10 +12,6 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 #[cfg(unix)] use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-
-use crate::helpers::rewrite_json_file;
-use crate::komodefi_proc::SmartFractPrecision;
-use crate::logging::{error_anyhow, warn_bail};
 
 const PROJECT_QUALIFIER: &str = "com";
 const PROJECT_COMPANY: &str = "komodoplatform";
@@ -31,7 +32,13 @@ pub(super) fn get_config() {
     info!("{}", komodefi_cfg)
 }
 
-pub(super) fn set_config(set_password: bool, rpc_api_uri: Option<String>) -> Result<()> {
+pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
+    config.inquire()?;
+    let set_password = config
+        .password
+        .ok_or_else(|| error_anyhow!("No seed phrase detected in config"))?;
+    let rpc_api_uri = config.uri.take();
+
     assert!(set_password || rpc_api_uri.is_some());
     let mut komodefi_cfg = KomodefiConfigImpl::from_config_path().unwrap_or_else(|_| KomodefiConfigImpl::default());
 

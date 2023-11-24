@@ -41,7 +41,7 @@ use mm2_rpc::data::legacy::{BalanceResponse, CancelAllOrdersResponse, CoinInitRe
 use mm2_rpc::data::version2::{BestOrdersV2Response, GetPublicKeyHashResponse, GetPublicKeyResponse,
                               GetRawTransactionResponse};
 
-use crate::komodefi_config::KomodefiConfig;
+use crate::config::KomodefiConfig;
 use crate::komodefi_proc::response_handler::formatters::{writeln_field, ZERO_INDENT};
 use crate::logging::error_anyhow;
 use crate::rpc_data::activation::{InitRpcTaskResponse, TaskId};

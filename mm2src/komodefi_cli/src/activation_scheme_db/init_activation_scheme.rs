@@ -7,8 +7,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
+use crate::config::KomodefiConfigImpl;
 use crate::error_anyhow;
-use crate::komodefi_config::KomodefiConfigImpl;
 
 const ACTIVATION_SCHEME_FILE: &str = "activation_scheme.json";
 const COIN_ACTIVATION_SOURCE: &str = "https://stats.kmd.io/api/table/coin_activation/";

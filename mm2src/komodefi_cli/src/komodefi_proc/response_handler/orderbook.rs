@@ -9,7 +9,7 @@ use mm2_rpc::data::legacy::{AggregatedOrderbookEntry, OrderbookResponse};
 
 use super::formatters::{format_confirmation_settings, format_ratio};
 use super::smart_fraction_fmt::SmartFractPrecision;
-use crate::komodefi_config::KomodefiConfig;
+use crate::config::KomodefiConfig;
 
 pub(crate) struct OrderbookSettings {
     pub(crate) uuids: bool,

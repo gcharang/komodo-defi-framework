@@ -23,7 +23,7 @@ use super::response_handler::ResponseHandler;
 use super::{OrderbookSettings, OrdersHistorySettings};
 use crate::activation_scheme_db::get_activation_scheme;
 use crate::cli_cmd_args::prelude::TxHistoryArgs;
-use crate::komodefi_config::KomodefiConfig;
+use crate::config::KomodefiConfig;
 use crate::rpc_data::activation::{zcoin::ZcoinActivationParams, ActivationMethod, ActivationMethodV2,
                                   EnablePlatformCoinWithTokensReq, InitRpcTaskResponse, InitStandaloneCoinReq,
                                   RpcTaskStatusRequest, SetTxHistory, TaskId};
