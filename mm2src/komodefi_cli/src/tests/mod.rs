@@ -5,7 +5,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use crate::activation_scheme_db::{get_activation_scheme, get_activation_scheme_path, init_activation_scheme};
 use crate::cli::Cli;
-use crate::komodefi_config::KomodefiConfigImpl;
+use crate::config::KomodefiConfigImpl;
 use crate::komodefi_proc::ResponseHandlerImpl;
 use crate::rpc_data::activation::{ActivationMethod, ActivationMethodLegacy};
 
