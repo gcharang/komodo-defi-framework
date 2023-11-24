@@ -1,4 +1,4 @@
-name: adex-cli
+name: komodefi-cli
 on: [push]
 
 concurrency:
@@ -38,8 +38,8 @@ jobs:
 
       - name: Start checking code format and lint
         run: |
-          cargo fmt --manifest-path ./mm2src/adex_cli/Cargo.toml --all -- --check
-          cargo clippy --manifest-path ./mm2src/adex_cli/Cargo.toml --all-targets --all-features -- --D warnings
+          cargo fmt --manifest-path ./mm2src/komodefi_cli/Cargo.toml --all -- --check
+          cargo clippy --manifest-path ./mm2src/komodefi_cli/Cargo.toml --all-targets --all-features -- --D warnings
 
   test:
     timeout-minutes: 60
@@ -70,7 +70,7 @@ jobs:
 
       - name: Start testing
         run: |
-          cargo test --manifest-path ./mm2src/adex_cli/Cargo.toml --no-fail-fast
+          cargo test --manifest-path ./mm2src/komodefi_cli/Cargo.toml --no-fail-fast
 
   build:
     timeout-minutes: 60
@@ -101,4 +101,4 @@ jobs:
 
       - name: Start building
         run: |
-          cargo build --manifest-path ./mm2src/adex_cli/Cargo.toml
+          cargo build --manifest-path ./mm2src/komodefi_cli/Cargo.toml
