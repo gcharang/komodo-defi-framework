@@ -8,7 +8,6 @@ use common::log::{error, info, warn};
 use directories::ProjectDirs;
 use inquire::Password;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
 use std::fs;
 #[cfg(unix)] use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -27,9 +26,9 @@ const PRICE_PRECISION: SmartFractPrecision = (PRICE_PRECISION_MIN, PRICE_PRECISI
 #[cfg(unix)]
 const CFG_FILE_PERM_MODE: u32 = 0o660;
 
-pub(super) fn get_config() {
+pub(super) fn get_config(option: &crate::cli::GetOption) {
     let Ok(komodefi_cfg) = KomodefiConfigImpl::from_config_path() else { return; };
-    info!("{}", komodefi_cfg)
+    info!("{}", komodefi_cfg.print_config(option.unhide))
 }
 
 pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
@@ -44,6 +43,7 @@ pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
 
     if set_password {
         let rpc_password = Password::new("Enter RPC API password:")
+            .allow_empty_password(false)
             .prompt()
             .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
         komodefi_cfg.set_rpc_password(rpc_password);
@@ -79,21 +79,6 @@ impl KomodefiConfig for KomodefiConfigImpl {
     fn rpc_uri(&self) -> Option<String> { self.rpc_uri.clone() }
     fn orderbook_price_precision(&self) -> &SmartFractPrecision { &PRICE_PRECISION }
     fn orderbook_volume_precision(&self) -> &SmartFractPrecision { &VOLUME_PRECISION }
-}
-
-impl Display for KomodefiConfigImpl {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if !self.is_set() {
-            return writeln!(f, "komodefi configuration is not set");
-        }
-        writeln!(
-            f,
-            "mm2 RPC URL: {}",
-            self.rpc_uri.as_ref().expect("Expected rpc_uri is set")
-        )?;
-        writeln!(f, "mm2 RPC password: *************")?;
-        Ok(())
-    }
 }
 
 impl KomodefiConfigImpl {
@@ -198,4 +183,21 @@ impl KomodefiConfigImpl {
     fn set_rpc_password(&mut self, rpc_password: String) { self.rpc_password.replace(rpc_password); }
 
     fn set_rpc_uri(&mut self, rpc_uri: String) { self.rpc_uri.replace(rpc_uri); }
+
+    fn print_config(&self, unhide: bool) -> String {
+        if !self.is_set() {
+            return "komodefi configuration is not set".to_string();
+        }
+        let password = if unhide {
+            self.rpc_password.clone().expect("Expected rpc_password is not set")
+        } else {
+            String::from("*************")
+        };
+
+        format!(
+            "mm2 RPC URL: {}\nmm2 RPC password: {}",
+            self.rpc_uri.as_deref().expect("Expected rpc_uri is not set"),
+            password
+        )
+    }
 }

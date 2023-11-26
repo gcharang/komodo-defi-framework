@@ -93,7 +93,7 @@ impl Cli {
             Command::Mm2(Mm2Commands::Status) => get_status(),
             Command::Mm2(Mm2Commands::Stop) => proc.send_stop().await?,
             Command::Config(ConfigSubcommand::Set(config)) => set_config(config)?,
-            Command::Config(ConfigSubcommand::Get) => get_config(),
+            Command::Config(ConfigSubcommand::Get(option)) => get_config(&option),
             Command::Coin(CoinCommands::Enable(args)) => {
                 proc.enable(&args.coin, args.keep_progress, args.tx_history).await?
             },
@@ -190,10 +190,16 @@ impl Cli {
     }
 }
 
+#[derive(Debug, clap::Parser)]
+pub(crate) struct GetOption {
+    #[arg(long, short)]
+    pub(crate) unhide: bool,
+}
+
 #[derive(Subcommand)]
 enum ConfigSubcommand {
     #[command(about = "Set komodo komodefi cli configuration")]
     Set(SetConfigArgs),
     #[command(about = "Get komodo komodefi cli configuration")]
-    Get,
+    Get(GetOption),
 }
