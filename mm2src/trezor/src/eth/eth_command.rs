@@ -41,7 +41,7 @@ fn get_eth_network_def(chain_id: ChainId) -> Option<Vec<u8>> {
 }
 
 /// get token definition by token contract address and chain id
-#[warn(dead_code)]
+#[allow(dead_code)]
 fn get_eth_token_def(address_bytes: &[u8], chain_id: ChainId) -> Option<Vec<u8>> {
     ETH_TOKEN_DEFS
         .iter()
