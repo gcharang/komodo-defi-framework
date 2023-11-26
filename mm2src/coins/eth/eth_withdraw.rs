@@ -288,6 +288,7 @@ impl<'a> EthWithdraw for InitEthWithdraw<'a> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 impl<'a> InitEthWithdraw<'a> {
     pub fn new(
         ctx: MmArc,
@@ -334,6 +335,7 @@ impl EthWithdraw for StandardEthWithdraw {
     }
 }
 
+#[allow(clippy::result_large_err)]
 impl StandardEthWithdraw {
     pub fn new(coin: EthCoin, req: WithdrawRequest) -> Result<StandardEthWithdraw, MmError<WithdrawError>> {
         Ok(StandardEthWithdraw { coin, req })

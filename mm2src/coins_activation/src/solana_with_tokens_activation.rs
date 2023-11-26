@@ -1,9 +1,11 @@
 use crate::context::CoinsActivationContext;
 use crate::platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPlatformBalance,
-                                       InitPlatformCoinWithTokensTask, InitPlatformTaskManagerShared,
-                                       InitTokensAsMmCoinsError, PlatformWithTokensActivationOps, RegisterTokenInfo,
-                                       TokenActivationParams, TokenActivationRequest, TokenAsMmCoinInitializer,
-                                       TokenInitializer, TokenOf};
+                                       InitPlatformCoinWithTokensStandardAwaitingStatus,
+                                       InitPlatformCoinWithTokensStandardInProgressStatus,
+                                       InitPlatformCoinWithTokensStandardUserAction, InitPlatformCoinWithTokensTask,
+                                       InitPlatformTaskManagerShared, InitTokensAsMmCoinsError,
+                                       PlatformWithTokensActivationOps, RegisterTokenInfo, TokenActivationParams,
+                                       TokenActivationRequest, TokenAsMmCoinInitializer, TokenInitializer, TokenOf};
 use crate::prelude::*;
 use crate::prelude::{CoinAddressInfo, TokenBalances, TryFromCoinProtocol, TxHistory};
 use crate::spl_token_activation::SplActivationRequest;
@@ -16,14 +18,13 @@ use coins::{BalanceError, CoinBalance, CoinProtocol, MarketCoinOps, MmCoinEnum, 
             SolanaActivationParams, SolanaCoin, SplToken};
 use common::Future01CompatExt;
 use common::{drop_mutability, true_f};
-use crypto::hw_rpc_task::{HwConnectStatuses, HwRpcTaskAwaitingStatus, HwRpcTaskUserAction};
 use crypto::CryptoCtxError;
 use futures::future::try_join_all;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_event_stream::EventStreamConfiguration;
 use mm2_number::BigDecimal;
-use rpc_task::{RpcTask, RpcTaskHandle, RpcTaskManagerShared, RpcTaskTypes};
+use rpc_task::RpcTaskHandle;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::HashMap;
@@ -94,7 +95,7 @@ impl TxHistory for SolanaWithTokensActivationRequest {
     fn tx_history(&self) -> bool { false }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct SolanaWithTokensActivationResult {
     current_block: u64,
     solana_addresses_infos: HashMap<String, CoinAddressInfo<CoinBalance>>,
@@ -230,7 +231,7 @@ impl PlatformWithTokensActivationOps for SolanaCoin {
 
     async fn get_activation_result(
         &self,
-        task_handle: Option<&RpcTaskHandle<InitPlatformCoinWithTokensTask<SolanaCoin>>>,
+        _task_handle: Option<&RpcTaskHandle<InitPlatformCoinWithTokensTask<SolanaCoin>>>,
         activation_request: &Self::ActivationRequest,
     ) -> Result<Self::ActivationResult, MmError<Self::ActivationError>> {
         let current_block = self
@@ -306,7 +307,7 @@ impl PlatformWithTokensActivationOps for SolanaCoin {
         Ok(())
     }
     
-    fn rpc_task_manager(activation_ctx: &CoinsActivationContext) -> &InitPlatformTaskManagerShared<SolanaCoin> {
+    fn rpc_task_manager(_activation_ctx: &CoinsActivationContext) -> &InitPlatformTaskManagerShared<SolanaCoin> {
         unimplemented!()
     }
 }

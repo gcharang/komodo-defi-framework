@@ -256,7 +256,7 @@ impl PlatformWithTokensActivationOps for EthCoin {
         // Todo: check utxo implementation for reference
         // let xpub_extractor: Option<RpcTaskXPubExtractor<InitEthTask>> = None;
         let xpub_extractor = if self.is_trezor() {
-            let ctx = MmArc::from_weak(&self.ctx).ok_or_else(|| EthActivationV2Error::InvalidHardwareWalletCall)?;
+            let ctx = MmArc::from_weak(&self.ctx).ok_or(EthActivationV2Error::InvalidHardwareWalletCall)?;
             let task_handle = task_handle.ok_or_else(|| {
                 EthActivationV2Error::InternalError("Hardware wallet must be accessed under task manager".to_string())
             })?;

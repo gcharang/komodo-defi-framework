@@ -7897,7 +7897,7 @@ fn test_withdraw_from_trezor_segwit_no_rpc() {
         .expect("coin activation must be successful");
 
     let tx_details = block_on(test_withdraw_init_loop(
-        ctx.clone(),
+        ctx,
         //fields,
         ticker,
         "tb1q3zkv6g29ku3jh9vdkhxlpyek44se2s0zrv7ctn",
@@ -8137,7 +8137,7 @@ fn test_eth_withdraw_from_trezor_no_rpc() {
     println!("account_balance={:?}", account_balance);
 
     let tx_details = block_on(test_withdraw_init_loop(
-        ctx.clone(),
+        ctx,
         ticker,
         "0xc06eFafa6527fc4b3C8F69Afb173964A3780a104",
         "0.00001",
