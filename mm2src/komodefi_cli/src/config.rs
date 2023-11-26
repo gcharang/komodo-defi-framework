@@ -43,7 +43,6 @@ pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
 
     if set_password {
         let rpc_password = Password::new("Enter RPC API password:")
-            .allow_empty_password(false)
             .prompt()
             .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
         komodefi_cfg.set_rpc_password(rpc_password);
