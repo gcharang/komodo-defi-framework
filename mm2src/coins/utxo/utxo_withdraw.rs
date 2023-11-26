@@ -341,7 +341,7 @@ where
                     on_ready: WithdrawInProgressStatus::FollowHwDeviceInstructions,
                 };
                 let sign_processor = TrezorRpcTaskProcessor::new(self.task_handle.clone(), trezor_statuses);
-                let sign_processor = Arc::new(sign_processor); //as &dyn TrezorRequestProcessor<Error = RpcTaskError>
+                let sign_processor = Arc::new(sign_processor);
                 let trezor_session = hw_ctx.trezor(sign_processor).await?;
                 SignPolicy::WithTrezor(trezor_session)
             },

@@ -72,7 +72,7 @@ pub trait TrezorConnectProcessor: TrezorRequestProcessor {
     async fn on_connection_failed(&self) -> MmResult<(), HwProcessingError<Self::Error>>;
 
     /// Helper to upcast to super trait object
-    fn as_base_shared(&self) -> Arc<dyn TrezorRequestProcessor<Error = RpcTaskError>>;
+    fn as_base_shared(&self) -> Arc<dyn TrezorRequestProcessor<Error = Self::Error>>;
 }
 
 #[derive(Clone)]
