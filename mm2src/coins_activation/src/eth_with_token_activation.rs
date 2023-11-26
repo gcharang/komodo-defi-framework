@@ -254,7 +254,7 @@ impl PlatformWithTokensActivationOps for EthCoin {
 
         // Todo: support for Trezor should be added in a similar place in init_platform_coin_with_token method when implemented
         // Todo: check utxo implementation for reference
-        // let xpub_extractor: Option<RpcTaskXPubExtractor<InitEthTask>> = None;
+        // this is a initial code for trezor:
         let xpub_extractor = if self.is_trezor() {
             let ctx = MmArc::from_weak(&self.ctx).ok_or(EthActivationV2Error::InvalidHardwareWalletCall)?;
             let task_handle = task_handle.ok_or_else(|| {

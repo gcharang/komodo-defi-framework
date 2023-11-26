@@ -13,6 +13,7 @@ use common::now_ms;
 use common::serde::Deserialize;
 use common::wait_until_ms;
 use common::{cfg_native, cfg_wasm32, get_utc_timestamp, log, new_uuid};
+use crypto::hw_rpc_task::HwRpcTaskAwaitingStatus;
 use crypto::privkey::key_pair_from_seed;
 use crypto::CryptoCtx;
 use http::{HeaderMap, StatusCode};
@@ -66,6 +67,9 @@ cfg_wasm32! {
 
     wasm_bindgen_test_configure!(run_in_browser);
 }
+
+use std::io::{stdin, stdout, BufRead, Write};
+use mm2_main::mm2::init_hw::init_trezor_user_action;
 
 /// Integration test for RPC server.
 /// Check that MM doesn't crash in case of invalid RPC requests
@@ -7825,9 +7829,6 @@ pub enum InitTrezorStatus {
 
 pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
     let ctx = mm_ctx_with_custom_db_with_conf(Some(conf));
-
-    //CryptoCtx::init_with_iguana_passphrase(ctx.clone(), "123456").unwrap(); // for now we need passphrase seed for init
-    //CryptoCtx::init_with_iguana_passphrase(ctx.clone(), "spice describe gravity federal blast come thank unfair canal monkey style afraid").unwrap(); // for now we need passphrase seed for init
     CryptoCtx::init_with_global_hd_account(ctx.clone(), "nothing tail captain royal canoe pencil pair arch ice west vintage thumb party task scrub ridge shift argue churn always forget island jelly trumpet").unwrap();
     let req: InitHwRequest = serde_json::from_value(json!({ "device_pubkey": null })).unwrap();
     let res = match init_trezor(ctx.clone(), req).await {
@@ -7837,9 +7838,10 @@ pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
         },
     };
 
+    let task_id = res.task_id;
     loop {
         let status_req = RpcTaskStatusRequest {
-            task_id: res.task_id,
+            task_id,
             forget_if_finished: false,
         };
         match init_trezor_status(ctx.clone(), status_req).await {
@@ -7855,7 +7857,28 @@ pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
                         break;
                     },
                     RpcTaskStatus::InProgress(_) => log!("trezor init in progress"),
-                    RpcTaskStatus::UserActionRequired(_) => log!("device is waiting for user action"),
+                    RpcTaskStatus::UserActionRequired(device_req) => {
+                        log!("device is waiting for user action");
+                        match device_req {
+                            HwRpcTaskAwaitingStatus::EnterTrezorPin => {
+                                print!("Enter pin:");
+                                let _ = stdout().flush();
+                                let pin = stdin().lock().lines().next().unwrap().unwrap(); // read pin from console
+                                let pin_req = serde_json::from_value(json!({
+                                    "task_id": task_id,
+                                    "user_action": {
+                                        "action_type": "TrezorPin",
+                                        "pin": pin
+                                    }
+                                })).unwrap();
+                                let _ = init_trezor_user_action(ctx.clone(), pin_req).await;
+                            }
+                            _ => {
+                                panic!("Trezor passphrase is not supported in tests");
+                            }
+                        }
+
+                    },
                 }
             },
             _ => {
@@ -7865,48 +7888,6 @@ pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
         Timer::sleep(5.).await
     }
     ctx
-}
-
-/// Tool to run withdraw directly with trezor device or emulator (no rpc version, added for easier debugging)
-/// run cargo test with '--ignored' option
-/// to use trezor emulator add '--features trezor-udp' option to cargo test params
-#[test]
-#[ignore]
-#[cfg(all(not(target_arch = "wasm32")))]
-fn test_withdraw_from_trezor_segwit_no_rpc() {
-    let ticker = "tBTC-Segwit";
-    let mut coin_conf = tbtc_segwit_conf();
-    coin_conf["trezor_coin"] = "Testnet".into();
-    let mm_conf = json!({ "coins": [coin_conf] });
-
-    let ctx = block_on(mm_ctx_with_trezor(mm_conf));
-    let enable_req = json!({
-        "method": "electrum",
-        "coin": ticker,
-        "servers": tbtc_electrums(),
-        "priv_key_policy": "Trezor",
-    });
-    let activation_params = UtxoActivationParams::from_legacy_req(&enable_req).unwrap();
-    let request: InitStandaloneCoinReq<UtxoActivationParams> = json::from_value(json!({
-        "ticker": ticker,
-        "activation_params": activation_params
-    }))
-    .unwrap();
-
-    block_on(init_standalone_coin_loop::<UtxoStandardCoin>(ctx.clone(), request))
-        .expect("coin activation must be successful");
-
-    let tx_details = block_on(test_withdraw_init_loop(
-        ctx,
-        //fields,
-        ticker,
-        "tb1q3zkv6g29ku3jh9vdkhxlpyek44se2s0zrv7ctn",
-        "0.00001",
-        "m/84'/1'/0'/0/0",
-        None,
-    ))
-    .expect("withdraw must end successfully");
-    log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
 }
 
 /// Helper to init trezor and wait for completion
@@ -7959,93 +7940,6 @@ async fn init_withdraw_loop_rpc(
     }
 }
 
-/// Tool to run withdraw rpc from trezor device or emulator segwit account
-/// run cargo test with '--ignored' option
-/// to use trezor emulator add '--features trezor-udp' option to cargo test params
-/// Sample (for emulator):
-/// cargo test -p mm2_main  --features trezor-udp -- --nocapture --ignored test_withdraw_from_trezor_segwit_no_rpc
-#[test]
-#[ignore]
-#[cfg(all(not(target_arch = "wasm32")))]
-fn test_withdraw_from_trezor_segwit_rpc() {
-    let default_passphrase = "123"; // TODO: remove when we allow hardware wallet init w/o seed
-    let ticker = "tBTC-Segwit";
-    let mut coin_conf = tbtc_segwit_conf();
-    coin_conf["trezor_coin"] = "Testnet".into();
-
-    // start bob
-    let conf = Mm2TestConf::seednode(default_passphrase, &json!([coin_conf]));
-    let mm_bob = block_on(MarketMakerIt::start_async(conf.conf, conf.rpc_password, None)).unwrap();
-
-    let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
-    log!("Bob log path: {}", mm_bob.log_path.display());
-
-    block_on(init_trezor_loop_rpc(&mm_bob, ticker, 60));
-
-    let utxo_bob = block_on(enable_utxo_v2_electrum(
-        &mm_bob,
-        ticker,
-        tbtc_electrums(),
-        None,
-        80,
-        Some("Trezor"),
-    ));
-    log!("enable UTXO bob {:?}", utxo_bob);
-
-    let tx_details = block_on(init_withdraw_loop_rpc(
-        &mm_bob,
-        ticker,
-        "tb1q3zkv6g29ku3jh9vdkhxlpyek44se2s0zrv7ctn",
-        "0.00001",
-        Some(json!({"derivation_path": "m/84'/1'/0'/0/0"})),
-    ));
-    log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
-}
-
-/// Tool to run withdraw rpc from trezor device or emulator p2pkh account
-/// run cargo test with '--ignored' option
-/// to use trezor emulator add '--features trezor-udp' option to cargo test params
-/// Sample (for emulator):
-/// cargo test -p mm2_main  --features trezor-udp -- --nocapture --ignored test_withdraw_from_trezor_p2pkh_rpc
-#[test]
-#[ignore]
-#[cfg(all(not(target_arch = "wasm32")))]
-fn test_withdraw_from_trezor_p2pkh_rpc() {
-    let default_passphrase = "123"; // TODO: remove when we allow hardware wallet init w/o seed
-    let ticker = "tBTC";
-    let mut coin_conf = tbtc_legacy_conf();
-    coin_conf["trezor_coin"] = "Testnet".into();
-    coin_conf["derivation_path"] = "m/44'/1'".into();
-
-    // start bob
-    let conf = Mm2TestConf::seednode(default_passphrase, &json!([coin_conf]));
-    let mm_bob = block_on(MarketMakerIt::start_async(conf.conf, conf.rpc_password, None)).unwrap();
-
-    let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
-    log!("Bob log path: {}", mm_bob.log_path.display());
-
-    block_on(init_trezor_loop_rpc(&mm_bob, ticker, 60));
-
-    let utxo_bob = block_on(enable_utxo_v2_electrum(
-        &mm_bob,
-        ticker,
-        tbtc_electrums(),
-        None,
-        80,
-        Some("Trezor"),
-    ));
-    log!("enable UTXO bob {:?}", utxo_bob);
-
-    let tx_details = block_on(init_withdraw_loop_rpc(
-        &mm_bob,
-        ticker,
-        "miuSj7rXDxbaHsqf1GmoKkygTBnoi3iwzj",
-        "0.00001",
-        Some(json!({"derivation_path": "m/44'/1'/0'/0/0"})),
-    ));
-    log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
-}
-
 /// We cannot put this code in coins/eth_tests.rs as trezor init needs some structs in mm2_main
 #[test]
 pub fn eth_my_balance() {
@@ -8086,12 +7980,11 @@ pub fn eth_my_balance() {
     println!("account_balance={:?}", account_balance);
 }
 
-/// Tool to run eth withdraw directly with trezor device or emulator (no rpc version, added for easier debugging)
-/// run cargo test with '--ignored' option
-/// to use trezor emulator add '--features trezor-udp' option to cargo test params
+/// Tool to run eth withdraw directly with trezor device or emulator (no-rpc version, added for easier debugging)
+/// run cargo test with '--features run-device-tests' option
+/// to use trezor emulator also add '--features trezor-udp' option to cargo params
 #[test]
-#[ignore]
-#[cfg(all(not(target_arch = "wasm32")))]
+#[cfg(all(feature = "run-device-tests", not(target_arch = "wasm32")))]
 fn test_eth_withdraw_from_trezor_no_rpc() {
     use std::convert::TryInto;
 

@@ -591,7 +591,7 @@ pub mod for_tests {
         request: EnablePlatformCoinWithTokensReq<Platform::ActivationRequest>,
     ) -> MmResult<Platform::ActivationResult, EnablePlatformCoinWithTokensError>
     where
-        Platform: PlatformWithTokensActivationOps + MmCoin + /*TryFromCoinProtocol +*/ Clone + Send + Sync + 'static,
+        Platform: PlatformWithTokensActivationOps + MmCoin + Clone + Send + Sync + 'static,
         Platform::InProgressStatus: InitPlatformWithTokensInitialStatus,
         EnablePlatformCoinWithTokensError: From<Platform::ActivationError>,
         (Platform::ActivationError, EnablePlatformCoinWithTokensError): NotEqual,

@@ -21,6 +21,7 @@ run-docker-tests = []
 enable-solana = []
 default = []
 trezor-udp = ["crypto/trezor-udp"] # use for tests to connect to trezor emulator over udp
+run-device-tests = []
 
 [dependencies]
 async-std = { version = "1.5", features = ["unstable"] }
