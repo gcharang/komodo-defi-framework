@@ -2495,12 +2495,16 @@ async fn electrum_process_json(
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum ElectrumRpcResponseEnum {
+        /// The subscription response as JSONRPC request.
+        ///
+        /// NOTE Because JsonRpcResponse uses default values for each of its field,
+        /// this variant has to stay at top in this enumeration to be properly deserialized
+        /// from serde.
+        SubscriptionNotification(JsonRpcRequest),
         /// The standard JSONRPC single response.
         SingleResponse(JsonRpcResponse),
         /// The batch of standard JSONRPC responses.
         BatchResponses(JsonRpcBatchResponse),
-        /// The subscription response as JSONRPC request.
-        SubscriptionNotification(JsonRpcRequest),
     }
 
     let response: ElectrumRpcResponseEnum = match json::from_value(raw_json) {

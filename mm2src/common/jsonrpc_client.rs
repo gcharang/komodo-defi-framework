@@ -186,6 +186,7 @@ pub struct JsonRpcResponse {
     pub jsonrpc: String,
     #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub result: Json,
     #[serde(default)]
     pub error: Json,
