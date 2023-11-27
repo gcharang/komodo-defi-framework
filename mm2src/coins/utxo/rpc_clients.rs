@@ -13,7 +13,7 @@ use common::executor::{abortable_queue, abortable_queue::AbortableQueue, Abortab
 use common::jsonrpc_client::{JsonRpcBatchClient, JsonRpcBatchResponse, JsonRpcClient, JsonRpcError, JsonRpcErrorType,
                              JsonRpcId, JsonRpcMultiClient, JsonRpcRemoteAddr, JsonRpcRequest, JsonRpcRequestEnum,
                              JsonRpcResponse, JsonRpcResponseEnum, JsonRpcResponseFut, RpcRes};
-use common::log::LogOnError;
+use common::log::{debug, LogOnError};
 use common::log::{error, info, warn};
 use common::{median, now_float, now_ms, now_sec, OrdRange};
 use derive_more::Display;
@@ -2512,9 +2512,11 @@ async fn electrum_process_json(
                 BLOCKCHAIN_HEADERS_SUB_ID => BLOCKCHAIN_HEADERS_SUB_ID,
                 BLOCKCHAIN_SCRIPTHASH_SUB_ID => {
                     if let Some(sender) = scripthash_notification_sender {
-                        println!("Sending scripthash notification");
-                        // TODO
-                        let _ = sender.lock().await.try_send(()).unwrap();
+                        debug!("Sending scripthash notification");
+                        if sender.lock().await.try_send(()).is_err() {
+                            error!("Failed sending scripthash notification");
+                            return;
+                        };
                     };
                     BLOCKCHAIN_SCRIPTHASH_SUB_ID
                 },
