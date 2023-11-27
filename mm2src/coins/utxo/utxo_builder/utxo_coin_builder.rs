@@ -21,7 +21,7 @@ use common::{now_sec, small_rng};
 use crypto::{Bip32DerPathError, CryptoCtx, CryptoCtxError, GlobalHDAccountArc, HwWalletType, StandardHDPathError,
              StandardHDPathToCoin};
 use derive_more::Display;
-use futures::channel::mpsc::{channel, unbounded, Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedReceiver};
+use futures::channel::mpsc::{channel, unbounded, Receiver as AsyncReceiver, UnboundedReceiver};
 use futures::compat::Future01CompatExt;
 use futures::lock::Mutex as AsyncMutex;
 use futures::StreamExt;
@@ -222,12 +222,11 @@ where
     let my_script_pubkey = output_script(&my_address, ScriptType::P2PKH).to_bytes();
     let derivation_method = DerivationMethod::SingleAddress(my_address);
 
-    // TODO
-    let (scripthash_notification_sender, scripthash_notification_receiver): (AsyncSender<()>, AsyncReceiver<()>) =
-        channel(1);
-
-    let scripthash_notification_sender = Some(Arc::new(AsyncMutex::new(scripthash_notification_sender)));
-    let scripthash_notification_receiver = Some(Arc::new(AsyncMutex::new(scripthash_notification_receiver)));
+    let (scripthash_notification_sender, scripthash_notification_receiver) =
+        match builder.ctx().get_scripthash_notification_handlers() {
+            Some((sender, receiver)) => (Some(sender), Some(receiver)),
+            None => (None, None),
+        };
 
     // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,
     // all spawned futures related to this `UTXO` coin will be aborted as well.
@@ -307,12 +306,11 @@ pub trait UtxoFieldsWithHardwareWalletBuilder: UtxoCoinBuilderCommonOps {
             gap_limit,
         };
 
-        // TODO
-        let (scripthash_notification_sender, scripthash_notification_receiver): (AsyncSender<()>, AsyncReceiver<()>) =
-            channel(1);
-
-        let scripthash_notification_sender = Some(Arc::new(AsyncMutex::new(scripthash_notification_sender)));
-        let scripthash_notification_receiver = Some(Arc::new(AsyncMutex::new(scripthash_notification_receiver)));
+        let (scripthash_notification_sender, scripthash_notification_receiver) =
+            match self.ctx().get_scripthash_notification_handlers() {
+                Some((sender, receiver)) => (Some(sender), Some(receiver)),
+                None => (None, None),
+            };
 
         // Create an abortable system linked to the `MmCtx` so if the context is stopped via `MmArc::stop`,
         // all spawned futures related to this `UTXO` coin will be aborted as well.
