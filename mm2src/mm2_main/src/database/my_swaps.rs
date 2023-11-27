@@ -52,12 +52,19 @@ pub const TRADING_PROTO_UPGRADE_MIGRATION: &[&str] = &[
     "ALTER TABLE my_swaps ADD COLUMN taker_coin_nota BOOLEAN;",
 ];
 
-const INSERT_MY_SWAP: &str = "INSERT INTO my_swaps (my_coin, other_coin, uuid, started_at) VALUES (?1, ?2, ?3, ?4)";
+const INSERT_MY_SWAP: &str = "INSERT INTO my_swaps (my_coin, other_coin, uuid, started_at) VALUES (?1, ?2, ?3, ?4, ?5)";
 
-pub fn insert_new_swap(ctx: &MmArc, my_coin: &str, other_coin: &str, uuid: &str, started_at: &str) -> SqlResult<()> {
+pub fn insert_new_swap(
+    ctx: &MmArc,
+    my_coin: &str,
+    other_coin: &str,
+    uuid: &str,
+    started_at: &str,
+    swap_type: u8,
+) -> SqlResult<()> {
     debug!("Inserting new swap {} to the SQLite database", uuid);
     let conn = ctx.sqlite_connection();
-    let params = [my_coin, other_coin, uuid, started_at];
+    let params = [my_coin, other_coin, uuid, started_at, &swap_type.to_string()];
     conn.execute(INSERT_MY_SWAP, params).map(|_| ())
 }
 
@@ -191,8 +198,9 @@ pub fn select_uuids_by_my_swaps_filter(
         return Ok(MyRecentSwapsUuids::default());
     }
 
-    // query the uuids finally
+    // query the uuids and types finally
     query_builder.field("uuid");
+    query_builder.field("swap_type");
     query_builder.order_desc("started_at");
 
     let skipped = match paging_options {
@@ -212,14 +220,17 @@ pub fn select_uuids_by_my_swaps_filter(
     let uuids_query = query_builder.sql().expect("SQL query builder should never fail here");
     debug!("Trying to execute SQL query {} with params {:?}", uuids_query, params);
     let mut stmt = conn.prepare(&uuids_query)?;
-    let uuids = stmt
-        .query_map_named(params_as_trait.as_slice(), |row| row.get(0))?
-        .collect::<SqlResult<Vec<String>>>()?;
-    let uuids: SqlResult<Vec<_>, _> = uuids.into_iter().map(|uuid| uuid.parse()).collect();
-    let uuids = uuids?;
+    let uuids_and_types = stmt
+        .query_map_named(params_as_trait.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<SqlResult<Vec<(String, u8)>>>()?;
+    let uuids_and_types: SqlResult<Vec<(Uuid, u8)>, UuidError> = uuids_and_types
+        .into_iter()
+        .map(|(uuid, swap_type)| Ok((uuid.parse()?, swap_type)))
+        .collect();
+    let uuids_and_types = uuids_and_types?;
 
     Ok(MyRecentSwapsUuids {
-        uuids,
+        uuids_and_types,
         total_count,
         skipped,
     })

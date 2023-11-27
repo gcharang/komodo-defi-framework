@@ -149,7 +149,7 @@ pub const SWAP_V2_PREFIX: TopicPrefix = "swapv2";
 pub const SWAP_FINISHED_LOG: &str = "Swap finished: ";
 pub const TX_HELPER_PREFIX: TopicPrefix = "txhlp";
 
-const LEGACY_SWAP_TYPE: u8 = 0;
+pub(crate) const LEGACY_SWAP_TYPE: u8 = 0;
 const MAKER_SWAP_V2_TYPE: u8 = 1;
 const TAKER_SWAP_V2_TYPE: u8 = 2;
 const MAX_STARTED_AT_DIFF: u64 = 60;
@@ -959,9 +959,10 @@ pub async fn insert_new_swap_to_db(
     other_coin: &str,
     uuid: Uuid,
     started_at: u64,
+    swap_type: u8,
 ) -> Result<(), String> {
     MySwapsStorage::new(ctx)
-        .save_new_swap(my_coin, other_coin, uuid, started_at)
+        .save_new_swap(my_coin, other_coin, uuid, started_at, swap_type)
         .await
         .map_err(|e| ERRL!("{}", e))
 }
@@ -1339,12 +1340,12 @@ pub async fn all_swaps_uuids_by_filter(ctx: MmArc, req: Json) -> Result<Response
 
     let res_js = json!({
         "result": {
-            "uuids": db_result.uuids,
+            "found_records": db_result.uuids_and_types.len(),
+            "uuids": db_result.uuids_and_types.into_iter().map(|(uuid, _)| uuid).collect::<Vec<_>>(),
             "my_coin": filter.my_coin,
             "other_coin": filter.other_coin,
             "from_timestamp": filter.from_timestamp,
             "to_timestamp": filter.to_timestamp,
-            "found_records": db_result.uuids.len(),
         },
     });
     let res = try_s!(json::to_vec(&res_js));
@@ -1361,8 +1362,8 @@ pub struct MyRecentSwapsReq {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct MyRecentSwapsUuids {
-    /// UUIDs of swaps matching the query
-    pub uuids: Vec<Uuid>,
+    /// UUIDs and types of swaps matching the query
+    pub uuids_and_types: Vec<(Uuid, u8)>,
     /// Total count of swaps matching the query
     pub total_count: usize,
     /// The number of skipped UUIDs
@@ -1406,8 +1407,9 @@ pub async fn latest_swaps_for_pair(
         Err(_) => return Err(MmError::new(LatestSwapsErr::UnableToQuerySwapStorage)),
     };
 
-    let mut swaps = Vec::with_capacity(db_result.uuids.len());
-    for uuid in db_result.uuids.iter() {
+    let mut swaps = Vec::with_capacity(db_result.uuids_and_types.len());
+    // TODO this is needed for trading bot, which seems not used as of now. Remove the code?
+    for (uuid, _) in db_result.uuids_and_types.iter() {
         let swap = match SavedSwap::load_my_swap_from_db(&ctx, *uuid).await {
             Ok(Some(swap)) => swap,
             Ok(None) => {
@@ -1432,15 +1434,25 @@ pub async fn my_recent_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
     );
 
     // iterate over uuids trying to parse the corresponding files content and add to result vector
-    let mut swaps = Vec::with_capacity(db_result.uuids.len());
-    for uuid in db_result.uuids.iter() {
-        match SavedSwap::load_my_swap_from_db(&ctx, *uuid).await {
-            Ok(Some(swap)) => {
-                let swap_json = json::to_value(MySwapStatusResponse::from(swap)).unwrap();
-                swaps.push(swap_json)
+    let mut swaps = Vec::with_capacity(db_result.uuids_and_types.len());
+    for (uuid, swap_type) in db_result.uuids_and_types.iter() {
+        match *swap_type {
+            LEGACY_SWAP_TYPE => match SavedSwap::load_my_swap_from_db(&ctx, *uuid).await {
+                Ok(Some(swap)) => {
+                    let swap_json = json::to_value(MySwapStatusResponse::from(swap)).unwrap();
+                    swaps.push(swap_json)
+                },
+                Ok(None) => warn!("No such swap with the uuid '{}'", uuid),
+                Err(e) => error!("Error loading a swap with the uuid '{}': {}", uuid, e),
             },
-            Ok(None) => warn!("No such swap with the uuid '{}'", uuid),
-            Err(e) => error!("Error loading a swap with the uuid '{}': {}", uuid, e),
+            MAKER_SWAP_V2_TYPE | TAKER_SWAP_V2_TYPE => match get_swap_data_for_rpc(&ctx, uuid, *swap_type).await {
+                Ok(data) => {
+                    let swap_json = json::to_value(data).expect("Serialization to not fail");
+                    swaps.push(swap_json);
+                },
+                Err(e) => error!("Error loading a swap with the uuid '{}': {}", uuid, e),
+            },
+            unknown_type => error!("Swap with the uuid '{}' has unknown type {}", uuid, unknown_type),
         }
     }
 
@@ -1453,7 +1465,7 @@ pub async fn my_recent_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
             "total": db_result.total_count,
             "page_number": req.paging_options.page_number,
             "total_pages": calc_total_pages(db_result.total_count, req.paging_options.limit),
-            "found_records": db_result.uuids.len(),
+            "found_records": db_result.uuids_and_types.len(),
         },
     });
     let res = try_s!(json::to_vec(&res_js));
@@ -1505,7 +1517,7 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
     let maker_swap_storage = MakerSwapStorage::new(ctx.clone());
     let unfinished_maker_uuids = try_s!(maker_swap_storage.get_unfinished().await);
     for maker_uuid in unfinished_maker_uuids {
-        debug!("Trying to kickstart maker swap {}", maker_uuid);
+        info!("Trying to kickstart maker swap {}", maker_uuid);
         let maker_swap_repr = try_s!(maker_swap_storage.get_repr(maker_uuid).await);
         debug!("Got maker swap repr {:?}", maker_swap_repr);
 
@@ -1524,7 +1536,7 @@ pub async fn swap_kick_starts(ctx: MmArc) -> Result<HashSet<String>, String> {
     let taker_swap_storage = TakerSwapStorage::new(ctx.clone());
     let unfinished_taker_uuids = try_s!(taker_swap_storage.get_unfinished().await);
     for taker_uuid in unfinished_taker_uuids {
-        debug!("Trying to kickstart taker swap {}", taker_uuid);
+        info!("Trying to kickstart taker swap {}", taker_uuid);
         let taker_swap_repr = try_s!(taker_swap_storage.get_repr(taker_uuid).await);
         debug!("Got taker swap repr {:?}", taker_swap_repr);
 
@@ -1645,6 +1657,7 @@ pub async fn import_swaps(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, St
                         &info.other_coin,
                         *swap.uuid(),
                         info.started_at,
+                        LEGACY_SWAP_TYPE,
                     )
                     .await
                     {

@@ -4,9 +4,9 @@ use coins::utxo::UtxoCommonOps;
 use coins::{GenTakerFundingSpendArgs, RefundFundingSecretArgs, RefundPaymentArgs, SendTakerFundingArgs, SwapOpsV2,
             Transaction, ValidateTakerFundingArgs};
 use common::{block_on, now_sec};
-use mm2_test_helpers::for_tests::{coins_needed_for_kickstart, disable_coin, disable_coin_err, enable_native, mm_dump,
-                                  my_swap_status, mycoin1_conf, mycoin_conf, start_swaps, wait_for_swap_finished,
-                                  wait_for_swap_status, MarketMakerIt, Mm2TestConf};
+use mm2_test_helpers::for_tests::{check_recent_swaps, coins_needed_for_kickstart, disable_coin, disable_coin_err,
+                                  enable_native, mm_dump, my_swap_status, mycoin1_conf, mycoin_conf, start_swaps,
+                                  wait_for_swap_finished, wait_for_swap_status, MarketMakerIt, Mm2TestConf};
 use script::{Builder, Opcode};
 use serialization::serialize;
 use uuid::Uuid;
@@ -252,6 +252,9 @@ fn test_v2_swap_utxo_utxo() {
         let taker_swap_status = block_on(my_swap_status(&mm_alice, &uuid));
         println!("{:?}", taker_swap_status);
     }
+
+    block_on(check_recent_swaps(&mm_bob, 1));
+    block_on(check_recent_swaps(&mm_alice, 1));
 
     // Disabling coins on both nodes should be successful at this point
     block_on(disable_coin(&mm_bob, MYCOIN, false));

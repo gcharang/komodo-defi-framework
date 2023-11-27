@@ -71,16 +71,15 @@ use uuid::Uuid;
 
 use crate::mm2::lp_network::{broadcast_p2p_msg, request_any_relay, request_one_peer, subscribe_to_topic, P2PRequest,
                              P2PRequestError};
-use crate::mm2::lp_swap::detect_secret_hash_algo;
 use crate::mm2::lp_swap::maker_swap_v2::{self, MakerSwapStateMachine, MakerSwapStorage};
 use crate::mm2::lp_swap::taker_swap_v2::{self, TakerSwapStateMachine, TakerSwapStorage};
 use crate::mm2::lp_swap::{calc_max_maker_vol, check_balance_for_maker_swap, check_balance_for_taker_swap,
-                          check_other_coin_balance_for_swap, dex_fee_amount_from_taker_coin, generate_secret,
-                          get_max_maker_vol, insert_new_swap_to_db, is_pubkey_banned, lp_atomic_locktime,
-                          p2p_keypair_and_peer_id_to_broadcast, p2p_private_and_peer_id_to_broadcast, run_maker_swap,
-                          run_taker_swap, swap_v2_topic, AtomicLocktimeVersion, CheckBalanceError, CheckBalanceResult,
-                          CoinVolumeInfo, MakerSwap, RunMakerSwapInput, RunTakerSwapInput, SwapConfirmationsSettings,
-                          TakerSwap};
+                          check_other_coin_balance_for_swap, detect_secret_hash_algo, dex_fee_amount_from_taker_coin,
+                          generate_secret, get_max_maker_vol, insert_new_swap_to_db, is_pubkey_banned,
+                          lp_atomic_locktime, p2p_keypair_and_peer_id_to_broadcast,
+                          p2p_private_and_peer_id_to_broadcast, run_maker_swap, run_taker_swap, swap_v2_topic,
+                          AtomicLocktimeVersion, CheckBalanceError, CheckBalanceResult, CoinVolumeInfo, MakerSwap,
+                          RunMakerSwapInput, RunTakerSwapInput, SwapConfirmationsSettings, TakerSwap, LEGACY_SWAP_TYPE};
 
 #[cfg(any(test, feature = "run-docker-tests"))]
 use crate::mm2::lp_swap::taker_swap::FailAt;
@@ -2993,8 +2992,15 @@ fn lp_connect_start_bob(ctx: MmArc, maker_match: MakerMatch, maker_order: MakerO
                 _ => todo!("implement fallback to the old protocol here"),
             }
         } else {
-            if let Err(e) =
-                insert_new_swap_to_db(ctx.clone(), maker_coin.ticker(), taker_coin.ticker(), uuid, now).await
+            if let Err(e) = insert_new_swap_to_db(
+                ctx.clone(),
+                maker_coin.ticker(),
+                taker_coin.ticker(),
+                uuid,
+                now,
+                LEGACY_SWAP_TYPE,
+            )
+            .await
             {
                 error!("Error {} on new swap insertion", e);
             }
@@ -3145,8 +3151,15 @@ fn lp_connected_alice(ctx: MmArc, taker_order: TakerOrder, taker_match: TakerMat
             #[cfg(any(test, feature = "run-docker-tests"))]
             let fail_at = std::env::var("TAKER_FAIL_AT").map(FailAt::from).ok();
 
-            if let Err(e) =
-                insert_new_swap_to_db(ctx.clone(), taker_coin.ticker(), maker_coin.ticker(), uuid, now).await
+            if let Err(e) = insert_new_swap_to_db(
+                ctx.clone(),
+                taker_coin.ticker(),
+                maker_coin.ticker(),
+                uuid,
+                now,
+                LEGACY_SWAP_TYPE,
+            )
+            .await
             {
                 error!("Error {} on new swap insertion", e);
             }
