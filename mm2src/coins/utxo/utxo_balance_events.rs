@@ -95,16 +95,23 @@ impl EventBehaviour for UtxoStandardCoin {
                 })
                 .collect();
 
-            // TODO: broadcast multiple updates at once
-            for (address, balance) in updated_parts {
-                let payload = json!({
-                    "ticker": self.ticker(),
-                    "address": address,
-                    "balance": { "spendable": balance, "unspendable": BigDecimal::default()  }
-                });
+            let balance_updates: Vec<_> = updated_parts
+                .iter()
+                .map(|(address, balance)| {
+                    json!({
+                        "ticker": self.ticker(),
+                        "address": address,
+                        "balance": { "spendable": balance, "unspendable": BigDecimal::default() }
+                    })
+                })
+                .collect();
 
+            if !balance_updates.is_empty() {
                 ctx.stream_channel_controller
-                    .broadcast(Event::new(Self::EVENT_NAME.to_string(), payload.to_string()))
+                    .broadcast(Event::new(
+                        Self::EVENT_NAME.to_string(),
+                        json!(balance_updates).to_string(),
+                    ))
                     .await;
             }
 
