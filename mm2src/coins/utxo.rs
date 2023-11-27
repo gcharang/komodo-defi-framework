@@ -142,6 +142,9 @@ pub type HistoryUtxoTxMap = HashMap<H256Json, HistoryUtxoTx>;
 pub type MatureUnspentMap = HashMap<Address, MatureUnspentList>;
 pub type RecentlySpentOutPointsGuard<'a> = AsyncMutexGuard<'a, RecentlySpentOutPoints>;
 pub type UtxoHDAddress = HDAddress<Address, Public>;
+pub type ScripthashNotificationSender = Option<Arc<AsyncMutex<AsyncSender<()>>>>;
+
+type ScripthashNotificationReceiver = Option<Arc<AsyncMutex<AsyncReceiver<()>>>>;
 
 #[cfg(windows)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -611,9 +614,11 @@ pub struct UtxoCoinFields {
     /// This abortable system is used to spawn coin's related futures that should be aborted on coin deactivation
     /// and on [`MmArc::stop`].
     pub abortable_system: AbortableQueue,
-    /// TODO: doc & type
-    scripthash_notification_receiver: Option<Arc<AsyncMutex<AsyncReceiver<()>>>>,
     pub(crate) ctx: MmWeak,
+    /// This is used for balance event streaming implementation for UTXOs.
+    /// If balance event streaming isn't enabled, this value will always be `None`; otherwise,
+    /// it will be used for receiving scripthash notifications to re-fetch balances.
+    scripthash_notification_receiver: ScripthashNotificationReceiver,
 }
 
 #[derive(Debug, Display)]

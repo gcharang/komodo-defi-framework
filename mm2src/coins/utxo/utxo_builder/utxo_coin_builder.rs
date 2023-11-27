@@ -6,8 +6,9 @@ use crate::utxo::tx_cache::{UtxoVerboseCacheOps, UtxoVerboseCacheShared};
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::utxo_builder::utxo_conf_builder::{UtxoConfBuilder, UtxoConfError};
 use crate::utxo::{output_script, utxo_common, ElectrumBuilderArgs, ElectrumProtoVerifier, ElectrumProtoVerifierEvent,
-                  RecentlySpentOutPoints, TxFee, UtxoCoinConf, UtxoCoinFields, UtxoHDAccount, UtxoHDWallet,
-                  UtxoRpcMode, UtxoSyncStatus, UtxoSyncStatusLoopHandle, DEFAULT_GAP_LIMIT, UTXO_DUST_AMOUNT};
+                  RecentlySpentOutPoints, ScripthashNotificationSender, TxFee, UtxoCoinConf, UtxoCoinFields,
+                  UtxoHDAccount, UtxoHDWallet, UtxoRpcMode, UtxoSyncStatus, UtxoSyncStatusLoopHandle,
+                  DEFAULT_GAP_LIMIT, UTXO_DUST_AMOUNT};
 use crate::{BlockchainNetwork, CoinTransportMetrics, DerivationMethod, HistorySyncState, IguanaPrivKey,
             PrivKeyBuildPolicy, PrivKeyPolicy, PrivKeyPolicyNotAllowed, RpcClientType, UtxoActivationParams};
 use async_trait::async_trait;
@@ -495,7 +496,7 @@ pub trait UtxoCoinBuilderCommonOps {
 
     async fn rpc_client(
         &self,
-        scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+        scripthash_notification_sender: ScripthashNotificationSender,
         abortable_system: AbortableQueue,
     ) -> UtxoCoinBuildResult<UtxoRpcClientEnum> {
         match self.activation_params().mode.clone() {
@@ -531,7 +532,7 @@ pub trait UtxoCoinBuilderCommonOps {
         abortable_system: AbortableQueue,
         args: ElectrumBuilderArgs,
         mut servers: Vec<ElectrumRpcRequest>,
-        scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+        scripthash_notification_sender: ScripthashNotificationSender,
     ) -> UtxoCoinBuildResult<ElectrumClient> {
         let (on_event_tx, on_event_rx) = unbounded();
         let ticker = self.ticker().to_owned();

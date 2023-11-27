@@ -17,7 +17,6 @@ use common::log::LogOnError;
 use common::log::{error, info, warn};
 use common::{median, now_float, now_ms, now_sec, OrdRange};
 use derive_more::Display;
-use futures::channel::mpsc::Sender as AsyncSender;
 use futures::channel::oneshot as async_oneshot;
 use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::future::{join_all, FutureExt, TryFutureExt};
@@ -52,6 +51,8 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Duration;
+
+use super::ScripthashNotificationSender;
 
 cfg_native! {
     use futures::future::Either;
@@ -1457,7 +1458,7 @@ fn addr_to_socket_addr(input: &str) -> Result<SocketAddr, String> {
 pub fn spawn_electrum(
     req: &ElectrumRpcRequest,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
-    scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+    scripthash_notification_sender: ScripthashNotificationSender,
     abortable_system: AbortableQueue,
 ) -> Result<ElectrumConnection, String> {
     let config = match req.protocol {
@@ -1633,7 +1634,7 @@ pub struct ElectrumClientImpl {
     abortable_system: AbortableQueue,
     negotiate_version: bool,
     /// TODO: doc & type
-    scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+    scripthash_notification_sender: ScripthashNotificationSender,
 }
 
 async fn electrum_request_multi(
@@ -2430,7 +2431,7 @@ impl ElectrumClientImpl {
         block_headers_storage: BlockHeaderStorage,
         abortable_system: AbortableQueue,
         negotiate_version: bool,
-        scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+        scripthash_notification_sender: ScripthashNotificationSender,
     ) -> ElectrumClientImpl {
         let protocol_version = OrdRange::new(1.2, 1.4).unwrap();
         ElectrumClientImpl {
@@ -2455,7 +2456,7 @@ impl ElectrumClientImpl {
         protocol_version: OrdRange<f32>,
         block_headers_storage: BlockHeaderStorage,
         abortable_system: AbortableQueue,
-        scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+        scripthash_notification_sender: ScripthashNotificationSender,
     ) -> ElectrumClientImpl {
         ElectrumClientImpl {
             protocol_version,
@@ -2479,7 +2480,7 @@ fn rx_to_stream(rx: mpsc::Receiver<Vec<u8>>) -> impl Stream<Item = Vec<u8>, Erro
 async fn electrum_process_json(
     raw_json: Json,
     arc: &JsonRpcPendingRequestsShared,
-    scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+    scripthash_notification_sender: ScripthashNotificationSender,
 ) {
     // detect if we got standard JSONRPC response or subscription response as JSONRPC request
     #[derive(Deserialize)]
@@ -2540,7 +2541,7 @@ async fn electrum_process_json(
 async fn electrum_process_chunk(
     chunk: &[u8],
     arc: &JsonRpcPendingRequestsShared,
-    scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+    scripthash_notification_sender: ScripthashNotificationSender,
 ) {
     // we should split the received chunk because we can get several responses in 1 chunk.
     let split = chunk.split(|item| *item == b'\n');
@@ -2683,7 +2684,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
     responses: JsonRpcPendingRequestsShared,
     connection_tx: Arc<AsyncMutex<Option<mpsc::Sender<Vec<u8>>>>>,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
-    scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+    scripthash_notification_sender: ScripthashNotificationSender,
     _spawner: Spawner,
 ) -> Result<(), ()> {
     let delay = Arc::new(AtomicU64::new(0));
@@ -2911,7 +2912,7 @@ fn electrum_connect(
     addr: String,
     config: ElectrumConfig,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
-    scripthash_notification_sender: Option<Arc<AsyncMutex<AsyncSender<()>>>>,
+    scripthash_notification_sender: ScripthashNotificationSender,
     abortable_system: AbortableQueue,
 ) -> ElectrumConnection {
     let responses = Arc::new(AsyncMutex::new(JsonRpcPendingRequests::default()));
