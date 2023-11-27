@@ -1,6 +1,7 @@
 use crate::coin_errors::MyAddressError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::my_tx_history_v2::{MyTxHistoryErrorV2, MyTxHistoryRequestV2, MyTxHistoryResponseV2};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::rpc_command::init_withdraw::WithdrawTaskHandleShared;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::rpc_command::init_withdraw::{InitWithdrawCoin, WithdrawInProgressStatus};

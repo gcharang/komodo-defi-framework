@@ -92,9 +92,9 @@ impl HwClient {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) async fn trezor<Processor: TrezorConnectProcessor>(
-        processor: &Processor,
-    ) -> MmResult<TrezorClient, HwProcessingError<Processor::Error>> {
+    pub(crate) async fn trezor(
+        processor: Arc<dyn TrezorConnectProcessor<Error = RpcTaskError>>,
+    ) -> MmResult<TrezorClient, HwProcessingError<RpcTaskError>> {
         let timeout = processor.on_connect().await?;
 
         let fut = async move {
@@ -184,9 +184,9 @@ impl HwClient {
     }
 
     #[cfg(target_os = "ios")]
-    pub(crate) async fn trezor<Processor: TrezorConnectProcessor>(
-        _processor: &Processor,
-    ) -> MmResult<TrezorClient, HwProcessingError<Processor::Error>> {
+    pub(crate) async fn trezor(
+        _processor: Arc<dyn TrezorConnectProcessor<Error = RpcTaskError>>,
+    ) -> MmResult<TrezorClient, HwProcessingError<RpcTaskError>> {
         MmError::err(HwProcessingError::HwError(HwError::Internal(
             "Not supported on iOS!".into(),
         )))
