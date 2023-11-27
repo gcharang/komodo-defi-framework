@@ -1497,6 +1497,7 @@ pub fn spawn_electrum(
 pub fn spawn_electrum(
     req: &ElectrumRpcRequest,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
+    scripthash_notification_sender: &ScripthashNotificationSender,
     abortable_system: AbortableQueue,
 ) -> Result<ElectrumConnection, String> {
     let mut url = req.url.clone();
@@ -1525,7 +1526,13 @@ pub fn spawn_electrum(
         },
     };
 
-    Ok(electrum_connect(url, config, event_handlers, abortable_system))
+    Ok(electrum_connect(
+        url,
+        config,
+        event_handlers,
+        scripthash_notification_sender,
+        abortable_system,
+    ))
 }
 
 /// Represents the active Electrum connection to selected address
@@ -2810,6 +2817,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
     responses: JsonRpcPendingRequestsShared,
     connection_tx: Arc<AsyncMutex<Option<mpsc::Sender<Vec<u8>>>>>,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
+    scripthash_notification_sender: ScripthashNotificationSender,
     spawner: Spawner,
 ) -> Result<(), ()> {
     use std::sync::atomic::AtomicUsize;
@@ -2844,6 +2852,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
             let delay = delay.clone();
             let addr = addr.clone();
             let responses = responses.clone();
+            let scripthash_notification_sender = scripthash_notification_sender.clone();
             let event_handlers = event_handlers.clone();
             async move {
                 while let Some(incoming_res) = transport_rx.next().await {
@@ -2856,7 +2865,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
                             let incoming_str = incoming_json.to_string();
                             event_handlers.on_incoming_response(incoming_str.as_bytes());
 
-                            electrum_process_json(incoming_json, &responses).await;
+                            electrum_process_json(incoming_json, &responses, &scripthash_notification_sender).await;
                         },
                         Err(e) => {
                             error!("{} error: {:?}", addr, e);

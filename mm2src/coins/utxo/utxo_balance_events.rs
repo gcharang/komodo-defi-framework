@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use common::{executor::{AbortSettings, SpawnAbortable, Timer},
              log, Future01CompatExt};
@@ -8,6 +6,7 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_event_stream::{behaviour::{EventBehaviour, EventInitStatus},
                        Event, EventStreamConfiguration};
 use mm2_number::BigDecimal;
+use std::collections::HashMap;
 
 use super::utxo_standard::UtxoStandardCoin;
 use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_tx_history_v2::UtxoTxHistoryOps},
@@ -18,12 +17,14 @@ impl EventBehaviour for UtxoStandardCoin {
     const EVENT_NAME: &'static str = "COIN_BALANCE";
 
     async fn handle(self, _interval: f64, tx: oneshot::Sender<EventInitStatus>) {
+        const RECEIVER_DROPPED_MSG: &str = "Receiver is dropped, which should never happen.";
+
         let ctx = match MmArc::from_weak(&self.as_ref().ctx) {
             Some(ctx) => ctx,
             None => {
                 let msg = "MM context must have been initialized already.";
                 tx.send(EventInitStatus::Failed(msg.to_owned()))
-                    .expect("Receiver is dropped, which should never happen.");
+                    .expect(RECEIVER_DROPPED_MSG);
                 panic!("{}", msg);
             },
         };
@@ -32,7 +33,7 @@ impl EventBehaviour for UtxoStandardCoin {
             Ok(t) => t,
             Err(e) => {
                 tx.send(EventInitStatus::Failed(e.to_string()))
-                    .expect("Receiver is dropped, which should never happen.");
+                    .expect(RECEIVER_DROPPED_MSG);
                 panic!("{}", e);
             },
         };
@@ -50,13 +51,12 @@ impl EventBehaviour for UtxoStandardCoin {
                 .await
             {
                 tx.send(EventInitStatus::Failed(e.to_string()))
-                    .expect("Receiver is dropped, which should never happen.");
+                    .expect(RECEIVER_DROPPED_MSG);
                 panic!("{}", e);
             }
         }
 
-        tx.send(EventInitStatus::Success)
-            .expect("Receiver is dropped, which should never happen.");
+        tx.send(EventInitStatus::Success).expect(RECEIVER_DROPPED_MSG);
 
         let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
         loop {
@@ -64,7 +64,7 @@ impl EventBehaviour for UtxoStandardCoin {
                 .as_ref()
                 .scripthash_notification_receiver
                 .as_ref()
-                .unwrap()
+                .expect("Can not be `None`")
                 .lock()
                 .await
                 .try_next()
@@ -76,11 +76,10 @@ impl EventBehaviour for UtxoStandardCoin {
                 },
             };
 
-            println!("CURRENT VALUES {:?}", current_balances);
-
-            let new_balances = self.my_addresses_balances().await.unwrap();
-
-            println!("NEW VALUES {:?}", new_balances);
+            let new_balances = match self.my_addresses_balances().await {
+                Ok(t) => t,
+                _ => continue,
+            };
 
             if new_balances == current_balances {
                 continue;
@@ -96,8 +95,7 @@ impl EventBehaviour for UtxoStandardCoin {
                 })
                 .collect();
 
-            println!("UPDATED VALUES {:?}", updated_parts);
-
+            // TODO: broadcast multiple updates at once
             for (address, balance) in updated_parts {
                 let payload = json!({
                     "ticker": self.ticker(),

@@ -114,6 +114,7 @@ impl EventBehaviour for TendermintCoin {
                         })
                         .collect();
 
+                    // TODO: broadcast multiple updates at once
                     for denom in denoms {
                         if let Some((ticker, decimals)) = self.active_ticker_and_decimals_from_denom(&denom) {
                             let balance_denom = match self.account_balance_for_denom(&self.account_id, denom).await {
