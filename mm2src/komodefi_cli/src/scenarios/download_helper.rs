@@ -95,7 +95,7 @@ fn extract_file_from_zip(zip_path: &std::path::Path, file_name: &str) -> Result<
     }
 
     let file_path = bin_dir.join(file_name);
-    let mut extracted_file = File::create(&file_path)?;
+    let mut extracted_file = File::create(file_path)?;
 
     std::io::copy(&mut file, &mut extracted_file)?;
 
