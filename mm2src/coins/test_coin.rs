@@ -16,7 +16,7 @@ use crate::{coin_errors::MyAddressError, BalanceFut, CanRefundHtlc, CheckIfMyPay
             ValidateTakerPaymentSpendPreimageResult, VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps,
             WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput,
             WatcherValidateTakerFeeInput, WithdrawFut, WithdrawRequest};
-use crate::{ToBytes, ValidateWatcherSpendInput};
+use crate::{DexFee, ToBytes, ValidateWatcherSpendInput};
 use async_trait::async_trait;
 use common::executor::AbortedError;
 use futures01::Future;
@@ -97,7 +97,7 @@ impl MarketCoinOps for TestCoin {
 
     fn display_priv_key(&self) -> Result<String, String> { unimplemented!() }
 
-    fn min_tx_amount(&self) -> BigDecimal { unimplemented!() }
+    fn min_tx_amount(&self) -> BigDecimal { Default::default() }
 
     fn min_trading_vol(&self) -> MmNumber { MmNumber::from("0.00777") }
 }
@@ -105,7 +105,7 @@ impl MarketCoinOps for TestCoin {
 #[async_trait]
 #[mockable]
 impl SwapOps for TestCoin {
-    fn send_taker_fee(&self, fee_addr: &[u8], amount: BigDecimal, uuid: &[u8]) -> TransactionFut { unimplemented!() }
+    fn send_taker_fee(&self, fee_addr: &[u8], dex_fee: DexFee, uuid: &[u8]) -> TransactionFut { unimplemented!() }
 
     fn send_maker_payment(&self, _maker_payment_args: SendPaymentArgs) -> TransactionFut { unimplemented!() }
 
@@ -351,7 +351,7 @@ impl MmCoin for TestCoin {
 
     async fn get_fee_to_send_taker_fee(
         &self,
-        _dex_fee_amount: BigDecimal,
+        _dex_fee_amount: DexFee,
         _stage: FeeApproxStage,
     ) -> TradePreimageResult<TradeFee> {
         unimplemented!()

@@ -27,7 +27,7 @@ use crate::utxo::utxo_common_tests::TEST_COIN_DECIMALS;
 use crate::utxo::utxo_common_tests::{self, utxo_coin_fields_for_test, utxo_coin_from_fields, TEST_COIN_NAME};
 use crate::utxo::utxo_standard::{utxo_standard_coin_with_priv_key, UtxoStandardCoin};
 use crate::utxo::utxo_tx_history_v2::{UtxoTxDetailsParams, UtxoTxHistoryOps};
-use crate::{BlockHeightAndTime, CoinBalance, ConfirmPaymentInput, IguanaPrivKey, PrivKeyBuildPolicy,
+use crate::{BlockHeightAndTime, CoinBalance, ConfirmPaymentInput, DexFee, IguanaPrivKey, PrivKeyBuildPolicy,
             SearchForSwapTxSpendInput, SpendPaymentArgs, StakingInfosDetails, SwapOps, TradePreimageValue,
             TxFeeDetails, TxMarshalingErr, ValidateFeeArgs, INVALID_SENDER_ERR_LOG};
 #[cfg(not(target_arch = "wasm32"))]
@@ -2521,7 +2521,7 @@ fn test_validate_fee_wrong_sender() {
         fee_tx: &taker_fee_tx,
         expected_sender: &DEX_FEE_ADDR_RAW_PUBKEY,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 0,
         uuid: &[],
     };
@@ -2546,7 +2546,7 @@ fn test_validate_fee_min_block() {
         fee_tx: &taker_fee_tx,
         expected_sender: &sender_pub,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 278455,
         uuid: &[],
     };
@@ -2575,7 +2575,7 @@ fn test_validate_fee_bch_70_bytes_signature() {
         fee_tx: &taker_fee_tx,
         expected_sender: &sender_pub,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 0,
         uuid: &[],
     };
