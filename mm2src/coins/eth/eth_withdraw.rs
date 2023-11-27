@@ -16,6 +16,10 @@ use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::{MapToMmResult, MmError, OrMmError};
 use std::ops::Deref;
 
+cfg_wasm32! {
+    use web3::types::TransactionRequest;
+}
+
 #[async_trait]
 pub trait EthWithdraw
 where
@@ -147,7 +151,7 @@ where
             nonce,
             value: eth_value,
             action: Action::Call(call_addr),
-            data,
+            data: data.clone(),
             gas,
             gas_price,
         };
@@ -177,12 +181,12 @@ where
                 }
 
                 let tx_to_send = TransactionRequest {
-                    from: coin.my_address(),
+                    from: my_address,
                     to: Some(to_addr),
                     gas: Some(gas),
                     gas_price: Some(gas_price),
                     value: Some(eth_value),
-                    data: Some(data.clone().into()),
+                    data: Some(data.into()),
                     nonce: None,
                     ..TransactionRequest::default()
                 };
