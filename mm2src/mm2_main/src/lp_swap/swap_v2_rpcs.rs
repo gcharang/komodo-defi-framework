@@ -2,6 +2,9 @@ use super::maker_swap::MakerSavedSwap;
 use super::taker_swap::TakerSavedSwap;
 use crate::mm2::lp_swap::maker_swap_v2::MakerSwapEvent;
 use crate::mm2::lp_swap::taker_swap_v2::TakerSwapEvent;
+use common::HttpStatusCode;
+use derive_more::Display;
+use http::StatusCode;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{MmNumber, MmNumberMultiRepr};
@@ -12,6 +15,7 @@ cfg_native!(
     use crate::mm2::database::my_swaps::SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID;
     use common::async_blocking;
     use db_common::sqlite::rusqlite::{Result as SqlResult, Row, Error as SqlError};
+    use db_common::sqlite::rusqlite::types::Type as SqlType;
 );
 
 cfg_wasm32!(
@@ -103,21 +107,25 @@ impl<T: DeserializeOwned> MySwapForRpc<T> {
         Ok(Self {
             my_coin: row.get(0)?,
             other_coin: row.get(1)?,
-            uuid: row.get::<_, String>(2)?.parse().unwrap(),
+            uuid: row
+                .get::<_, String>(2)?
+                .parse()
+                .map_err(|e| SqlError::FromSqlConversionFailure(2, SqlType::Text, Box::new(e)))?,
             started_at: row.get(3)?,
             is_finished: row.get(4)?,
-            events: serde_json::from_str(&row.get::<_, String>(5)?).unwrap(),
+            events: serde_json::from_str(&row.get::<_, String>(5)?)
+                .map_err(|e| SqlError::FromSqlConversionFailure(5, SqlType::Text, Box::new(e)))?,
             maker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(6)?)
-                .unwrap()
+                .map_err(|e| SqlError::FromSqlConversionFailure(6, SqlType::Text, Box::new(e)))?
                 .into(),
             taker_volume: MmNumber::from_fraction_string(&row.get::<_, String>(7)?)
-                .unwrap()
+                .map_err(|e| SqlError::FromSqlConversionFailure(7, SqlType::Text, Box::new(e)))?
                 .into(),
             premium: MmNumber::from_fraction_string(&row.get::<_, String>(8)?)
-                .unwrap()
+                .map_err(|e| SqlError::FromSqlConversionFailure(8, SqlType::Text, Box::new(e)))?
                 .into(),
             dex_fee: MmNumber::from_fraction_string(&row.get::<_, String>(9)?)
-                .unwrap()
+                .map_err(|e| SqlError::FromSqlConversionFailure(9, SqlType::Text, Box::new(e)))?
                 .into(),
             lock_duration: row.get(10)?,
             maker_coin_confs: row.get(11)?,
@@ -241,9 +249,30 @@ pub(super) async fn get_taker_swap_data_for_rpc(
     })
 }
 
+#[derive(Serialize)]
 pub(crate) enum SwapRpcData {
     MakerV1(MakerSavedSwap),
     TakerV1(TakerSavedSwap),
     MakerV2(MySwapForRpc<MakerSwapEvent>),
     TakerV2(MySwapForRpc<TakerSwapEvent>),
+}
+
+#[derive(Deserialize)]
+pub(crate) struct MySwapStatusRequest {
+    uuid: Uuid,
+}
+
+#[derive(Display, Serialize, SerializeErrorType)]
+#[serde(tag = "error_type", content = "error_data")]
+pub(crate) enum MySwapStatusError {}
+
+impl HttpStatusCode for MySwapStatusError {
+    fn status_code(&self) -> StatusCode { todo!() }
+}
+
+pub(crate) async fn my_swap_status_rpc(
+    ctx: MmArc,
+    req: MySwapStatusRequest,
+) -> MmResult<SwapRpcData, MySwapStatusError> {
+    unimplemented!()
 }

@@ -107,7 +107,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[rustfmt::skip]
 mod swap_v2_pb;
 #[path = "lp_swap/swap_v2_common.rs"] mod swap_v2_common;
-#[path = "lp_swap/swap_v2_rpcs.rs"] mod swap_v2_rpcs;
+#[path = "lp_swap/swap_v2_rpcs.rs"] pub(crate) mod swap_v2_rpcs;
 #[path = "lp_swap/swap_watcher.rs"] pub(crate) mod swap_watcher;
 #[path = "lp_swap/taker_restart.rs"]
 pub(crate) mod taker_restart;
