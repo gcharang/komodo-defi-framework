@@ -1633,7 +1633,9 @@ pub struct ElectrumClientImpl {
     /// Please also note that this abortable system is a subsystem of [`UtxoCoinFields::abortable_system`].
     abortable_system: AbortableQueue,
     negotiate_version: bool,
-    /// TODO: doc & type
+    /// This is used for balance event streaming implementation for UTXOs.
+    /// If balance event streaming isn't enabled, this value will always be `None`; otherwise,
+    /// it will be used for sending scripthash notifications to trigger re-fetching the balances.
     scripthash_notification_sender: ScripthashNotificationSender,
 }
 
