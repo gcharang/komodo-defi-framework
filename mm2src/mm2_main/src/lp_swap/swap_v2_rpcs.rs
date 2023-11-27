@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 cfg_native!(
     use crate::mm2::database::my_swaps::SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID;
-    use db_common::sqlite::rusqlite::{Result as SqlResult, Row};
+    use common::async_blocking;
+    use db_common::sqlite::rusqlite::{Result as SqlResult, Row, Error as SqlError};
 );
 
 cfg_wasm32!(
@@ -22,12 +23,18 @@ cfg_wasm32!(
 );
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> SqlResult<u8> {
-    let conn = ctx.sqlite_connection();
-    const SELECT_SWAP_TYPE_BY_UUID: &str = "SELECT swap_type FROM my_swaps WHERE uuid = :uuid;";
-    let mut stmt = conn.prepare(SELECT_SWAP_TYPE_BY_UUID)?;
-    let swap_type = stmt.query_row(&[(":uuid", &uuid.to_string())], |row| row.get(0))?;
-    Ok(swap_type)
+pub(super) async fn get_swap_type(ctx: &MmArc, uuid: &Uuid) -> MmResult<u8, SqlError> {
+    let ctx = ctx.clone();
+    let uuid = uuid.to_string();
+
+    async_blocking(move || {
+        let conn = ctx.sqlite_connection();
+        const SELECT_SWAP_TYPE_BY_UUID: &str = "SELECT swap_type FROM my_swaps WHERE uuid = :uuid;";
+        let mut stmt = conn.prepare(SELECT_SWAP_TYPE_BY_UUID)?;
+        let swap_type = stmt.query_row(&[(":uuid", uuid.as_str())], |row| row.get(0))?;
+        Ok(swap_type)
+    })
+    .await
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -122,23 +129,43 @@ impl<T: DeserializeOwned> MySwapForRpc<T> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) async fn get_swap_data_for_rpc<T: DeserializeOwned>(
+pub(super) async fn get_maker_swap_data_for_rpc(
     ctx: &MmArc,
     uuid: &Uuid,
-    _swap_type: u8,
-) -> SqlResult<MySwapForRpc<T>> {
-    let conn = ctx.sqlite_connection();
-    let mut stmt = conn.prepare(SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID)?;
-    let swap_data = stmt.query_row(&[(":uuid", &uuid.to_string())], MySwapForRpc::from_row)?;
-    Ok(swap_data)
+) -> MmResult<MySwapForRpc<MakerSwapEvent>, SqlError> {
+    get_swap_data_for_rpc_impl(ctx, uuid).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn get_taker_swap_data_for_rpc(
+    ctx: &MmArc,
+    uuid: &Uuid,
+) -> MmResult<MySwapForRpc<TakerSwapEvent>, SqlError> {
+    get_swap_data_for_rpc_impl(ctx, uuid).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn get_swap_data_for_rpc_impl<T: DeserializeOwned + Send + 'static>(
+    ctx: &MmArc,
+    uuid: &Uuid,
+) -> MmResult<MySwapForRpc<T>, SqlError> {
+    let ctx = ctx.clone();
+    let uuid = uuid.to_string();
+
+    async_blocking(move || {
+        let conn = ctx.sqlite_connection();
+        let mut stmt = conn.prepare(SELECT_MY_SWAP_V2_FOR_RPC_BY_UUID)?;
+        let swap_data = stmt.query_row(&[(":uuid", uuid.as_str())], MySwapForRpc::from_row)?;
+        Ok(swap_data)
+    })
+    .await
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(super) async fn get_swap_data_for_rpc(
+pub(super) async fn get_maker_swap_data_for_rpc(
     ctx: &MmArc,
     uuid: &Uuid,
-    swap_type: u8,
-) -> MmResult<MySwapForRpc, SwapV2DbError> {
+) -> MmResult<MySwapForRpc<MakerSwapEvent>, SwapV2DbError> {
     let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
     let db = swaps_ctx.swap_db().await?;
     let transaction = db.transaction().await?;
@@ -154,49 +181,64 @@ pub(super) async fn get_swap_data_for_rpc(
         None => return MmError::err(SwapV2DbError::NoSwapWithUuid(*uuid)),
     };
 
-    match swap_type {
-        MAKER_SWAP_V2_TYPE => {
-            let json_repr: MakerSwapDbRepr = serde_json::from_value(item.saved_swap)?;
-            Ok(MySwapForRpc {
-                my_coin: json_repr.maker_coin,
-                other_coin: json_repr.taker_coin,
-                uuid: json_repr.uuid,
-                started_at: json_repr.started_at as i64,
-                is_finished: filter_item.is_finished.as_bool(),
-                events: json_repr.events,
-                maker_volume: json_repr.maker_volume.into(),
-                taker_volume: json_repr.taker_volume.into(),
-                premium: json_repr.taker_premium.into(),
-                dex_fee: json_repr.dex_fee_amount.into(),
-                lock_duration: json_repr.lock_duration as i64,
-                maker_coin_confs: json_repr.conf_settings.maker_coin_confs as i64,
-                maker_coin_nota: json_repr.conf_settings.maker_coin_nota,
-                taker_coin_confs: json_repr.conf_settings.taker_coin_confs as i64,
-                taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
-            })
-        },
-        TAKER_SWAP_V2_TYPE => {
-            let json_repr: TakerSwapDbRepr = serde_json::from_value(item.saved_swap)?;
-            Ok(MySwapForRpc {
-                my_coin: json_repr.taker_coin,
-                other_coin: json_repr.maker_coin,
-                uuid: json_repr.uuid,
-                started_at: json_repr.started_at as i64,
-                is_finished: filter_item.is_finished.as_bool(),
-                events: json_repr.events,
-                maker_volume: json_repr.maker_volume.into(),
-                taker_volume: json_repr.taker_volume.into(),
-                premium: json_repr.taker_premium.into(),
-                dex_fee: json_repr.dex_fee.into(),
-                lock_duration: json_repr.lock_duration as i64,
-                maker_coin_confs: json_repr.conf_settings.maker_coin_confs as i64,
-                maker_coin_nota: json_repr.conf_settings.maker_coin_nota,
-                taker_coin_confs: json_repr.conf_settings.taker_coin_confs as i64,
-                taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
-            })
-        },
-        unsupported_type => MmError::err(SwapV2DbError::UnsupportedSwapType(unsupported_type)),
-    }
+    let json_repr: MakerSwapDbRepr = serde_json::from_value(item.saved_swap)?;
+    Ok(MySwapForRpc {
+        my_coin: json_repr.maker_coin,
+        other_coin: json_repr.taker_coin,
+        uuid: json_repr.uuid,
+        started_at: json_repr.started_at as i64,
+        is_finished: filter_item.is_finished.as_bool(),
+        events: json_repr.events,
+        maker_volume: json_repr.maker_volume.into(),
+        taker_volume: json_repr.taker_volume.into(),
+        premium: json_repr.taker_premium.into(),
+        dex_fee: json_repr.dex_fee_amount.into(),
+        lock_duration: json_repr.lock_duration as i64,
+        maker_coin_confs: json_repr.conf_settings.maker_coin_confs as i64,
+        maker_coin_nota: json_repr.conf_settings.maker_coin_nota,
+        taker_coin_confs: json_repr.conf_settings.taker_coin_confs as i64,
+        taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn get_taker_swap_data_for_rpc(
+    ctx: &MmArc,
+    uuid: &Uuid,
+) -> MmResult<MySwapForRpc<TakerSwapEvent>, SwapV2DbError> {
+    let swaps_ctx = SwapsContext::from_ctx(ctx).unwrap();
+    let db = swaps_ctx.swap_db().await?;
+    let transaction = db.transaction().await?;
+    let table = transaction.table::<SavedSwapTable>().await?;
+    let item = match table.get_item_by_unique_index("uuid", uuid).await? {
+        Some((_item_id, item)) => item,
+        None => return MmError::err(SwapV2DbError::NoSwapWithUuid(*uuid)),
+    };
+
+    let filters_table = transaction.table::<MySwapsFiltersTable>().await?;
+    let filter_item = match filters_table.get_item_by_unique_index("uuid", uuid).await? {
+        Some((_item_id, item)) => item,
+        None => return MmError::err(SwapV2DbError::NoSwapWithUuid(*uuid)),
+    };
+
+    let json_repr: TakerSwapDbRepr = serde_json::from_value(item.saved_swap)?;
+    Ok(MySwapForRpc {
+        my_coin: json_repr.taker_coin,
+        other_coin: json_repr.maker_coin,
+        uuid: json_repr.uuid,
+        started_at: json_repr.started_at as i64,
+        is_finished: filter_item.is_finished.as_bool(),
+        events: json_repr.events,
+        maker_volume: json_repr.maker_volume.into(),
+        taker_volume: json_repr.taker_volume.into(),
+        premium: json_repr.taker_premium.into(),
+        dex_fee: json_repr.dex_fee.into(),
+        lock_duration: json_repr.lock_duration as i64,
+        maker_coin_confs: json_repr.conf_settings.maker_coin_confs as i64,
+        maker_coin_nota: json_repr.conf_settings.maker_coin_nota,
+        taker_coin_confs: json_repr.conf_settings.taker_coin_confs as i64,
+        taker_coin_nota: json_repr.conf_settings.taker_coin_nota,
+    })
 }
 
 pub(crate) enum SwapRpcData {

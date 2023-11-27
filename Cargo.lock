@@ -4435,7 +4435,6 @@ dependencies = [
  "keys",
  "lazy_static",
  "libc",
- "log",
  "mm2_core",
  "mm2_db",
  "mm2_err_handle",
