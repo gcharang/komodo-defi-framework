@@ -7,11 +7,13 @@ use mm2_err_handle::prelude::*;
 
 const DB_NAME: &str = "z_params";
 const DB_VERSION: u32 = 1;
+const TARGET_SPEND_CHUNKS: usize = 12;
 
-pub type ZcashParamsWasmRes<T> = MmResult<T, ZcoinStorageError>;
-pub type ZcashParamsInnerLocked<'a> = DbLocked<'a, ZcashParamsWasmInner>;
+pub(crate) type ZcashParamsWasmRes<T> = MmResult<T, ZcoinStorageError>;
+pub(crate) type ZcashParamsInnerLocked<'a> = DbLocked<'a, ZcashParamsWasmInner>;
 
-//  indexeddb max data =267386880 bytes to save, so we need to split sapling_spend
+/// Since sapling_spend data way is greater than indexeddb max_data(267386880) bytes to save, we need to split
+/// sapling_spend and insert to db multiple times with index(sapling_spend_id)
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ZcashParamsWasmTable {
     sapling_spend_id: u8,
@@ -76,6 +78,7 @@ impl ZcashParamsWasmImpl {
             .mm_err(|err| ZcoinStorageError::DbError(err.to_string()))
     }
 
+    /// Given sapling_spend, sapling_output and sapling_spend_id, save to indexeddb storage.
     pub async fn save_params(
         &self,
         sapling_spend_id: u8,
@@ -89,7 +92,7 @@ impl ZcashParamsWasmImpl {
             sapling_spend_id,
             sapling_spend: sapling_spend.to_vec(),
             sapling_output: sapling_output.to_vec(),
-            ticker: "z_params".to_string(),
+            ticker: DB_NAME.to_string(),
         };
 
         params_db.add_item(&params).await?;
@@ -97,6 +100,7 @@ impl ZcashParamsWasmImpl {
         Ok(())
     }
 
+    /// Check if z_params is already save to storage previously.
     pub async fn check_params(&self) -> MmResult<bool, ZcoinStorageError> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
@@ -104,7 +108,7 @@ impl ZcashParamsWasmImpl {
 
         let maybe_param = params_db
             .cursor_builder()
-            .only("ticker", "z_params")?
+            .only("ticker", DB_NAME)?
             .open_cursor("ticker")
             .await?
             .next()
@@ -113,13 +117,14 @@ impl ZcashParamsWasmImpl {
         Ok(maybe_param.is_some())
     }
 
+    /// Get z_params from storage.
     pub async fn get_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
         let mut maybe_params = params_db
             .cursor_builder()
-            .only("ticker", "z_params")?
+            .only("ticker", DB_NAME)?
             .open_cursor("ticker")
             .await?;
 
@@ -133,9 +138,10 @@ impl ZcashParamsWasmImpl {
             }
         }
 
-        Ok((sapling_spend, sapling_output.clone()))
+        Ok((sapling_spend, sapling_output))
     }
 
+    /// Download and save z_params to storage.
     pub async fn download_and_save_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
         let (sapling_spend, sapling_output) = super::download_parameters().await.unwrap();
         let spends = sapling_spend_to_chunks(&sapling_spend);
@@ -151,16 +157,16 @@ impl ZcashParamsWasmImpl {
     }
 }
 
-pub fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
-    // Set the target chunk size
-    let target_chunk_size = 12;
+/// Since sapling_spend data way is greater than indexeddb max_data(267386880) bytes to save, we need to split
+/// sapling_spend into chunks of 12 and insert to db multiple times with index(sapling_spend_id)
+fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
     // Calculate the target size for each chunk
-    let chunk_size = sapling_spend.len() / target_chunk_size;
+    let chunk_size = sapling_spend.len() / TARGET_SPEND_CHUNKS;
     // Calculate the remainder for cases when the length is not perfectly divisible
-    let remainder = sapling_spend.len() % target_chunk_size;
-    let mut sapling_spend_chunks: Vec<Vec<u8>> = Vec::with_capacity(target_chunk_size);
+    let remainder = sapling_spend.len() % TARGET_SPEND_CHUNKS;
+    let mut sapling_spend_chunks: Vec<Vec<u8>> = Vec::with_capacity(TARGET_SPEND_CHUNKS);
     let mut start = 0;
-    for i in 0..target_chunk_size {
+    for i in 0..TARGET_SPEND_CHUNKS {
         let end = start + chunk_size + usize::from(i < remainder);
         // Extract the current chunk from the original vector
         sapling_spend_chunks.push(sapling_spend[start..end].to_vec());

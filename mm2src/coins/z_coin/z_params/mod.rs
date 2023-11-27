@@ -1,5 +1,5 @@
 mod indexeddb;
-pub use indexeddb::{sapling_spend_to_chunks, ZcashParamsWasmImpl};
+pub use indexeddb::ZcashParamsWasmImpl;
 
 use blake2b_simd::State;
 use common::log::info;
@@ -21,6 +21,7 @@ pub enum ZcashParamsBytesError {
     IO(String),
 }
 
+/// Download, validate and return z_params from given `DOWNLOAD_URL`
 async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, ZcashParamsBytesError> {
     let (status, file) = FetchRequest::get(&format!("{DOWNLOAD_URL}/{name}"))
         .cors()
@@ -28,7 +29,12 @@ async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, Zcas
         .await
         .mm_err(|err| ZcashParamsBytesError::IO(err.to_string()))?;
 
-    assert_eq!(200, status);
+    if status != 200 {
+        return MmError::err(ZcashParamsBytesError::IO(format!(
+            "Expected status 200, got {} for {}",
+            status, name
+        )));
+    }
 
     let hash = State::new().update(&file).finalize().to_hex();
     // Verify parameter file hash.
