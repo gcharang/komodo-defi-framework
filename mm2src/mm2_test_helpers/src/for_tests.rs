@@ -3192,3 +3192,25 @@ pub async fn init_trezor_status_rpc(mm: &MarketMakerIt, task_id: u64) -> Json {
     );
     json::from_str(&request.1).unwrap()
 }
+
+pub async fn init_trezor_user_action_rpc(mm: &MarketMakerIt, task_id: u64, user_action: Json) -> Json {
+    let request = mm
+        .rpc(&json!({
+            "userpass": mm.userpass,
+            "method": "task::init_trezor::user_action",
+            "mmrpc": "2.0",
+            "params": {
+                "task_id": task_id,
+                "user_action": user_action
+            }
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        request.0,
+        StatusCode::OK,
+        "'task::init_trezor::user_action' failed: {}",
+        request.1
+    );
+    json::from_str(&request.1).unwrap()
+}
