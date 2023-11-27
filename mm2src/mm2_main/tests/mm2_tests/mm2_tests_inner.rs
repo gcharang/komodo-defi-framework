@@ -1,24 +1,10 @@
 #[cfg(all(feature = "zhtlc-native-tests", not(target_arch = "wasm32")))]
 use super::enable_z_coin;
 use crate::integration_tests_common::*;
-use coins::eth::{eth_coin_from_conf_and_request, EthCoin, ETH_GAS};
-use coins::for_tests::test_withdraw_init_loop;
-use coins::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps};
-use coins::utxo::{utxo_standard::UtxoStandardCoin, UtxoActivationParams};
-use coins::{lp_coinfind, CoinProtocol, MmCoinEnum, PrivKeyBuildPolicy};
-use coins_activation::platform_for_tests::init_platform_coin_with_tokens_loop;
-use coins_activation::{for_tests::init_standalone_coin_loop, InitStandaloneCoinReq};
 use common::executor::Timer;
-use common::now_ms;
-use common::serde::Deserialize;
-use common::wait_until_ms;
 use common::{cfg_native, cfg_wasm32, get_utc_timestamp, log, new_uuid};
-use crypto::hw_rpc_task::HwRpcTaskAwaitingStatus;
 use crypto::privkey::key_pair_from_seed;
-use crypto::CryptoCtx;
 use http::{HeaderMap, StatusCode};
-use mm2_core::mm_ctx::MmArc;
-use mm2_main::mm2::init_hw::{init_trezor, init_trezor_status, InitHwRequest, InitHwResponse};
 use mm2_main::mm2::lp_ordermatch::MIN_ORDER_KEEP_ALIVE_INTERVAL;
 use mm2_metrics::{MetricType, MetricsJson};
 use mm2_number::{BigDecimal, BigRational, Fraction, MmNumber};
@@ -26,27 +12,21 @@ use mm2_rpc::data::legacy::{CoinInitResponse, MmVersionResponse, OrderbookRespon
 use mm2_test_helpers::electrums::*;
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "zhtlc-native-tests")))]
 use mm2_test_helpers::for_tests::check_stats_swap_status;
-use mm2_test_helpers::for_tests::init_trezor_rpc;
-use mm2_test_helpers::for_tests::init_trezor_status_rpc;
 #[cfg(all(not(target_arch = "wasm32")))]
-use mm2_test_helpers::for_tests::mm_ctx_with_custom_db_with_conf;
 use mm2_test_helpers::for_tests::{account_balance, btc_segwit_conf, btc_with_spv_conf, btc_with_sync_starting_header,
                                   check_recent_swaps, enable_eth_coin, enable_eth_with_tokens, enable_qrc20,
-                                  enable_utxo_v2_electrum, eth_jst_testnet_conf,
-                                  eth_sepolia_trezor_firmware_compat_conf, eth_testnet_conf, find_metrics_in_json,
-                                  from_env_file, get_new_address, get_shared_db_id, init_withdraw, mm_spat,
-                                  morty_conf, rick_conf, sign_message, start_swaps, tbtc_legacy_conf,
-                                  tbtc_segwit_conf, tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf,
-                                  verify_message, wait_for_swap_contract_negotiation,
-                                  wait_for_swap_negotiation_failure, wait_for_swaps_finish_and_check_status,
-                                  wait_till_history_has_records, withdraw_status, MarketMakerIt, Mm2InitPrivKeyPolicy,
-                                  Mm2TestConf, Mm2TestConfForSwap, RaiiDump, DOC_ELECTRUM_ADDRS, ETH_DEV_NODES,
-                                  ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT, ETH_MAINNET_NODE,
-                                  ETH_MAINNET_SWAP_CONTRACT, ETH_SEPOLIA_NODE, MARTY_ELECTRUM_ADDRS, MORTY,
+                                  enable_utxo_v2_electrum, eth_jst_testnet_conf, eth_testnet_conf,
+                                  find_metrics_in_json, from_env_file, get_new_address, get_shared_db_id, mm_spat,
+                                  morty_conf, rick_conf, sign_message, start_swaps, tbtc_segwit_conf,
+                                  tbtc_with_spv_conf, test_qrc20_history_impl, tqrc20_conf, verify_message,
+                                  wait_for_swap_contract_negotiation, wait_for_swap_negotiation_failure,
+                                  wait_for_swaps_finish_and_check_status, wait_till_history_has_records,
+                                  MarketMakerIt, Mm2InitPrivKeyPolicy, Mm2TestConf, Mm2TestConfForSwap, RaiiDump,
+                                  DOC_ELECTRUM_ADDRS, ETH_DEV_NODES, ETH_DEV_SWAP_CONTRACT, ETH_DEV_TOKEN_CONTRACT,
+                                  ETH_MAINNET_NODE, ETH_MAINNET_SWAP_CONTRACT, MARTY_ELECTRUM_ADDRS, MORTY,
                                   QRC20_ELECTRUMS, RICK, RICK_ELECTRUM_ADDRS, TBTC_ELECTRUMS, T_BCH_ELECTRUMS};
 use mm2_test_helpers::get_passphrase;
 use mm2_test_helpers::structs::*;
-use rpc_task::{rpc_common::RpcTaskStatusRequest, RpcTaskStatus};
 use serde_json::{self as json, json, Value as Json};
 use std::collections::HashMap;
 use std::env::{self, var};
@@ -67,9 +47,6 @@ cfg_wasm32! {
 
     wasm_bindgen_test_configure!(run_in_browser);
 }
-
-use std::io::{stdin, stdout, BufRead, Write};
-use mm2_main::mm2::init_hw::init_trezor_user_action;
 
 /// Integration test for RPC server.
 /// Check that MM doesn't crash in case of invalid RPC requests
@@ -7818,229 +7795,200 @@ fn test_eth_swap_negotiation_fails_maker_no_fallback() {
     block_on(wait_for_swap_negotiation_failure(&mm_alice, &uuids[0], wait_until));
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, tag = "status", content = "details")]
-pub enum InitTrezorStatus {
-    Ok(InitHwResponse),
-    Error(Json),
-    InProgress(Json),
-    UserActionRequired(Json),
-}
-
-pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
-    let ctx = mm_ctx_with_custom_db_with_conf(Some(conf));
-    CryptoCtx::init_with_global_hd_account(ctx.clone(), "nothing tail captain royal canoe pencil pair arch ice west vintage thumb party task scrub ridge shift argue churn always forget island jelly trumpet").unwrap();
-    let req: InitHwRequest = serde_json::from_value(json!({ "device_pubkey": null })).unwrap();
-    let res = match init_trezor(ctx.clone(), req).await {
-        Ok(res) => res,
-        _ => {
-            panic!("cannot init trezor");
-        },
-    };
-
-    let task_id = res.task_id;
-    loop {
-        let status_req = RpcTaskStatusRequest {
-            task_id,
-            forget_if_finished: false,
-        };
-        match init_trezor_status(ctx.clone(), status_req).await {
-            Ok(res) => {
-                log!("trezor init status={:?}", serde_json::to_string(&res).unwrap());
-                match res {
-                    RpcTaskStatus::Ok(_) => {
-                        log!("device initialized");
-                        break;
-                    },
-                    RpcTaskStatus::Error(_) => {
-                        log!("device in error state");
-                        break;
-                    },
-                    RpcTaskStatus::InProgress(_) => log!("trezor init in progress"),
-                    RpcTaskStatus::UserActionRequired(device_req) => {
-                        log!("device is waiting for user action");
-                        match device_req {
-                            HwRpcTaskAwaitingStatus::EnterTrezorPin => {
-                                print!("Enter pin:");
-                                let _ = stdout().flush();
-                                let pin = stdin().lock().lines().next().unwrap().unwrap(); // read pin from console
-                                let pin_req = serde_json::from_value(json!({
-                                    "task_id": task_id,
-                                    "user_action": {
-                                        "action_type": "TrezorPin",
-                                        "pin": pin
-                                    }
-                                })).unwrap();
-                                let _ = init_trezor_user_action(ctx.clone(), pin_req).await;
-                            }
-                            _ => {
-                                panic!("Trezor passphrase is not supported in tests");
-                            }
-                        }
-
-                    },
-                }
-            },
-            _ => {
-                panic!("cannot get trezor status");
-            },
-        };
-        Timer::sleep(5.).await
-    }
-    ctx
-}
-
-/// Helper to init trezor and wait for completion
-pub async fn init_trezor_loop_rpc(mm: &MarketMakerIt, coin: &str, timeout: u64) -> InitHwResponse {
-    let init = init_trezor_rpc(mm, coin).await;
-    let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
-    let timeout = wait_until_ms(timeout * 1000);
-
-    loop {
-        if now_ms() > timeout {
-            panic!("{} init_trezor_rpc timed out", coin);
-        }
-
-        let ret = init_trezor_status_rpc(mm, init.result.task_id).await;
-        log!("init_trezor_status_rpc: {:?}", ret);
-        let ret: RpcV2Response<InitTrezorStatus> = json::from_value(ret).unwrap();
-        match ret.result {
-            InitTrezorStatus::Ok(result) => break result,
-            InitTrezorStatus::Error(e) => panic!("{} trezor initialization error {:?}", coin, e),
-            _ => Timer::sleep(1.).await,
-        }
-    }
-}
-
-/// Helper to run init withdraw and wait for completion
-async fn init_withdraw_loop_rpc(
-    mm: &MarketMakerIt,
-    coin: &str,
-    to: &str,
-    amount: &str,
-    from: Option<Json>,
-) -> TransactionDetails {
-    let init = init_withdraw(mm, coin, to, amount, from).await;
-    let init: RpcV2Response<InitTaskResult> = json::from_value(init).unwrap();
-    let timeout = wait_until_ms(150000);
-
-    loop {
-        if now_ms() > timeout {
-            panic!("{} init_withdraw timed out", coin);
-        }
-
-        let status = withdraw_status(mm, init.result.task_id).await;
-        log!("Withdraw status {}", json::to_string(&status).unwrap());
-        let status: RpcV2Response<WithdrawStatus> = json::from_value(status).unwrap();
-        match status.result {
-            WithdrawStatus::Ok(result) => break result,
-            WithdrawStatus::Error(e) => panic!("{} withdraw error {:?}", coin, e),
-            _ => Timer::sleep(1.).await,
-        }
-    }
-}
-
-/// We cannot put this code in coins/eth_tests.rs as trezor init needs some structs in mm2_main
-#[test]
-pub fn eth_my_balance() {
-    let req = json!({
-        "method": "enable",
-        "coin": "ETH",
-        "urls": ETH_SEPOLIA_NODE,
-        "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
-        "priv_key_policy": "Trezor",
-    });
-
-    let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
-    eth_conf["mm2"] = 2.into();
-    let mm_conf = json!({ "coins": [eth_conf] });
-
-    let ctx = block_on(mm_ctx_with_trezor(mm_conf));
-    let priv_key_policy = PrivKeyBuildPolicy::Trezor;
-    // this activate method does not create a default hd wallet account what is needed for trezor
-    // maybe make a new account as a separate call?
-    // for that we need get_activation_result() to be called (which calls enable_balance and then create_new_account)
-    let eth_coin = block_on(eth_coin_from_conf_and_request(
-        &ctx,
-        "ETH",
-        &eth_conf,
-        &req,
-        CoinProtocol::ETH,
-        priv_key_policy,
-    ))
-    .unwrap();
-
-    let account_balance = block_on(eth_coin.account_balance_rpc(AccountBalanceParams {
-        account_index: 0,
-        chain: crypto::Bip44Chain::External,
-        limit: Default::default(),
-        paging_options: Default::default(),
-    }))
-    .unwrap();
-    println!("account_balance={:?}", account_balance);
-}
-
-/// Tool to run eth withdraw directly with trezor device or emulator (no-rpc version, added for easier debugging)
-/// run cargo test with '--features run-device-tests' option
-/// to use trezor emulator also add '--features trezor-udp' option to cargo params
-#[test]
 #[cfg(all(feature = "run-device-tests", not(target_arch = "wasm32")))]
-fn test_eth_withdraw_from_trezor_no_rpc() {
-    use std::convert::TryInto;
+mod trezor_tests {
+    use coins::eth::{eth_coin_from_conf_and_request, EthCoin, ETH_GAS};
+    use coins::for_tests::test_withdraw_init_loop;
+    use coins::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps};
+    use coins::{lp_coinfind, CoinProtocol, MmCoinEnum, PrivKeyBuildPolicy};
+    use coins_activation::platform_for_tests::init_platform_coin_with_tokens_loop;
+    use common::executor::Timer;
+    use common::serde::Deserialize;
+    use common::{block_on, log};
+    use crypto::hw_rpc_task::HwRpcTaskAwaitingStatus;
+    use crypto::CryptoCtx;
+    use mm2_core::mm_ctx::MmArc;
+    use mm2_main::mm2::init_hw::init_trezor_user_action;
+    use mm2_main::mm2::init_hw::{init_trezor, init_trezor_status, InitHwRequest, InitHwResponse};
+    use mm2_test_helpers::for_tests::{eth_sepolia_trezor_firmware_compat_conf, mm_ctx_with_custom_db_with_conf,
+                                      ETH_DEV_SWAP_CONTRACT, ETH_SEPOLIA_NODE};
+    use rpc_task::{rpc_common::RpcTaskStatusRequest, RpcTaskStatus};
+    use serde_json::{self as json, json, Value as Json};
+    use std::io::{stdin, stdout, BufRead, Write};
 
-    use coins::WithdrawFee;
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields, tag = "status", content = "details")]
+    pub enum InitTrezorStatus {
+        Ok(InitHwResponse),
+        Error(Json),
+        InProgress(Json),
+        UserActionRequired(Json),
+    }
 
-    let ticker = "ETH";
+    pub async fn mm_ctx_with_trezor(conf: Json) -> MmArc {
+        let ctx = mm_ctx_with_custom_db_with_conf(Some(conf));
+        CryptoCtx::init_with_global_hd_account(ctx.clone(), "nothing tail captain royal canoe pencil pair arch ice west vintage thumb party task scrub ridge shift argue churn always forget island jelly trumpet").unwrap();
+        let req: InitHwRequest = serde_json::from_value(json!({ "device_pubkey": null })).unwrap();
+        let res = match init_trezor(ctx.clone(), req).await {
+            Ok(res) => res,
+            _ => {
+                panic!("cannot init trezor");
+            },
+        };
 
-    let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
-    eth_conf["mm2"] = 2.into();
-    let mm_conf = json!({ "coins": [eth_conf] });
+        let task_id = res.task_id;
+        loop {
+            let status_req = RpcTaskStatusRequest {
+                task_id,
+                forget_if_finished: false,
+            };
+            match init_trezor_status(ctx.clone(), status_req).await {
+                Ok(status_res) => {
+                    log!("trezor init status={:?}", serde_json::to_string(&status_res).unwrap());
+                    match status_res {
+                        RpcTaskStatus::Ok(_) => {
+                            log!("device initialized");
+                            break;
+                        },
+                        RpcTaskStatus::Error(_) => {
+                            log!("device in error state");
+                            break;
+                        },
+                        RpcTaskStatus::InProgress(_) => log!("trezor init in progress"),
+                        RpcTaskStatus::UserActionRequired(device_req) => {
+                            log!("device is waiting for user action");
+                            match device_req {
+                                HwRpcTaskAwaitingStatus::EnterTrezorPin => {
+                                    print!("Enter pin:");
+                                    let _ = stdout().flush();
+                                    let pin = stdin().lock().lines().next().unwrap().unwrap(); // read pin from console
+                                    let pin_req = serde_json::from_value(json!({
+                                        "task_id": task_id,
+                                        "user_action": {
+                                            "action_type": "TrezorPin",
+                                            "pin": pin
+                                        }
+                                    }))
+                                    .unwrap();
+                                    let _ = init_trezor_user_action(ctx.clone(), pin_req).await;
+                                },
+                                _ => {
+                                    panic!("Trezor passphrase is not supported in tests");
+                                },
+                            }
+                        },
+                    }
+                },
+                _ => {
+                    panic!("cannot get trezor status");
+                },
+            };
+            Timer::sleep(5.).await
+        }
+        ctx
+    }
 
-    let ctx = block_on(mm_ctx_with_trezor(mm_conf));
-    block_on(init_platform_coin_with_tokens_loop::<EthCoin>(
-        ctx.clone(),
-        json::from_value(json!({
-            "ticker": ticker,
-            "rpc_mode": "Http",
-            "nodes": [
-                {"url": "https://rpc2.sepolia.org"},
-                {"url": "https://rpc.sepolia.org/"}
-            ],
+    /// We cannot put this code in coins/eth_tests.rs as trezor init needs some structs in mm2_main
+    #[test]
+    pub fn eth_my_balance() {
+        let req = json!({
+            "method": "enable",
+            "coin": "ETH",
+            "urls": ETH_SEPOLIA_NODE,
             "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
-            "erc20_tokens_requests": [],
-            "priv_key_policy": "Trezor"
+            "priv_key_policy": "Trezor",
+        });
+
+        let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
+        eth_conf["mm2"] = 2.into();
+        let mm_conf = json!({ "coins": [eth_conf] });
+
+        let ctx = block_on(mm_ctx_with_trezor(mm_conf));
+        let priv_key_policy = PrivKeyBuildPolicy::Trezor;
+        // this activate method does not create a default hd wallet account what is needed for trezor
+        // maybe make a new account as a separate call?
+        // for that we need get_activation_result() to be called (which calls enable_balance and then create_new_account)
+        let eth_coin = block_on(eth_coin_from_conf_and_request(
+            &ctx,
+            "ETH",
+            &eth_conf,
+            &req,
+            CoinProtocol::ETH,
+            priv_key_policy,
+        ))
+        .unwrap();
+
+        let account_balance = block_on(eth_coin.account_balance_rpc(AccountBalanceParams {
+            account_index: 0,
+            chain: crypto::Bip44Chain::External,
+            limit: Default::default(),
+            paging_options: Default::default(),
         }))
-        .unwrap(),
-    ))
-    .unwrap();
+        .unwrap();
+        println!("account_balance={:?}", account_balance);
+    }
 
-    let coin = block_on(lp_coinfind(&ctx, "ETH")).unwrap();
-    let eth_coin = if let Some(MmCoinEnum::EthCoin(eth_coin)) = coin {
-        eth_coin
-    } else {
-        panic!("eth coin not enabled");
-    };
-    let account_balance = block_on(eth_coin.account_balance_rpc(AccountBalanceParams {
-        account_index: 0,
-        chain: crypto::Bip44Chain::External,
-        limit: 1,
-        paging_options: Default::default(),
-    }))
-    .unwrap();
-    println!("account_balance={:?}", account_balance);
+    /// Tool to run eth withdraw directly with trezor device or emulator (no-rpc version, added for easier debugging)
+    /// run cargo test with '--features run-device-tests' option
+    /// to use trezor emulator also add '--features trezor-udp' option to cargo params
+    #[test]
+    fn test_eth_withdraw_from_trezor_no_rpc() {
+        use std::convert::TryInto;
 
-    let tx_details = block_on(test_withdraw_init_loop(
-        ctx,
-        ticker,
-        "0xc06eFafa6527fc4b3C8F69Afb173964A3780a104",
-        "0.00001",
-        "m/44'/1'/0'/0/0",
-        Some(WithdrawFee::EthGas {
-            gas: ETH_GAS,
-            gas_price: 0.1_f32.try_into().unwrap(),
-        }),
-    ))
-    .expect("withdraw must end successfully");
-    log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
-    // TODO: check maybe we need to disconnect trezor somehow
+        use coins::WithdrawFee;
+
+        let ticker = "ETH";
+
+        let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
+        eth_conf["mm2"] = 2.into();
+        let mm_conf = json!({ "coins": [eth_conf] });
+
+        let ctx = block_on(mm_ctx_with_trezor(mm_conf));
+        block_on(init_platform_coin_with_tokens_loop::<EthCoin>(
+            ctx.clone(),
+            json::from_value(json!({
+                "ticker": ticker,
+                "rpc_mode": "Http",
+                "nodes": [
+                    {"url": "https://rpc2.sepolia.org"},
+                    {"url": "https://rpc.sepolia.org/"}
+                ],
+                "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
+                "erc20_tokens_requests": [],
+                "priv_key_policy": "Trezor"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+        let coin = block_on(lp_coinfind(&ctx, "ETH")).unwrap();
+        let eth_coin = if let Some(MmCoinEnum::EthCoin(eth_coin)) = coin {
+            eth_coin
+        } else {
+            panic!("eth coin not enabled");
+        };
+        let account_balance = block_on(eth_coin.account_balance_rpc(AccountBalanceParams {
+            account_index: 0,
+            chain: crypto::Bip44Chain::External,
+            limit: 1,
+            paging_options: Default::default(),
+        }))
+        .unwrap();
+        println!("account_balance={:?}", account_balance);
+
+        let tx_details = block_on(test_withdraw_init_loop(
+            ctx,
+            ticker,
+            "0xc06eFafa6527fc4b3C8F69Afb173964A3780a104",
+            "0.00001",
+            "m/44'/1'/0'/0/0",
+            Some(WithdrawFee::EthGas {
+                gas: ETH_GAS,
+                gas_price: 0.1_f32.try_into().unwrap(),
+            }),
+        ))
+        .expect("withdraw must end successfully");
+        log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+        // TODO: check maybe we need to disconnect trezor somehow
+    }
 }
