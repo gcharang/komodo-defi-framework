@@ -820,10 +820,10 @@ impl UtxoRpcClientOps for NativeClient {
     }
 
     fn blockchain_scripthash_subscribe(&self, _scripthash: String) -> UtxoRpcFut<Json> {
-        return Box::new(futures01::future::err(
+        Box::new(futures01::future::err(
             UtxoRpcError::Internal("blockchain_scripthash_subscribe` is not supported for Native Clients".to_owned())
                 .into(),
-        ));
+        ))
     }
 
     fn get_transaction_bytes(&self, txid: &H256Json) -> UtxoRpcFut<BytesJson> {
@@ -1458,7 +1458,7 @@ fn addr_to_socket_addr(input: &str) -> Result<SocketAddr, String> {
 pub fn spawn_electrum(
     req: &ElectrumRpcRequest,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
-    scripthash_notification_sender: ScripthashNotificationSender,
+    scripthash_notification_sender: &ScripthashNotificationSender,
     abortable_system: AbortableQueue,
 ) -> Result<ElectrumConnection, String> {
     let config = match req.protocol {
@@ -1729,7 +1729,7 @@ impl ElectrumClientImpl {
         let connection = try_s!(spawn_electrum(
             req,
             self.event_handlers.clone(),
-            self.scripthash_notification_sender.clone(),
+            &self.scripthash_notification_sender,
             subsystem,
         ));
         self.connections.lock().await.push(connection);
@@ -2482,7 +2482,7 @@ fn rx_to_stream(rx: mpsc::Receiver<Vec<u8>>) -> impl Stream<Item = Vec<u8>, Erro
 async fn electrum_process_json(
     raw_json: Json,
     arc: &JsonRpcPendingRequestsShared,
-    scripthash_notification_sender: ScripthashNotificationSender,
+    scripthash_notification_sender: &ScripthashNotificationSender,
 ) {
     // detect if we got standard JSONRPC response or subscription response as JSONRPC request
     #[derive(Deserialize)]
@@ -2545,7 +2545,7 @@ async fn electrum_process_json(
 async fn electrum_process_chunk(
     chunk: &[u8],
     arc: &JsonRpcPendingRequestsShared,
-    scripthash_notification_sender: ScripthashNotificationSender,
+    scripthash_notification_sender: &ScripthashNotificationSender,
 ) {
     // we should split the received chunk because we can get several responses in 1 chunk.
     let split = chunk.split(|item| *item == b'\n');
@@ -2559,7 +2559,7 @@ async fn electrum_process_chunk(
                     return;
                 },
             };
-            electrum_process_json(raw_json, arc, scripthash_notification_sender.clone()).await
+            electrum_process_json(raw_json, arc, scripthash_notification_sender).await
         }
     }
 }
@@ -2766,7 +2766,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
                     event_handlers.on_incoming_response(buffer.as_bytes());
                     last_chunk.store(now_ms(), AtomicOrdering::Relaxed);
 
-                    electrum_process_chunk(buffer.as_bytes(), &responses, scripthash_notification_sender.clone()).await;
+                    electrum_process_chunk(buffer.as_bytes(), &responses, &scripthash_notification_sender).await;
                     buffer.clear();
                 }
             }
@@ -2916,7 +2916,7 @@ fn electrum_connect(
     addr: String,
     config: ElectrumConfig,
     event_handlers: Vec<RpcTransportEventHandlerShared>,
-    scripthash_notification_sender: ScripthashNotificationSender,
+    scripthash_notification_sender: &ScripthashNotificationSender,
     abortable_system: AbortableQueue,
 ) -> ElectrumConnection {
     let responses = Arc::new(AsyncMutex::new(JsonRpcPendingRequests::default()));
