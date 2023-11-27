@@ -9,10 +9,10 @@ use crate::utxo::utxo_builder::{UtxoCoinBuilder, UtxoCoinBuilderCommonOps, UtxoF
                                 UtxoFieldsWithHardwareWalletBuilder, UtxoFieldsWithIguanaSecretBuilder};
 use crate::utxo::utxo_common::{big_decimal_from_sat_unsigned, payment_script};
 use crate::utxo::UtxoFeeDetails;
-use crate::utxo::{utxo_common, ActualTxFee, AdditionalTxData, AddrFromStrError, Address, BroadcastTxErr, FeePolicy,
-                  GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList, RecentlySpentOutPointsGuard,
-                  UtxoActivationParams, UtxoAddressFormat, UtxoArc, UtxoCoinFields, UtxoCommonOps, UtxoRpcMode,
-                  UtxoTxBroadcastOps, UtxoTxGenerationOps, VerboseTransactionFrom};
+use crate::utxo::{sat_from_big_decimal, utxo_common, ActualTxFee, AdditionalTxData, AddrFromStrError, Address,
+                  BroadcastTxErr, FeePolicy, GetUtxoListOps, HistoryUtxoTx, HistoryUtxoTxMap, MatureUnspentList,
+                  RecentlySpentOutPointsGuard, UtxoActivationParams, UtxoAddressFormat, UtxoArc, UtxoCoinFields,
+                  UtxoCommonOps, UtxoRpcMode, UtxoTxBroadcastOps, UtxoTxGenerationOps, VerboseTransactionFrom};
 use crate::TxFeeDetails;
 use crate::{BalanceError, BalanceFut, CheckIfMyPaymentSentArgs, CoinBalance, CoinFutSpawner, ConfirmPaymentInput,
             DexFee, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, MakerSwapTakerCoin, MarketCoinOps, MmCoin,
@@ -85,8 +85,6 @@ use z_rpc::init_light_client;
 pub use z_rpc::{FirstSyncBlock, SyncStatus};
 
 cfg_native!(
-    use crate::{NumConversError, TransactionDetails, TxFeeDetails};
-    use crate::utxo::{UtxoFeeDetails, sat_from_big_decimal};
     use crate::utxo::utxo_common::{addresses_from_script, big_decimal_from_sat};
     use common::{async_blocking, sha256_digest, calc_total_pages, PagingOptionsEnum};
     use db_common::sqlite::offset_by_id;
