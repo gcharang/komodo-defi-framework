@@ -89,6 +89,12 @@ pub enum UtxoCoinBuildError {
     #[display(fmt = "SPV params verificaiton failed. Error: {_0}")]
     SPVError(SPVError),
     ErrorCalculatingStartingHeight(String),
+    #[display(fmt = "Failed spawning balance events. Error: {_0}")]
+    FailedSpawningBalanceEvents(String),
+    #[display(fmt = "Can not enable balance events for {} mode.", mode)]
+    UnsupportedModeForBalanceEvents {
+        mode: String,
+    },
 }
 
 impl From<UtxoConfError> for UtxoCoinBuildError {

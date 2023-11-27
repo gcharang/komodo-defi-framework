@@ -114,6 +114,15 @@ pub enum UtxoRpcClientEnum {
     Electrum(ElectrumClient),
 }
 
+impl ToString for UtxoRpcClientEnum {
+    fn to_string(&self) -> String {
+        match self {
+            UtxoRpcClientEnum::Native(_) => "native".to_owned(),
+            UtxoRpcClientEnum::Electrum(_) => "electrum".to_owned(),
+        }
+    }
+}
+
 impl From<ElectrumClient> for UtxoRpcClientEnum {
     fn from(client: ElectrumClient) -> UtxoRpcClientEnum { UtxoRpcClientEnum::Electrum(client) }
 }
