@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 #[cfg(unix)] use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use url::{ParseError, Url};
 
 const PROJECT_QUALIFIER: &str = "com";
 const PROJECT_COMPANY: &str = "komodoplatform";
@@ -32,30 +33,59 @@ pub(super) fn get_config(option: &crate::cli::GetOption) {
 }
 
 pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
-    config.inquire()?;
-    let set_password = config
-        .password
-        .ok_or_else(|| error_anyhow!("No seed phrase detected in config"))?;
-    let rpc_api_uri = config.uri.take();
-
-    assert!(set_password || rpc_api_uri.is_some());
     let mut komodefi_cfg = KomodefiConfigImpl::from_config_path().unwrap_or_else(|_| KomodefiConfigImpl::default());
 
-    if set_password {
-        let rpc_password = Password::new("Enter RPC API password:")
-            .prompt()
-            .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
-        komodefi_cfg.set_rpc_password(rpc_password);
-    }
+    if let Some(path) = &config.from_path {
+        let (uri, password) = config.source_from_path(&path)?;
+        komodefi_cfg.set_rpc_uri(uri);
+        komodefi_cfg.set_rpc_password(password);
+    } else {
+        config.inquire()?;
+        let set_password = config
+            .password
+            .ok_or_else(|| error_anyhow!("No set password option detected in config"))?;
+        let rpc_api_uri = config.uri.take();
+        assert!(set_password || rpc_api_uri.is_some());
 
-    if let Some(rpc_api_uri) = rpc_api_uri {
-        komodefi_cfg.set_rpc_uri(rpc_api_uri);
+        if set_password {
+            let rpc_password = Password::new("Enter RPC API password:")
+                .prompt()
+                .map_err(|error| error_anyhow!("Failed to get rpc_api_password: {error}"))?;
+            komodefi_cfg.set_rpc_password(rpc_password);
+        }
+
+        if let Some(rpc_api_uri) = rpc_api_uri {
+            validate_rpc_url(&rpc_api_uri)?;
+            komodefi_cfg.set_rpc_uri(rpc_api_uri);
+        }
     }
 
     komodefi_cfg.write_to_config_path()?;
     info!("Configuration has been set");
 
     Ok(())
+}
+
+/// Validates an RPC URL and add base if not provided.
+pub fn validate_rpc_url(input: &str) -> Result<(), anyhow::Error> {
+    let url = match Url::parse(input) {
+        Ok(url) => url,
+        Err(err) => match err {
+            ParseError::RelativeUrlWithoutBase => {
+                Url::parse(&format!("http://{}", input)).map_err(|err| error_anyhow!("Invalid RPC URI: {err:?}"))?
+            },
+            _ => return Err(error_anyhow!("Invalid RPC URI: {err:?}")),
+        },
+    };
+
+    // Check that the scheme is "http" and the host is an IPv4 address, and there is a port
+    if url.scheme() == "http" && url.port().is_some() {
+        Ok(())
+    } else {
+        Err(error_anyhow!(
+            "Invalid RPC URI! Expected scheme, host, and port (http:127.0.0.1:7783)"
+        ))
+    }
 }
 
 pub(super) trait KomodefiConfig {
