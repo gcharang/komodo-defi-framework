@@ -19,4 +19,6 @@ pub(crate) enum Mm2Commands {
     Status,
     #[command(about = "Get version of intermediary mm2 service")]
     Version,
+    #[command(about = "Download latest available mm2 version and extract to bin folder for use.")]
+    Download,
 }

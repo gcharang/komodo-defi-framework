@@ -4,7 +4,7 @@ use std::mem::take;
 
 use crate::config::{get_config, set_config, KomodefiConfig};
 use crate::komodefi_proc::{KomodefiProc, ResponseHandler};
-use crate::scenarios::{get_status, init, start_process, stop_process};
+use crate::scenarios::{download_binary_and_extract_to_bin_folder, get_status, init, start_process, stop_process};
 use crate::transport::SlurpTransport;
 
 use super::cli_cmd_args::prelude::*;
@@ -89,6 +89,7 @@ impl Cli {
                 mm_log: log_file,
             }) => start_process(mm2_cfg_file, coins_file, log_file),
             Command::Mm2(Mm2Commands::Version) => proc.get_version().await?,
+            Command::Mm2(Mm2Commands::Download) => download_binary_and_extract_to_bin_folder().await?,
             Command::Mm2(Mm2Commands::Kill) => stop_process(),
             Command::Mm2(Mm2Commands::Status) => get_status(),
             Command::Mm2(Mm2Commands::Stop) => proc.send_stop().await?,

@@ -1,3 +1,4 @@
+mod download_helper;
 mod init_coins;
 mod init_mm2_cfg;
 mod inquire_extentions;
@@ -11,6 +12,7 @@ use init_mm2_cfg::init_mm2_cfg;
 
 use super::activation_scheme_db::init_activation_scheme;
 
+pub(super) use download_helper::download_binary_and_extract_to_bin_folder;
 pub(super) use mm2_proc_mng::{get_status, start_process, stop_process};
 
 pub(super) async fn init(cfg_file: &str, coins_file: &str) { let _ = init_impl(cfg_file, coins_file).await; }

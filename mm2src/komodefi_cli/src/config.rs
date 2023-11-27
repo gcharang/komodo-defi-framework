@@ -36,7 +36,7 @@ pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
     let mut komodefi_cfg = KomodefiConfigImpl::from_config_path().unwrap_or_else(|_| KomodefiConfigImpl::default());
 
     if let Some(path) = &config.from_path {
-        let (uri, password) = config.source_from_path(&path)?;
+        let (uri, password) = config.source_from_path(path)?;
         komodefi_cfg.set_rpc_uri(uri);
         komodefi_cfg.set_rpc_password(password);
     } else {
