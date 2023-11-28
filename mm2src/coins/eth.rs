@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright © 2022 Atomic Private Limited and its contributors               *
+ * Copyright © 2023 Pampex LTD and TillyHK LTD              *
  *                                                                            *
  * See the CONTRIBUTOR-LICENSE-AGREEMENT, COPYING, LICENSE-COPYRIGHT-NOTICE   *
  * and DEVELOPER-CERTIFICATE-OF-ORIGIN files in the LEGAL directory in        *
@@ -7,7 +7,7 @@
  * holder information and the developer policies on copyright and licensing.  *
  *                                                                            *
  * Unless otherwise agreed in a custom licensing agreement, no part of the    *
- * AtomicDEX software, including this file may be copied, modified, propagated*
+ * Komodo DeFi Framework software, including this file may be copied, modified, propagated*
  * or distributed except according to the terms contained in the              *
  * LICENSE-COPYRIGHT-NOTICE file.                                             *
  *                                                                            *
@@ -18,12 +18,12 @@
 //  eth.rs
 //  marketmaker
 //
-//  Copyright © 2022 AtomicDEX. All rights reserved.
+//  Copyright © 2023 Pampex LTD and TillyHK LTD. All rights reserved.
 //
 use super::eth::Action::{Call, Create};
 use crate::lp_price::get_base_price_in_rel;
 use crate::nft::nft_structs::{ContractType, ConvertChain, TransactionNftDetails, WithdrawErc1155, WithdrawErc721};
-use crate::{ValidateWatcherSpendInput, WatcherSpendType};
+use crate::{DexFee, ValidateWatcherSpendInput, WatcherSpendType};
 use async_trait::async_trait;
 use bitcrypto::{dhash160, keccak256, ripemd160, sha256};
 use common::custom_futures::repeatable::{Ready, Retry, RetryOnError};
@@ -1056,12 +1056,15 @@ impl Deref for EthCoin {
 
 #[async_trait]
 impl SwapOps for EthCoin {
-    fn send_taker_fee(&self, fee_addr: &[u8], amount: BigDecimal, _uuid: &[u8]) -> TransactionFut {
+    fn send_taker_fee(&self, fee_addr: &[u8], dex_fee: DexFee, _uuid: &[u8]) -> TransactionFut {
         let address = try_tx_fus!(addr_from_raw_pubkey(fee_addr));
 
         Box::new(
-            self.send_to_address(address, try_tx_fus!(wei_from_big_decimal(&amount, self.decimals)))
-                .map(TransactionEnum::from),
+            self.send_to_address(
+                address,
+                try_tx_fus!(wei_from_big_decimal(&dex_fee.fee_amount().into(), self.decimals)),
+            )
+            .map(TransactionEnum::from),
         )
     }
 
@@ -1116,7 +1119,7 @@ impl SwapOps for EthCoin {
             fee_tx_hash: &tx.hash,
             expected_sender: validate_fee_args.expected_sender,
             fee_addr: validate_fee_args.fee_addr,
-            amount: validate_fee_args.amount,
+            amount: &validate_fee_args.dex_fee.fee_amount().into(),
             min_block_number: validate_fee_args.min_block_number,
             uuid: validate_fee_args.uuid,
         })
@@ -4901,10 +4904,10 @@ impl MmCoin for EthCoin {
 
     async fn get_fee_to_send_taker_fee(
         &self,
-        dex_fee_amount: BigDecimal,
+        dex_fee_amount: DexFee,
         stage: FeeApproxStage,
     ) -> TradePreimageResult<TradeFee> {
-        let dex_fee_amount = wei_from_big_decimal(&dex_fee_amount, self.decimals)?;
+        let dex_fee_amount = wei_from_big_decimal(&dex_fee_amount.fee_amount().into(), self.decimals)?;
 
         // pass the dummy params
         let to_addr = addr_from_raw_pubkey(&DEX_FEE_ADDR_RAW_PUBKEY)
