@@ -4,10 +4,11 @@ use crate::komodefi_proc::SmartFractPrecision;
 use crate::logging::{error_anyhow, warn_bail};
 
 use anyhow::{anyhow, bail, Result};
-use common::log::{error, info, warn};
+use common::log::{debug, error, info, warn};
 use directories::ProjectDirs;
 use inquire::Password;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::fs;
 #[cfg(unix)] use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -29,7 +30,11 @@ const CFG_FILE_PERM_MODE: u32 = 0o660;
 
 pub(super) fn get_config(option: &crate::cli::GetOption) {
     let Ok(komodefi_cfg) = KomodefiConfigImpl::from_config_path() else { return; };
-    info!("{}", komodefi_cfg.print_config(option.unhide))
+    if option.unhide {
+        komodefi_cfg.print_config_with_password_on_tty()
+    } else {
+        println!("{}", komodefi_cfg)
+    }
 }
 
 pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
@@ -54,8 +59,8 @@ pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
             komodefi_cfg.set_rpc_password(rpc_password);
         }
 
-        if let Some(rpc_api_uri) = rpc_api_uri {
-            validate_rpc_url(&rpc_api_uri)?;
+        if let Some(mut rpc_api_uri) = rpc_api_uri {
+            validate_rpc_uri_scheme(config.secure_conn.unwrap_or_default(), &mut rpc_api_uri)?;
             komodefi_cfg.set_rpc_uri(rpc_api_uri);
         }
     }
@@ -67,24 +72,25 @@ pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
 }
 
 /// Validates an RPC URL and add base if not provided.
-pub fn validate_rpc_url(input: &str) -> Result<(), anyhow::Error> {
-    let url = match Url::parse(input) {
-        Ok(url) => url,
+fn validate_rpc_uri_scheme(secure_conn: bool, input: &mut String) -> Result<(), anyhow::Error> {
+    match Url::parse(input) {
+        Ok(url) => {
+            if matches!(url.scheme(), "http" | "https") {
+                let scheme = if secure_conn { "https" } else { "http" };
+                *input = format!("{scheme}://{}:{}", url.host().unwrap(), url.port().unwrap());
+                return Ok(());
+            }
+
+            Ok(())
+        },
         Err(err) => match err {
             ParseError::RelativeUrlWithoutBase => {
-                Url::parse(&format!("http://{}", input)).map_err(|err| error_anyhow!("Invalid RPC URI: {err:?}"))?
+                let scheme = if secure_conn { "https" } else { "http" };
+                *input = format!("{scheme}://{input}");
+                Ok(())
             },
-            _ => return Err(error_anyhow!("Invalid RPC URI: {err:?}")),
+            _ => Err(error_anyhow!("Invalid RPC URI: {err:?}")),
         },
-    };
-
-    // Check that the scheme is "http" and the host is an IPv4 address, and there is a port
-    if url.scheme() == "http" && url.port().is_some() {
-        Ok(())
-    } else {
-        Err(error_anyhow!(
-            "Invalid RPC URI! Expected scheme, host, and port (http:127.0.0.1:7783)"
-        ))
     }
 }
 
@@ -101,6 +107,21 @@ pub(super) struct KomodefiConfigImpl {
     rpc_password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rpc_uri: Option<String>,
+}
+
+impl Display for KomodefiConfigImpl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !self.is_set() {
+            return writeln!(f, "komodefi configuration is not set");
+        }
+        writeln!(
+            f,
+            "mm2 RPC URL: {}",
+            self.rpc_uri.as_ref().expect("Expected rpc_uri is set")
+        )?;
+        writeln!(f, "mm2 RPC password: *************")?;
+        Ok(())
+    }
 }
 
 impl KomodefiConfig for KomodefiConfigImpl {
@@ -200,10 +221,10 @@ impl KomodefiConfigImpl {
             );
 
             // Update permissions to the desired mode
-            info!("Updating permission...");
+            debug!("Updating permission...");
             let new_perms = fs::Permissions::from_mode(CFG_FILE_PERM_MODE);
             fs::set_permissions(Path::new(file_path), new_perms)?;
-            info!("Permission Updated!, new permission: {mode}");
+            debug!("Permission Updated!, new permission: {mode}");
         };
 
         Ok(())
@@ -213,20 +234,15 @@ impl KomodefiConfigImpl {
 
     fn set_rpc_uri(&mut self, rpc_uri: String) { self.rpc_uri.replace(rpc_uri); }
 
-    fn print_config(&self, unhide: bool) -> String {
+    fn print_config_with_password_on_tty(&self) {
         if !self.is_set() {
-            return "komodefi configuration is not set".to_string();
+            return println!("komodefi configuration is not set");
         }
-        let password = if unhide {
-            self.rpc_password.clone().expect("Expected rpc_password is not set")
-        } else {
-            String::from("*************")
-        };
 
-        format!(
+        println!(
             "mm2 RPC URL: {}\nmm2 RPC password: {}",
-            self.rpc_uri.as_deref().expect("Expected rpc_uri is not set"),
-            password
+            self.rpc_uri.as_ref().expect("Expected rpc_uri is set"),
+            self.rpc_password.clone().expect("Expected rpc_password is not set")
         )
     }
 }
