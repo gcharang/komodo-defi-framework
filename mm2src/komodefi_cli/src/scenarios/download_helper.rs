@@ -83,12 +83,12 @@ async fn extract_file_from_zip(zip_path: &std::path::Path, file_name: &str) -> R
     archive.extract(&bin_dir)?;
 
     // Check binary version
-    let version = get_binary_version(&format!("{}/{file_name}", bin_dir.to_string_lossy().to_string())).await?;
+    let version = get_binary_version(&format!("{}/{file_name}", bin_dir.to_string_lossy())).await?;
     info!("running {version}");
 
     // Delete zip
     let file_path = bin_dir.join("downloaded_file.zip");
-    fs::remove_file(&file_path)?;
+    fs::remove_file(file_path)?;
     debug!("deleted downloaded_file.zip after use");
 
     Ok(())

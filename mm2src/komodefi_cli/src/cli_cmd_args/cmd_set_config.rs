@@ -79,18 +79,14 @@ impl SetConfigArgs {
         let mm2: Mm2Config = serde_json::from_str(&String::from_utf8_lossy(&buffer))
             .map_err(|error| error_anyhow!("Failed to get rpc_uri: {error}"))?;
 
-        let base = if mm2.secure_conn.unwrap_or_default() {
+        let scheme = if mm2.secure_conn.unwrap_or_default() {
             "https://"
         } else {
             "http://"
         };
         Ok((
-            format!(
-                "{base}{}:{}",
-                mm2.rpcip.to_string().trim(),
-                mm2.rpcport.to_string().trim()
-            ),
-            mm2.rpc_password.to_string().trim().to_string(),
+            format!("{scheme}{}:{}", mm2.rpcip.trim(), mm2.rpcport),
+            mm2.rpc_password.trim().to_string(),
         ))
     }
 }
