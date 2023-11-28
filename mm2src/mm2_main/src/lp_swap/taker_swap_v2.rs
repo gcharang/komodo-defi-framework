@@ -56,6 +56,7 @@ pub struct StoredNegotiationData {
 
 /// Represents events produced by taker swap states.
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "event_type", content = "event_data")]
 pub enum TakerSwapEvent {
     /// Swap has been successfully initialized.
     Initialized {

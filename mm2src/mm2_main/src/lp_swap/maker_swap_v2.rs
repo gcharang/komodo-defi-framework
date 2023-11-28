@@ -55,6 +55,7 @@ pub struct StoredNegotiationData {
 
 /// Represents events produced by maker swap states.
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "event_type", content = "event_data")]
 pub enum MakerSwapEvent {
     /// Swap has been successfully initialized.
     Initialized {

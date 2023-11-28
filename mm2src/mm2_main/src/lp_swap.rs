@@ -152,8 +152,8 @@ pub const SWAP_FINISHED_LOG: &str = "Swap finished: ";
 pub const TX_HELPER_PREFIX: TopicPrefix = "txhlp";
 
 pub(crate) const LEGACY_SWAP_TYPE: u8 = 0;
-const MAKER_SWAP_V2_TYPE: u8 = 1;
-const TAKER_SWAP_V2_TYPE: u8 = 2;
+pub(crate) const MAKER_SWAP_V2_TYPE: u8 = 1;
+pub(crate) const TAKER_SWAP_V2_TYPE: u8 = 2;
 const MAX_STARTED_AT_DIFF: u64 = 60;
 
 const NEGOTIATE_SEND_INTERVAL: f64 = 30.;
@@ -1063,7 +1063,7 @@ pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, 
     let swap_type = try_s!(get_swap_type(&ctx, &uuid).await);
 
     match swap_type {
-        LEGACY_SWAP_TYPE => {
+        Some(LEGACY_SWAP_TYPE) => {
             let status = match SavedSwap::load_my_swap_from_db(&ctx, uuid).await {
                 Ok(Some(status)) => status,
                 Ok(None) => return Err("swap data is not found".to_owned()),
@@ -1074,19 +1074,20 @@ pub async fn my_swap_status(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, 
             let res = try_s!(json::to_vec(&res_js));
             Ok(try_s!(Response::builder().body(res)))
         },
-        MAKER_SWAP_V2_TYPE => {
+        Some(MAKER_SWAP_V2_TYPE) => {
             let swap_data = try_s!(get_maker_swap_data_for_rpc(&ctx, &uuid).await);
             let res_js = json!({ "result": swap_data });
             let res = try_s!(json::to_vec(&res_js));
             Ok(try_s!(Response::builder().body(res)))
         },
-        TAKER_SWAP_V2_TYPE => {
+        Some(TAKER_SWAP_V2_TYPE) => {
             let swap_data = try_s!(get_taker_swap_data_for_rpc(&ctx, &uuid).await);
             let res_js = json!({ "result": swap_data });
             let res = try_s!(json::to_vec(&res_js));
             Ok(try_s!(Response::builder().body(res)))
         },
-        unsupported_type => ERR!("Got unsupported swap type from DB: {}", unsupported_type),
+        Some(unsupported_type) => ERR!("Got unsupported swap type from DB: {}", unsupported_type),
+        None => ERR!("No swap with uuid {}", uuid),
     }
 }
 
