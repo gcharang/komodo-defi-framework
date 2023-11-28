@@ -22,16 +22,16 @@ use crate::utxo::utxo_builder::{MergeUtxoArcOps, UtxoCoinBuildError, UtxoCoinBui
 use crate::utxo::utxo_tx_history_v2::{UtxoMyAddressesHistoryError, UtxoTxDetailsError, UtxoTxDetailsParams,
                                       UtxoTxHistoryOps};
 use crate::{eth, CanRefundHtlc, CheckIfMyPaymentSentArgs, CoinBalance, CoinWithDerivationMethod,
-            CoinWithPrivKeyPolicy, ConfirmPaymentInput, DelegationError, DelegationFut, GetWithdrawSenderAddress,
-            IguanaPrivKey, MakerSwapTakerCoin, MmCoinEnum, NegotiateSwapContractAddrErr, PaymentInstructionArgs,
-            PaymentInstructions, PaymentInstructionsErr, PrivKeyBuildPolicy, RefundError, RefundPaymentArgs,
-            RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput, SendPaymentArgs,
-            SignatureResult, SpendPaymentArgs, StakingInfosFut, SwapOps, TakerSwapMakerCoin, TradePreimageValue,
-            TransactionFut, TransactionResult, TxMarshalingErr, UnexpectedDerivationMethod, ValidateAddressResult,
-            ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr, ValidatePaymentError,
-            ValidatePaymentFut, ValidatePaymentInput, ValidateWatcherSpendInput, VerificationResult,
-            WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError, WatcherSearchForSwapTxSpendInput,
-            WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut};
+            CoinWithPrivKeyPolicy, ConfirmPaymentInput, DelegationError, DelegationFut, DexFee,
+            GetWithdrawSenderAddress, IguanaPrivKey, MakerSwapTakerCoin, MmCoinEnum, NegotiateSwapContractAddrErr,
+            PaymentInstructionArgs, PaymentInstructions, PaymentInstructionsErr, PrivKeyBuildPolicy, RefundError,
+            RefundPaymentArgs, RefundResult, SearchForSwapTxSpendInput, SendMakerPaymentSpendPreimageInput,
+            SendPaymentArgs, SignatureResult, SpendPaymentArgs, StakingInfosFut, SwapOps, TakerSwapMakerCoin,
+            TradePreimageValue, TransactionFut, TransactionResult, TxMarshalingErr, UnexpectedDerivationMethod,
+            ValidateAddressResult, ValidateFeeArgs, ValidateInstructionsErr, ValidateOtherPubKeyErr,
+            ValidatePaymentError, ValidatePaymentFut, ValidatePaymentInput, ValidateWatcherSpendInput,
+            VerificationResult, WaitForHTLCTxSpendArgs, WatcherOps, WatcherReward, WatcherRewardError,
+            WatcherSearchForSwapTxSpendInput, WatcherValidatePaymentInput, WatcherValidateTakerFeeInput, WithdrawFut};
 use common::executor::{AbortableSystem, AbortedError};
 use ethereum_types::H160;
 use futures::{FutureExt, TryFutureExt};
@@ -522,8 +522,8 @@ impl UtxoStandardOps for QtumCoin {
 #[async_trait]
 impl SwapOps for QtumCoin {
     #[inline]
-    fn send_taker_fee(&self, fee_addr: &[u8], amount: BigDecimal, _uuid: &[u8]) -> TransactionFut {
-        utxo_common::send_taker_fee(self.clone(), fee_addr, amount)
+    fn send_taker_fee(&self, fee_addr: &[u8], dex_fee: DexFee, _uuid: &[u8]) -> TransactionFut {
+        utxo_common::send_taker_fee(self.clone(), fee_addr, dex_fee)
     }
 
     #[inline]
@@ -572,7 +572,7 @@ impl SwapOps for QtumCoin {
             tx,
             utxo_common::DEFAULT_FEE_VOUT,
             validate_fee_args.expected_sender,
-            validate_fee_args.amount,
+            validate_fee_args.dex_fee,
             validate_fee_args.min_block_number,
             validate_fee_args.fee_addr,
         )
@@ -943,7 +943,7 @@ impl MmCoin for QtumCoin {
 
     async fn get_fee_to_send_taker_fee(
         &self,
-        dex_fee_amount: BigDecimal,
+        dex_fee_amount: DexFee,
         stage: FeeApproxStage,
     ) -> TradePreimageResult<TradeFee> {
         utxo_common::get_fee_to_send_taker_fee(self, dex_fee_amount, stage).await

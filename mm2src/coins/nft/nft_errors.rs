@@ -5,10 +5,11 @@ use common::{HttpStatusCode, ParseRfc3339Err};
 use derive_more::Display;
 use enum_from::EnumFromStringify;
 use http::StatusCode;
-use mm2_net::transport::SlurpError;
+use mm2_net::transport::{GetInfoFromUriError, SlurpError};
 use serde::{Deserialize, Serialize};
 use web3::Error;
 
+/// Enumerates potential errors that can arise when fetching NFT information.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum GetNftInfoError {
@@ -119,6 +120,16 @@ impl HttpStatusCode for GetNftInfoError {
     }
 }
 
+/// Enumerates possible errors that can occur while updating NFT details in the database.
+///
+/// The errors capture various issues that can arise during:
+/// - Metadata refresh
+/// - NFT transfer history updating
+/// - NFT list updating
+///
+/// The issues addressed include database errors, invalid hex strings,
+/// inconsistencies in block numbers, and problems related to fetching or interpreting
+/// fetched metadata.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum UpdateNftError {
@@ -168,6 +179,11 @@ pub enum UpdateNftError {
     },
     #[display(fmt = "Invalid hex string: {}", _0)]
     InvalidHexString(String),
+    UpdateSpamPhishingError(UpdateSpamPhishingError),
+    GetInfoFromUriError(GetInfoFromUriError),
+    #[from_stringify("serde_json::Error")]
+    SerdeError(String),
+    ProtectFromSpamError(ProtectFromSpamError),
 }
 
 impl From<CreateNftStorageError> for UpdateNftError {
@@ -190,6 +206,18 @@ impl<T: NftStorageError> From<T> for UpdateNftError {
     fn from(err: T) -> Self { UpdateNftError::DbError(format!("{:?}", err)) }
 }
 
+impl From<UpdateSpamPhishingError> for UpdateNftError {
+    fn from(e: UpdateSpamPhishingError) -> Self { UpdateNftError::UpdateSpamPhishingError(e) }
+}
+
+impl From<GetInfoFromUriError> for UpdateNftError {
+    fn from(e: GetInfoFromUriError) -> Self { UpdateNftError::GetInfoFromUriError(e) }
+}
+
+impl From<ProtectFromSpamError> for UpdateNftError {
+    fn from(e: ProtectFromSpamError) -> Self { UpdateNftError::ProtectFromSpamError(e) }
+}
+
 impl HttpStatusCode for UpdateNftError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -202,15 +230,35 @@ impl HttpStatusCode for UpdateNftError {
             | UpdateNftError::InvalidBlockOrder { .. }
             | UpdateNftError::LastScannedBlockNotFound { .. }
             | UpdateNftError::AttemptToReceiveAlreadyOwnedErc721 { .. }
-            | UpdateNftError::InvalidHexString(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | UpdateNftError::InvalidHexString(_)
+            | UpdateNftError::UpdateSpamPhishingError(_)
+            | UpdateNftError::GetInfoFromUriError(_)
+            | UpdateNftError::SerdeError(_)
+            | UpdateNftError::ProtectFromSpamError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
+/// Enumerates the errors that can occur during spam protection operations.
+///
+/// This includes issues such as regex failures during text validation and
+/// serialization/deserialization problems.
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
-pub(crate) enum GetInfoFromUriError {
-    /// `http::Error` can appear on an HTTP request [`http::Builder::build`] building.
-    #[from_stringify("http::Error")]
+pub enum ProtectFromSpamError {
+    #[from_stringify("regex::Error")]
+    RegexError(String),
+    #[from_stringify("serde_json::Error")]
+    SerdeError(String),
+}
+
+/// An enumeration representing the potential errors encountered
+/// during the process of updating spam or phishing-related information.
+///
+/// This error set captures various failures, from request malformation
+/// to database interaction errors, providing a comprehensive view of
+/// possible issues during the spam/phishing update operations.
+#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
+pub enum UpdateSpamPhishingError {
     #[display(fmt = "Invalid request: {}", _0)]
     InvalidRequest(String),
     #[display(fmt = "Transport: {}", _0)]
@@ -220,24 +268,45 @@ pub(crate) enum GetInfoFromUriError {
     InvalidResponse(String),
     #[display(fmt = "Internal: {}", _0)]
     Internal(String),
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
+    GetMyAddressError(GetMyAddressError),
 }
 
-impl From<SlurpError> for GetInfoFromUriError {
-    fn from(e: SlurpError) -> Self {
-        let error_str = e.to_string();
+impl From<GetMyAddressError> for UpdateSpamPhishingError {
+    fn from(e: GetMyAddressError) -> Self { UpdateSpamPhishingError::GetMyAddressError(e) }
+}
+
+impl From<GetInfoFromUriError> for UpdateSpamPhishingError {
+    fn from(e: GetInfoFromUriError) -> Self {
         match e {
-            SlurpError::ErrorDeserializing { .. } => GetInfoFromUriError::InvalidResponse(error_str),
-            SlurpError::Transport { .. } | SlurpError::Timeout { .. } => GetInfoFromUriError::Transport(error_str),
-            SlurpError::InvalidRequest(_) => GetInfoFromUriError::InvalidRequest(error_str),
-            SlurpError::Internal(_) => GetInfoFromUriError::Internal(error_str),
+            GetInfoFromUriError::InvalidRequest(e) => UpdateSpamPhishingError::InvalidRequest(e),
+            GetInfoFromUriError::Transport(e) => UpdateSpamPhishingError::Transport(e),
+            GetInfoFromUriError::InvalidResponse(e) => UpdateSpamPhishingError::InvalidResponse(e),
+            GetInfoFromUriError::Internal(e) => UpdateSpamPhishingError::Internal(e),
         }
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize)]
-pub enum ProtectFromSpamError {
-    #[from_stringify("regex::Error")]
-    RegexError(String),
+impl<T: NftStorageError> From<T> for UpdateSpamPhishingError {
+    fn from(err: T) -> Self { UpdateSpamPhishingError::DbError(format!("{:?}", err)) }
+}
+
+/// Errors encountered when parsing a `Chain` from a string.
+#[derive(Debug, Display)]
+pub enum ParseChainTypeError {
+    /// The provided string does not correspond to any of the supported blockchain types.
+    UnsupportedChainType,
+}
+
+#[derive(Debug, Display, EnumFromStringify)]
+pub(crate) enum MetaFromUrlError {
     #[from_stringify("serde_json::Error")]
-    SerdeError(String),
+    #[display(fmt = "Invalid response: {}", _0)]
+    InvalidResponse(String),
+    GetInfoFromUriError(GetInfoFromUriError),
+}
+
+impl From<GetInfoFromUriError> for MetaFromUrlError {
+    fn from(e: GetInfoFromUriError) -> Self { MetaFromUrlError::GetInfoFromUriError(e) }
 }

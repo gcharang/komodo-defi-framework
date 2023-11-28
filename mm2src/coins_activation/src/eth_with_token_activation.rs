@@ -17,6 +17,7 @@ use common::{drop_mutability, true_f};
 use crypto::hw_rpc_task::{HwRpcTaskAwaitingStatus, HwRpcTaskUserAction};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
+use mm2_event_stream::EventStreamConfiguration;
 #[cfg(target_arch = "wasm32")]
 use mm2_metamask::MetamaskRpcError;
 use mm2_number::BigDecimal;
@@ -302,6 +303,13 @@ impl PlatformWithTokensActivationOps for EthCoin {
         _storage: impl TxHistoryStorage + Send + 'static,
         _initial_balance: Option<BigDecimal>,
     ) {
+    }
+
+    async fn handle_balance_streaming(
+        &self,
+        _config: &EventStreamConfiguration,
+    ) -> Result<(), MmError<Self::ActivationError>> {
+        Ok(())
     }
 }
 
