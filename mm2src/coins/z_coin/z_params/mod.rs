@@ -1,5 +1,5 @@
 mod indexeddb;
-pub use indexeddb::ZcashParamsWasmImpl;
+pub(crate) use indexeddb::ZcashParamsWasmImpl;
 
 use blake2b_simd::State;
 use common::log::info;

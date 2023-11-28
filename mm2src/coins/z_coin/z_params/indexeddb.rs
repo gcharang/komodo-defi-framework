@@ -15,7 +15,7 @@ pub(crate) type ZcashParamsInnerLocked<'a> = DbLocked<'a, ZcashParamsWasmInner>;
 /// Since sapling_spend data way is greater than indexeddb max_data(267386880) bytes to save, we need to split
 /// sapling_spend and insert to db multiple times with index(sapling_spend_id)
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ZcashParamsWasmTable {
+struct ZcashParamsWasmTable {
     sapling_spend_id: u8,
     sapling_spend: Vec<u8>,
     sapling_output: Vec<u8>,
@@ -23,7 +23,7 @@ pub struct ZcashParamsWasmTable {
 }
 
 impl ZcashParamsWasmTable {
-    pub const SPEND_OUTPUT_INDEX: &str = "sapling_spend_sapling_output_index";
+    const SPEND_OUTPUT_INDEX: &str = "sapling_spend_sapling_output_index";
 }
 
 impl TableSignature for ZcashParamsWasmTable {
@@ -60,14 +60,14 @@ impl DbInstance for ZcashParamsWasmInner {
 }
 
 impl ZcashParamsWasmInner {
-    pub fn get_inner(&self) -> &IndexedDb { &self.0 }
+    pub(crate) fn get_inner(&self) -> &IndexedDb { &self.0 }
 }
 
 #[derive(Clone)]
-pub struct ZcashParamsWasmImpl(SharedDb<ZcashParamsWasmInner>);
+pub(crate) struct ZcashParamsWasmImpl(SharedDb<ZcashParamsWasmInner>);
 
 impl ZcashParamsWasmImpl {
-    pub async fn new(ctx: MmArc) -> MmResult<Self, ZcoinStorageError> {
+    pub(crate) async fn new(ctx: MmArc) -> MmResult<Self, ZcoinStorageError> {
         Ok(Self(ConstructibleDb::new(&ctx).into_shared()))
     }
 
@@ -79,7 +79,7 @@ impl ZcashParamsWasmImpl {
     }
 
     /// Given sapling_spend, sapling_output and sapling_spend_id, save to indexeddb storage.
-    pub async fn save_params(
+    pub(crate) async fn save_params(
         &self,
         sapling_spend_id: u8,
         sapling_spend: &[u8],
@@ -101,7 +101,7 @@ impl ZcashParamsWasmImpl {
     }
 
     /// Check if z_params is already save to storage previously.
-    pub async fn check_params(&self) -> MmResult<bool, ZcoinStorageError> {
+    pub(crate) async fn check_params(&self) -> MmResult<bool, ZcoinStorageError> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
@@ -118,7 +118,7 @@ impl ZcashParamsWasmImpl {
     }
 
     /// Get z_params from storage.
-    pub async fn get_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
+    pub(crate) async fn get_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
@@ -142,7 +142,7 @@ impl ZcashParamsWasmImpl {
     }
 
     /// Download and save z_params to storage.
-    pub async fn download_and_save_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
+    pub(crate) async fn download_and_save_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
         let (sapling_spend, sapling_output) = super::download_parameters().await.unwrap();
         let spends = sapling_spend_to_chunks(&sapling_spend);
         for (i, spend) in spends.into_iter().enumerate() {
