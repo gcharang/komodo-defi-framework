@@ -261,10 +261,6 @@ impl MmCtx {
         db_root.join(wallet_name.to_string() + ".dat")
     }
 
-    /// Checks if a wallet with the given name exists.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn check_if_wallet_exists(&self, wallet_name: &str) -> bool { self.wallet_file_path(wallet_name).exists() }
-
     /// MM database path.  
     /// Defaults to a relative "DB".
     ///

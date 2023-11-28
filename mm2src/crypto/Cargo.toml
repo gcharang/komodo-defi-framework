@@ -7,6 +7,7 @@ edition = "2018"
 doctest = false
 
 [dependencies]
+aes = "0.8.3"
 argon2 = { version = "0.5.2", features = ["zeroize"] }
 arrayref = "0.3"
 async-trait = "0.1"
@@ -15,6 +16,8 @@ bip32 = { version = "0.2.2", default-features = false, features = ["alloc", "sec
 bip39 = { version = "2.0.0", features = ["rand_core", "zeroize"], default-features = false }
 bitcrypto = { path = "../mm2_bitcoin/crypto" }
 bs58 = "0.4.0"
+cbc = "0.1.2"
+cipher = "0.4.4"
 common = { path = "../common" }
 derive_more = "0.99"
 enum_from = { path = "../derives/enum_from" }
@@ -29,7 +32,6 @@ lazy_static = "1.4"
 mm2_core = { path = "../mm2_core" }
 mm2_err_handle = { path = "../mm2_err_handle" }
 num-traits = "0.2"
-openssl = "0.10.60"
 parking_lot = { version = "0.12.0", features = ["nightly"] }
 primitives = { path = "../mm2_bitcoin/primitives" }
 rpc = { path = "../mm2_bitcoin/rpc" }

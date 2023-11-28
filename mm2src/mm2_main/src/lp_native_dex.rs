@@ -22,8 +22,7 @@ use bitcrypto::sha256;
 use coins::register_balance_update_handler;
 use common::executor::{SpawnFuture, Timer};
 use common::log::{info, warn};
-use crypto::{decrypt_mnemonic, encrypt_mnemonic, from_hw_error, generate_mnemonic, CryptoCtx, CryptoInitError,
-             EncryptedMnemonicData, HwError, HwProcessingError, HwRpcError, MnemonicError, WithHwRpcError};
+use crypto::{from_hw_error, CryptoCtx, HwError, HwProcessingError, HwRpcError, WithHwRpcError};
 use derive_more::Display;
 use enum_from::EnumFromTrait;
 use mm2_core::mm_ctx::{MmArc, MmCtx};
@@ -36,7 +35,6 @@ use mm2_metrics::mm_gauge;
 use mm2_net::network_event::NetworkEvent;
 use mm2_net::p2p::P2PContext;
 use rpc_task::RpcTaskError;
-use serde::de::DeserializeOwned;
 use serde_json::{self as json};
 use std::fs;
 use std::io;
@@ -52,6 +50,7 @@ use crate::mm2::lp_ordermatch::{broadcast_maker_orders_keep_alive_loop, clean_me
                                 lp_ordermatch_loop, orders_kick_start, BalanceUpdateOrdermatchHandler,
                                 OrdermatchInitError};
 use crate::mm2::lp_swap::{running_swaps_num, swap_kick_starts};
+use crate::mm2::lp_wallet::{initialize_wallet_passphrase, WalletInitError};
 use crate::mm2::rpc::spawn_rpc;
 
 cfg_native! {
@@ -142,8 +141,6 @@ pub enum MmInitError {
     },
     #[display(fmt = "P2P initializing error: '{}'", _0)]
     P2PError(P2PInitError),
-    #[display(fmt = "I/O error: '{}'", _0)]
-    IOError(String),
     #[display(fmt = "Error creating DB director '{:?}': {}", path, error)]
     ErrorCreatingDbDir {
         path: PathBuf,
@@ -165,12 +162,8 @@ pub enum MmInitError {
     SwapsKickStartError(String),
     #[display(fmt = "Order kick start error: {}", _0)]
     OrdersKickStartError(String),
-    #[display(fmt = "Passphrase cannot be an empty string")]
-    EmptyPassphrase,
-    #[display(fmt = "Invalid passphrase: {}", _0)]
-    InvalidPassphrase(String),
-    #[display(fmt = "Mnemonic error: {}", _0)]
-    MnemonicError(String),
+    #[display(fmt = "Error initializing wallet: {}", _0)]
+    WalletInitError(String),
     #[display(fmt = "NETWORK event initialization failed: {}", _0)]
     NetworkEventInitFailed(String),
     #[from_trait(WithHwRpcError::hw_rpc_error)]
@@ -210,6 +203,17 @@ impl From<OrdermatchInitError> for MmInitError {
     }
 }
 
+impl From<WalletInitError> for MmInitError {
+    fn from(e: WalletInitError) -> Self {
+        match e {
+            WalletInitError::ErrorDeserializingConfig { field, error } => {
+                MmInitError::ErrorDeserializingConfig { field, error }
+            },
+            other => MmInitError::WalletInitError(other.to_string()),
+        }
+    }
+}
+
 impl From<InitMessageServiceError> for MmInitError {
     fn from(e: InitMessageServiceError) -> Self {
         match e {
@@ -218,23 +222,6 @@ impl From<InitMessageServiceError> for MmInitError {
             },
         }
     }
-}
-
-impl From<CryptoInitError> for MmInitError {
-    fn from(e: CryptoInitError) -> Self {
-        match e {
-            e @ CryptoInitError::InitializedAlready | e @ CryptoInitError::NotInitialized => {
-                MmInitError::Internal(e.to_string())
-            },
-            CryptoInitError::EmptyPassphrase => MmInitError::EmptyPassphrase,
-            CryptoInitError::InvalidPassphrase(pass) => MmInitError::InvalidPassphrase(pass.to_string()),
-            CryptoInitError::Internal(internal) => MmInitError::Internal(internal),
-        }
-    }
-}
-
-impl From<MnemonicError> for MmInitError {
-    fn from(e: MnemonicError) -> Self { MmInitError::MnemonicError(e.to_string()) }
 }
 
 impl From<HwError> for MmInitError {
@@ -305,10 +292,6 @@ pub fn fix_directories(ctx: &MmCtx) -> MmInitResult<()> {
     fix_shared_dbdir(ctx)?;
 
     let dbdir = ctx.dbdir();
-    fs::create_dir_all(&dbdir).map_to_mm(|e| MmInitError::ErrorCreatingDbDir {
-        path: dbdir.clone(),
-        error: e.to_string(),
-    })?;
 
     if !ensure_dir_is_writable(&dbdir.join("SWAPS")) {
         return MmError::err(MmInitError::db_directory_is_not_writable("SWAPS"));
@@ -462,179 +445,17 @@ pub async fn lp_init_continue(ctx: MmArc) -> MmInitResult<()> {
     Ok(())
 }
 
-// Utility function for deserialization to reduce repetition
-fn deserialize_config_field<T: DeserializeOwned>(ctx: &MmArc, field: &str) -> MmInitResult<T> {
-    json::from_value::<T>(ctx.conf[field].clone()).map_to_mm(|e| MmInitError::ErrorDeserializingConfig {
-        field: field.to_owned(),
-        error: e.to_string(),
-    })
-}
-
-/// Saves the passphrase to a file associated with the given wallet name.
-///
-/// # Arguments
-///
-/// * `wallet_name` - The name of the wallet.
-/// * `passphrase` - The passphrase to save.
-///
-/// # Returns
-/// Result indicating success or an error.
-pub async fn save_encrypted_passphrase_to_file(
-    ctx: &MmArc,
-    wallet_name: &str,
-    encrypted_passphrase_data: &EncryptedMnemonicData,
-) -> MmInitResult<()> {
-    let wallet_path = ctx.wallet_file_path(wallet_name);
-    let dbdir = ctx.dbdir();
-    fs::create_dir_all(&dbdir).map_to_mm(|e| MmInitError::ErrorCreatingDbDir {
-        path: dbdir.clone(),
-        error: e.to_string(),
-    })?;
-    ensure_file_is_writable(&wallet_path).map_to_mm(|_| MmInitError::DbFileIsNotWritable {
-        path: wallet_path.display().to_string(),
-    })?;
-    mm2_io::fs::write_json(encrypted_passphrase_data, &wallet_path, true)
-        .await
-        .mm_err(|e| MmInitError::Internal(format!("Error saving passphrase to file {:?}: {}", wallet_path, e)))
-}
-
-// Utility function to handle passphrase encryption and saving
-async fn encrypt_and_save_passphrase(
-    ctx: &MmArc,
-    wallet_name: &str,
-    passphrase: &str,
-    wallet_password: &str,
-) -> MmInitResult<()> {
-    let encrypted_passphrase_data = encrypt_mnemonic(passphrase, wallet_password)?;
-    save_encrypted_passphrase_to_file(ctx, wallet_name, &encrypted_passphrase_data).await
-}
-
-/// Reads the encrypted passphrase data from the file associated with the given wallet name.
-///
-/// This function is responsible for retrieving the encrypted passphrase data from a file.
-/// The data is expected to be in the format of `EncryptedPassphraseData`, which includes
-/// all necessary components for decryption, such as the encryption algorithm, key derivation
-/// details, salts, IV, ciphertext, and HMAC tag.
-///
-/// # Arguments
-///
-/// * `ctx` - The `MmArc` context, providing access to application configuration and state.
-/// * `wallet_name` - The name of the wallet whose encrypted passphrase data is to be read.
-///
-/// # Returns
-/// `io::Result<EncryptedPassphraseData>` - The encrypted passphrase data or an error if the
-/// reading process fails.
-///
-/// # Errors
-/// Returns an `io::Error` if the file cannot be read or the data cannot be deserialized into
-/// `EncryptedPassphraseData`.
-pub async fn read_encrypted_passphrase_from_file(
-    ctx: &MmArc,
-    wallet_name: &str,
-) -> MmInitResult<EncryptedMnemonicData> {
-    let wallet_path = ctx.wallet_file_path(wallet_name);
-    let maybe_passphrase = mm2_io::fs::read_json(&wallet_path).await.mm_err(|e| {
-        MmInitError::IOError(format!(
-            "Error reading passphrase from file {}: {}",
-            wallet_path.display(),
-            e
-        ))
-    })?;
-    match maybe_passphrase {
-        Some(passphrase) => Ok(passphrase),
-        None => MmError::err(MmInitError::Internal("Passphrase not found".to_string())),
-    }
-}
-
-/// Reads and decrypts the passphrase from a file associated with the given wallet name.
-///
-/// This function first reads the passphrase from the file. Since the passphrase is stored in an encrypted
-/// format, it decrypts it before returning.
-///
-/// # Arguments
-/// * `ctx` - The `MmArc` context containing the application state and configuration.
-/// * `wallet_name` - The name of the wallet for which the passphrase is to be retrieved.
-///
-/// # Returns
-/// `MmInitResult<String>` - The decrypted passphrase or an error if any operation fails.
-///
-/// # Errors
-/// Returns specific `MmInitError` variants for different failure scenarios.
-async fn read_and_decrypt_passphrase(ctx: &MmArc, wallet_name: &str, wallet_password: &str) -> MmInitResult<String> {
-    let encrypted_passphrase = read_encrypted_passphrase_from_file(ctx, wallet_name).await?;
-    let mnemonic = decrypt_mnemonic(&encrypted_passphrase, wallet_password)?;
-    Ok(mnemonic.to_string())
-}
-
-/// Initializes and manages the wallet passphrase.
-///
-/// This function handles several scenarios based on the configuration:
-/// - Deserializes the passphrase and wallet name from the configuration.
-/// - If both wallet name and passphrase are `None`, the function sets up the context for "no login mode"
-///   This mode can be entered after the function's execution, allowing access to Komodo DeFi Framework
-///   functionalities that don't require a passphrase (e.g., viewing the orderbook).
-/// - If a wallet name is provided without a passphrase, it first checks for the existence of a
-///   passphrase file associated with the wallet. If no file is found, it generates a new passphrase,
-///   encrypts it, and saves it, enabling multi-wallet support.
-/// - If a passphrase is provided (with or without a wallet name), it uses the provided passphrase
-///   and handles encryption and storage as needed.
-/// - Initializes the cryptographic context based on the `enable_hd` configuration.
-///
-/// # Arguments
-/// * `ctx` - The `MmArc` context containing the application state and configuration.
-///
-/// # Returns
-/// `MmInitResult<()>` - Result indicating success or failure of the initialization process.
-///
-/// # Errors
-/// Returns `MmInitError` if deserialization fails or if there are issues in passphrase handling.
-///
-async fn initialize_wallet_passphrase(ctx: MmArc) -> MmInitResult<()> {
-    let passphrase = deserialize_config_field::<Option<String>>(&ctx, "passphrase")?;
-    // New approach for passphrase, `wallet_name` is needed in the config to enable multi-wallet support.
-    // In this case the passphrase will be generated if not provided.
-    // The passphrase will then be encrypted and saved whether it was generated or provided.
-    let wallet_name = deserialize_config_field::<Option<String>>(&ctx, "wallet_name")?;
-
-    let passphrase = match (wallet_name, passphrase) {
-        (None, None) => None,
-        // Legacy approach for passphrase, no `wallet_name` is needed in the config, in this case the passphrase is not encrypted and saved.
-        (None, Some(passphrase)) => Some(passphrase),
-        // New mode, passphrase is not provided. Generate, encrypt and save passphrase.
-        // passphrase is provided. encrypt and save passphrase.
-        (Some(wallet_name), maybe_passphrase) => {
-            let wallet_password = deserialize_config_field::<String>(&ctx, "wallet_password")?;
-            if ctx.check_if_wallet_exists(&wallet_name) {
-                let passphrase_from_file = read_and_decrypt_passphrase(&ctx, &wallet_name, &wallet_password).await?;
-                match maybe_passphrase {
-                    Some(passphrase) if passphrase == passphrase_from_file => Some(passphrase),
-                    None => Some(passphrase_from_file),
-                    _ => return MmError::err(MmInitError::InvalidPassphrase("Passphrase doesn't match the one from file, please create a new wallet if you want to use a new passphrase".to_string())),
-                }
-            } else {
-                let new_passphrase = match maybe_passphrase {
-                    Some(passphrase) => passphrase,
-                    None => generate_mnemonic(&ctx)?.to_string(),
-                };
-                encrypt_and_save_passphrase(&ctx, &wallet_name, &new_passphrase, &wallet_password).await?;
-                Some(new_passphrase)
-            }
-        },
-    };
-
-    if let Some(passphrase) = passphrase {
-        // This defaults to false to maintain backward compatibility.
-        match ctx.conf["enable_hd"].as_bool().unwrap_or(false) {
-            true => CryptoCtx::init_with_global_hd_account(ctx.clone(), &passphrase)?,
-            false => CryptoCtx::init_with_iguana_passphrase(ctx.clone(), &passphrase)?,
-        };
-    }
-
-    Ok(())
-}
-
 pub async fn lp_init(ctx: MmArc, version: String, datetime: String) -> MmInitResult<()> {
     info!("Version: {} DT {}", version, datetime);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let dbdir = ctx.dbdir();
+        fs::create_dir_all(&dbdir).map_to_mm(|e| MmInitError::ErrorCreatingDbDir {
+            path: dbdir.clone(),
+            error: e.to_string(),
+        })?;
+    }
 
     // This either initializes the cryptographic context or sets up the context for "no login mode".
     initialize_wallet_passphrase(ctx.clone()).await?;

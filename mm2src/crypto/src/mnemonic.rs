@@ -1,3 +1,5 @@
+use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use aes::Aes256;
 use argon2::password_hash::{PasswordHasher, SaltString};
 use argon2::Argon2;
 use bip39::{Language, Mnemonic};
@@ -6,13 +8,15 @@ use derive_more::Display;
 use hmac::{Hmac, Mac};
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
-use openssl::symm::{decrypt, encrypt, Cipher};
 use sha2::Sha256;
 use std::convert::TryInto;
 
 const DEFAULT_WORD_COUNT: u64 = 24;
 
-#[derive(Debug, Display)]
+type Aes256CbcEnc = cbc::Encryptor<Aes256>;
+type Aes256CbcDec = cbc::Decryptor<Aes256>;
+
+#[derive(Debug, Display, PartialEq)]
 pub enum MnemonicError {
     #[display(fmt = "BIP39 mnemonic error: {}", _0)]
     BIP39Error(String),
@@ -35,10 +39,6 @@ impl From<bip39::Error> for MnemonicError {
 
 impl From<argon2::password_hash::Error> for MnemonicError {
     fn from(e: argon2::password_hash::Error) -> Self { MnemonicError::PasswordHashingFailed(e.to_string()) }
-}
-
-impl From<openssl::error::ErrorStack> for MnemonicError {
-    fn from(e: openssl::error::ErrorStack) -> Self { MnemonicError::AESCipherError(e.to_string()) }
 }
 
 impl From<base64::DecodeError> for MnemonicError {
@@ -252,12 +252,17 @@ pub fn encrypt_mnemonic(mnemonic: &str, password: &str) -> MmResult<EncryptedMne
     let (key_aes, key_hmac) = derive_aes_hmac_keys(password, &salt_aes, &salt_hmac)?;
 
     // Create an AES-256-CBC cipher instance, encrypt the data with the key and the IV and get the ciphertext
-    let cipher = Cipher::aes_256_cbc();
-    let ciphertext = encrypt(cipher, &key_aes, Some(&iv), mnemonic.as_bytes())?;
+    let msg_len = mnemonic.len();
+    let buffer_len = msg_len + 16 - (msg_len % 16);
+    let mut buffer = vec![0u8; buffer_len];
+    buffer[..msg_len].copy_from_slice(mnemonic.as_bytes());
+    let ciphertext = Aes256CbcEnc::new(&key_aes.into(), &iv.into())
+        .encrypt_padded_mut::<Pkcs7>(&mut buffer, msg_len)
+        .map_to_mm(|e| MnemonicError::AESCipherError(e.to_string()))?;
 
     // Create HMAC tag
     let mut mac = Hmac::<Sha256>::new_from_slice(&key_hmac).map_to_mm(|e| MnemonicError::Internal(e.to_string()))?;
-    mac.update(&ciphertext);
+    mac.update(ciphertext);
     mac.update(&iv);
     let tag = mac.finalize().into_bytes();
 
@@ -295,7 +300,7 @@ pub fn encrypt_mnemonic(mnemonic: &str, password: &str) -> MmResult<EncryptedMne
 pub fn decrypt_mnemonic(encrypted_data: &EncryptedMnemonicData, password: &str) -> MmResult<Mnemonic, MnemonicError> {
     // Decode the Base64-encoded values
     let iv = base64::decode(&encrypted_data.iv)?;
-    let ciphertext = base64::decode(&encrypted_data.ciphertext)?;
+    let mut ciphertext = base64::decode(&encrypted_data.ciphertext)?;
     let tag = base64::decode(&encrypted_data.tag)?;
 
     // Re-create the salts from Base64-encoded strings
@@ -313,11 +318,13 @@ pub fn decrypt_mnemonic(encrypted_data: &EncryptedMnemonicData, password: &str) 
         .map_to_mm(|e| MnemonicError::HMACError(e.to_string()))?;
 
     // Decrypt the ciphertext
-    let cipher = Cipher::aes_256_cbc();
-    let decrypted_data = decrypt(cipher, &key_aes, Some(&iv), &ciphertext)?;
+    let decrypted_data = Aes256CbcDec::new(&key_aes.into(), iv.as_slice().into())
+        .decrypt_padded_mut::<Pkcs7>(&mut ciphertext)
+        .map_to_mm(|e| MnemonicError::AESCipherError(e.to_string()))?;
 
     // Convert decrypted data back to a string
-    let mnemonic_str = String::from_utf8(decrypted_data).map_to_mm(|e| MnemonicError::DecodeError(e.to_string()))?;
+    let mnemonic_str =
+        String::from_utf8(decrypted_data.to_vec()).map_to_mm(|e| MnemonicError::DecodeError(e.to_string()))?;
     let mnemonic = Mnemonic::parse_normalized(&mnemonic_str)?;
     Ok(mnemonic)
 }
@@ -348,5 +355,26 @@ mod tests {
 
         // Verify if decrypted mnemonic matches the original
         assert_eq!(decrypted_mnemonic, parsed_mnemonic);
+    }
+
+    #[test]
+    fn test_mnemonic_with_last_byte_zero() {
+        let mnemonic = "tank abandon bind salon remove wisdom net size aspect direct source fossil\0".to_string();
+        let password = "password";
+
+        // Encrypt the mnemonic
+        let encrypted_data = encrypt_mnemonic(&mnemonic, password);
+        assert!(encrypted_data.is_ok());
+        let encrypted_data = encrypted_data.unwrap();
+
+        // Decrypt the mnemonic
+        let decrypted_mnemonic = decrypt_mnemonic(&encrypted_data, password);
+        assert!(decrypted_mnemonic.is_err());
+
+        // Verify that the error is due to parsing and not padding
+        assert!(decrypted_mnemonic
+            .unwrap_err()
+            .to_string()
+            .contains("mnemonic contains an unknown word (word 11)"));
     }
 }

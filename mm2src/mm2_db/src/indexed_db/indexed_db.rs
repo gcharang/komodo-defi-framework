@@ -110,9 +110,9 @@ impl DbIdentifier {
 }
 
 pub struct IndexedDbBuilder {
-    db_name: String,
-    db_version: u32,
-    tables: HashMap<String, OnUpgradeNeededCb>,
+    pub db_name: String,
+    pub db_version: u32,
+    pub tables: HashMap<String, OnUpgradeNeededCb>,
 }
 
 impl IndexedDbBuilder {
