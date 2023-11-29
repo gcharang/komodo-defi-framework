@@ -2539,13 +2539,13 @@ async fn sign_raw_eth_tx(coin: &EthCoin, args: &SignEthTransactionParams) -> Raw
     let ctx = MmArc::from_weak(&coin.ctx)
         .ok_or("!ctx")
         .map_to_mm(|err| RawTransactionError::TransactionError(err.to_string()))?;
-    let value = args.value.unwrap_or_else(|| U256::from(0));
+    let value = wei_from_big_decimal(args.value.as_ref().unwrap_or(&BigDecimal::from(0)), coin.decimals)?;
     let action = if let Some(to) = &args.to {
         Call(Address::from_str(to).map_to_mm(|err| RawTransactionError::InvalidParam(err.to_string()))?)
     } else {
         Create
     };
-    let data = args.data.clone().unwrap_or_default();
+    let data = hex::decode(args.data.as_ref().unwrap_or(&String::from("")))?;
     match coin.priv_key_policy {
         // TODO: use zeroise for privkey
         EthPrivKeyPolicy::Iguana(ref key_pair)

@@ -167,7 +167,14 @@ fn test_sign_eth_transaction() {
     let conf = Mm2TestConf::seednode(&passphrase, &coins);
     let mm = block_on(MarketMakerIt::start_async(conf.conf, conf.rpc_password, None)).unwrap();
     block_on(enable_eth(&mm, "ETH", ETH_DEV_NODES));
-    let signed_tx = block_on(call_sign_eth_transaction(&mm, "ETH"));
+    let signed_tx = block_on(call_sign_eth_transaction(
+        &mm,
+        "ETH",
+        "0x7Bc1bBDD6A0a722fC9bffC49c921B685ECB84b94",
+        "1.234",
+        "21000",
+        Some("ABCD1234"),
+    ));
     assert!(signed_tx["result"]["tx_hex"].is_string());
 }
 
@@ -193,8 +200,17 @@ async fn enable_eth(mm: &MarketMakerIt, platform_coin: &str, nodes: &[&str]) -> 
     Json::from_str(&enable.1).unwrap()
 }
 
+/// helper to call sign_raw_transaction rpc
+/// params: marketmaker, coin, value in eth, gas_limit, optional contract data in hex
 #[cfg(not(target_arch = "wasm32"))]
-async fn call_sign_eth_transaction(mm: &MarketMakerIt, platform_coin: &str) -> Json {
+async fn call_sign_eth_transaction(
+    mm: &MarketMakerIt,
+    platform_coin: &str,
+    to: &str,
+    value: &str,
+    gas_limit: &str,
+    data: Option<&str>,
+) -> Json {
     let signed_tx = mm
         .rpc(&json!({
         "userpass": mm.userpass,
@@ -204,9 +220,10 @@ async fn call_sign_eth_transaction(mm: &MarketMakerIt, platform_coin: &str) -> J
                 "coin": platform_coin,
                 "type": "ETH",
                 "tx": {
-                    "to": "0x7Bc1bBDD6A0a722fC9bffC49c921B685ECB84b94".to_string(),
-                    "value": "0x1000",
-                    "gas_limit": "21000"
+                    "to": to,
+                    "value": value,
+                    "gas_limit": gas_limit,
+                    "data": data
                 }
             }
         }))

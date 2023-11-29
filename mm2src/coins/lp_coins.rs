@@ -58,6 +58,7 @@ use futures::compat::Future01CompatExt;
 use futures::lock::Mutex as AsyncMutex;
 use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
+use hex::FromHexError;
 use http::{Response, StatusCode};
 use keys::{AddressFormat as UtxoAddressFormat, KeyPair, NetworkPrefix as CashAddrPrefix};
 use mm2_core::mm_ctx::{from_ctx, MmArc};
@@ -389,6 +390,14 @@ impl From<CoinFindError> for RawTransactionError {
     }
 }
 
+impl From<NumConversError> for RawTransactionError {
+    fn from(e: NumConversError) -> Self { RawTransactionError::InvalidParam(e.to_string()) }
+}
+
+impl From<FromHexError> for RawTransactionError {
+    fn from(e: FromHexError) -> Self { RawTransactionError::InvalidParam(e.to_string()) }
+}
+
 #[derive(Clone, Debug, Deserialize, Display, EnumFromStringify, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum GetMyAddressError {
@@ -465,11 +474,11 @@ pub struct SignUtxoTransactionParams {
 #[derive(Clone, Debug, Deserialize)]
 pub struct SignEthTransactionParams {
     /// Eth transfer value
-    value: Option<U256>,
+    value: Option<BigDecimal>,
     /// Eth to address
     to: Option<String>,
     /// Eth contract data
-    data: Option<Vec<u8>>,
+    data: Option<String>,
     /// Eth gas use limit
     gas_limit: U256,
 }
