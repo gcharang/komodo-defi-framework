@@ -15,7 +15,6 @@ pub mod for_tests {
     use mm2_core::mm_ctx::MmArc;
     use mm2_err_handle::prelude::{MmResult, NotEqual};
     use rpc_task::RpcTaskStatus;
-    //use serde_json::{Value, self};
 
     use crate::{init_standalone_coin, init_standalone_coin_status,
                 standalone_coin::{InitStandaloneCoinActivationOps, InitStandaloneCoinError,

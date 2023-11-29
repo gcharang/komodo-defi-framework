@@ -43,6 +43,7 @@ pub enum OutputDestination {
 impl OutputDestination {
     pub fn plain(address: String) -> OutputDestination { OutputDestination::Plain { address } }
 
+    #[inline]
     pub fn change(derivation_path: DerivationPath, addr_format: AddressFormat) -> OutputDestination {
         OutputDestination::Change {
             derivation_path,
@@ -58,6 +59,7 @@ pub struct SendingOutputInfo {
 
 impl SendingOutputInfo {
     /// For now, returns [`TrezorOutputScriptType::PayToAddress`] since we don't support SLP tokens yet.
+    #[inline]
     pub fn trezor_output_script_type(&self) -> TrezorOutputScriptType {
         match self.destination_address {
             OutputDestination::Change { ref addr_format, .. } if *addr_format == AddressFormat::Segwit => {
