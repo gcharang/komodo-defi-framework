@@ -165,7 +165,7 @@ pub(super) async fn store_swap_event<T: StateMachineDbRepr + DeserializeOwned + 
 
 #[cfg(target_arch = "wasm32")]
 pub(super) async fn get_swap_repr<T: DeserializeOwned>(ctx: &MmArc, id: Uuid) -> MmResult<T, SwapStateMachineError> {
-    let swaps_ctx = SwapsContext::from_ctx(&ctx).expect("SwapsContext::from_ctx should not fail");
+    let swaps_ctx = SwapsContext::from_ctx(ctx).expect("SwapsContext::from_ctx should not fail");
     let db = swaps_ctx.swap_db().await?;
     let transaction = db.transaction().await?;
 
