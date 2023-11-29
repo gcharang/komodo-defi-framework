@@ -132,7 +132,10 @@ pub struct MmCtx {
     pub nft_ctx: Mutex<Option<Arc<dyn Any + 'static + Send + Sync>>>,
 }
 
-type ScripthashNotificationHandlers = Option<(Arc<AsyncMutex<AsyncSender<()>>>, Arc<AsyncMutex<AsyncReceiver<()>>>)>;
+type ScripthashNotificationHandlers = Option<(
+    Arc<AsyncMutex<AsyncSender<String>>>,
+    Arc<AsyncMutex<AsyncReceiver<String>>>,
+)>;
 
 impl MmCtx {
     pub fn with_log_state(log: LogState) -> MmCtx {
@@ -575,7 +578,7 @@ impl MmArc {
 
     pub fn get_scripthash_notification_handlers(&self) -> ScripthashNotificationHandlers {
         if self.event_stream_configuration.is_some() {
-            let (sender, receiver): (AsyncSender<()>, AsyncReceiver<()>) = futures::channel::mpsc::channel(1);
+            let (sender, receiver): (AsyncSender<String>, AsyncReceiver<String>) = futures::channel::mpsc::channel(1);
             Some((Arc::new(AsyncMutex::new(sender)), Arc::new(AsyncMutex::new(receiver))))
         } else {
             None

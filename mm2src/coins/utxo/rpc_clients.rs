@@ -2522,9 +2522,17 @@ async fn electrum_process_json(
             let id = match req.method.as_ref() {
                 BLOCKCHAIN_HEADERS_SUB_ID => BLOCKCHAIN_HEADERS_SUB_ID,
                 BLOCKCHAIN_SCRIPTHASH_SUB_ID => {
+                    let scripthash = match req.params.first() {
+                        Some(t) => t.as_str().unwrap_or_default(),
+                        None => {
+                            debug!("Notification must contain the scripthash value.");
+                            return;
+                        },
+                    };
+
                     if let Some(sender) = scripthash_notification_sender {
                         debug!("Sending scripthash notification");
-                        if sender.lock().await.try_send(()).is_err() {
+                        if sender.lock().await.try_send(scripthash.to_string()).is_err() {
                             error!("Failed sending scripthash notification");
                             return;
                         };

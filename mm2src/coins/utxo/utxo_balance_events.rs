@@ -1,15 +1,15 @@
 use async_trait::async_trait;
-use common::{executor::{AbortSettings, SpawnAbortable, Timer},
+use common::{executor::{AbortSettings, SpawnAbortable},
              log, Future01CompatExt};
 use futures::channel::oneshot::{self, Receiver, Sender};
+use futures_util::StreamExt;
 use mm2_core::mm_ctx::MmArc;
 use mm2_event_stream::{behaviour::{EventBehaviour, EventInitStatus},
                        Event, EventStreamConfiguration};
-use mm2_number::BigDecimal;
-use std::collections::HashMap;
 
 use super::utxo_standard::UtxoStandardCoin;
-use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_tx_history_v2::UtxoTxHistoryOps},
+use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_common::address_balance,
+                   utxo_tx_history_v2::UtxoTxHistoryOps},
             MarketCoinOps, MmCoin};
 
 #[async_trait]
@@ -56,66 +56,68 @@ impl EventBehaviour for UtxoStandardCoin {
             }
         }
 
+        let scripthash_notification_receiver = match self.as_ref().scripthash_notification_receiver.as_ref() {
+            Some(t) => t,
+            None => {
+                let e = "Scripthash notification receiver can not be empty.";
+                tx.send(EventInitStatus::Failed(e.to_string()))
+                    .expect(RECEIVER_DROPPED_MSG);
+                panic!("{}", e);
+            },
+        };
+
         tx.send(EventInitStatus::Success).expect(RECEIVER_DROPPED_MSG);
 
-        let mut current_balances: HashMap<String, BigDecimal> = HashMap::new();
-        loop {
-            match self
-                .as_ref()
-                .scripthash_notification_receiver
-                .as_ref()
-                .expect("Can not be `None`")
-                .lock()
-                .await
-                .try_next()
-            {
-                Ok(Some(_)) => {},
-                _ => {
-                    Timer::sleep(0.1).await;
+        while let Some(notified_scripthash) = scripthash_notification_receiver.lock().await.next().await {
+            let address = match self.my_addresses().await {
+                Ok(addresses) => addresses.into_iter().find_map(|addr| {
+                    let script = output_script(&addr, keys::Type::P2PKH);
+                    let script_hash = electrum_script_hash(&script);
+                    let scripthash = hex::encode(script_hash);
+
+                    if notified_scripthash == scripthash {
+                        Some(addr)
+                    } else {
+                        None
+                    }
+                }),
+                Err(e) => {
+                    log::error!("{e}");
                     continue;
                 },
             };
 
-            let new_balances = match self.my_addresses_balances().await {
-                Ok(t) => t,
-                _ => continue,
+            let address = match address {
+                Some(t) => t,
+                None => {
+                    log::debug!(
+                        "Couldn't find the relevant address for {} scripthash.",
+                        notified_scripthash
+                    );
+                    continue;
+                },
             };
 
-            if new_balances == current_balances {
-                continue;
-            }
+            let balance = match address_balance(&self, &address).await {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("{e}");
+                    continue;
+                },
+            };
 
-            // Get the differences
-            let updated_parts: HashMap<String, BigDecimal> = new_balances
-                .iter()
-                .filter_map(|(key, new_value)| match current_balances.get(key) {
-                    Some(current_value) if new_value != current_value => Some((key.clone(), new_value.clone())),
-                    None => Some((key.clone(), new_value.clone())),
-                    _ => None,
-                })
-                .collect();
+            let payload = json!({
+                "ticker": self.ticker(),
+                "address": address.to_string(),
+                "balance": { "spendable": balance.spendable, "unspendable": balance.unspendable }
+            });
 
-            let balance_updates: Vec<_> = updated_parts
-                .iter()
-                .map(|(address, balance)| {
-                    json!({
-                        "ticker": self.ticker(),
-                        "address": address,
-                        "balance": { "spendable": balance, "unspendable": BigDecimal::default() }
-                    })
-                })
-                .collect();
-
-            if !balance_updates.is_empty() {
-                ctx.stream_channel_controller
-                    .broadcast(Event::new(
-                        Self::EVENT_NAME.to_string(),
-                        json!(balance_updates).to_string(),
-                    ))
-                    .await;
-            }
-
-            current_balances = new_balances;
+            ctx.stream_channel_controller
+                .broadcast(Event::new(
+                    Self::EVENT_NAME.to_string(),
+                    json!(vec![payload]).to_string(),
+                ))
+                .await;
         }
     }
 

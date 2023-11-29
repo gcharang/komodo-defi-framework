@@ -142,9 +142,9 @@ pub type HistoryUtxoTxMap = HashMap<H256Json, HistoryUtxoTx>;
 pub type MatureUnspentMap = HashMap<Address, MatureUnspentList>;
 pub type RecentlySpentOutPointsGuard<'a> = AsyncMutexGuard<'a, RecentlySpentOutPoints>;
 pub type UtxoHDAddress = HDAddress<Address, Public>;
-pub type ScripthashNotificationSender = Option<Arc<AsyncMutex<AsyncSender<()>>>>;
+pub type ScripthashNotificationSender = Option<Arc<AsyncMutex<AsyncSender<String>>>>;
 
-type ScripthashNotificationReceiver = Option<Arc<AsyncMutex<AsyncReceiver<()>>>>;
+type ScripthashNotificationReceiver = Option<Arc<AsyncMutex<AsyncReceiver<String>>>>;
 
 #[cfg(windows)]
 #[cfg(not(target_arch = "wasm32"))]
