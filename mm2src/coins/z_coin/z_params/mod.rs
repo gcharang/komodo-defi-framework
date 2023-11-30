@@ -17,20 +17,21 @@ const SAPLING_SPEND_HASH: &str = "8270785a1a0d0bc77196f000ee6d221c9c9894f55307bd
 const SAPLING_OUTPUT_HASH: &str = "657e3d38dbb5cb5e7dd2970e8b03d69b4787dd907285b5a7f0790dcc8072f60bf593b32cc2d1c030e00ff5ae64bf84c5c3beb84ddc841d48264b4a171744d028";
 
 #[derive(Debug, derive_more::Display)]
-pub enum ZcashParamsBytesError {
-    IO(String),
+pub enum ZcashParamsError {
+    Transport(String),
+    ValidationError(String),
 }
 
 /// Download, validate and return z_params from given `DOWNLOAD_URL`
-async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, ZcashParamsBytesError> {
+async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, ZcashParamsError> {
     let (status, file) = FetchRequest::get(&format!("{DOWNLOAD_URL}/{name}"))
         .cors()
         .request_array()
         .await
-        .mm_err(|err| ZcashParamsBytesError::IO(err.to_string()))?;
+        .mm_err(|err| ZcashParamsError::Transport(err.to_string()))?;
 
     if status != 200 {
-        return MmError::err(ZcashParamsBytesError::IO(format!(
+        return MmError::err(ZcashParamsError::Transport(format!(
             "Expected status 200, got {} for {}",
             status, name
         )));
@@ -39,7 +40,7 @@ async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, Zcas
     let hash = State::new().update(&file).finalize().to_hex();
     // Verify parameter file hash.
     if &hash != expected_hash {
-        return Err(ZcashParamsBytesError::IO(format!(
+        return Err(ZcashParamsError::ValidationError(format!(
             "{} failed validation (expected: {}, actual: {}, fetched {} bytes)",
             name,
             expected_hash,
@@ -52,7 +53,7 @@ async fn fetch_params(name: &str, expected_hash: &str) -> MmResult<Vec<u8>, Zcas
     Ok(file)
 }
 
-pub(crate) async fn download_parameters() -> MmResult<(Vec<u8>, Vec<u8>), ZcashParamsBytesError> {
+pub(crate) async fn download_parameters() -> MmResult<(Vec<u8>, Vec<u8>), ZcashParamsError> {
     Ok((
         fetch_params(SAPLING_SPEND_NAME, SAPLING_SPEND_HASH).await?,
         fetch_params(SAPLING_OUTPUT_NAME, SAPLING_OUTPUT_HASH).await?,

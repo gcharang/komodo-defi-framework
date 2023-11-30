@@ -42,7 +42,7 @@ impl TableSignature for ZcashParamsWasmTable {
     }
 }
 
-pub struct ZcashParamsWasmInner(IndexedDb);
+pub(crate) struct ZcashParamsWasmInner(IndexedDb);
 
 #[async_trait::async_trait]
 impl DbInstance for ZcashParamsWasmInner {
@@ -143,13 +143,20 @@ impl ZcashParamsWasmImpl {
 
     /// Download and save z_params to storage.
     pub(crate) async fn download_and_save_params(&self) -> MmResult<(Vec<u8>, Vec<u8>), ZcoinStorageError> {
-        let (sapling_spend, sapling_output) = super::download_parameters().await.unwrap();
+        let (sapling_spend, sapling_output) = super::download_parameters()
+            .await
+            .mm_err(|err| ZcoinStorageError::ZcashParamsError(err.to_string()))?;
         let spends = sapling_spend_to_chunks(&sapling_spend);
-        for (i, spend) in spends.into_iter().enumerate() {
-            if i == 0 {
-                self.save_params(i as u8, &spend, &sapling_output).await?
-            } else {
-                self.save_params(i as u8, &spend, &[]).await?
+
+        if sapling_spend.len() <= sapling_output.len() {
+            self.save_params(0, &sapling_spend, &sapling_output).await?
+        } else {
+            for (i, spend) in spends.into_iter().enumerate() {
+                if i == 0 {
+                    self.save_params(i as u8, spend, &sapling_output).await?
+                } else {
+                    self.save_params(i as u8, spend, &[]).await?
+                }
             }
         }
 
@@ -159,17 +166,17 @@ impl ZcashParamsWasmImpl {
 
 /// Since sapling_spend data way is greater than indexeddb max_data(267386880) bytes to save, we need to split
 /// sapling_spend into chunks of 12 and insert to db multiple times with index(sapling_spend_id)
-fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<Vec<u8>> {
+fn sapling_spend_to_chunks(sapling_spend: &[u8]) -> Vec<&[u8]> {
     // Calculate the target size for each chunk
     let chunk_size = sapling_spend.len() / TARGET_SPEND_CHUNKS;
     // Calculate the remainder for cases when the length is not perfectly divisible
     let remainder = sapling_spend.len() % TARGET_SPEND_CHUNKS;
-    let mut sapling_spend_chunks: Vec<Vec<u8>> = Vec::with_capacity(TARGET_SPEND_CHUNKS);
+    let mut sapling_spend_chunks = Vec::with_capacity(TARGET_SPEND_CHUNKS);
     let mut start = 0;
     for i in 0..TARGET_SPEND_CHUNKS {
         let end = start + chunk_size + usize::from(i < remainder);
         // Extract the current chunk from the original vector
-        sapling_spend_chunks.push(sapling_spend[start..end].to_vec());
+        sapling_spend_chunks.push(&sapling_spend[start..end]);
         // Move the start index to the next position
         start = end;
     }

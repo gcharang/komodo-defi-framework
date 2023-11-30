@@ -421,6 +421,8 @@ pub enum ZcoinStorageError {
     ChainError(String),
     InternalError(String),
     NotSupported(String),
+    #[cfg(target_arch = "wasm32")]
+    ZcashParamsError(String),
 }
 
 impl From<UpdateBlocksCacheErr> for ZcoinStorageError {
