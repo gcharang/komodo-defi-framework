@@ -234,7 +234,7 @@ impl KomodefiConfigImpl {
 
     fn set_rpc_uri(&mut self, rpc_uri: String) { self.rpc_uri.replace(rpc_uri); }
 
-    fn print_config_with_password_on_tty(&self) {
+    fn print_config_with_password(&self) {
         if !self.is_set() {
             return println!("komodefi configuration is not set");
         }
