@@ -3,7 +3,7 @@
 
 use crate::utxo::utxo_block_header_storage::BlockHeaderStorage;
 use crate::utxo::{output_script, sat_from_big_decimal, GetBlockHeaderError, GetConfirmedTxError, GetTxError,
-                  GetTxHeightError};
+                  GetTxHeightError, ScripthashNotification};
 use crate::{big_decimal_from_sat_unsigned, NumConversError, RpcTransportEventHandler, RpcTransportEventHandlerShared};
 use async_trait::async_trait;
 use chain::{BlockHeader, BlockHeaderBits, BlockHeaderNonce, OutPoint, Transaction as UtxoTx};
@@ -1642,7 +1642,7 @@ pub struct ElectrumClientImpl {
     negotiate_version: bool,
     /// This is used for balance event streaming implementation for UTXOs.
     /// If balance event streaming isn't enabled, this value will always be `None`; otherwise,
-    /// it will be used for sending scripthash notifications to trigger re-fetching the balances.
+    /// it will be used for sending scripthash messages to trigger re-connections, re-fetching the balances, etc.
     scripthash_notification_sender: ScripthashNotificationSender,
 }
 
@@ -2531,9 +2531,10 @@ async fn electrum_process_json(
                     };
 
                     if let Some(sender) = scripthash_notification_sender {
-                        debug!("Sending scripthash notification");
-                        if sender.lock().await.try_send(scripthash.to_string()).is_err() {
-                            error!("Failed sending scripthash notification");
+                        debug!("Sending scripthash message");
+                        if let Err(e) = sender.unbounded_send(ScripthashNotification::Triggered(scripthash.to_string()))
+                        {
+                            error!("Failed sending scripthash message. {e}");
                             return;
                         };
                     };
@@ -2564,7 +2565,7 @@ async fn electrum_process_json(
 async fn electrum_process_chunk(
     chunk: &[u8],
     arc: &JsonRpcPendingRequestsShared,
-    scripthash_notification_sender: &ScripthashNotificationSender,
+    scripthash_notification_sender: ScripthashNotificationSender,
 ) {
     // we should split the received chunk because we can get several responses in 1 chunk.
     let split = chunk.split(|item| *item == b'\n');
@@ -2578,7 +2579,7 @@ async fn electrum_process_chunk(
                     return;
                 },
             };
-            electrum_process_json(raw_json, arc, scripthash_notification_sender).await
+            electrum_process_json(raw_json, arc, &scripthash_notification_sender).await
         }
     }
 }
@@ -2785,7 +2786,7 @@ async fn connect_loop<Spawner: SpawnFuture>(
                     event_handlers.on_incoming_response(buffer.as_bytes());
                     last_chunk.store(now_ms(), AtomicOrdering::Relaxed);
 
-                    electrum_process_chunk(buffer.as_bytes(), &responses, &scripthash_notification_sender).await;
+                    electrum_process_chunk(buffer.as_bytes(), &responses, scripthash_notification_sender.clone()).await;
                     buffer.clear();
                 }
             }
@@ -2807,6 +2808,13 @@ async fn connect_loop<Spawner: SpawnFuture>(
         macro_rules! reset_tx_and_continue {
             () => {
                 info!("{} connection dropped", addr);
+
+                if let Some(sender) = &scripthash_notification_sender {
+                    if let Err(e) = sender.unbounded_send(ScripthashNotification::ConnectionLost) {
+                        error!("Failed sending scripthash message. {e}");
+                    };
+                }
+
                 event_handlers.on_disconnected(addr.clone()).error_log();
                 *connection_tx.lock().await = None;
                 increase_delay(&delay);
@@ -2915,6 +2923,13 @@ async fn connect_loop<Spawner: SpawnFuture>(
         macro_rules! reset_tx_and_continue {
             () => {
                 info!("{} connection dropped", addr);
+
+                if let Some(sender) = &scripthash_notification_sender {
+                    if let Err(e) = sender.unbounded_send(ScripthashNotification::ConnectionLost) {
+                        error!("Failed sending scripthash message. {e}");
+                    };
+                }
+
                 *connection_tx.lock().await = None;
                 event_handlers.on_disconnected(addr.clone()).error_log();
                 increase_delay(&delay);

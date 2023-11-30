@@ -56,7 +56,7 @@ use crypto::{Bip32DerPathOps, Bip32Error, Bip44Chain, ChildNumber, DerivationPat
              StandardHDCoinAddress, StandardHDPathError, StandardHDPathToAccount, StandardHDPathToCoin};
 use derive_more::Display;
 #[cfg(not(target_arch = "wasm32"))] use dirs::home_dir;
-use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedSender};
+use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender, UnboundedReceiver, UnboundedSender};
 use futures::compat::Future01CompatExt;
 use futures::lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use futures01::Future;
@@ -142,9 +142,14 @@ pub type HistoryUtxoTxMap = HashMap<H256Json, HistoryUtxoTx>;
 pub type MatureUnspentMap = HashMap<Address, MatureUnspentList>;
 pub type RecentlySpentOutPointsGuard<'a> = AsyncMutexGuard<'a, RecentlySpentOutPoints>;
 pub type UtxoHDAddress = HDAddress<Address, Public>;
-pub type ScripthashNotificationSender = Option<Arc<AsyncMutex<AsyncSender<String>>>>;
 
-type ScripthashNotificationReceiver = Option<Arc<AsyncMutex<AsyncReceiver<String>>>>;
+pub enum ScripthashNotification {
+    Triggered(String),
+    ConnectionLost,
+}
+
+pub type ScripthashNotificationSender = Option<UnboundedSender<ScripthashNotification>>;
+type ScripthashNotificationHandler = Option<Arc<AsyncMutex<UnboundedReceiver<ScripthashNotification>>>>;
 
 #[cfg(windows)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -618,7 +623,7 @@ pub struct UtxoCoinFields {
     /// This is used for balance event streaming implementation for UTXOs.
     /// If balance event streaming isn't enabled, this value will always be `None`; otherwise,
     /// it will be used for receiving scripthash notifications to re-fetch balances.
-    scripthash_notification_receiver: ScripthashNotificationReceiver,
+    scripthash_notification_handler: ScripthashNotificationHandler,
 }
 
 #[derive(Debug, Display)]

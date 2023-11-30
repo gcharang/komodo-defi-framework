@@ -4,8 +4,6 @@ use common::executor::{abortable_queue::{AbortableQueue, WeakSpawner},
                        graceful_shutdown, AbortSettings, AbortableSystem, SpawnAbortable, SpawnFuture};
 use common::log::{self, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
-use futures::channel::mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender};
-use futures::lock::Mutex as AsyncMutex;
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
 use mm2_event_stream::{controller::Controller, Event, EventStreamConfiguration};
@@ -131,11 +129,6 @@ pub struct MmCtx {
     /// The context belonging to the `nft` mod: `NftCtx`.
     pub nft_ctx: Mutex<Option<Arc<dyn Any + 'static + Send + Sync>>>,
 }
-
-type ScripthashNotificationHandlers = Option<(
-    Arc<AsyncMutex<AsyncSender<String>>>,
-    Arc<AsyncMutex<AsyncReceiver<String>>>,
-)>;
 
 impl MmCtx {
     pub fn with_log_state(log: LogState) -> MmCtx {
@@ -574,15 +567,6 @@ impl MmArc {
             .register_listener()
             .map_err(|e| MmMetricsError::Internal(e.to_string()))?;
         prometheus::spawn_prometheus_exporter(self.metrics.weak(), address, shutdown_detector, credentials)
-    }
-
-    pub fn get_scripthash_notification_handlers(&self) -> ScripthashNotificationHandlers {
-        if self.event_stream_configuration.is_some() {
-            let (sender, receiver): (AsyncSender<String>, AsyncReceiver<String>) = futures::channel::mpsc::channel(1);
-            Some((Arc::new(AsyncMutex::new(sender)), Arc::new(AsyncMutex::new(receiver))))
-        } else {
-            None
-        }
     }
 }
 
