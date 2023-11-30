@@ -1,8 +1,8 @@
 use crypto::EncryptedMnemonicData;
 use mm2_core::mm_ctx::MmArc;
 use mm2_core::DbNamespaceId;
-use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, OnUpgradeResult,
-                         TableSignature};
+use mm2_db::indexed_db::{DbIdentifier, DbInstance, DbUpgrader, IndexedDb, IndexedDbBuilder, OnUpgradeError,
+                         OnUpgradeResult, TableSignature};
 use mm2_err_handle::prelude::*;
 use std::collections::HashMap;
 
@@ -32,10 +32,27 @@ struct MnemonicsTable {
 impl TableSignature for MnemonicsTable {
     fn table_name() -> &'static str { "mnemonics" }
 
-    fn on_upgrade_needed(upgrader: &DbUpgrader, old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
-        if let (0, 1) = (old_version, new_version) {
-            let table = upgrader.create_table(Self::table_name())?;
-            table.create_index("wallet_name", true)?;
+    fn on_upgrade_needed(upgrader: &DbUpgrader, mut old_version: u32, new_version: u32) -> OnUpgradeResult<()> {
+        while old_version < new_version {
+            match old_version {
+                0 => {
+                    // do nothing explicitly because the table should be created on upgrade
+                    // from version 1 to 2 in order to avoid breaking existing databases
+                },
+                1 => {
+                    let table = upgrader.create_table(Self::table_name())?;
+                    table.create_index("wallet_name", true)?;
+                },
+                unsupported_version => {
+                    return MmError::err(OnUpgradeError::UnsupportedVersion {
+                        unsupported_version,
+                        old_version,
+                        new_version,
+                    })
+                },
+            }
+
+            old_version += 1;
         }
         Ok(())
     }

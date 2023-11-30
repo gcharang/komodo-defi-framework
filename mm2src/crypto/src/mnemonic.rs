@@ -11,7 +11,13 @@ use mm2_err_handle::prelude::*;
 use sha2::Sha256;
 use std::convert::TryInto;
 
+const ARGON2_ALGORITHM: &str = "Argon2id";
+const ARGON2ID_VERSION: &str = "0x13";
+const ARGON2ID_M_COST: u32 = 65536;
+const ARGON2ID_T_COST: u32 = 2;
+const ARGON2ID_P_COST: u32 = 1;
 const DEFAULT_WORD_COUNT: u64 = 24;
+const ENCRYPTION_ALGORITHM: &str = "AES-256-CBC";
 
 type Aes256CbcEnc = cbc::Encryptor<Aes256>;
 type Aes256CbcDec = cbc::Decryptor<Aes256>;
@@ -73,11 +79,11 @@ pub struct Argon2Params {
 impl Default for Argon2Params {
     fn default() -> Self {
         Argon2Params {
-            algorithm: "Argon2id".to_string(),
-            version: "0x13".to_string(),
-            m_cost: 65536,
-            t_cost: 2,
-            p_cost: 1,
+            algorithm: ARGON2_ALGORITHM.to_string(),
+            version: ARGON2ID_VERSION.to_string(),
+            m_cost: ARGON2ID_M_COST,
+            t_cost: ARGON2ID_T_COST,
+            p_cost: ARGON2ID_P_COST,
         }
     }
 }
@@ -267,7 +273,7 @@ pub fn encrypt_mnemonic(mnemonic: &str, password: &str) -> MmResult<EncryptedMne
     let tag = mac.finalize().into_bytes();
 
     let encrypted_mnemonic_data = EncryptedMnemonicData {
-        encryption_algorithm: "AES-256-CBC".to_string(),
+        encryption_algorithm: ENCRYPTION_ALGORITHM.to_string(),
         key_derivation_details: KeyDerivationDetails::default(),
         salt_aes: salt_aes.as_str().to_string(),
         iv: base64::encode(&iv),
