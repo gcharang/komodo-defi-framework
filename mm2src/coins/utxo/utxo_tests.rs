@@ -3783,6 +3783,8 @@ fn test_scan_for_new_addresses() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
     let mut fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let ctx = MmCtxBuilder::new().into_mm_arc();
+    fields.ctx = ctx.weak();
     let mut hd_accounts = HDAccountsMap::new();
     hd_accounts.insert(0, UtxoHDAccount {
         account_id: 0,
@@ -3922,6 +3924,8 @@ fn test_get_new_address() {
 
     let client = NativeClient(Arc::new(NativeClientImpl::default()));
     let mut fields = utxo_coin_fields_for_test(UtxoRpcClientEnum::Native(client), None, false);
+    let ctx = MmCtxBuilder::new().into_mm_arc();
+    fields.ctx = ctx.weak();
     let mut hd_accounts = HDAccountsMap::new();
     let hd_account_for_test = UtxoHDAccount {
         account_id: 0,
