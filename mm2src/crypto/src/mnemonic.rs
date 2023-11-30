@@ -17,7 +17,6 @@ const ARGON2ID_M_COST: u32 = 65536;
 const ARGON2ID_T_COST: u32 = 2;
 const ARGON2ID_P_COST: u32 = 1;
 const DEFAULT_WORD_COUNT: u64 = 24;
-const ENCRYPTION_ALGORITHM: &str = "AES-256-CBC";
 
 type Aes256CbcEnc = cbc::Encryptor<Aes256>;
 type Aes256CbcDec = cbc::Decryptor<Aes256>;
@@ -49,6 +48,15 @@ impl From<argon2::password_hash::Error> for MnemonicError {
 
 impl From<base64::DecodeError> for MnemonicError {
     fn from(e: base64::DecodeError) -> Self { MnemonicError::DecodeError(e.to_string()) }
+}
+
+/// Enum representing different encryption algorithms.
+#[derive(Serialize, Deserialize, Debug)]
+enum EncryptionAlgorithm {
+    /// AES-256-CBC algorithm.
+    AES256CBC,
+    // Placeholder for future algorithms.
+    // Future algorithms can be added here.
 }
 
 /// Parameters for the Argon2 key derivation function.
@@ -129,7 +137,7 @@ impl Default for KeyDerivationDetails {
 pub struct EncryptedMnemonicData {
     /// The encryption algorithm used to encrypt the mnemonic.
     /// Example: "AES-256-CBC".
-    encryption_algorithm: String,
+    encryption_algorithm: EncryptionAlgorithm,
 
     /// Detailed information about the key derivation process. This includes
     /// the specific algorithm used (e.g., Argon2) and its parameters.
@@ -273,7 +281,7 @@ pub fn encrypt_mnemonic(mnemonic: &str, password: &str) -> MmResult<EncryptedMne
     let tag = mac.finalize().into_bytes();
 
     let encrypted_mnemonic_data = EncryptedMnemonicData {
-        encryption_algorithm: ENCRYPTION_ALGORITHM.to_string(),
+        encryption_algorithm: EncryptionAlgorithm::AES256CBC,
         key_derivation_details: KeyDerivationDetails::default(),
         salt_aes: salt_aes.as_str().to_string(),
         iv: base64::encode(&iv),
