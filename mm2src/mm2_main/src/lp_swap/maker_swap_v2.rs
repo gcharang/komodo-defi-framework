@@ -226,7 +226,7 @@ impl StateMachineStorage for MakerSwapStorage {
     }
 
     async fn mark_finished(&mut self, id: Self::MachineId) -> Result<(), Self::Error> {
-        mark_swap_finished(self.ctx.clone(), id).await
+        mark_swap_as_finished(self.ctx.clone(), id).await
     }
 }
 

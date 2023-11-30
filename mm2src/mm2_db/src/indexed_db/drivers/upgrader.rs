@@ -19,7 +19,7 @@ pub enum OnUpgradeError {
     #[display(fmt = "Error occurred due to creating the '{}' index: {}", index, description)]
     ErrorCreatingIndex { index: String, description: String },
     #[display(
-        fmt = "Upgrade attempt to unsupported version: {}, old: {}, new: {}",
+        fmt = "Upgrade attempt to an unsupported version: {}, old: {}, new: {}",
         unsupported_version,
         old_version,
         new_version

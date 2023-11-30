@@ -12,7 +12,7 @@ use super::{broadcast_my_swap_status, broadcast_swap_message, broadcast_swap_msg
             SwapsContext, TransactionIdentifier, WAIT_CONFIRM_INTERVAL_SEC};
 use crate::mm2::lp_network::subscribe_to_topic;
 use crate::mm2::lp_ordermatch::TakerOrderBuilder;
-use crate::mm2::lp_swap::swap_v2_common::mark_swap_finished;
+use crate::mm2::lp_swap::swap_v2_common::mark_swap_as_finished;
 use crate::mm2::lp_swap::taker_restart::get_command_based_on_watcher_activity;
 use crate::mm2::lp_swap::{broadcast_p2p_tx_msg, broadcast_swap_msg_every_delayed, tx_helper_topic,
                           wait_for_maker_payment_conf_duration, TakerSwapWatcherData, MAX_STARTED_AT_DIFF};
@@ -484,7 +484,7 @@ pub async fn run_taker_swap(swap: RunTakerSwapInput, ctx: MmArc) {
                         command = c;
                     },
                     None => {
-                        if let Err(e) = mark_swap_finished(ctx.clone(), running_swap.uuid).await {
+                        if let Err(e) = mark_swap_as_finished(ctx.clone(), running_swap.uuid).await {
                             error!("!mark_swap_finished({}): {}", uuid, e);
                         }
 
