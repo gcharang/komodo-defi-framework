@@ -130,17 +130,22 @@ pub mod common_impl {
     use super::*;
     use crate::coin_balance::HDWalletBalanceOps;
     use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
+    use crate::utxo::utxo_common::prepare_addresses_for_balance_stream_if_enabled;
+    use crate::utxo::UtxoCommonOps;
     use crate::CoinWithDerivationMethod;
-    use std::fmt;
+    use keys::Address;
     use std::ops::DerefMut;
+    use std::str::FromStr;
 
     pub async fn scan_for_new_addresses_rpc<Coin>(
         coin: &Coin,
         params: ScanAddressesParams,
     ) -> MmResult<ScanAddressesResponse, HDAccountBalanceRpcError>
     where
-        Coin: CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + HDWalletBalanceOps + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display,
+        Coin: UtxoCommonOps
+            + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
+            + HDWalletBalanceOps
+            + Sync,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -156,6 +161,15 @@ pub mod common_impl {
         let new_addresses = coin
             .scan_for_new_addresses(hd_wallet, hd_account.deref_mut(), &address_scanner, gap_limit)
             .await?;
+
+        let addresses: Vec<_> = new_addresses
+            .iter()
+            .map(|address_balance| Address::from_str(&address_balance.address).expect("Valid address"))
+            .collect();
+
+        prepare_addresses_for_balance_stream_if_enabled(coin, addresses)
+            .await
+            .map_err(|e| HDAccountBalanceRpcError::FailedScripthashSubscription(e.to_string()))?;
 
         Ok(ScanAddressesResponse {
             account_index: account_id,

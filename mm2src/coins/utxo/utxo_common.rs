@@ -5048,6 +5048,41 @@ where
     refund_htlc_payment(coin, args, SwapPaymentType::TakerPaymentV2).await
 }
 
+/// Prepares addresses for scripthash subscription if coin balance event
+/// is enabled.
+pub async fn prepare_addresses_for_balance_stream_if_enabled<T>(
+    coin: &T,
+    addresses: Vec<Address>,
+) -> MmResult<(), String>
+where
+    T: UtxoCommonOps,
+{
+    let ctx = MmArc::from_weak(&coin.as_ref().ctx).expect("MM context must have been initialized already.");
+
+    match &ctx.event_stream_configuration {
+        Some(event_config) if event_config.get_event("COIN_BALANCE").is_some() => {
+            for address in addresses {
+                let script = output_script(&address, keys::Type::P2PKH);
+                let script_hash = electrum_script_hash(&script);
+                let scripthash = hex::encode(script_hash);
+
+                if let Err(e) = coin
+                    .as_ref()
+                    .rpc_client
+                    .blockchain_scripthash_subscribe(scripthash)
+                    .compat()
+                    .await
+                {
+                    return MmError::err(e.to_string());
+                }
+            }
+
+            Ok(())
+        },
+        _ => Ok(()),
+    }
+}
+
 #[test]
 fn test_increase_by_percent() {
     assert_eq!(increase_by_percent(4300, 1.), 4343);

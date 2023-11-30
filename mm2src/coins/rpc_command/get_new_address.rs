@@ -54,6 +54,8 @@ pub enum GetNewAddressRpcError {
     RpcInvalidResponse(String),
     #[display(fmt = "HD wallet storage error: {_0}")]
     WalletStorageError(String),
+    #[display(fmt = "Failed scripthash subscription. Error: {_0}")]
+    FailedScripthashSubscription(String),
     #[from_trait(WithTimeout::timeout)]
     #[display(fmt = "RPC timed out {_0:?}")]
     Timeout(Duration),
@@ -183,6 +185,7 @@ impl HttpStatusCode for GetNewAddressRpcError {
             GetNewAddressRpcError::Transport(_)
             | GetNewAddressRpcError::RpcInvalidResponse(_)
             | GetNewAddressRpcError::WalletStorageError(_)
+            | GetNewAddressRpcError::FailedScripthashSubscription(_)
             | GetNewAddressRpcError::HwError(_)
             | GetNewAddressRpcError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             GetNewAddressRpcError::Timeout(_) => StatusCode::REQUEST_TIMEOUT,
@@ -380,6 +383,8 @@ pub(crate) mod common_impl {
     use super::*;
     use crate::coin_balance::{HDAddressBalanceScanner, HDWalletBalanceOps};
     use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
+    use crate::utxo::utxo_common::prepare_addresses_for_balance_stream_if_enabled;
+    use crate::utxo::UtxoCommonOps;
     use crate::{CoinWithDerivationMethod, HDAddress};
     use crypto::RpcDerivationPath;
     use std::fmt;
@@ -435,9 +440,12 @@ pub(crate) mod common_impl {
     ) -> MmResult<GetNewAddressResponse, GetNewAddressRpcError>
     where
         ConfirmAddress: HDConfirmAddress,
-        Coin:
-            HDWalletBalanceOps + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet> + Send + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display,
+        Coin: UtxoCommonOps
+            + HDWalletBalanceOps
+            + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
+            + Send
+            + Sync,
+        <Coin as HDWalletCoinOps>::Address: fmt::Display + Into<keys::Address>,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -462,9 +470,16 @@ pub(crate) mod common_impl {
             .await?;
 
         let balance = coin.known_address_balance(&address).await?;
+
+        let address_as_string = address.to_string();
+
+        prepare_addresses_for_balance_stream_if_enabled(coin, vec![address.into()])
+            .await
+            .map_err(|e| GetNewAddressRpcError::FailedScripthashSubscription(e.to_string()))?;
+
         Ok(GetNewAddressResponse {
             new_address: HDAddressBalance {
-                address: address.to_string(),
+                address: address_as_string,
                 derivation_path: RpcDerivationPath(derivation_path),
                 chain,
                 balance,

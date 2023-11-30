@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use async_trait::async_trait;
 use common::{executor::{AbortSettings, SpawnAbortable},
              log, Future01CompatExt};
@@ -9,6 +7,7 @@ use keys::Address;
 use mm2_core::mm_ctx::MmArc;
 use mm2_event_stream::{behaviour::{EventBehaviour, EventInitStatus},
                        Event, EventStreamConfiguration};
+use std::collections::{BTreeMap, HashSet};
 
 use super::utxo_standard::UtxoStandardCoin;
 use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_common::address_balance,
@@ -22,11 +21,18 @@ impl EventBehaviour for UtxoStandardCoin {
     async fn handle(self, _interval: f64, tx: oneshot::Sender<EventInitStatus>) {
         const RECEIVER_DROPPED_MSG: &str = "Receiver is dropped, which should never happen.";
 
-        async fn subscribe_to_addresses(utxo: &UtxoCoinFields, addresses: HashSet<Address>) -> Result<(), String> {
+        async fn subscribe_to_addresses(
+            utxo: &UtxoCoinFields,
+            addresses: HashSet<Address>,
+        ) -> Result<BTreeMap<String, Address>, String> {
+            let mut scripthash_to_address_map: BTreeMap<String, Address> = BTreeMap::new();
+
             for address in addresses {
                 let script = output_script(&address, keys::Type::P2PKH);
                 let script_hash = electrum_script_hash(&script);
                 let scripthash = hex::encode(script_hash);
+
+                scripthash_to_address_map.insert(scripthash.clone(), address);
 
                 if let Err(e) = utxo
                     .rpc_client
@@ -38,7 +44,7 @@ impl EventBehaviour for UtxoStandardCoin {
                 }
             }
 
-            Ok(())
+            Ok(scripthash_to_address_map)
         }
 
         let ctx = match MmArc::from_weak(&self.as_ref().ctx) {
@@ -51,7 +57,17 @@ impl EventBehaviour for UtxoStandardCoin {
             },
         };
 
-        let mut subscribed_addresses = match self.my_addresses().await {
+        let scripthash_notification_handler = match self.as_ref().scripthash_notification_handler.as_ref() {
+            Some(t) => t,
+            None => {
+                let e = "Scripthash notification receiver can not be empty.";
+                tx.send(EventInitStatus::Failed(e.to_string()))
+                    .expect(RECEIVER_DROPPED_MSG);
+                panic!("{}", e);
+            },
+        };
+
+        let addresses = match self.my_addresses().await {
             Ok(t) => t,
             Err(e) => {
                 tx.send(EventInitStatus::Failed(e.to_string()))
@@ -60,17 +76,10 @@ impl EventBehaviour for UtxoStandardCoin {
             },
         };
 
-        if let Err(e) = subscribe_to_addresses(self.as_ref(), subscribed_addresses.clone()).await {
-            tx.send(EventInitStatus::Failed(e.clone())).expect(RECEIVER_DROPPED_MSG);
-            panic!("{}", e);
-        }
-
-        let scripthash_notification_handler = match self.as_ref().scripthash_notification_handler.as_ref() {
-            Some(t) => t,
-            None => {
-                let e = "Scripthash notification receiver can not be empty.";
-                tx.send(EventInitStatus::Failed(e.to_string()))
-                    .expect(RECEIVER_DROPPED_MSG);
+        let mut scripthash_to_address_map = match subscribe_to_addresses(self.as_ref(), addresses).await {
+            Ok(t) => t,
+            Err(e) => {
+                tx.send(EventInitStatus::Failed(e.clone())).expect(RECEIVER_DROPPED_MSG);
                 panic!("{}", e);
             },
         };
@@ -89,54 +98,34 @@ impl EventBehaviour for UtxoStandardCoin {
             let notified_scripthash = match message {
                 ScripthashNotification::Triggered(t) => t,
                 ScripthashNotification::ConnectionLost => {
-                    if let Err(e) = subscribe_to_addresses(self.as_ref(), my_addresses).await {
-                        log::error!("{e}");
+                    match subscribe_to_addresses(self.as_ref(), my_addresses).await {
+                        Ok(map) => scripthash_to_address_map = map, // update the map with fresh one
+                        Err(e) => {
+                            log::error!("{e}");
+                        },
                     };
 
                     continue;
                 },
             };
 
-            // Subscribe if we have new addresses
-            // TODO: This isn't good solution, handle this
-            // with specific message as right now we can't
-            // subscribe new addresses if there is no event.
-            {
-                let new_addresses: HashSet<_> = my_addresses
-                    .iter()
-                    .filter_map(|address| {
-                        if subscribed_addresses.contains(address) {
-                            return None;
+            let address = scripthash_to_address_map
+                .get(&notified_scripthash)
+                .cloned()
+                .or_else(|| {
+                    my_addresses.into_iter().find_map(|addr| {
+                        let script = output_script(&addr, keys::Type::P2PKH);
+                        let script_hash = electrum_script_hash(&script);
+                        let scripthash = hex::encode(script_hash);
+
+                        if notified_scripthash == scripthash {
+                            scripthash_to_address_map.insert(notified_scripthash.clone(), addr.clone());
+                            Some(addr)
+                        } else {
+                            None
                         }
-
-                        Some(address.clone())
                     })
-                    .collect();
-
-                if let Err(e) = subscribe_to_addresses(self.as_ref(), new_addresses.clone()).await {
-                    log::error!("{e}");
-                };
-
-                subscribed_addresses.extend(new_addresses);
-            }
-
-            let address = match self.my_addresses().await {
-                Ok(addresses) => addresses.into_iter().find_map(|addr| {
-                    let script = output_script(&addr, keys::Type::P2PKH);
-                    let script_hash = electrum_script_hash(&script);
-                    let scripthash = hex::encode(script_hash);
-
-                    if notified_scripthash == scripthash {
-                        Some(addr)
-                    } else {
-                        None
-                    }
-                }),
-                Err(e) => {
-                    log::error!("{e}");
-                    continue;
-                },
-            };
+                });
 
             let address = match address {
                 Some(t) => t,
