@@ -41,7 +41,7 @@ pub(super) async fn save_encrypted_passphrase(
 /// Reads the encrypted passphrase data from the file associated with the given wallet name.
 ///
 /// This function is responsible for retrieving the encrypted passphrase data from a file.
-/// The data is expected to be in the format of `EncryptedPassphraseData`, which includes
+/// The data is expected to be in the format of `EncryptedMnemonicData`, which includes
 /// all necessary components for decryption, such as the encryption algorithm, key derivation
 /// details, salts, IV, ciphertext, and HMAC tag.
 ///
