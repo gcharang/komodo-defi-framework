@@ -52,7 +52,12 @@ pub const TRADING_PROTO_UPGRADE_MIGRATION: &[&str] = &[
     "ALTER TABLE my_swaps ADD COLUMN taker_coin_nota BOOLEAN;",
 ];
 
-const INSERT_MY_SWAP: &str = "INSERT INTO my_swaps (my_coin, other_coin, uuid, started_at) VALUES (?1, ?2, ?3, ?4, ?5)";
+/// The query to insert swap on migration 1, during this migration swap_type column doesn't exist
+/// in my_swaps table yet.
+const INSERT_MY_SWAP_MIGRATION_1: &str =
+    "INSERT INTO my_swaps (my_coin, other_coin, uuid, started_at) VALUES (?1, ?2, ?3, ?4)";
+const INSERT_MY_SWAP: &str =
+    "INSERT INTO my_swaps (my_coin, other_coin, uuid, started_at, swap_type) VALUES (?1, ?2, ?3, ?4, ?5)";
 
 pub fn insert_new_swap(
     ctx: &MmArc,
@@ -114,12 +119,17 @@ pub fn insert_new_swap_v2(ctx: &MmArc, params: &[(&str, &dyn ToSql)]) -> SqlResu
 }
 
 /// Returns SQL statements to initially fill my_swaps table using existing DB with JSON files
+/// Use this only in migration code!
 pub async fn fill_my_swaps_from_json_statements(ctx: &MmArc) -> Vec<(&'static str, Vec<String>)> {
     let swaps = SavedSwap::load_all_my_swaps_from_db(ctx).await.unwrap_or_default();
-    swaps.into_iter().filter_map(insert_saved_swap_sql).collect()
+    swaps
+        .into_iter()
+        .filter_map(insert_saved_swap_sql_migration_1)
+        .collect()
 }
 
-fn insert_saved_swap_sql(swap: SavedSwap) -> Option<(&'static str, Vec<String>)> {
+/// Use this only in migration code!
+fn insert_saved_swap_sql_migration_1(swap: SavedSwap) -> Option<(&'static str, Vec<String>)> {
     let swap_info = match swap.get_my_info() {
         Some(s) => s,
         // get_my_info returning None means that swap did not even start - so we can keep it away from indexing.
@@ -131,7 +141,7 @@ fn insert_saved_swap_sql(swap: SavedSwap) -> Option<(&'static str, Vec<String>)>
         swap.uuid().to_string(),
         swap_info.started_at.to_string(),
     ];
-    Some((INSERT_MY_SWAP, params))
+    Some((INSERT_MY_SWAP_MIGRATION_1, params))
 }
 
 #[derive(Debug)]

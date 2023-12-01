@@ -276,7 +276,7 @@ pub fn unsubscribe_from_topic(ctx: &MmArc, topic: String) {
     let p2p_ctx = P2PContext::fetch_from_mm_arc(ctx);
     let cmd = AdexBehaviourCmd::Unsubscribe { topic };
     if let Err(e) = p2p_ctx.cmd_tx.lock().try_send(cmd) {
-        log::error!("subscribe_to_topic cmd_tx.send error {:?}", e);
+        log::error!("unsubscribe_from_topic cmd_tx.send error {:?}", e);
     };
 }
 

@@ -1264,7 +1264,7 @@ pub async fn my_recent_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
         match *swap_type {
             LEGACY_SWAP_TYPE => match SavedSwap::load_my_swap_from_db(&ctx, *uuid).await {
                 Ok(Some(swap)) => {
-                    let swap_json = json::to_value(MySwapStatusResponse::from(swap)).unwrap();
+                    let swap_json = try_s!(json::to_value(MySwapStatusResponse::from(swap)));
                     swaps.push(swap_json)
                 },
                 Ok(None) => warn!("No such swap with the uuid '{}'", uuid),
@@ -1272,14 +1272,14 @@ pub async fn my_recent_swaps_rpc(ctx: MmArc, req: Json) -> Result<Response<Vec<u
             },
             MAKER_SWAP_V2_TYPE => match get_maker_swap_data_for_rpc(&ctx, uuid).await {
                 Ok(data) => {
-                    let swap_json = json::to_value(data).expect("Serialization to not fail");
+                    let swap_json = try_s!(json::to_value(data));
                     swaps.push(swap_json);
                 },
                 Err(e) => error!("Error loading a swap with the uuid '{}': {}", uuid, e),
             },
             TAKER_SWAP_V2_TYPE => match get_taker_swap_data_for_rpc(&ctx, uuid).await {
                 Ok(data) => {
-                    let swap_json = json::to_value(data).expect("Serialization to not fail");
+                    let swap_json = try_s!(json::to_value(data));
                     swaps.push(swap_json);
                 },
                 Err(e) => error!("Error loading a swap with the uuid '{}': {}", uuid, e),
