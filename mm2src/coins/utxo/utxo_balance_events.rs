@@ -14,10 +14,24 @@ use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_common
                    utxo_tx_history_v2::UtxoTxHistoryOps, ScripthashNotification, UtxoCoinFields},
             MarketCoinOps, MmCoin};
 
+macro_rules! try_or_continue {
+    ($exp:expr) => {
+        match $exp {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("{}", e);
+                continue;
+            },
+        }
+    };
+}
+
 #[async_trait]
 impl EventBehaviour for UtxoStandardCoin {
     const EVENT_NAME: &'static str = "COIN_BALANCE";
 
+    // TODO: On certain errors, send an error event to clients (e.g., when not being able to read the
+    // balance).
     async fn handle(self, _interval: f64, tx: oneshot::Sender<EventInitStatus>) {
         const RECEIVER_DROPPED_MSG: &str = "Receiver is dropped, which should never happen.";
 
@@ -67,39 +81,16 @@ impl EventBehaviour for UtxoStandardCoin {
             },
         };
 
-        let addresses = match self.my_addresses().await {
-            Ok(t) => t,
-            Err(e) => {
-                tx.send(EventInitStatus::Failed(e.to_string()))
-                    .expect(RECEIVER_DROPPED_MSG);
-                panic!("{}", e);
-            },
-        };
-
-        let mut scripthash_to_address_map = match subscribe_to_addresses(self.as_ref(), addresses).await {
-            Ok(t) => t,
-            Err(e) => {
-                tx.send(EventInitStatus::Failed(e.clone())).expect(RECEIVER_DROPPED_MSG);
-                panic!("{}", e);
-            },
-        };
-
         tx.send(EventInitStatus::Success).expect(RECEIVER_DROPPED_MSG);
 
+        let mut scripthash_to_address_map = BTreeMap::default();
         while let Some(message) = scripthash_notification_handler.lock().await.next().await {
-            let my_addresses = match self.my_addresses().await {
-                Ok(t) => t,
-                Err(e) => {
-                    log::error!("{e}");
-                    continue;
-                },
-            };
-
             let notified_scripthash = match message {
                 ScripthashNotification::Triggered(t) => t,
-                ScripthashNotification::ConnectionLost => {
+                ScripthashNotification::TriggerSubscriptions => {
+                    let my_addresses = try_or_continue!(self.my_addresses().await);
                     match subscribe_to_addresses(self.as_ref(), my_addresses).await {
-                        Ok(map) => scripthash_to_address_map = map, // update the map with fresh one
+                        Ok(map) => scripthash_to_address_map = map,
                         Err(e) => {
                             log::error!("{e}");
                         },
@@ -109,11 +100,11 @@ impl EventBehaviour for UtxoStandardCoin {
                 },
             };
 
-            let address = scripthash_to_address_map
-                .get(&notified_scripthash)
-                .cloned()
-                .or_else(|| {
-                    my_addresses.into_iter().find_map(|addr| {
+            let address = match scripthash_to_address_map.get(&notified_scripthash) {
+                Some(t) => Some(t.clone()),
+                None => try_or_continue!(self.my_addresses().await)
+                    .into_iter()
+                    .find_map(|addr| {
                         let script = output_script(&addr, keys::Type::P2PKH);
                         let script_hash = electrum_script_hash(&script);
                         let scripthash = hex::encode(script_hash);
@@ -124,8 +115,8 @@ impl EventBehaviour for UtxoStandardCoin {
                         } else {
                             None
                         }
-                    })
-                });
+                    }),
+            };
 
             let address = match address {
                 Some(t) => t,
@@ -138,13 +129,7 @@ impl EventBehaviour for UtxoStandardCoin {
                 },
             };
 
-            let balance = match address_balance(&self, &address).await {
-                Ok(t) => t,
-                Err(e) => {
-                    log::error!("{e}");
-                    continue;
-                },
-            };
+            let balance = try_or_continue!(address_balance(&self, &address).await);
 
             let payload = json!({
                 "ticker": self.ticker(),

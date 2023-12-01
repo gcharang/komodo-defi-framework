@@ -1795,6 +1795,13 @@ impl ElectrumClientImpl {
             .find(|con| con.addr == server_addr)
             .ok_or(ERRL!("Unknown electrum address {}", server_addr))?;
         con.set_protocol_version(version).await;
+
+        if let Some(sender) = &self.scripthash_notification_sender {
+            sender
+                .unbounded_send(ScripthashNotification::TriggerSubscriptions)
+                .map_err(|e| ERRL!("Failed sending scripthash message. {}", e))?;
+        }
+
         Ok(())
     }
 
@@ -2808,13 +2815,6 @@ async fn connect_loop<Spawner: SpawnFuture>(
         macro_rules! reset_tx_and_continue {
             () => {
                 info!("{} connection dropped", addr);
-
-                if let Some(sender) = &scripthash_notification_sender {
-                    if let Err(e) = sender.unbounded_send(ScripthashNotification::ConnectionLost) {
-                        error!("Failed sending scripthash message. {e}");
-                    };
-                }
-
                 event_handlers.on_disconnected(addr.clone()).error_log();
                 *connection_tx.lock().await = None;
                 increase_delay(&delay);
@@ -2923,13 +2923,6 @@ async fn connect_loop<Spawner: SpawnFuture>(
         macro_rules! reset_tx_and_continue {
             () => {
                 info!("{} connection dropped", addr);
-
-                if let Some(sender) = &scripthash_notification_sender {
-                    if let Err(e) = sender.unbounded_send(ScripthashNotification::ConnectionLost) {
-                        error!("Failed sending scripthash message. {e}");
-                    };
-                }
-
                 *connection_tx.lock().await = None;
                 event_handlers.on_disconnected(addr.clone()).error_log();
                 increase_delay(&delay);

@@ -145,7 +145,7 @@ pub type UtxoHDAddress = HDAddress<Address, Public>;
 
 pub enum ScripthashNotification {
     Triggered(String),
-    ConnectionLost,
+    TriggerSubscriptions,
 }
 
 pub type ScripthashNotificationSender = Option<UnboundedSender<ScripthashNotification>>;
