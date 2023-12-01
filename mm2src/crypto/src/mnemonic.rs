@@ -16,7 +16,7 @@ const ARGON2ID_VERSION: &str = "0x13";
 const ARGON2ID_M_COST: u32 = 65536;
 const ARGON2ID_T_COST: u32 = 2;
 const ARGON2ID_P_COST: u32 = 1;
-const DEFAULT_WORD_COUNT: u64 = 24;
+const DEFAULT_WORD_COUNT: u64 = 12;
 
 type Aes256CbcEnc = cbc::Encryptor<Aes256>;
 type Aes256CbcDec = cbc::Decryptor<Aes256>;

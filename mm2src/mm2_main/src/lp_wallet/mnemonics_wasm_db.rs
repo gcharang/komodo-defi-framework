@@ -36,13 +36,10 @@ impl TableSignature for MnemonicsTable {
         while old_version < new_version {
             match old_version {
                 0 => {
-                    // do nothing explicitly because the table should be created on upgrade
-                    // from version 1 to 2 in order to avoid breaking existing databases
-                },
-                1 => {
                     let table = upgrader.create_table(Self::table_name())?;
                     table.create_index("wallet_name", true)?;
                 },
+                // handle new versions here if needed
                 unsupported_version => {
                     return MmError::err(OnUpgradeError::UnsupportedVersion {
                         unsupported_version,
