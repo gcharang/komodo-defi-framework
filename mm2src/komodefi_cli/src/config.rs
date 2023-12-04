@@ -1,3 +1,4 @@
+use crate::cli::get_cli_root;
 use crate::cli_cmd_args::prelude::SetConfigArgs;
 use crate::helpers::rewrite_json_file;
 use crate::komodefi_proc::SmartFractPrecision;
@@ -5,7 +6,6 @@ use crate::logging::{error_anyhow, warn_bail};
 
 use anyhow::{anyhow, bail, Result};
 use common::log::{debug, error, info, warn};
-use directories::ProjectDirs;
 use inquire::Password;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -14,9 +14,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use url::{ParseError, Url};
 
-const PROJECT_QUALIFIER: &str = "com";
-const PROJECT_COMPANY: &str = "komodoplatform";
-const PROJECT_APP: &str = "komodefi-cli";
 const KOMODEFI_CFG: &str = "komodefi_cfg.json";
 
 const PRICE_PRECISION_MIN: usize = 8;
@@ -31,7 +28,7 @@ const CFG_FILE_PERM_MODE: u32 = 0o660;
 pub(super) fn get_config(option: &crate::cli::GetOption) {
     let Ok(komodefi_cfg) = KomodefiConfigImpl::from_config_path() else { return; };
     if option.unhide {
-        komodefi_cfg.print_config_with_password_on_tty()
+        komodefi_cfg.print_config_with_password()
     } else {
         println!("{}", komodefi_cfg)
     }
@@ -40,8 +37,8 @@ pub(super) fn get_config(option: &crate::cli::GetOption) {
 pub(super) fn set_config(config: &mut SetConfigArgs) -> Result<()> {
     let mut komodefi_cfg = KomodefiConfigImpl::from_config_path().unwrap_or_else(|_| KomodefiConfigImpl::default());
 
-    if let Some(path) = &config.from_path {
-        let (uri, password) = config.source_from_path(path)?;
+    if config.from_path {
+        let (uri, password) = config.source_from_path()?;
         komodefi_cfg.set_rpc_uri(uri);
         komodefi_cfg.set_rpc_password(password);
     } else {
@@ -154,23 +151,10 @@ impl KomodefiConfigImpl {
 
     fn is_set(&self) -> bool { self.rpc_uri.is_some() && self.rpc_password.is_some() }
 
-    pub(super) fn get_config_dir() -> Result<PathBuf> {
-        let project_dirs = ProjectDirs::from(PROJECT_QUALIFIER, PROJECT_COMPANY, PROJECT_APP)
-            .ok_or_else(|| error_anyhow!("Failed to get project_dirs"))?;
-        let config_path: PathBuf = project_dirs.config_dir().into();
-        fs::create_dir_all(&config_path)
-            .map_err(|error| error_anyhow!("Failed to create config_dir: {config_path:?}, error: {error}"))?;
-        Ok(config_path)
-    }
-
     pub(crate) fn get_config_path() -> Result<PathBuf> {
-        let config_path = if let Ok(config_path) = std::env::var("KOMODO_CLI_CFG") {
-            PathBuf::from(config_path)
-        } else {
-            let mut config_path = KomodefiConfigImpl::get_config_dir()?;
-            config_path.push(KOMODEFI_CFG);
-            config_path
-        };
+        let mut config_path = get_cli_root()?;
+        config_path.push(KOMODEFI_CFG);
+
         Ok(config_path)
     }
 

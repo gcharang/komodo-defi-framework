@@ -21,14 +21,14 @@ const DEFAULT_GID: &str = "komodefi-cli";
 const DEFAULT_OPTION_PLACEHOLDER: &str = "Tap enter to skip";
 const RPC_PORT_MIN: u16 = 1024;
 const RPC_PORT_MAX: u16 = 49151;
-const DEFAULT_RPC_PORT: u16 = 7789;
+const DEFAULT_RPC_PORT: u16 = 7783;
 const DEFAULT_RPC_IP: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 
 pub(crate) fn init_mm2_cfg(cfg_file: &str) -> Result<()> {
     let mut mm2_cfg = Mm2Cfg::new();
     info!("Start collecting mm2_cfg into: {cfg_file}");
     mm2_cfg.inquire()?;
-    // write default config args(dbdir, ip, port)
+    // write default config(dbdir, ip, port)
     mm2_cfg.write_default_args()?;
     helpers::rewrite_json_file(&mm2_cfg, cfg_file)?;
     info!("mm2_cfg has been writen into: {cfg_file}");

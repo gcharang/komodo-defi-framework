@@ -1,6 +1,11 @@
-use anyhow::Result;
+use crate::logging::error_anyhow;
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
+use common::log::error;
+use directories::ProjectDirs;
+use std::fs;
 use std::mem::take;
+use std::path::PathBuf;
 
 use crate::config::{get_config, set_config, KomodefiConfig};
 use crate::komodefi_proc::{KomodefiProc, ResponseHandler};
@@ -9,8 +14,11 @@ use crate::transport::SlurpTransport;
 
 use super::cli_cmd_args::prelude::*;
 
-const MM2_CONFIG_FILE_DEFAULT: &str = "MM2.json";
 const COINS_FILE_DEFAULT: &str = "coins";
+const MM2_CONFIG_FILE_DEFAULT: &str = "MM2.json";
+const PROJECT_QUALIFIER: &str = "com";
+const PROJECT_COMPANY: &str = "komodoplatform";
+const PROJECT_APP: &str = "komodefi-cli";
 
 #[derive(Subcommand)]
 enum Command {
@@ -188,6 +196,23 @@ impl Cli {
             Command::Message(MessageCommands::Verify(args)) => proc.verify_message(args.into()).await?,
         }
         Ok(())
+    }
+}
+
+pub fn get_cli_root() -> Result<PathBuf> {
+    if let Ok(cli_root) = std::env::var("KOMODEFI_CLI_ROOT") {
+        let cli_root = PathBuf::from(cli_root);
+        fs::create_dir_all(&cli_root)
+            .map_err(|error| error_anyhow!("Failed to create config_dir: {cli_root:?}, error: {error}"))?;
+        Ok(cli_root)
+    } else {
+        let project_dirs = ProjectDirs::from(PROJECT_QUALIFIER, PROJECT_COMPANY, PROJECT_APP)
+            .ok_or_else(|| error_anyhow!("Failed to get project_dirs"))?;
+        let cli_root: PathBuf = project_dirs.config_dir().into();
+        fs::create_dir_all(&cli_root)
+            .map_err(|error| error_anyhow!("Failed to create config_dir: {cli_root:?}, error: {error}"))?;
+
+        Ok(cli_root)
     }
 }
 

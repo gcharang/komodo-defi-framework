@@ -1,4 +1,6 @@
+use crate::cli::get_cli_root;
 use crate::error_anyhow;
+
 use anyhow::{anyhow, Result};
 use clap::Args;
 use common::log::error;
@@ -22,7 +24,7 @@ pub(crate) struct SetConfigArgs {
     )]
     pub(crate) secure_conn: Option<bool>,
     #[arg(long, short, help = "Set configuration from path")]
-    pub(crate) from_path: Option<String>,
+    pub(crate) from_path: bool,
 }
 
 impl SetConfigArgs {
@@ -70,14 +72,17 @@ impl SetConfigArgs {
         Ok(())
     }
 
-    pub fn source_from_path(&self, path: &str) -> Result<(String, String)> {
-        let mut file = File::open(path).map_err(|error| error_anyhow!("Failed to get rpc_uri: {error}"))?;
+    pub(crate) fn source_from_path(&self) -> Result<(String, String)> {
+        let mut root = get_cli_root()?;
+        root.push("MM2.json");
+
+        let mut file = File::open(root).map_err(|error| error_anyhow!("Failed to open path: {error}"))?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)
-            .map_err(|error| error_anyhow!("Failed to get rpc_uri: {error}"))?;
+            .map_err(|error| error_anyhow!("Failed to read file: {error}"))?;
 
         let mm2: Mm2Config = serde_json::from_str(&String::from_utf8_lossy(&buffer))
-            .map_err(|error| error_anyhow!("Failed to get rpc_uri: {error}"))?;
+            .map_err(|error| error_anyhow!("Failed to write json: {error}"))?;
 
         let scheme = if mm2.secure_conn.unwrap_or_default() {
             "https://"

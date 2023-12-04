@@ -1,3 +1,5 @@
+use crate::cli::get_cli_root;
+
 use anyhow::Result;
 use common::log::{debug, error, info};
 use serde::Deserialize;
@@ -51,17 +53,18 @@ pub(crate) async fn download_binary_and_extract_to_bin_folder() -> Result<()> {
         // Download the ZIP file
         let zip_data = client.get(download_url).send().await?.bytes().await?;
         // Create directories if they don't exist
-        let bin_dir = std::env::current_dir()?.join("bin");
-        if !bin_dir.exists() {
-            fs::create_dir_all(&bin_dir)?;
-        }
+        let cli_root = get_cli_root()?;
+        let mut zip_path = cli_root.clone();
+        zip_path.push("mm2.zip");
         // Save the ZIP file
-        let zip_path = bin_dir.join("downloaded_file.zip");
         let mut zip_file = File::create(&zip_path)?;
         zip_file.write_all(&zip_data)?;
         // Extract only mm2 binary file from the folder
         extract_file_from_zip(&zip_path, BINARY_NAME).await?;
-        info!("Binary downloaded and extracted to the bin folder!");
+        info!(
+            "Binary downloaded and extracted to {} folder!",
+            cli_root.to_string_lossy()
+        );
         Ok(())
     } else {
         error!("No matching release found");
@@ -76,19 +79,16 @@ async fn extract_file_from_zip(zip_path: &std::path::Path, file_name: &str) -> R
     let mut archive = ZipArchive::new(reader)?;
 
     // Create directories if they don't exist and extract binary
-    let bin_dir = std::env::current_dir()?.join("bin");
-    if !bin_dir.exists() {
-        fs::create_dir_all(&bin_dir)?;
-    }
-    archive.extract(&bin_dir)?;
+    let mut config_path = get_cli_root()?;
+    archive.extract(&config_path)?;
 
     // Check binary version
-    let version = get_binary_version(&format!("{}/{file_name}", bin_dir.to_string_lossy())).await?;
+    let version = get_binary_version(&format!("{}/{file_name}", config_path.to_string_lossy())).await?;
     info!("running {version}");
 
     // Delete zip
-    let file_path = bin_dir.join("downloaded_file.zip");
-    fs::remove_file(file_path)?;
+    config_path.push("mm2.zip");
+    fs::remove_file(config_path)?;
     debug!("deleted downloaded_file.zip after use");
 
     Ok(())

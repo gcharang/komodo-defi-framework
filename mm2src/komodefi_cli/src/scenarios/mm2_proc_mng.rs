@@ -3,6 +3,7 @@ use common::log::{error, info};
 use std::env;
 use std::path::PathBuf;
 
+use crate::cli::get_cli_root;
 use crate::error_anyhow;
 
 #[cfg(not(target_os = "macos"))]
@@ -77,10 +78,10 @@ fn find_proc_by_name(pname: &'_ str) -> Vec<u32> {
 }
 
 fn get_mm2_binary_path() -> Result<PathBuf> {
-    let mut dir = env::current_exe().map_err(|error| error_anyhow!("Failed to get current binary dir: {error}"))?;
-    dir.pop();
-    dir.push(MM2_BINARY);
-    Ok(dir)
+    let mut mm2_base_path =
+        get_cli_root().map_err(|error| error_anyhow!("Failed to get current binary dir: {error}"))?;
+    mm2_base_path.push(MM2_BINARY);
+    Ok(mm2_base_path)
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -204,9 +205,8 @@ pub(crate) fn stop_process() {
 #[cfg(target_os = "macos")]
 pub(crate) fn start_process(mm2_cfg_file: &Option<String>, coins_file: &Option<String>, log_file: &Option<String>) {
     let Ok(mm2_binary) = get_mm2_binary_path() else { return; };
-
-    let Ok(current_dir) = env::current_dir() else {
-	error!("Failed to get current_dir");
+    let Ok(cli_root_dir) = get_cli_root() else {
+	error!("Failed to get cli_root_dir");
 	return
     };
 
@@ -239,7 +239,7 @@ pub(crate) fn start_process(mm2_cfg_file: &Option<String>, coins_file: &Option<S
         </plist>"#,
         LAUNCHCTL_MM2_ID,
         mm2_binary.display(),
-        current_dir.display(),
+        cli_root_dir.display(),
         log_file
             .as_deref()
             .map(|log_file| format!("<key>MM_LOG</key><string>{log_file}</string>"))
