@@ -577,7 +577,7 @@ impl<MakerCoin: MmCoin + CoinAssocTypes, TakerCoin: MmCoin + SwapOpsV2> Storable
             conf_settings: repr.conf_settings,
             p2p_topic: swap_v2_topic(&uuid),
             uuid,
-            p2p_keypair: None,
+            p2p_keypair: repr.p2p_keypair.map(|k| k.into_inner()),
         };
 
         Ok(RestoredMachine { machine, current_state })
