@@ -5,6 +5,7 @@ use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, Db
                          InitDbResult, OnUpgradeResult, SharedDb, TableSignature};
 use mm2_err_handle::prelude::*;
 
+const CHAIN: &str = "z_coin";
 const DB_NAME: &str = "z_params";
 const DB_VERSION: u32 = 1;
 const TARGET_SPEND_CHUNKS: usize = 12;
@@ -92,7 +93,7 @@ impl ZcashParamsWasmImpl {
             sapling_spend_id,
             sapling_spend: sapling_spend.to_vec(),
             sapling_output: sapling_output.to_vec(),
-            ticker: DB_NAME.to_string(),
+            ticker: CHAIN.to_string(),
         };
 
         params_db.add_item(&params).await?;
@@ -108,7 +109,7 @@ impl ZcashParamsWasmImpl {
 
         let maybe_param = params_db
             .cursor_builder()
-            .only("ticker", DB_NAME)?
+            .only("ticker", CHAIN)?
             .open_cursor("ticker")
             .await?
             .next()
@@ -124,7 +125,7 @@ impl ZcashParamsWasmImpl {
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
         let mut maybe_params = params_db
             .cursor_builder()
-            .only("ticker", DB_NAME)?
+            .only("ticker", CHAIN)?
             .open_cursor("ticker")
             .await?;
 
@@ -146,16 +147,16 @@ impl ZcashParamsWasmImpl {
         let (sapling_spend, sapling_output) = super::download_parameters()
             .await
             .mm_err(|err| ZcoinStorageError::ZcashParamsError(err.to_string()))?;
-        let spends = sapling_spend_to_chunks(&sapling_spend);
 
         if sapling_spend.len() <= sapling_output.len() {
             self.save_params(0, &sapling_spend, &sapling_output).await?
         } else {
-            for (i, spend) in spends.into_iter().enumerate() {
-                if i == 0 {
-                    self.save_params(i as u8, spend, &sapling_output).await?
-                } else {
-                    self.save_params(i as u8, spend, &[]).await?
+            let spends = sapling_spend_to_chunks(&sapling_spend);
+            if let Some((first_spend, remaining_spends)) = spends.split_first() {
+                self.save_params(0, first_spend, &sapling_output).await?;
+
+                for (i, spend) in remaining_spends.iter().enumerate() {
+                    self.save_params((i + 1) as u8, spend, &[]).await?;
                 }
             }
         }
