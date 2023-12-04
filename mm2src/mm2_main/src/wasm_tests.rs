@@ -102,10 +102,10 @@ async fn trade_base_rel_electrum(
 
     // Enable coins on Alice side. Print the replies in case we need the address.
     let rc = enable_electrum_json(&mm_alice, RICK, true, doc_electrums(), alice_path_to_address.clone()).await;
-    log!("enable RICK (bob): {:?}", rc);
+    log!("enable RICK (alice): {:?}", rc);
 
     let rc = enable_electrum_json(&mm_alice, MORTY, true, marty_electrums(), alice_path_to_address).await;
-    log!("enable MORTY (bob): {:?}", rc);
+    log!("enable MORTY (alice): {:?}", rc);
 
     let uuids = start_swaps(&mut mm_bob, &mut mm_alice, pairs, maker_price, taker_price, volume).await;
 
@@ -194,9 +194,7 @@ async fn trade_v2_test_rick_and_morty() {
 
     let coins = json!([rick_conf(), morty_conf()]);
 
-    // let bob_policy = Mm2InitPrivKeyPolicy::Iguana;
-
-    let bob_conf = Mm2TestConf::seednode_trade_v2(&get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap(), &coins);
+    let bob_conf = Mm2TestConf::seednode_with_hd_account_trade_v2(Mm2TestConfForSwap::BOB_HD_PASSPHRASE, &coins);
     let mm_bob = MarketMakerIt::start_async(bob_conf.conf, bob_conf.rpc_password, Some(wasm_start))
         .await
         .unwrap();
@@ -204,7 +202,6 @@ async fn trade_v2_test_rick_and_morty() {
     let (_bob_dump_log, _bob_dump_dashboard) = mm_bob.mm_dump();
     Timer::sleep(1.).await;
 
-    // let alice_policy = Mm2InitPrivKeyPolicy::GlobalHDAccount;
     let alice_conf =
         Mm2TestConf::light_node_with_hd_account_trade_v2(Mm2TestConfForSwap::ALICE_HD_PASSPHRASE, &coins, &[
             &mm_bob.my_seed_addr()
@@ -216,8 +213,16 @@ async fn trade_v2_test_rick_and_morty() {
 
     let (_alice_dump_log, _alice_dump_dashboard) = mm_alice.mm_dump();
 
+    // use account: 1 to avoid possible UTXO re-usage between trade_v2_test_rick_and_morty and trade_test_rick_and_morty
+    let bob_path_to_address = StandardHDCoinAddress {
+        account: 1,
+        is_change: false,
+        address_index: 0,
+    };
+
+    // use account: 1 to avoid possible UTXO re-usage between trade_v2_test_rick_and_morty and trade_test_rick_and_morty
     let alice_path_to_address = StandardHDCoinAddress {
-        account: 0,
+        account: 1,
         is_change: false,
         address_index: 0,
     };
@@ -226,7 +231,7 @@ async fn trade_v2_test_rick_and_morty() {
     trade_base_rel_electrum(
         mm_bob,
         mm_alice,
-        None,
+        Some(bob_path_to_address),
         Some(alice_path_to_address),
         pairs,
         1.,

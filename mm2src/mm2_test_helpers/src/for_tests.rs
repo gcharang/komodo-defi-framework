@@ -397,7 +397,7 @@ pub struct Mm2TestConfForSwap;
 
 impl Mm2TestConfForSwap {
     /// TODO consider moving it to read it from a env file.
-    const BOB_HD_PASSPHRASE: &'static str =
+    pub const BOB_HD_PASSPHRASE: &'static str =
         "involve work eager scene give acoustic tooth mimic dance smoke hold foster";
     /// TODO consider moving it to read it from a env file.
     pub const ALICE_HD_PASSPHRASE: &'static str =
