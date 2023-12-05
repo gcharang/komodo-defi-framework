@@ -177,9 +177,6 @@ pub(crate) async fn cursor_event_loop(mut rx: DbCursorEventRx, mut cursor: Curso
             },
         }
     }
-
-    cursor._onsuccess_closure.forget();
-    cursor._onerror_closure.forget();
 }
 
 mod tests {
