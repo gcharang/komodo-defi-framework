@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::cli::get_cli_root;
 use crate::error_anyhow;
 
+#[cfg(not(target_os = "macos"))] use std::env;
 #[cfg(not(target_os = "macos"))]
 use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 
