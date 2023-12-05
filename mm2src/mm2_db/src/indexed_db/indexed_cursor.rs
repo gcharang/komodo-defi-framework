@@ -58,6 +58,7 @@ pub use crate::indexed_db::db_driver::cursor::{CursorError, CursorResult};
 use crate::indexed_db::{DbTable, ItemId, TableSignature};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt};
+use log;
 use mm2_err_handle::prelude::*;
 use serde::Serialize;
 use serde_json::{self as json, Value as Json};
@@ -173,7 +174,20 @@ pub(crate) async fn cursor_event_loop(mut rx: DbCursorEventRx, mut cursor: Curso
     while let Some(event) = rx.next().await {
         match event {
             DbCursorEvent::NextItem { result_tx } => {
-                result_tx.send(cursor.next().await).ok();
+                log::info!("Processing NextItem event in cursor_event_loop");
+                match cursor.next().await {
+                    Ok(result) => {
+                        if let Err(e) = result_tx.send(Ok(result)) {
+                            log::error!("Failed to send cursor next result: {:?}", e);
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("Error in cursor.next(): {:?}", e);
+                        if let Err(send_err) = result_tx.send(Err(e)) {
+                            log::error!("Failed to send error response: {:?}", send_err);
+                        }
+                    },
+                }
             },
         }
     }
