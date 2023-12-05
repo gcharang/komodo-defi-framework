@@ -204,6 +204,12 @@ pub(crate) struct CursorDriver {
 impl Drop for CursorDriver {
     fn drop(&mut self) {
         log::info!("Dropping CursorDriver");
+        // Replace the closures with dummy closures and then forget them
+        let dummy_on_success = Closure::wrap(Box::new(|_| {}) as Box<dyn FnMut(_)>);
+        let dummy_on_error = Closure::wrap(Box::new(|_| {}) as Box<dyn FnMut(_)>);
+
+        std::mem::replace(&mut self._onsuccess_closure, dummy_on_success).forget();
+        std::mem::replace(&mut self._onerror_closure, dummy_on_error).forget();
     }
 }
 
