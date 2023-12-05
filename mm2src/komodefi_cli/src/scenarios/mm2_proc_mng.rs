@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use common::log::{error, info};
-use std::env;
 use std::path::PathBuf;
 
 use crate::cli::get_cli_root;
@@ -288,7 +287,7 @@ pub(crate) fn start_process(mm2_cfg_file: &Option<String>, coins_file: &Option<S
 
 #[cfg(target_os = "macos")]
 fn get_plist_path() -> Result<PathBuf> {
-    match env::current_dir() {
+    match get_cli_root() {
         Err(error) => Err(error_anyhow!(
             "Failed to get current_dir to construct plist_path: {error}"
         )),

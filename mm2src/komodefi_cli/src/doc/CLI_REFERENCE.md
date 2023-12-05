@@ -43,7 +43,8 @@ RUST_LOG=error komodefi-cli init
 > What is rpcip: None  
 > What is the rpcport: None  
 > What is rpc_local_only:    
-> What is i_am_a_seed:    
+> Use secure connection for rpc: No  
+> What is i_am_a_seed: 
 ? What is the next seednode: Tap enter to skip    
 [Optional. If operating on a test or private netID, the IP address of at least one seed node is required (on the main network, these are already hardcoded)]
 ...
@@ -57,7 +58,10 @@ resulting `MM2.json`:
     "netid": 7777,  
     "rpc_password": "D6~$jETp",  
     "passphrase": "upgrade hunt engage mountain cheap hood attitude bleak flag wild feature aim",  
-    "allow_weak_password": false
+    "allow_weak_password": false,
+    "rpcip": "127.0.0.1",
+    "rpcport": 7783,
+    "secure_conn": false
 }
 ```
 
@@ -177,13 +181,16 @@ Process killed: mm2:505606
 
 ## Configuring `komodefi-cli`
 
-Config commands are `set` and `get`.  These are aimed to set and get password and uri to connect to and be granted to request methods from the running `mm2` instance. Password is setting in an interactive mode. The certain path of the configuration depends on the operating system the `komodefi-cli` is running on and could be different.
+Config commands are `set` and `get`.  These are aimed to set and get password and uri to connect to and be 
+granted to request methods from the running `mm2` instance. Password is setting in an interactive mode. The certain path of the configuration depends on the operating system the `komodefi-cli` is running on and could be different.
 
 ```sh
 komodefi-cli config set --help  
 Set komodo komodefi cli configuration  
   
-Usage: komodefi-cli config set <--password|--uri <URI>>  
+Usage: 
+- komodefi-cli config set <--password|--uri <URI>>
+- komodefi-cli config set --from-path (sets config from MM2.json file automatically)
   
 Options:  
  -p, --password   Set if you are going to set up a password  
@@ -214,9 +221,15 @@ cat ~/.config/komodefi-cli/komodefi_cfg.json
 Getting configuration:
 
 ```sh
-release/komodefi-cli config get    
+release/komodefi-cli config get   
 mm2 RPC URL: https://localhost:7783  
 mm2 RPC password: *************
+```
+
+```sh
+release/komodefi-cli config get --unhide 
+mm2 RPC URL: https://localhost:7783  
+mm2 RPC password: SomeVeryStrongPassword
 ```
 
 ## Setting up coin index
