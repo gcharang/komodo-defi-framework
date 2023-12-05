@@ -10,8 +10,11 @@ use mm2_event_stream::{behaviour::{EventBehaviour, EventInitStatus},
 use std::collections::{BTreeMap, HashSet};
 
 use super::utxo_standard::UtxoStandardCoin;
-use crate::{utxo::{output_script, rpc_clients::electrum_script_hash, utxo_common::address_balance,
-                   utxo_tx_history_v2::UtxoTxHistoryOps, ScripthashNotification, UtxoCoinFields},
+use crate::{utxo::{output_script,
+                   rpc_clients::electrum_script_hash,
+                   utxo_common::{address_balance, address_to_scripthash},
+                   utxo_tx_history_v2::UtxoTxHistoryOps,
+                   ScripthashNotification, UtxoCoinFields},
             MarketCoinOps, MmCoin};
 
 macro_rules! try_or_continue {
@@ -42,9 +45,7 @@ impl EventBehaviour for UtxoStandardCoin {
             let mut scripthash_to_address_map: BTreeMap<String, Address> = BTreeMap::new();
 
             for address in addresses {
-                let script = output_script(&address, keys::Type::P2PKH);
-                let script_hash = electrum_script_hash(&script);
-                let scripthash = hex::encode(script_hash);
+                let scripthash = address_to_scripthash(&address);
 
                 scripthash_to_address_map.insert(scripthash.clone(), address);
 
