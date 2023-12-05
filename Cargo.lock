@@ -4288,7 +4288,6 @@ dependencies = [
  "itertools",
  "js-sys",
  "lazy_static",
- "log",
  "mm2_core",
  "mm2_err_handle",
  "mm2_number",

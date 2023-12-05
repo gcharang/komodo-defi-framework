@@ -85,6 +85,7 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
         }
+        NftListStorageOps::get_last_block_number(&storage, chain).await?;
     }
     let mut nft_list = storage
         .get_nft_list(req.chains, req.max, req.limit, req.page_number, req.filters)

@@ -56,9 +56,9 @@ use crate::indexed_db::db_driver::cursor::CursorBoundValue;
 pub(crate) use crate::indexed_db::db_driver::cursor::{CursorDriver, CursorFilters};
 pub use crate::indexed_db::db_driver::cursor::{CursorError, CursorResult};
 use crate::indexed_db::{DbTable, ItemId, TableSignature};
+use common::log;
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt};
-use log;
 use mm2_err_handle::prelude::*;
 use serde::Serialize;
 use serde_json::{self as json, Value as Json};
@@ -177,6 +177,7 @@ pub(crate) async fn cursor_event_loop(mut rx: DbCursorEventRx, mut cursor: Curso
                 log::info!("Processing NextItem event in cursor_event_loop");
                 match cursor.next().await {
                     Ok(result) => {
+                        log::info!("Sending result: {:?}", result);
                         if let Err(e) = result_tx.send(Ok(result)) {
                             log::error!("Failed to send cursor next result: {:?}", e);
                         }

@@ -1,6 +1,7 @@
 use super::construct_event_closure;
 use crate::indexed_db::db_driver::{InternalItem, ItemId};
 use crate::indexed_db::BeBigUint;
+use common::log;
 use common::wasm::{deserialize_from_js, serialize_to_js, stringify_js_error};
 use derive_more::Display;
 use enum_from::EnumFromTrait;
@@ -198,6 +199,12 @@ pub(crate) struct CursorDriver {
     /// We need to hold the closures in memory till `cursor` exists.
     _onsuccess_closure: Closure<dyn FnMut(JsValue)>,
     _onerror_closure: Closure<dyn FnMut(JsValue)>,
+}
+
+impl Drop for CursorDriver {
+    fn drop(&mut self) {
+        log::info!("Dropping CursorDriver");
+    }
 }
 
 impl CursorDriver {

@@ -99,11 +99,15 @@ where
     Event: fmt::Debug + 'static,
 {
     Closure::new(move |event: JsValue| {
+        info!("Closure called with event: {:?}", event);
         let open_event = f(event);
-        if let Err(e) = event_tx.try_send(open_event) {
-            let error = e.to_string();
-            let event = e.into_inner();
-            error!("Error sending the '{:?}' event: {}", event, error);
+        match event_tx.try_send(open_event) {
+            Ok(_) => info!("Event sent successfully"),
+            Err(e) => {
+                let error = e.to_string();
+                let event = e.into_inner();
+                error!("Error sending the '{:?}' event: {}", event, error);
+            },
         }
     })
 }
