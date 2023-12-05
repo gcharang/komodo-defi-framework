@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use common::{executor::{AbortSettings, SpawnAbortable},
+use common::{executor::{AbortSettings, SpawnAbortable, Timer},
              log, Future01CompatExt};
 use futures::channel::oneshot::{self, Receiver, Sender};
 use futures_util::StreamExt;
@@ -34,7 +34,7 @@ impl EventBehaviour for UtxoStandardCoin {
     const EVENT_NAME: &'static str = "COIN_BALANCE";
 
     // TODO: On certain errors, send an error event to clients (e.g., when not being able to read the
-    // balance).
+    // balance or not being able to subscribe to scripthash/address.).
     async fn handle(self, _interval: f64, tx: oneshot::Sender<EventInitStatus>) {
         const RECEIVER_DROPPED_MSG: &str = "Receiver is dropped, which should never happen.";
 
@@ -42,20 +42,33 @@ impl EventBehaviour for UtxoStandardCoin {
             utxo: &UtxoCoinFields,
             addresses: HashSet<Address>,
         ) -> Result<BTreeMap<String, Address>, String> {
-            let mut scripthash_to_address_map: BTreeMap<String, Address> = BTreeMap::new();
+            const LOOP_INTERVAL: f64 = 0.5;
 
+            let mut scripthash_to_address_map: BTreeMap<String, Address> = BTreeMap::new();
             for address in addresses {
                 let scripthash = address_to_scripthash(&address);
 
                 scripthash_to_address_map.insert(scripthash.clone(), address);
 
-                if let Err(e) = utxo
+                let mut attempt = 0;
+                while let Err(e) = utxo
                     .rpc_client
-                    .blockchain_scripthash_subscribe(scripthash)
+                    .blockchain_scripthash_subscribe(scripthash.clone())
                     .compat()
                     .await
                 {
-                    return Err(e.to_string());
+                    if attempt == 5 {
+                        return Err(e.to_string());
+                    }
+
+                    log::error!(
+                        "Failed to subscribe {} scripthash ({attempt}/5 attempt). Error: {}",
+                        scripthash,
+                        e.to_string()
+                    );
+
+                    attempt += 1;
+                    Timer::sleep(LOOP_INTERVAL).await;
                 }
             }
 
@@ -88,7 +101,17 @@ impl EventBehaviour for UtxoStandardCoin {
         while let Some(message) = scripthash_notification_handler.lock().await.next().await {
             let notified_scripthash = match message {
                 ScripthashNotification::Triggered(t) => t,
-                ScripthashNotification::TriggerSubscriptions => {
+                ScripthashNotification::SubscribeToAddresses(addresses) => {
+                    match subscribe_to_addresses(self.as_ref(), addresses).await {
+                        Ok(map) => scripthash_to_address_map.extend(map),
+                        Err(e) => {
+                            log::error!("{e}");
+                        },
+                    };
+
+                    continue;
+                },
+                ScripthashNotification::RefreshSubscriptions => {
                     let my_addresses = try_or_continue!(self.my_addresses().await);
                     match subscribe_to_addresses(self.as_ref(), my_addresses).await {
                         Ok(map) => scripthash_to_address_map = map,

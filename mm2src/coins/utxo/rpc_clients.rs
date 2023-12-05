@@ -1643,7 +1643,7 @@ pub struct ElectrumClientImpl {
     /// This is used for balance event streaming implementation for UTXOs.
     /// If balance event streaming isn't enabled, this value will always be `None`; otherwise,
     /// it will be used for sending scripthash messages to trigger re-connections, re-fetching the balances, etc.
-    scripthash_notification_sender: ScripthashNotificationSender,
+    pub(crate) scripthash_notification_sender: ScripthashNotificationSender,
 }
 
 async fn electrum_request_multi(
@@ -1798,7 +1798,7 @@ impl ElectrumClientImpl {
 
         if let Some(sender) = &self.scripthash_notification_sender {
             sender
-                .unbounded_send(ScripthashNotification::TriggerSubscriptions)
+                .unbounded_send(ScripthashNotification::RefreshSubscriptions)
                 .map_err(|e| ERRL!("Failed sending scripthash message. {}", e))?;
         }
 

@@ -386,6 +386,7 @@ pub(crate) mod common_impl {
     use crate::utxo::UtxoCommonOps;
     use crate::{CoinWithDerivationMethod, HDAddress};
     use crypto::RpcDerivationPath;
+    use std::collections::HashSet;
     use std::fmt;
     use std::ops::DerefMut;
 
@@ -444,7 +445,7 @@ pub(crate) mod common_impl {
             + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
             + Send
             + Sync,
-        <Coin as HDWalletCoinOps>::Address: fmt::Display + Into<keys::Address>,
+        <Coin as HDWalletCoinOps>::Address: fmt::Display + Into<keys::Address> + std::hash::Hash + std::cmp::Eq,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -472,7 +473,7 @@ pub(crate) mod common_impl {
 
         let address_as_string = address.to_string();
 
-        coin.prepare_addresses_for_balance_stream_if_enabled(vec![address])
+        coin.prepare_addresses_for_balance_stream_if_enabled(HashSet::from([address]))
             .await
             .map_err(|e| GetNewAddressRpcError::FailedScripthashSubscription(e.to_string()))?;
 

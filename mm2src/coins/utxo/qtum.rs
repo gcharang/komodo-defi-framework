@@ -1153,7 +1153,7 @@ impl HDWalletBalanceOps for QtumCoin {
 
     async fn prepare_addresses_for_balance_stream_if_enabled(
         &self,
-        addresses: Vec<Self::Address>,
+        addresses: HashSet<Self::Address>,
     ) -> MmResult<(), String> {
         utxo_prepare_addresses_for_balance_stream_if_enabled(self, addresses).await
     }

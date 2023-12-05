@@ -133,6 +133,7 @@ pub mod common_impl {
     use crate::utxo::UtxoCommonOps;
     use crate::CoinWithDerivationMethod;
     use keys::Address;
+    use std::collections::HashSet;
     use std::ops::DerefMut;
     use std::str::FromStr;
 
@@ -145,7 +146,7 @@ pub mod common_impl {
             + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
             + HDWalletBalanceOps
             + Sync,
-        Vec<<Coin as HDWalletCoinOps>::Address>: From<Vec<keys::Address>>,
+        HashSet<<Coin as HDWalletCoinOps>::Address>: From<HashSet<keys::Address>>,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -162,7 +163,7 @@ pub mod common_impl {
             .scan_for_new_addresses(hd_wallet, hd_account.deref_mut(), &address_scanner, gap_limit)
             .await?;
 
-        let addresses: Vec<_> = new_addresses
+        let addresses: HashSet<_> = new_addresses
             .iter()
             .map(|address_balance| Address::from_str(&address_balance.address).expect("Valid address"))
             .collect();

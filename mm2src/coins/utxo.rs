@@ -145,7 +145,8 @@ pub type UtxoHDAddress = HDAddress<Address, Public>;
 
 pub enum ScripthashNotification {
     Triggered(String),
-    TriggerSubscriptions,
+    SubscribeToAddresses(HashSet<Address>),
+    RefreshSubscriptions,
 }
 
 pub type ScripthashNotificationSender = Option<UnboundedSender<ScripthashNotification>>;

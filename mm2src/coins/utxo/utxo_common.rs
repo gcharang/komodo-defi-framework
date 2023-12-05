@@ -5056,33 +5056,18 @@ pub fn address_to_scripthash(address: &Address) -> String {
 
 pub async fn utxo_prepare_addresses_for_balance_stream_if_enabled<T>(
     coin: &T,
-    addresses: Vec<Address>,
+    addresses: HashSet<Address>,
 ) -> MmResult<(), String>
 where
     T: UtxoCommonOps,
 {
-    let ctx = MmArc::from_weak(&coin.as_ref().ctx).expect("MM context must have been initialized already.");
-
-    if ctx
-        .event_stream_configuration
-        .as_ref()
-        .map(|event_config| event_config.get_event("COIN_BALANCE").is_some())
-        .unwrap_or_default()
-    {
-        for address in addresses {
-            let scripthash = address_to_scripthash(&address);
-
-            if let Err(e) = coin
-                .as_ref()
-                .rpc_client
-                .blockchain_scripthash_subscribe(scripthash)
-                .compat()
-                .await
-            {
-                return MmError::err(e.to_string());
-            }
+    if let UtxoRpcClientEnum::Electrum(electrum_client) = &coin.as_ref().rpc_client {
+        if let Some(sender) = &electrum_client.scripthash_notification_sender {
+            sender
+                .unbounded_send(ScripthashNotification::SubscribeToAddresses(addresses))
+                .map_err(|e| ERRL!("Failed sending scripthash message. {}", e))?;
         }
-    }
+    };
 
     Ok(())
 }
