@@ -5054,9 +5054,7 @@ pub fn address_to_scripthash(address: &Address) -> String {
     hex::encode(script_hash)
 }
 
-/// Prepares addresses for scripthash subscription if coin balance event
-/// is enabled.
-pub async fn prepare_addresses_for_balance_stream_if_enabled<T>(
+pub async fn utxo_prepare_addresses_for_balance_stream_if_enabled<T>(
     coin: &T,
     addresses: Vec<Address>,
 ) -> MmResult<(), String>

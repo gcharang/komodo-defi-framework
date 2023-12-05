@@ -321,6 +321,12 @@ pub trait HDWalletBalanceOps: HDWalletCoinOps {
         let balance = self.known_address_balance(address).await?;
         Ok(AddressBalanceStatus::Used(balance))
     }
+
+    /// Prepares addresses for real time balance streaming if coin balance event is enabled.
+    async fn prepare_addresses_for_balance_stream_if_enabled(
+        &self,
+        addresses: Vec<Self::Address>,
+    ) -> MmResult<(), String>;
 }
 
 #[async_trait]

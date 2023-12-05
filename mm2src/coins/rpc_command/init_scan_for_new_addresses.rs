@@ -130,7 +130,6 @@ pub mod common_impl {
     use super::*;
     use crate::coin_balance::HDWalletBalanceOps;
     use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
-    use crate::utxo::utxo_common::prepare_addresses_for_balance_stream_if_enabled;
     use crate::utxo::UtxoCommonOps;
     use crate::CoinWithDerivationMethod;
     use keys::Address;
@@ -146,6 +145,7 @@ pub mod common_impl {
             + CoinWithDerivationMethod<HDWallet = <Coin as HDWalletCoinOps>::HDWallet>
             + HDWalletBalanceOps
             + Sync,
+        Vec<<Coin as HDWalletCoinOps>::Address>: From<Vec<keys::Address>>,
     {
         let hd_wallet = coin.derivation_method().hd_wallet_or_err()?;
 
@@ -167,7 +167,7 @@ pub mod common_impl {
             .map(|address_balance| Address::from_str(&address_balance.address).expect("Valid address"))
             .collect();
 
-        prepare_addresses_for_balance_stream_if_enabled(coin, addresses)
+        coin.prepare_addresses_for_balance_stream_if_enabled(addresses.into())
             .await
             .map_err(|e| HDAccountBalanceRpcError::FailedScripthashSubscription(e.to_string()))?;
 

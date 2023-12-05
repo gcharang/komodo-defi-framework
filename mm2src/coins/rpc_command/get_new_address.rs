@@ -383,7 +383,6 @@ pub(crate) mod common_impl {
     use super::*;
     use crate::coin_balance::{HDAddressBalanceScanner, HDWalletBalanceOps};
     use crate::hd_wallet::{HDAccountOps, HDWalletCoinOps, HDWalletOps};
-    use crate::utxo::utxo_common::prepare_addresses_for_balance_stream_if_enabled;
     use crate::utxo::UtxoCommonOps;
     use crate::{CoinWithDerivationMethod, HDAddress};
     use crypto::RpcDerivationPath;
@@ -473,7 +472,7 @@ pub(crate) mod common_impl {
 
         let address_as_string = address.to_string();
 
-        prepare_addresses_for_balance_stream_if_enabled(coin, vec![address.into()])
+        coin.prepare_addresses_for_balance_stream_if_enabled(vec![address])
             .await
             .map_err(|e| GetNewAddressRpcError::FailedScripthashSubscription(e.to_string()))?;
 
