@@ -11,7 +11,7 @@ use zip::ZipArchive;
 
 const BINARY_HOST_URL: &str = "https://api.github.com/repos/KomodoPlatform/komodo-defi-framework/releases";
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(unix, not(target_os = "macos")))]
 const DOWNLOAD_NAME: &str = "Linux-Release.";
 #[cfg(target_os = "macos")]
 const DOWNLOAD_NAME: &str = "Darwin-Release.";

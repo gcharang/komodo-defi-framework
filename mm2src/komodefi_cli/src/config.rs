@@ -5,7 +5,8 @@ use crate::komodefi_proc::SmartFractPrecision;
 use crate::logging::{error_anyhow, warn_bail};
 
 use anyhow::{anyhow, bail, Result};
-use common::log::{debug, error, info, warn};
+#[cfg(unix)] use common::log::debug;
+use common::log::{error, info, warn};
 use inquire::Password;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
