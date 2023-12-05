@@ -18,7 +18,7 @@ Now `komodefi-cli` is built and available in the `bin` directory and can be call
 ### Setting the Default CLI Root
 You can customize the default root directory for `komodefi-cli` by setting the `KOMODEFI_CLI_ROOT` environment variable. This allows you to specify a location for saving configuration files, binaries, and other related data.
  
-```ssh
+```sh
 export KOMODEFI_CLI_ROOT=$HOME/komodefi-cli
 komodefi-cli mm2 download
 ```
@@ -77,7 +77,7 @@ resulting `MM2.json`:
 Download the latest version of `mm2` binary and save to `KOMODEFI_CLI_ROOT` dir.
 
 Usage:
-```
+```sh
 komodefi-cli mm2 download
 ```
 
