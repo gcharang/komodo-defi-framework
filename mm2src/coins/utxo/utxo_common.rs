@@ -5063,26 +5063,28 @@ where
 {
     let ctx = MmArc::from_weak(&coin.as_ref().ctx).expect("MM context must have been initialized already.");
 
-    match &ctx.event_stream_configuration {
-        Some(event_config) if event_config.get_event("COIN_BALANCE").is_some() => {
-            for address in addresses {
-                let scripthash = address_to_scripthash(&address);
+    if ctx
+        .event_stream_configuration
+        .as_ref()
+        .map(|event_config| event_config.get_event("COIN_BALANCE").is_some())
+        .unwrap_or_default()
+    {
+        for address in addresses {
+            let scripthash = address_to_scripthash(&address);
 
-                if let Err(e) = coin
-                    .as_ref()
-                    .rpc_client
-                    .blockchain_scripthash_subscribe(scripthash)
-                    .compat()
-                    .await
-                {
-                    return MmError::err(e.to_string());
-                }
+            if let Err(e) = coin
+                .as_ref()
+                .rpc_client
+                .blockchain_scripthash_subscribe(scripthash)
+                .compat()
+                .await
+            {
+                return MmError::err(e.to_string());
             }
-
-            Ok(())
-        },
-        _ => Ok(()),
+        }
     }
+
+    Ok(())
 }
 
 #[test]
