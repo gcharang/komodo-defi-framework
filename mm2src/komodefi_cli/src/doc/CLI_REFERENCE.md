@@ -15,6 +15,14 @@ Now `komodefi-cli` is built and available in the `bin` directory and can be call
 
 `komodefi-cli`  should be configured in a proper way to be able to connect to and interract with the running `mm2` service via the Komodo RPC API. The `mm2` can be started manually or by using the `komodefi-cli` that facilitates configuring and managing it as a process.
 
+### Setting the Default CLI Root
+You can customize the default root directory for `komodefi-cli` by setting the `KOMODEFI_CLI_ROOT` environment variable. This allows you to specify a location for saving configuration files, binaries, and other related data.
+ 
+```ssh
+export KOMODEFI_CLI_ROOT=$HOME/komodefi-cli
+komodefi-cli mm2 download
+```
+
 ### init
 
 The `init` command is aiming to facilitate creating of the `MM2.json` configuration file and getting the `coins` configuration. The `komodefi-cli` implements it in an interactive step-by-step mode and produces `MM2.json` as a result. `coins` configuration is got from the https://raw.githubusercontent.com/KomodoPlatform/coins/master/coins. The `init` also provides alternative paths setting by additional options.
@@ -63,6 +71,14 @@ resulting `MM2.json`:
     "rpcport": 7783,
     "secure_conn": false
 }
+```
+
+### mm2 download
+Download the latest version of `mm2` binary and save to `KOMODEFI_CLI_ROOT` dir.
+
+Usage:
+```
+komodefi-cli mm2 download
 ```
 
 ### mm2 start
