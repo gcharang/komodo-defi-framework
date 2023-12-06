@@ -262,15 +262,19 @@ impl AtomicDexBehaviour {
     fn spawn(&self, fut: impl Future<Output = ()> + Send + 'static) { self.runtime.spawn(fut) }
 
     fn process_cmd(&mut self, cmd: AdexBehaviourCmd) {
+        const BREAKING_CHANGE_NOTIFICATION: &str = "MM2 MAIN NETWORK HAS BEEN MIGRATED FROM 7777 TO 8762 WITH NETWORK UPGRADES. PLEASE CONSIDER UPDATING YOUR MM2 TO THE LATEST RELEASE AND SWITCHING TO THE NEW MAIN NETWORK 8762.";
+
         match cmd {
             AdexBehaviourCmd::Subscribe { topic } => {
                 let topic = Topic::new(topic);
                 self.gossipsub.subscribe(topic);
             },
-            AdexBehaviourCmd::PublishMsg { topics, msg } => {
+            AdexBehaviourCmd::PublishMsg { mut topics, msg } => {
+                topics.push(BREAKING_CHANGE_NOTIFICATION.to_owned());
                 self.gossipsub.publish_many(topics.into_iter().map(Topic::new), msg);
             },
-            AdexBehaviourCmd::PublishMsgFrom { topics, msg, from } => {
+            AdexBehaviourCmd::PublishMsgFrom { mut topics, msg, from } => {
+                topics.push(BREAKING_CHANGE_NOTIFICATION.to_owned());
                 self.gossipsub
                     .publish_many_from(topics.into_iter().map(Topic::new), msg, from);
             },
