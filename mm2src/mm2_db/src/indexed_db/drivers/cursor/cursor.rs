@@ -196,8 +196,8 @@ pub(crate) struct CursorDriver {
     /// Whether we got `CursorAction::Stop` at the last iteration or not.
     stopped: bool,
     /// We need to hold the closures in memory till `cursor` exists.
-    pub _onsuccess_closure: Closure<dyn FnMut(JsValue)>,
-    pub _onerror_closure: Closure<dyn FnMut(JsValue)>,
+    _onsuccess_closure: Closure<dyn FnMut(JsValue)>,
+    _onerror_closure: Closure<dyn FnMut(JsValue)>,
 }
 
 impl CursorDriver {

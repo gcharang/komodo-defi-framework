@@ -1,5 +1,4 @@
 use crate::z_coin::z_coin_errors::ZcoinStorageError;
-use common::log::info;
 
 use mm2_core::mm_ctx::MmArc;
 use mm2_db::indexed_db::{ConstructibleDb, DbIdentifier, DbInstance, DbLocked, DbUpgrader, IndexedDb, IndexedDbBuilder,
@@ -37,6 +36,7 @@ impl TableSignature for ZcashParamsWasmTable {
             table.create_multi_index(Self::SPEND_OUTPUT_INDEX, &["sapling_spend", "sapling_output"], true)?;
             table.create_index("sapling_spend", false)?;
             table.create_index("sapling_output", false)?;
+            table.create_index("sapling_spend_id", true)?;
             table.create_index("ticker", false)?;
         }
 
@@ -97,9 +97,10 @@ impl ZcashParamsWasmImpl {
             ticker: CHAIN.to_string(),
         };
 
-        params_db.add_item(&params).await?;
-
-        Ok(())
+        Ok(params_db
+            .replace_item_by_unique_index("sapling_spend_id", sapling_spend_id as u32, &params)
+            .await
+            .map(|_| ())?)
     }
 
     /// Check if z_params is already save to storage previously.
@@ -107,16 +108,12 @@ impl ZcashParamsWasmImpl {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
+        let count = params_db.count_all().await?;
+        if count != TARGET_SPEND_CHUNKS {
+            params_db.delete_items_by_index("ticker", CHAIN).await?;
+        }
 
-        let maybe_param = params_db
-            .cursor_builder()
-            .only("ticker", CHAIN)?
-            .open_cursor("ticker")
-            .await?
-            .next()
-            .await?;
-
-        Ok(maybe_param.is_some())
+        Ok(count == TARGET_SPEND_CHUNKS)
     }
 
     /// Get z_params from storage.
@@ -124,6 +121,14 @@ impl ZcashParamsWasmImpl {
         let locked_db = self.lock_db().await?;
         let db_transaction = locked_db.get_inner().transaction().await?;
         let params_db = db_transaction.table::<ZcashParamsWasmTable>().await?;
+        let count = params_db.count_all().await?;
+        // if params count in store is not 11 we need to delete the store params, re-download and save fresh params
+        // to avoid bad bytes combinations.
+        if count != TARGET_SPEND_CHUNKS {
+            params_db.delete_items_by_index("ticker", CHAIN).await?;
+            return self.download_and_save_params().await;
+        };
+
         let mut maybe_params = params_db
             .cursor_builder()
             .only("ticker", CHAIN)?
@@ -133,8 +138,7 @@ impl ZcashParamsWasmImpl {
         let mut sapling_spend = vec![];
         let mut sapling_output = vec![];
 
-        while let Some((i, params)) = maybe_params.next().await? {
-            info!("PROCESSED: {i:?}");
+        while let Some((_, params)) = maybe_params.next().await? {
             sapling_spend.extend_from_slice(&params.sapling_spend);
             if params.sapling_spend_id == 0 {
                 sapling_output = params.sapling_output

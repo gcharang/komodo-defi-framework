@@ -495,7 +495,7 @@ impl<'transaction, Table: TableSignature> DbTable<'transaction, Table> {
         send_event_recv_response(&self.event_tx, event, result_rx).await
     }
 
-    /// Adds the given `item` of replace the previous one.
+    /// Adds the given `item` or replace the previous one.
     /// https://developer.mozilla.org/en-US/docs/Web/API/IDBObjectStore/put
     pub async fn replace_item(&self, item_id: ItemId, item: &Table) -> DbTransactionResult<ItemId> {
         let item = json::to_value(item).map_to_mm(|e| DbTransactionError::ErrorSerializingItem(e.to_string()))?;
