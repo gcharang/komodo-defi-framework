@@ -29,7 +29,7 @@ use futures::compat::Future01CompatExt;
 use futures::future::try_join_all;
 use mm2_err_handle::map_to_mm::MapToMmResult;
 use mm2_net::transport::send_post_request_to_uri;
-use mm2_number::{BigDecimal, BigUint};
+use mm2_number::BigUint;
 use regex::Regex;
 use serde_json::Value as Json;
 use std::cmp::Ordering;
@@ -1158,30 +1158,6 @@ async fn mark_as_spam_and_build_empty_meta<T: NftListStorageOps + NftTransferHis
         chain: transfer.chain,
         block_number: transfer.block_number,
     }))
-}
-
-/// `find_wallet_nft_amount` function returns NFT amount of cached NFT.
-/// Note: in db **token_address** is kept in **lowercase**, because Moralis returns all addresses in lowercase.
-pub(crate) async fn find_wallet_nft_amount(
-    ctx: &MmArc,
-    chain: &Chain,
-    token_address: String,
-    token_id: BigUint,
-) -> MmResult<BigDecimal, GetNftInfoError> {
-    let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(GetNftInfoError::Internal)?;
-
-    let storage = nft_ctx.lock_db().await?;
-    if !NftListStorageOps::is_initialized(&storage, chain).await? {
-        NftListStorageOps::init(&storage, chain).await?;
-    }
-    let nft_meta = storage
-        .get_nft(chain, token_address.to_lowercase(), token_id.clone())
-        .await?
-        .ok_or_else(|| GetNftInfoError::TokenNotFoundInWallet {
-            token_address,
-            token_id: token_id.to_string(),
-        })?;
-    Ok(nft_meta.common.amount)
 }
 
 async fn cache_nfts_from_moralis<T: NftListStorageOps + NftTransferHistoryStorageOps>(
