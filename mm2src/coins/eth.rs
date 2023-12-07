@@ -107,7 +107,7 @@ pub use rlp;
 mod web3_transport;
 
 #[path = "eth/v2_activation.rs"] pub mod v2_activation;
-use crate::nft::{find_wallet_nft_amount, WithdrawNftResult};
+use crate::nft::WithdrawNftResult;
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
 
 mod nonce;
@@ -878,15 +878,10 @@ pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> Wit
     let coin = lp_coinfind_or_err(&ctx, withdraw_type.chain.to_ticker()).await?;
     let (to_addr, token_addr, eth_coin) =
         get_valid_nft_add_to_withdraw(coin, &withdraw_type.to, &withdraw_type.token_address)?;
-    let my_address = eth_coin.my_address()?;
 
-    let wallet_amount = find_wallet_nft_amount(
-        &ctx,
-        &withdraw_type.chain,
-        withdraw_type.token_address.to_lowercase(),
-        withdraw_type.token_id.clone(),
-    )
-    .await?;
+    let token_id_str = &withdraw_type.token_id.to_string();
+    let wallet_amount = eth_coin.erc1155_balance(token_addr, token_id_str).await?;
+
     let amount_dec = if withdraw_type.max {
         wallet_amount.clone()
     } else {
@@ -905,7 +900,7 @@ pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> Wit
     let (eth_value, data, call_addr, fee_coin) = match eth_coin.coin_type {
         EthCoinType::Eth => {
             let function = ERC1155_CONTRACT.function("safeTransferFrom")?;
-            let token_id_u256 = U256::from_dec_str(&withdraw_type.token_id.to_string())
+            let token_id_u256 = U256::from_dec_str(token_id_str)
                 .map_err(|e| format!("{:?}", e))
                 .map_to_mm(NumConversError::new)?;
             let amount_u256 = U256::from_dec_str(&amount_dec.to_string())
@@ -956,10 +951,11 @@ pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> Wit
     let signed_bytes = rlp::encode(&signed);
     let fee_details = EthTxFeeDetails::new(gas, gas_price, fee_coin)?;
 
+    let my_address_str = eth_coin.my_address()?;
     Ok(TransactionNftDetails {
         tx_hex: BytesJson::from(signed_bytes.to_vec()),
         tx_hash: format!("{:02x}", signed.tx_hash()),
-        from: vec![my_address],
+        from: vec![my_address_str],
         to: vec![withdraw_type.to],
         contract_type: ContractType::Erc1155,
         token_address: withdraw_type.token_address,
@@ -3941,6 +3937,34 @@ impl EthCoin {
                 MmError::err(BalanceError::InvalidResponse(error))
             },
         }
+    }
+
+    async fn erc1155_balance(&self, token_addr: Address, token_id: &str) -> MmResult<BigDecimal, BalanceError> {
+        let wallet_amount_uint = match self.coin_type {
+            EthCoinType::Eth => {
+                let function = ERC1155_CONTRACT.function("balanceOf")?;
+                let token_id_u256 = U256::from_dec_str(token_id)
+                    .map_err(|e| format!("{:?}", e))
+                    .map_to_mm(NumConversError::new)?;
+                let data = function.encode_input(&[Token::Address(self.my_address), Token::Uint(token_id_u256)])?;
+                let result = self.call_request(token_addr, None, Some(data.into())).await?;
+                let decoded = function.decode_output(&result.0)?;
+                match decoded[0] {
+                    Token::Uint(number) => number,
+                    _ => {
+                        let error = format!("Expected U256 as balanceOf result but got {:?}", decoded);
+                        return MmError::err(BalanceError::InvalidResponse(error));
+                    },
+                }
+            },
+            EthCoinType::Erc20 { .. } => {
+                return MmError::err(BalanceError::Internal(
+                    "Erc20 coin type doesnt support Erc1155 standard".to_owned(),
+                ))
+            },
+        };
+        let wallet_amount = BigDecimal::from_str(&wallet_amount_uint.to_string()).map_err(NumConversError::from)?;
+        Ok(wallet_amount)
     }
 
     fn estimate_gas(&self, req: CallRequest) -> Box<dyn Future<Item = U256, Error = web3::Error> + Send> {
