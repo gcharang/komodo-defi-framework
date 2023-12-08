@@ -9,7 +9,7 @@ use crate::mm2::{lp_ordermatch::{cancel_order, create_maker_order,
                                  update_maker_order, CancelOrderReq, MakerOrder, MakerOrderUpdateReq,
                                  OrdermatchContext, SetPriceReq},
                  lp_swap::{latest_swaps_for_pair, LatestSwapsErr}};
-use coins::lp_price::{fetch_price_tickers, Provider, RateInfos};
+use coins::lp_price::{fetch_price_tickers, Provider, RateInfos, PRICE_ENDPOINTS};
 use coins::{lp_coinfind, GetNonZeroBalance};
 use common::{executor::{SpawnFuture, Timer},
              log::{debug, error, info, warn},
@@ -23,7 +23,6 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 // !< constants
-pub const KMD_PRICE_ENDPOINT: &str = "https://prices.komodo.earth/api/v2/tickers";
 pub const BOT_DEFAULT_REFRESH_RATE: f64 = 30.0;
 pub const PRECISION_FOR_NOTIFICATION: u64 = 8;
 const LATEST_SWAPS_LIMIT: usize = 1000;
@@ -735,7 +734,9 @@ pub async fn start_simple_market_maker_bot(ctx: MmArc, req: StartSimpleMakerBotR
             *state = RunningState {
                 trading_bot_cfg: req.cfg,
                 bot_refresh_rate: refresh_rate,
-                price_urls: req.price_urls.unwrap_or_else(|| vec![KMD_PRICE_ENDPOINT.to_string()]),
+                price_urls: req
+                    .price_urls
+                    .unwrap_or_else(|| PRICE_ENDPOINTS.iter().map(|url| url.to_string()).collect()),
             }
             .into();
             drop(state);

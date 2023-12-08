@@ -10,7 +10,7 @@ use std::collections::HashMap;
 #[cfg(feature = "run-docker-tests")] use std::str::FromStr;
 use std::str::Utf8Error;
 
-const PRICE_ENDPOINTS: [&str; 2] = [
+pub const PRICE_ENDPOINTS: [&str; 2] = [
     "https://prices.komodo.earth/api/v2/tickers",
     "https://prices.cipig.net:1717/api/v2/tickers",
 ];
