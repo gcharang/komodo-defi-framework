@@ -111,6 +111,7 @@ use crate::nft::WithdrawNftResult;
 use v2_activation::{build_address_and_priv_key_policy, EthActivationV2Error};
 
 mod nonce;
+use crate::nft::nft_errors::GetNftInfoError;
 use crate::{PrivKeyPolicy, TransactionResult, WithdrawFrom};
 use nonce::ParityNonce;
 
@@ -878,6 +879,7 @@ pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> Wit
     let coin = lp_coinfind_or_err(&ctx, withdraw_type.chain.to_ticker()).await?;
     let (to_addr, token_addr, eth_coin) =
         get_valid_nft_add_to_withdraw(coin, &withdraw_type.to, &withdraw_type.token_address)?;
+    let my_address_str = eth_coin.my_address()?;
 
     let token_id_str = &withdraw_type.token_id.to_string();
     let wallet_amount = eth_coin.erc1155_balance(token_addr, token_id_str).await?;
@@ -951,7 +953,6 @@ pub async fn withdraw_erc1155(ctx: MmArc, withdraw_type: WithdrawErc1155) -> Wit
     let signed_bytes = rlp::encode(&signed);
     let fee_details = EthTxFeeDetails::new(gas, gas_price, fee_coin)?;
 
-    let my_address_str = eth_coin.my_address()?;
     Ok(TransactionNftDetails {
         tx_hex: BytesJson::from(signed_bytes.to_vec()),
         tx_hash: format!("{:02x}", signed.tx_hash()),
@@ -976,7 +977,17 @@ pub async fn withdraw_erc721(ctx: MmArc, withdraw_type: WithdrawErc721) -> Withd
     let coin = lp_coinfind_or_err(&ctx, withdraw_type.chain.to_ticker()).await?;
     let (to_addr, token_addr, eth_coin) =
         get_valid_nft_add_to_withdraw(coin, &withdraw_type.to, &withdraw_type.token_address)?;
-    let my_address = eth_coin.my_address()?;
+    let my_address_str = eth_coin.my_address()?;
+
+    let token_id_str = &withdraw_type.token_id.to_string();
+    let token_owner = eth_coin.erc721_owner(token_addr, token_id_str).await?;
+    let my_address = eth_coin.my_address;
+    if token_owner != my_address {
+        return MmError::err(WithdrawError::MyAddressNotNftOwner {
+            my_address: eth_addr_to_hex(&my_address),
+            token_owner: eth_addr_to_hex(&token_owner),
+        });
+    }
 
     let (eth_value, data, call_addr, fee_coin) = match eth_coin.coin_type {
         EthCoinType::Eth => {
@@ -985,7 +996,7 @@ pub async fn withdraw_erc721(ctx: MmArc, withdraw_type: WithdrawErc721) -> Withd
                 .map_err(|e| format!("{:?}", e))
                 .map_to_mm(NumConversError::new)?;
             let data = function.encode_input(&[
-                Token::Address(eth_coin.my_address),
+                Token::Address(my_address),
                 Token::Address(to_addr),
                 Token::Uint(token_id_u256),
             ])?;
@@ -1007,7 +1018,7 @@ pub async fn withdraw_erc721(ctx: MmArc, withdraw_type: WithdrawErc721) -> Withd
     )
     .await?;
     let _nonce_lock = eth_coin.nonce_lock.lock().await;
-    let (nonce, _) = get_addr_nonce(eth_coin.my_address, eth_coin.web3_instances.clone())
+    let (nonce, _) = get_addr_nonce(my_address, eth_coin.web3_instances.clone())
         .compat()
         .timeout_secs(30.)
         .await?
@@ -1030,7 +1041,7 @@ pub async fn withdraw_erc721(ctx: MmArc, withdraw_type: WithdrawErc721) -> Withd
     Ok(TransactionNftDetails {
         tx_hex: BytesJson::from(signed_bytes.to_vec()),
         tx_hash: format!("{:02x}", signed.tx_hash()),
-        from: vec![my_address],
+        from: vec![my_address_str],
         to: vec![withdraw_type.to],
         contract_type: ContractType::Erc721,
         token_address: withdraw_type.token_address,
@@ -3967,6 +3978,33 @@ impl EthCoin {
         Ok(wallet_amount)
     }
 
+    async fn erc721_owner(&self, token_addr: Address, token_id: &str) -> MmResult<Address, GetNftInfoError> {
+        let owner_address = match self.coin_type {
+            EthCoinType::Eth => {
+                let function = ERC721_CONTRACT.function("ownerOf")?;
+                let token_id_u256 = U256::from_dec_str(token_id)
+                    .map_err(|e| format!("{:?}", e))
+                    .map_to_mm(NumConversError::new)?;
+                let data = function.encode_input(&[Token::Uint(token_id_u256)])?;
+                let result = self.call_request(token_addr, None, Some(data.into())).await?;
+                let decoded = function.decode_output(&result.0)?;
+                match decoded[0] {
+                    Token::Address(owner) => owner,
+                    _ => {
+                        let error = format!("Expected Address as ownerOf result but got {:?}", decoded);
+                        return MmError::err(GetNftInfoError::InvalidResponse(error));
+                    },
+                }
+            },
+            EthCoinType::Erc20 { .. } => {
+                return MmError::err(GetNftInfoError::Internal(
+                    "Erc20 coin type doesnt support Erc721 standard".to_owned(),
+                ))
+            },
+        };
+        Ok(owner_address)
+    }
+
     fn estimate_gas(&self, req: CallRequest) -> Box<dyn Future<Item = U256, Error = web3::Error> + Send> {
         // always using None block number as old Geth version accept only single argument in this RPC
         Box::new(self.web3.eth().estimate_gas(req, None).compat())
@@ -5724,11 +5762,6 @@ pub async fn get_eth_address(
 
 #[derive(Display)]
 pub enum GetValidEthWithdrawAddError {
-    #[display(fmt = "My address {} and from address {} mismatch", my_address, from)]
-    AddressMismatchError {
-        my_address: String,
-        from: String,
-    },
     #[display(fmt = "{} coin doesn't support NFT withdrawing", coin)]
     CoinDoesntSupportNftWithdraw {
         coin: String,

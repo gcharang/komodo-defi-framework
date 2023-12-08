@@ -2315,11 +2315,6 @@ pub enum WithdrawError {
     CoinDoesntSupportNftWithdraw {
         coin: String,
     },
-    #[display(fmt = "My address {} and from address {} mismatch", my_address, from)]
-    AddressMismatchError {
-        my_address: String,
-        from: String,
-    },
     #[display(fmt = "Contract type {} doesnt support 'withdraw_nft' yet", _0)]
     ContractTypeDoesntSupportNftWithdrawing(String),
     #[display(fmt = "Action not allowed for coin: {}", _0)]
@@ -2340,6 +2335,11 @@ pub enum WithdrawError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
+    #[display(fmt = "My address:= {}, while current Nft owner:= {}", my_address, token_owner)]
+    MyAddressNotNftOwner {
+        my_address: String,
+        token_owner: String,
+    },
 }
 
 impl HttpStatusCode for WithdrawError {
@@ -2362,10 +2362,10 @@ impl HttpStatusCode for WithdrawError {
             | WithdrawError::UnsupportedError(_)
             | WithdrawError::ActionNotAllowed(_)
             | WithdrawError::GetNftInfoError(_)
-            | WithdrawError::AddressMismatchError { .. }
             | WithdrawError::ContractTypeDoesntSupportNftWithdrawing(_)
             | WithdrawError::CoinDoesntSupportNftWithdraw { .. }
-            | WithdrawError::NotEnoughNftsAmount { .. } => StatusCode::BAD_REQUEST,
+            | WithdrawError::NotEnoughNftsAmount { .. }
+            | WithdrawError::MyAddressNotNftOwner { .. } => StatusCode::BAD_REQUEST,
             WithdrawError::HwError(_) => StatusCode::GONE,
             #[cfg(target_arch = "wasm32")]
             WithdrawError::BroadcastExpected(_) => StatusCode::BAD_REQUEST,
@@ -2409,9 +2409,6 @@ impl From<TimeoutError> for WithdrawError {
 impl From<GetValidEthWithdrawAddError> for WithdrawError {
     fn from(e: GetValidEthWithdrawAddError) -> Self {
         match e {
-            GetValidEthWithdrawAddError::AddressMismatchError { my_address, from } => {
-                WithdrawError::AddressMismatchError { my_address, from }
-            },
             GetValidEthWithdrawAddError::CoinDoesntSupportNftWithdraw { coin } => {
                 WithdrawError::CoinDoesntSupportNftWithdraw { coin }
             },

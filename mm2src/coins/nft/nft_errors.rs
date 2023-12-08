@@ -2,7 +2,7 @@ use crate::eth::GetEthAddressError;
 #[cfg(target_arch = "wasm32")]
 use crate::nft::storage::wasm::WasmNftCacheError;
 use crate::nft::storage::NftStorageError;
-use crate::{CoinFindError, GetMyAddressError, WithdrawError};
+use crate::{CoinFindError, GetMyAddressError, NumConversError, WithdrawError};
 use common::{HttpStatusCode, ParseRfc3339Err};
 #[cfg(not(target_arch = "wasm32"))]
 use db_common::sqlite::rusqlite::Error as SqlError;
@@ -43,6 +43,7 @@ pub enum GetNftInfoError {
     ContractTypeIsNull,
     ProtectFromSpamError(ProtectFromSpamError),
     TransferConfirmationsError(TransferConfirmationsError),
+    NumConversError(String),
 }
 
 impl From<GetNftInfoError> for WithdrawError {
@@ -109,6 +110,18 @@ impl From<TransferConfirmationsError> for GetNftInfoError {
     fn from(e: TransferConfirmationsError) -> Self { GetNftInfoError::TransferConfirmationsError(e) }
 }
 
+impl From<ethabi::Error> for GetNftInfoError {
+    fn from(e: ethabi::Error) -> Self {
+        // Currently, we use the `ethabi` crate to work with a smart contract ABI known at compile time.
+        // It's an internal error if there are any issues during working with a smart contract ABI.
+        GetNftInfoError::Internal(e.to_string())
+    }
+}
+
+impl From<NumConversError> for GetNftInfoError {
+    fn from(e: NumConversError) -> Self { GetNftInfoError::NumConversError(e.to_string()) }
+}
+
 impl HttpStatusCode for GetNftInfoError {
     fn status_code(&self) -> StatusCode {
         match self {
@@ -121,7 +134,8 @@ impl HttpStatusCode for GetNftInfoError {
             | GetNftInfoError::TokenNotFoundInWallet { .. }
             | GetNftInfoError::DbError(_)
             | GetNftInfoError::ProtectFromSpamError(_)
-            | GetNftInfoError::TransferConfirmationsError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | GetNftInfoError::TransferConfirmationsError(_)
+            | GetNftInfoError::NumConversError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
