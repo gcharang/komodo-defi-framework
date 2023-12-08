@@ -1,4 +1,4 @@
-use common::log::{debug, error};
+use common::log::{debug, error, info};
 use common::StatusCode;
 use mm2_err_handle::prelude::{MmError, OrMmError};
 use mm2_net::transport::SlurpError;
@@ -208,10 +208,25 @@ async fn process_price_request(price_url: &str) -> Result<TickerInfosRegistry, M
     Ok(TickerInfosRegistry(model))
 }
 
-pub async fn fetch_price_tickers(price_url: &str) -> Result<TickerInfosRegistry, MmError<PriceServiceRequestError>> {
-    let model = process_price_request(price_url).await?;
-    debug!("price registry size: {}", model.0.len());
-    Ok(model)
+pub async fn fetch_price_tickers(
+    price_urls: Vec<String>,
+) -> Result<TickerInfosRegistry, MmError<PriceServiceRequestError>> {
+    for url in price_urls {
+        let model = match process_price_request(&url).await {
+            Ok(model) => model,
+            Err(err) => {
+                error!("Error fetching price from: {}, error: {:?}", url, err);
+                continue;
+            },
+        };
+        debug!("price registry size: {}", model.0.len());
+        info!("price successfully fetched from {url}");
+        return Ok(model);
+    }
+
+    MmError::err(PriceServiceRequestError::HttpProcessError(
+        "couldn't fetch price".to_string(),
+    ))
 }
 
 /// CEXRates, structure for storing `base` coin and `rel` coin USD price

@@ -113,7 +113,7 @@ impl From<std::string::String> for OrderProcessingError {
 #[derive(Deserialize)]
 pub struct StartSimpleMakerBotRequest {
     cfg: SimpleMakerBotRegistry,
-    price_url: Option<String>,
+    price_urls: Option<Vec<String>>,
     bot_refresh_rate: Option<f64>,
 }
 
@@ -615,19 +615,16 @@ async fn execute_create_single_order(
 async fn process_bot_logic(ctx: &MmArc) {
     let simple_market_maker_bot_ctx = TradingBotContext::from_ctx(ctx).unwrap();
     let state = simple_market_maker_bot_ctx.trading_bot_states.lock().await;
-    let (cfg, price_url) = if let TradingBotState::Running(running_state) = &*state {
-        let res = (running_state.trading_bot_cfg.clone(), running_state.price_url.clone());
+    let (cfg, price_urls) = if let TradingBotState::Running(running_state) = &*state {
+        let res = (running_state.trading_bot_cfg.clone(), running_state.price_urls.clone());
         drop(state);
         res
     } else {
         drop(state);
         return;
     };
-    let rates_registry = match fetch_price_tickers(price_url.as_str()).await {
-        Ok(model) => {
-            info!("price successfully fetched from {price_url}");
-            model
-        },
+    let rates_registry = match fetch_price_tickers(price_urls).await {
+        Ok(model) => model,
         Err(err) => {
             let nb_orders = cancel_pending_orders(ctx, &cfg).await;
             error!("error fetching price: {err:?} - cancel {nb_orders} orders");
@@ -738,7 +735,7 @@ pub async fn start_simple_market_maker_bot(ctx: MmArc, req: StartSimpleMakerBotR
             *state = RunningState {
                 trading_bot_cfg: req.cfg,
                 bot_refresh_rate: refresh_rate,
-                price_url: req.price_url.unwrap_or_else(|| KMD_PRICE_ENDPOINT.to_string()),
+                price_urls: req.price_urls.unwrap_or_else(|| vec![KMD_PRICE_ENDPOINT.to_string()]),
             }
             .into();
             drop(state);
@@ -793,7 +790,7 @@ mod tests {
         let another_cloned_ctx = ctx.clone();
         let req = StartSimpleMakerBotRequest {
             cfg: Default::default(),
-            price_url: None,
+            price_urls: None,
             bot_refresh_rate: None,
         };
         let answer = block_on(start_simple_market_maker_bot(ctx, req)).unwrap();
@@ -801,7 +798,7 @@ mod tests {
 
         let req = StartSimpleMakerBotRequest {
             cfg: Default::default(),
-            price_url: None,
+            price_urls: None,
             bot_refresh_rate: None,
         };
         let answer = block_on(start_simple_market_maker_bot(cloned_ctx, req));
