@@ -96,3 +96,16 @@ pub fn coin_conf_with_protocol<T: TryFromCoinProtocol>(
         })?;
     Ok((conf, coin_protocol))
 }
+
+pub trait ActivationRequestInfo {
+    fn is_hw_policy(&self) -> bool;
+}
+
+impl ActivationRequestInfo for UtxoActivationParams {
+    fn is_hw_policy(&self) -> bool { self.priv_key_policy.is_hw_policy() }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ActivationRequestInfo for ZcoinActivationParams {
+    fn is_hw_policy(&self) -> bool { false } // TODO: fix when device policy is added
+}

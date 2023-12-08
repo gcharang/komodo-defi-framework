@@ -756,7 +756,7 @@ pub fn eth_sepolia_conf() -> Json {
 
 pub fn eth_sepolia_trezor_firmware_compat_conf() -> Json {
     json!({
-        "coin": "ETH",
+        "coin": "tETH",
         "name": "ethereum",
         "derivation_path": "m/44'/1'", // Note: trezor uses coin type 1' for eth for testnet (SLIP44_TESTNET)
         "chain_id": 11155111,
@@ -787,6 +787,24 @@ pub fn jst_sepolia_conf() -> Json {
         "coin": "JST",
         "name": "jst",
         "chain_id": 11155111,
+        "protocol": {
+            "type": "ERC20",
+            "protocol_data": {
+                "platform": "ETH",
+                "chain_id": 11155111,
+                "contract_address": ETH_SEPOLIA_TOKEN_CONTRACT
+            }
+        }
+    })
+}
+
+pub fn jst_sepolia_trezor_conf() -> Json {
+    json!({
+        "coin": "tJST",
+        "name": "tjst",
+        "chain_id": 11155111,
+        "derivation_path": "m/44'/1'", // Note: Trezor uses 1' coin type for all testnets
+        "trezor_coin": "tETH",
         "protocol": {
             "type": "ERC20",
             "protocol_data": {

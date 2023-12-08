@@ -114,6 +114,10 @@ impl Default for EthPrivKeyActivationPolicy {
     fn default() -> Self { EthPrivKeyActivationPolicy::ContextPrivKey }
 }
 
+impl EthPrivKeyActivationPolicy {
+    pub fn is_hw_policy(&self) -> bool { matches!(self, EthPrivKeyActivationPolicy::Trezor) }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum EthRpcMode {
     Http,
@@ -280,8 +284,8 @@ impl EthCoin {
     }
 }
 
-/// Activate eth coin from coin config and and private key build policy,
-/// version 2 with no intrinsic tokens creation  
+/// Activate eth coin from coin config and private key build policy,
+/// version 2 of the activation function, with no intrinsic tokens creation  
 pub async fn eth_coin_from_conf_and_request_v2(
     ctx: &MmArc,
     ticker: &str,
@@ -309,20 +313,17 @@ pub async fn eth_coin_from_conf_and_request_v2(
         build_address_and_priv_key_policy(ctx, ticker, conf, priv_key_policy, &req.path_to_address, req.gap_limit)
             .await?;
     let enabled_address = match priv_key_policy {
-        PrivKeyPolicy::Trezor {
-            path_to_coin: _,
-            ref activated_pubkey,
-        } => {
+        PrivKeyPolicy::Trezor { ref activated_pubkey } => {
             let my_pubkey = activated_pubkey
                 .as_ref()
-                .or_mm_err(|| EthActivationV2Error::InternalError("no pubkey from trezor".to_string()))?;
+                .or_mm_err(|| EthActivationV2Error::InternalError("empty trezor xpub".to_string()))?;
             let my_pubkey = pubkey_from_xpub_str(my_pubkey)
-                .map_err(|_| EthActivationV2Error::InternalError("invalid xpub from trezor".to_string()))?;
+                .map_to_mm(|_| EthActivationV2Error::InternalError("invalid trezor xpub".to_string()))?;
             public_to_address(&my_pubkey)
         },
         _ => priv_key_policy
             .activated_key_or_err()
-            .map_err(|e| EthActivationV2Error::PrivKeyPolicyNotAllowed(e.into_inner()))?
+            .mm_err(EthActivationV2Error::PrivKeyPolicyNotAllowed)?
             .address(),
     };
     let enabled_address_str = display_eth_address(&enabled_address);
@@ -339,10 +340,7 @@ pub async fn eth_coin_from_conf_and_request_v2(
             },
         ) => build_http_transport(ctx, ticker.to_string(), enabled_address_str, key_pair, &req.nodes).await?,
         (EthRpcMode::Http, EthPrivKeyPolicy::Trezor { .. }) => {
-            /*return MmError::err(EthActivationV2Error::PrivKeyPolicyNotAllowed(
-                PrivKeyPolicyNotAllowed::HardwareWalletNotSupported,
-            ));*/
-            // for now in-memory privkey which must be always initialised if trezor policy is set
+            // Get in-memory internal privkey, which for now must be initialised if trezor policy is set
             let crypto_ctx = CryptoCtx::from_ctx(ctx)?;
             let secp256k1_key_pair = crypto_ctx.mm2_internal_key_pair();
             let eth_key_pair = eth::KeyPair::from_secret_slice(&secp256k1_key_pair.private_bytes())
@@ -513,7 +511,6 @@ pub(crate) async fn build_address_and_priv_key_policy(
                 .await?;
             Ok((
                 EthPrivKeyPolicy::Trezor {
-                    path_to_coin: Some(path_to_coin),
                     activated_pubkey: Some(my_pubkey),
                 },
                 derivation_method,

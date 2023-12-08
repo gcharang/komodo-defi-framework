@@ -18,21 +18,21 @@ const SEPOLIA_ID: u64 = 11155111;
 
 lazy_static! {
 
-    // Add definitions for lesser known networks
+    // External eth network definitions
     static ref ETH_NETWORK_DEFS: BTreeMap<ChainId, StaticDefinitionBytes> = [
         (SEPOLIA_ID, SEPOLIA_NETORK_DEF.as_ref())
-        // add more fresh supported network defs (i.e. if they are not known in the trezor firmware but already exist on their web site)
     ].iter().cloned().collect();
 
+    // External eth token definitions
     static ref ETH_TOKEN_DEFS: BTreeMap<StaticAddressBytes, (ChainId, StaticDefinitionBytes)> = [
-        // add more fresh supported token defs (i.e. if they are not known in the trezor firmware but already exist on their web site)
     ].iter().cloned().collect();
 
     static ref SEPOLIA_NETORK_DEF: Vec<u8> = include_bytes!("definitions/sepolia.dat").to_vec();
-    // add more files with network or token definitions
+    // add more files with external network or token definitions
 }
 
-/// get network definition by chain id
+/// Get external network definition by chain id
+/// check this doc how to find network definition files https://docs.trezor.io/trezor-firmware/common/ethereum-definitions.html
 fn get_eth_network_def(chain_id: ChainId) -> Option<Vec<u8>> {
     ETH_NETWORK_DEFS
         .iter()
@@ -40,7 +40,8 @@ fn get_eth_network_def(chain_id: ChainId) -> Option<Vec<u8>> {
         .map(|found| found.1.to_vec())
 }
 
-/// get token definition by token contract address and chain id
+/// Get external token definition by token contract address and chain id
+/// check this doc how to find token definition files https://docs.trezor.io/trezor-firmware/common/ethereum-definitions.html
 #[allow(dead_code)]
 fn get_eth_token_def(address_bytes: &[u8], chain_id: ChainId) -> Option<Vec<u8>> {
     ETH_TOKEN_DEFS

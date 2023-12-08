@@ -51,7 +51,12 @@ where
             .map_to_mm(WithdrawError::InvalidAddress)?;
         let (my_balance, my_address, key_pair, derivation_path) = match req.from {
             Some(from) => {
-                let path_to_coin = coin.priv_key_policy.path_to_coin_or_err()?;
+                let path_to_coin = &coin
+                    .deref()
+                    .derivation_method
+                    .hd_wallet()
+                    .ok_or(WithdrawError::UnexpectedDerivationMethod)?
+                    .derivation_path;
                 let path_to_address = from.to_address_path(path_to_coin.coin_type())?;
                 let derivation_path = path_to_address.to_derivation_path(path_to_coin)?;
                 let (key_pair, address) = match coin.priv_key_policy {
@@ -60,9 +65,9 @@ where
                     } => {
                         let my_pubkey = activated_pubkey
                             .as_ref()
-                            .or_mm_err(|| WithdrawError::InternalError("no pubkey from trezor".to_string()))?;
+                            .or_mm_err(|| WithdrawError::InternalError("empty trezor xpub".to_string()))?;
                         let my_pubkey = pubkey_from_xpub_str(my_pubkey)
-                            .map_err(|_| WithdrawError::InternalError("invalid xpub from trezor".to_string()))?;
+                            .map_to_mm(|_| WithdrawError::InternalError("invalid trezor xpub".to_string()))?;
                         let address = public_to_address(&my_pubkey);
                         (None, address)
                     },

@@ -7810,8 +7810,8 @@ mod trezor_tests {
     use mm2_core::mm_ctx::MmArc;
     use mm2_main::mm2::init_hw::init_trezor_user_action;
     use mm2_main::mm2::init_hw::{init_trezor, init_trezor_status, InitHwRequest, InitHwResponse};
-    use mm2_test_helpers::for_tests::{eth_sepolia_trezor_firmware_compat_conf, mm_ctx_with_custom_db_with_conf,
-                                      ETH_DEV_SWAP_CONTRACT, ETH_SEPOLIA_NODE};
+    use mm2_test_helpers::for_tests::{eth_sepolia_trezor_firmware_compat_conf, jst_sepolia_trezor_conf,
+                                      mm_ctx_with_custom_db_with_conf, ETH_DEV_SWAP_CONTRACT, ETH_SEPOLIA_NODE};
     use rpc_task::{rpc_common::RpcTaskStatusRequest, RpcTaskStatus};
     use serde_json::{self as json, json, Value as Json};
     use std::io::{stdin, stdout, BufRead, Write};
@@ -7832,7 +7832,7 @@ mod trezor_tests {
         let res = match init_trezor(ctx.clone(), req).await {
             Ok(res) => res,
             _ => {
-                panic!("cannot init trezor");
+                panic!("cannot start init trezor task");
             },
         };
 
@@ -7851,8 +7851,7 @@ mod trezor_tests {
                             break;
                         },
                         RpcTaskStatus::Error(_) => {
-                            log!("device in error state");
-                            break;
+                            panic!("cannot init trezor device");
                         },
                         RpcTaskStatus::InProgress(_) => log!("trezor init in progress"),
                         RpcTaskStatus::UserActionRequired(device_req) => {
@@ -7928,40 +7927,38 @@ mod trezor_tests {
         println!("account_balance={:?}", account_balance);
     }
 
-    /// Tool to run eth withdraw directly with trezor device or emulator (no-rpc version, added for easier debugging)
+    /// Test to run eth withdraw directly with trezor device or emulator (for checking or debugging)
     /// run cargo test with '--features run-device-tests' option
     /// to use trezor emulator also add '--features trezor-udp' option to cargo params
     #[test]
     fn test_eth_withdraw_from_trezor_no_rpc() {
+        use coins::WithdrawFee;
         use std::convert::TryInto;
 
-        use coins::WithdrawFee;
-
-        let ticker = "ETH";
-
-        let mut eth_conf = eth_sepolia_trezor_firmware_compat_conf();
-        eth_conf["mm2"] = 2.into();
-        let mm_conf = json!({ "coins": [eth_conf] });
-
+        let ticker_coin = "tETH";
+        let ticker_token = "tJST";
+        let eth_conf = eth_sepolia_trezor_firmware_compat_conf();
+        let jst_conf = jst_sepolia_trezor_conf();
+        let mm_conf = json!({ "coins": [eth_conf, jst_conf] });
         let ctx = block_on(mm_ctx_with_trezor(mm_conf));
         block_on(init_platform_coin_with_tokens_loop::<EthCoin>(
             ctx.clone(),
             json::from_value(json!({
-                "ticker": ticker,
+                "ticker": ticker_coin,
                 "rpc_mode": "Http",
                 "nodes": [
                     {"url": "https://rpc2.sepolia.org"},
                     {"url": "https://rpc.sepolia.org/"}
                 ],
                 "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
-                "erc20_tokens_requests": [],
+                "erc20_tokens_requests": [{"ticker": ticker_token}],
                 "priv_key_policy": "Trezor"
             }))
             .unwrap(),
         ))
         .unwrap();
 
-        let coin = block_on(lp_coinfind(&ctx, "ETH")).unwrap();
+        let coin = block_on(lp_coinfind(&ctx, ticker_coin)).unwrap();
         let eth_coin = if let Some(MmCoinEnum::EthCoin(eth_coin)) = coin {
             eth_coin
         } else {
@@ -7976,9 +7973,10 @@ mod trezor_tests {
         .unwrap();
         println!("account_balance={:?}", account_balance);
 
+        // try to create eth withdrawal tx
         let tx_details = block_on(test_withdraw_init_loop(
-            ctx,
-            ticker,
+            ctx.clone(),
+            ticker_coin,
             "0xc06eFafa6527fc4b3C8F69Afb173964A3780a104",
             "0.00001",
             "m/44'/1'/0'/0/0",
@@ -7989,6 +7987,31 @@ mod trezor_tests {
         ))
         .expect("withdraw must end successfully");
         log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+
+        // try to create JST ERC20 token withdrawal tx
+        let tx_details = block_on(test_withdraw_init_loop(
+            ctx,
+            ticker_token,
+            "0xbAB36286672fbdc7B250804bf6D14Be0dF69fa29",
+            "0.000000000000000001", // 1 wei
+            "m/44'/1'/0'/0/0",      // Note: Trezor uses 1' type for all testnets
+            Some(WithdrawFee::EthGas {
+                gas: ETH_GAS,
+                gas_price: 0.1_f32.try_into().unwrap(),
+            }),
+        ))
+        .expect("withdraw must end successfully");
+        log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
+
+        // if you need to send tx:
+        /* let send_tx_res = block_on(send_raw_transaction(ctx, json!({
+            "coin": ticker_token,
+            "tx_hex": tx_details.tx_hex,
+        })));
+        assert!(send_tx_res.is_ok(), "!{} send: {:?}", ticker_token, send_tx_res);
+        if send_tx_res.is_ok() {
+            println!("tx_hash={}", tx_details.tx_hash);
+        } */
         // TODO: check maybe we need to disconnect trezor somehow
     }
 }

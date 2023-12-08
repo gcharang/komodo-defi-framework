@@ -2,10 +2,10 @@ use crate::context::CoinsActivationContext;
 use crate::platform_coin_with_tokens::{EnablePlatformCoinWithTokensError, GetPlatformBalance,
                                        InitPlatformCoinWithTokensStandardAwaitingStatus,
                                        InitPlatformCoinWithTokensStandardInProgressStatus,
-                                       InitPlatformCoinWithTokensStandardUserAction, InitPlatformTaskManagerShared,
-                                       InitTokensAsMmCoinsError, PlatformWithTokensActivationOps, RegisterTokenInfo,
-                                       TokenActivationParams, TokenActivationRequest, TokenAsMmCoinInitializer,
-                                       TokenInitializer, TokenOf};
+                                       InitPlatformCoinWithTokensStandardUserAction,
+                                       InitPlatformCoinWithTokensTaskManagerShared, InitTokensAsMmCoinsError,
+                                       PlatformCoinWithTokensActivationOps, RegisterTokenInfo, TokenActivationParams,
+                                       TokenActivationRequest, TokenAsMmCoinInitializer, TokenInitializer, TokenOf};
 use crate::prelude::*;
 use async_trait::async_trait;
 use coins::coin_balance::{EnableCoinBalanceOps, EnableCoinScanPolicy};
@@ -157,6 +157,10 @@ impl TxHistory for EthWithTokensActivationRequest {
     fn tx_history(&self) -> bool { false }
 }
 
+impl ActivationRequestInfo for EthWithTokensActivationRequest {
+    fn is_hw_policy(&self) -> bool { self.platform_request.priv_key_policy.is_hw_policy() }
+}
+
 impl TokenOf for EthCoin {
     type PlatformCoin = EthCoin;
 }
@@ -192,7 +196,7 @@ impl CurrentBlock for EthWithTokensActivationResult {
 }
 
 #[async_trait]
-impl PlatformWithTokensActivationOps for EthCoin {
+impl PlatformCoinWithTokensActivationOps for EthCoin {
     type ActivationRequest = EthWithTokensActivationRequest;
     type PlatformProtocolInfo = EthCoinType;
     type ActivationResult = EthWithTokensActivationResult;
@@ -350,7 +354,9 @@ impl PlatformWithTokensActivationOps for EthCoin {
         Ok(())
     }
 
-    fn rpc_task_manager(activation_ctx: &CoinsActivationContext) -> &InitPlatformTaskManagerShared<EthCoin> {
+    fn rpc_task_manager(
+        activation_ctx: &CoinsActivationContext,
+    ) -> &InitPlatformCoinWithTokensTaskManagerShared<EthCoin> {
         &activation_ctx.init_eth_task_manager
     }
 }
@@ -372,7 +378,7 @@ fn eth_priv_key_build_policy(
     }
 }
 
-pub type EthTaskManagerShared = InitPlatformTaskManagerShared<EthCoin>;
+pub type EthTaskManagerShared = InitPlatformCoinWithTokensTaskManagerShared<EthCoin>;
 
 pub(crate) fn eth_xpub_extractor_rpc_statuses() -> HwConnectStatuses<
     InitPlatformCoinWithTokensStandardInProgressStatus,

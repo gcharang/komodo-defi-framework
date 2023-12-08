@@ -54,6 +54,7 @@ impl<'a, 'b, T: 'static> TrezorResponse<'a, 'b, T> {
     /// # Error
     ///
     /// Will error if it receives requests, which require input like: `PinMatrixRequest`.
+    /// TODO: Deprecate ack_all and add pin and passphrase processing
     pub async fn ack_all(self) -> TrezorResult<T> {
         let mut resp = self;
         loop {

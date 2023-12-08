@@ -250,13 +250,13 @@ impl Deref for TendermintCoin {
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TendermintInitError {
     pub ticker: String,
     pub kind: TendermintInitErrorKind,
 }
 
-#[derive(Display, Debug)]
+#[derive(Display, Debug, Clone)]
 pub enum TendermintInitErrorKind {
     Internal(String),
     InvalidPrivKey(String),

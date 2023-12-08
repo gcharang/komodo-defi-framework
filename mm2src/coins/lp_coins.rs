@@ -1721,7 +1721,7 @@ pub struct TransactionDetails {
     /// Raw bytes of signed transaction, this should be sent as is to `send_raw_transaction_bytes` RPC to broadcast the transaction
     pub tx_hex: BytesJson,
     /// Transaction hash in hexadecimal format
-    tx_hash: String,
+    pub tx_hash: String,
     /// Coins are sent from these addresses
     from: Vec<String>,
     /// Coins are sent to these addresses
@@ -2339,6 +2339,8 @@ pub enum WithdrawError {
     DbError(String),
     #[display(fmt = "chain id not set: {}", _0)]
     ChainIdRequired(String),
+    #[display(fmt = "Must use hierarchical deterministic wallet")]
+    UnexpectedDerivationMethod,
 }
 
 impl HttpStatusCode for WithdrawError {
@@ -2369,9 +2371,10 @@ impl HttpStatusCode for WithdrawError {
             WithdrawError::HwError(_) => StatusCode::GONE,
             #[cfg(target_arch = "wasm32")]
             WithdrawError::BroadcastExpected(_) => StatusCode::BAD_REQUEST,
-            WithdrawError::Transport(_) | WithdrawError::InternalError(_) | WithdrawError::DbError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            },
+            WithdrawError::Transport(_)
+            | WithdrawError::InternalError(_)
+            | WithdrawError::DbError(_)
+            | WithdrawError::UnexpectedDerivationMethod => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -3213,6 +3216,10 @@ impl Default for PrivKeyActivationPolicy {
     fn default() -> Self { PrivKeyActivationPolicy::ContextPrivKey }
 }
 
+impl PrivKeyActivationPolicy {
+    pub fn is_hw_policy(&self) -> bool { matches!(self, PrivKeyActivationPolicy::Trezor) }
+}
+
 /// Enum representing various private key management policies.
 ///
 /// This enum defines the various ways in which private keys can be managed
@@ -3248,11 +3255,9 @@ pub enum PrivKeyPolicy<T> {
     /// Details about how the keys are managed with the Trezor device
     /// are abstracted away and are not directly managed by this policy.
     Trezor {
-        /// path to coin for Trezor, user only for eth. TODO: could we get this from trezor itself?
-        path_to_coin: Option<StandardHDPathToCoin>,
         /// pubkey for initially derived account, used for Eth only
-        /// TODO: maybe better get pubkey each time when it is needed instead of storing here.
-        /// Also now it is stored as base58 encodes. Maybe better to store as a binary type Secp256k1ExtendedPublicKey
+        /// TODO: maybe better get the pubkey each time when it is needed instead of storing here.
+        /// Also now it is stored as base58. Maybe better to store as a binary type Secp256k1ExtendedPublicKey
         activated_pubkey: Option<String>,
     },
     /// The Metamask private key policy, specific to the WASM target architecture.
@@ -3324,13 +3329,14 @@ impl<T> PrivKeyPolicy<T> {
                 path_to_coin: derivation_path,
                 ..
             } => Some(derivation_path),
-            PrivKeyPolicy::Trezor { path_to_coin, .. } => path_to_coin.as_ref(),
+            PrivKeyPolicy::Trezor { .. } => None,
             PrivKeyPolicy::Iguana(_) => None,
             #[cfg(target_arch = "wasm32")]
             PrivKeyPolicy::Metamask(_) => None,
         }
     }
 
+    // TODO: eliminate and use hdwallet.derivation_path
     fn path_to_coin_or_err(&self) -> Result<&StandardHDPathToCoin, MmError<PrivKeyPolicyNotAllowed>> {
         self.path_to_coin().or_mm_err(|| {
             PrivKeyPolicyNotAllowed::UnsupportedMethod(
@@ -3348,12 +3354,7 @@ impl<T> PrivKeyPolicy<T> {
             .mm_err(|e| PrivKeyPolicyNotAllowed::InternalError(e.to_string()))
     }
 
-    fn is_trezor(&self) -> bool {
-        matches!(self, PrivKeyPolicy::Trezor {
-            path_to_coin: _,
-            activated_pubkey: _
-        })
-    }
+    fn is_trezor(&self) -> bool { matches!(self, PrivKeyPolicy::Trezor { activated_pubkey: _ }) }
 }
 
 /// 'CoinWithPrivKeyPolicy' trait is used to get the private key policy of a coin.
@@ -3475,6 +3476,13 @@ where
     ///
     /// Panic if the address mode is [`DerivationMethod::HDWallet`].
     pub async fn unwrap_single_addr(&self) -> Address { self.single_addr_or_err().await.unwrap() }
+
+    /*pub fn derivation_path(&self) -> Option<&StandardHDPathToCoin> {
+        match self {
+            DerivationMethod::SingleAddress(_) => None,
+            DerivationMethod::HDWallet(hd_wallet) => Some(hd_wallet.derivation_path()),
+        }
+    }*/
 }
 
 /// A trait representing coins with specific address derivation methods.
@@ -4829,11 +4837,20 @@ pub mod for_tests {
         from_derivation_path: &str,
         fee: Option<WithdrawFee>,
     ) -> MmResult<TransactionDetails, WithdrawError> {
+        println!(
+            "amount={} BigDecimal::from_str(amount).unwrap()={}",
+            amount,
+            BigDecimal::from_str(amount).unwrap()
+        );
         let withdraw_req = WithdrawRequest {
             amount: BigDecimal::from_str(amount).unwrap(),
-            from: Some(WithdrawFrom::DerivationPath {
-                derivation_path: from_derivation_path.to_owned(),
-            }),
+            from: if !from_derivation_path.is_empty() {
+                Some(WithdrawFrom::DerivationPath {
+                    derivation_path: from_derivation_path.to_owned(),
+                })
+            } else {
+                None
+            },
             to: to.to_owned(),
             coin: ticker.to_owned(),
             max: false,
