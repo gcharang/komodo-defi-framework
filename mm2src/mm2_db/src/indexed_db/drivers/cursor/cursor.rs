@@ -241,7 +241,7 @@ impl CursorDriver {
         })
     }
 
-    pub(crate) async fn next(&mut self, first_row_only: bool) -> CursorResult<Option<(ItemId, Json)>> {
+    pub(crate) async fn next(&mut self, first_result_only: bool) -> CursorResult<Option<(ItemId, Json)>> {
         loop {
             // Check if we got `CursorAction::Stop` at the last iteration.
             if self.stopped {
@@ -277,12 +277,13 @@ impl CursorDriver {
                     return Ok(None);
                 },
             };
+
             let item: InternalItem =
                 deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
-
             let action = self.inner.on_iteration(key)?;
 
-            if !first_row_only {
+            // if getting the first result is what we want, we'd skip this block.
+            if !first_result_only {
                 let (_, cursor_action) = action;
                 match cursor_action {
                     CursorAction::Continue => cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
