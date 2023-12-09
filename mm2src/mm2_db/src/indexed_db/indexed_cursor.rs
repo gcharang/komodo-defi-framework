@@ -139,30 +139,28 @@ impl<'transaction, Table: TableSignature> CursorIter<'transaction, Table> {
     /// Please note that the items are sorted by the index keys.
     pub async fn next(&mut self) -> CursorResult<Option<(ItemId, Table)>> {
         let (result_tx, result_rx) = oneshot::channel();
-        Ok(self
-            .next_impl(
-                DbCursorEvent::NextItem {
-                    result_tx,
-                    first_row_only: false,
-                },
-                result_rx,
-            )
-            .await?)
+        self.next_impl(
+            DbCursorEvent::NextItem {
+                result_tx,
+                first_row_only: false,
+            },
+            result_rx,
+        )
+        .await
     }
 
     /// Advances the iterator and returns the next value.
     /// Please note that the items are sorted by the index keys.
     pub async fn first(&mut self) -> CursorResult<Option<(ItemId, Table)>> {
         let (result_tx, result_rx) = oneshot::channel();
-        Ok(self
-            .next_impl(
-                DbCursorEvent::NextItem {
-                    result_tx,
-                    first_row_only: true,
-                },
-                result_rx,
-            )
-            .await?)
+        self.next_impl(
+            DbCursorEvent::NextItem {
+                result_tx,
+                first_row_only: true,
+            },
+            result_rx,
+        )
+        .await
     }
 
     async fn next_impl(
