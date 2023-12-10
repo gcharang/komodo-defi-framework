@@ -245,7 +245,7 @@ impl CursorDriver {
 
     pub(crate) async fn next(&mut self, first_row_only: bool) -> CursorResult<Option<(ItemId, Json)>> {
         loop {
-            info!("CursorDriver = \n {:?} \n", self.inner);
+            info!("CursorDriver = \n {:?} \n", self);
             // Check if we got `CursorAction::Stop` at the last iteration.
             if self.stopped {
                 return Ok(None);

@@ -22,6 +22,7 @@ use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, NftComm
                               PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq, SpamContractReq,
                               SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
+use common::log::info;
 use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
 use ethereum_types::{Address, H256};
@@ -36,7 +37,6 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use web3::types::TransactionId;
-use common::log::info;
 
 #[cfg(not(target_arch = "wasm32"))]
 use mm2_net::native_http::send_request_to_uri;
