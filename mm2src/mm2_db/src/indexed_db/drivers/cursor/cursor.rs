@@ -280,9 +280,8 @@ impl CursorDriver {
 
             let item: InternalItem =
                 deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
-            let action = self.inner.on_iteration(key)?;
+            let (item_action, cursor_action) = self.inner.on_iteration(key)?;
 
-            let (item_action, cursor_action) = action;
             match cursor_action {
                 CursorAction::Continue => {
                     if !first_result_only {
