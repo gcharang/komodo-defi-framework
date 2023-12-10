@@ -779,27 +779,25 @@ async fn get_last_block_from_table(
     table: DbTable<'_, impl TableSignature + BlockNumberTable>,
     cursor: &str,
 ) -> MmResult<Option<u64>, WasmNftCacheError> {
-    let maybe_item = table
+    let items = table
         .cursor_builder()
         .only("chain", chain.to_string())
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
         // Sets lower and upper bounds for block_number field
         .bound("block_number", BeBigUint::from(0u64), BeBigUint::from(u64::MAX))
-        // Cursor returns values from the lowest to highest key indexes.
-        // But we need to get the most highest block_number, so reverse the cursor direction.
-        .reverse()
         // Opens a cursor by the specified index.
         // In get_last_block_from_table case it is CHAIN_BLOCK_NUMBER_INDEX, as we need to search block_number for specific chain.
+        // Cursor returns values from the lowest to highest key indexes.
         .open_cursor(cursor)
         .await
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
-        // Advances the iterator and returns the next value.
-        // Please note that the items are sorted by the index keys.
-        .next()
+        .collect()
         .await
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
 
-    let maybe_item = maybe_item
+    let maybe_item = items
+        .into_iter()
+        .last()
         .map(|(_item_id, item)| {
             item.get_block_number()
                 .to_u64()
