@@ -282,29 +282,35 @@ impl CursorDriver {
                 deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
             let action = self.inner.on_iteration(key)?;
 
-            // if getting the first result is what we want, we'd skip this block.
-            if !first_result_only {
-                let (_, cursor_action) = action;
-                match cursor_action {
-                    CursorAction::Continue => cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
+            let (item_action, cursor_action) = action;
+            match cursor_action {
+                CursorAction::Continue => {
+                    if !first_result_only {
+                        // if getting the first result is what we want, we'd stop iteration at this block..
+                        return Ok(Some(item.into_pair()));
+                    };
+                    cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
                         description: stringify_js_error(&e),
-                    })?,
-                    CursorAction::ContinueWithValue(next_value) => {
-                        cursor
-                            .continue_with_key(&next_value)
-                            .map_to_mm(|e| CursorError::AdvanceError {
-                                description: stringify_js_error(&e),
-                            })?
-                    },
-                    // Don't advance the cursor.
-                    // Here we set the `stopped` flag so we return `Ok(None)` at the next iteration immediately.
-                    // This is required because `item_action` can be `CollectItemAction::Include`,
-                    // and at this iteration we will return `Ok(Some)`.
-                    CursorAction::Stop => self.stopped = true,
-                }
+                    })?
+                },
+                CursorAction::ContinueWithValue(next_value) => {
+                    if !first_result_only {
+                        // if getting the first result is what we want, we'd stop iteration at this block.
+                        return Ok(Some(item.into_pair()));
+                    };
+                    cursor
+                        .continue_with_key(&next_value)
+                        .map_to_mm(|e| CursorError::AdvanceError {
+                            description: stringify_js_error(&e),
+                        })?
+                },
+                // Don't advance the cursor.
+                // Here we set the `stopped` flag so we return `Ok(None)` at the next iteration immediately.
+                // This is required because `item_action` can be `CollectItemAction::Include`,
+                // and at this iteration we will return `Ok(Some)`.
+                CursorAction::Stop => self.stopped = true,
             };
 
-            let (item_action, _) = action;
             match item_action {
                 CursorItemAction::Include => return Ok(Some(item.into_pair())),
                 // Try to fetch the next item.
