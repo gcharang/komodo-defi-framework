@@ -310,7 +310,7 @@ impl PlatformCoinWithTokensActivationOps for SolanaCoin {
     ) -> Result<(), MmError<Self::ActivationError>> {
         Ok(())
     }
-    
+
     fn rpc_task_manager(
         _activation_ctx: &CoinsActivationContext,
     ) -> &InitPlatformCoinWithTokensTaskManagerShared<SolanaCoin> {

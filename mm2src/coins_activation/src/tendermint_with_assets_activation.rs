@@ -311,7 +311,7 @@ impl PlatformCoinWithTokensActivationOps for TendermintCoin {
         }
         Ok(())
     }
-    
+
     fn rpc_task_manager(
         _activation_ctx: &CoinsActivationContext,
     ) -> &InitPlatformCoinWithTokensTaskManagerShared<TendermintCoin> {

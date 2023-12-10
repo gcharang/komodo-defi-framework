@@ -209,7 +209,7 @@ pub trait PlatformCoinWithTokensActivationOps: Into<MmCoinEnum> + Clone + Send +
         &self,
         config: &EventStreamConfiguration,
     ) -> Result<(), MmError<Self::ActivationError>>;
-    
+
     fn rpc_task_manager(activation_ctx: &CoinsActivationContext) -> &InitPlatformCoinWithTokensTaskManagerShared<Self>
     where
         EnablePlatformCoinWithTokensError: From<Self::ActivationError>;

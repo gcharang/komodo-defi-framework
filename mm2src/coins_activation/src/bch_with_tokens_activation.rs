@@ -351,7 +351,7 @@ impl PlatformCoinWithTokensActivationOps for BchCoin {
     ) -> Result<(), MmError<Self::ActivationError>> {
         Ok(())
     }
-    
+
     fn rpc_task_manager(
         _activation_ctx: &CoinsActivationContext,
     ) -> &InitPlatformCoinWithTokensTaskManagerShared<BchCoin> {
