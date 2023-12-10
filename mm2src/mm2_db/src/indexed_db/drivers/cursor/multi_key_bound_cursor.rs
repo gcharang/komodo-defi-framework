@@ -10,6 +10,7 @@ use web_sys::IdbKeyRange;
 /// The representation of a range that includes records
 /// with the multiple `only` and `bound` restrictions.
 /// https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange/bound
+#[derive(Debug)]
 pub struct IdbMultiKeyBoundCursor {
     only_values: Vec<(String, Json)>,
     bound_values: Vec<(String, CursorBoundValue, CursorBoundValue)>,

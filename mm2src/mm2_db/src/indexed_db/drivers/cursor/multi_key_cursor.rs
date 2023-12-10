@@ -9,6 +9,7 @@ use web_sys::IdbKeyRange;
 /// The representation of a range that includes records
 /// whose fields have only the specified [`IdbSingleCursor::only_values`] values.
 /// https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange/only
+#[derive(Debug)]
 pub struct IdbMultiKeyCursor {
     only_values: Vec<(String, Json)>,
 }

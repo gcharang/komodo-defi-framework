@@ -795,7 +795,7 @@ async fn get_last_block_from_table(
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?
         // Advances the iterator and returns the next value.
         // Please note that the items are sorted by the index keys.
-        .next()
+        .first()
         .await
         .map_err(|e| WasmNftCacheError::GetLastNftBlockError(e.to_string()))?;
 

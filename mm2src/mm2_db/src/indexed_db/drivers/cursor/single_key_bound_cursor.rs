@@ -8,6 +8,7 @@ use web_sys::IdbKeyRange;
 /// whose value of the [`IdbSingleBoundCursor::field_name`] field is lower than [`IdbSingleBoundCursor::lower_bound_value`]
 /// and greater than [`IdbSingleBoundCursor::upper_bound_value`].
 /// https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange/bound
+#[derive(Debug)]
 pub struct IdbSingleKeyBoundCursor {
     #[allow(dead_code)]
     field_name: String,

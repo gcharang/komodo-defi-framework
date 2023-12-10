@@ -8,6 +8,7 @@ use web_sys::IdbKeyRange;
 /// The representation of a range that includes records
 /// whose value of the [`IdbSingleKeyCursor::field_name`] field equals to the [`IdbSingleKeyCursor::field_value`] value.
 /// https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange/only
+#[derive(Debug)]
 pub struct IdbSingleKeyCursor {
     #[allow(dead_code)]
     field_name: String,

@@ -1,6 +1,7 @@
 use super::construct_event_closure;
 use crate::indexed_db::db_driver::{InternalItem, ItemId};
 use crate::indexed_db::BeBigUint;
+use common::log::info;
 use common::wasm::{deserialize_from_js, serialize_to_js, stringify_js_error};
 use derive_more::Display;
 use enum_from::EnumFromTrait;
@@ -188,6 +189,7 @@ pub trait CursorDriverImpl: Sized {
     fn on_iteration(&mut self, key: JsValue) -> CursorResult<(CursorItemAction, CursorAction)>;
 }
 
+#[derive(Debug)]
 pub(crate) struct CursorDriver {
     /// An actual cursor implementation.
     inner: IdbCursorEnum,
@@ -243,6 +245,7 @@ impl CursorDriver {
 
     pub(crate) async fn next(&mut self, first_row_only: bool) -> CursorResult<Option<(ItemId, Json)>> {
         loop {
+            info!("CursorDriver = \n {:?} \n", self.inner);
             // Check if we got `CursorAction::Stop` at the last iteration.
             if self.stopped {
                 return Ok(None);
@@ -280,7 +283,11 @@ impl CursorDriver {
             let item: InternalItem =
                 deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
 
+            info!("IdbCursorEnum = \n {:?} \n", self.inner);
+
             let action = self.inner.on_iteration(key)?;
+            info!("CursorItemAction = \n {:?} \n", action.0);
+            info!("CursorAction = \n {:?} \n", action.1);
 
             if !first_row_only {
                 let (_, cursor_action) = action;
@@ -313,6 +320,7 @@ impl CursorDriver {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum IdbCursorEnum {
     Empty(IdbEmptyCursor),
     SingleKey(IdbSingleKeyCursor),

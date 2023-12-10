@@ -36,6 +36,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use web3::types::TransactionId;
+use common::log::info;
 
 #[cfg(not(target_arch = "wasm32"))]
 use mm2_net::native_http::send_request_to_uri;
@@ -85,6 +86,8 @@ pub async fn get_nft_list(ctx: MmArc, req: NftListReq) -> MmResult<NftList, GetN
         if !NftListStorageOps::is_initialized(&storage, chain).await? {
             NftListStorageOps::init(&storage, chain).await?;
         }
+        let last_block = NftListStorageOps::get_last_block_number(&storage, chain).await?;
+        info!("last_block = {:?} \n", last_block);
     }
     let mut nft_list = storage
         .get_nft_list(req.chains, req.max, req.limit, req.page_number, req.filters)

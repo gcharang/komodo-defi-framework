@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::IdbKeyRange;
 
 /// The representation of a range that includes all records.
+#[derive(Debug)]
 pub struct IdbEmptyCursor;
 
 impl CursorDriverImpl for IdbEmptyCursor {
