@@ -139,8 +139,36 @@ impl<'transaction, Table: TableSignature> CursorIter<'transaction, Table> {
     /// Please note that the items are sorted by the index keys.
     pub async fn next(&mut self) -> CursorResult<Option<(ItemId, Table)>> {
         let (result_tx, result_rx) = oneshot::channel();
+        self.next_impl(
+            DbCursorEvent::NextItem {
+                result_tx,
+                first_result_only: false,
+            },
+            result_rx,
+        )
+        .await
+    }
+
+    /// Use only when you care about just the first result.
+    pub async fn first(&mut self) -> CursorResult<Option<(ItemId, Table)>> {
+        let (result_tx, result_rx) = oneshot::channel();
+        self.next_impl(
+            DbCursorEvent::NextItem {
+                result_tx,
+                first_result_only: true,
+            },
+            result_rx,
+        )
+        .await
+    }
+
+    async fn next_impl(
+        &mut self,
+        event: DbCursorEvent,
+        result_rx: oneshot::Receiver<CursorResult<Option<(ItemId, serde_json::Value)>>>,
+    ) -> CursorResult<Option<(ItemId, Table)>> {
         self.event_tx
-            .send(DbCursorEvent::NextItem { result_tx })
+            .send(event)
             .await
             .map_to_mm(|e| CursorError::UnexpectedState(format!("Error sending cursor event: {e}")))?;
         let maybe_item = result_rx
@@ -166,14 +194,18 @@ impl<'transaction, Table: TableSignature> CursorIter<'transaction, Table> {
 pub enum DbCursorEvent {
     NextItem {
         result_tx: oneshot::Sender<CursorResult<Option<(ItemId, Json)>>>,
+        first_result_only: bool,
     },
 }
 
 pub(crate) async fn cursor_event_loop(mut rx: DbCursorEventRx, mut cursor: CursorDriver) {
     while let Some(event) = rx.next().await {
         match event {
-            DbCursorEvent::NextItem { result_tx } => {
-                result_tx.send(cursor.next().await).ok();
+            DbCursorEvent::NextItem {
+                result_tx,
+                first_result_only,
+            } => {
+                result_tx.send(cursor.next(first_result_only).await).ok();
             },
         }
     }

@@ -241,7 +241,7 @@ impl CursorDriver {
         })
     }
 
-    pub(crate) async fn next(&mut self) -> CursorResult<Option<(ItemId, Json)>> {
+    pub(crate) async fn next(&mut self, first_result_only: bool) -> CursorResult<Option<(ItemId, Json)>> {
         loop {
             // Check if we got `CursorAction::Stop` at the last iteration.
             if self.stopped {
@@ -280,14 +280,23 @@ impl CursorDriver {
 
             let item: InternalItem =
                 deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
-
             let (item_action, cursor_action) = self.inner.on_iteration(key)?;
 
             match cursor_action {
-                CursorAction::Continue => cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
-                    description: stringify_js_error(&e),
-                })?,
+                CursorAction::Continue => {
+                    if !first_result_only {
+                        // if getting the first result is what we want, we'd stop iteration at this block..
+                        return Ok(Some(item.into_pair()));
+                    };
+                    cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
+                        description: stringify_js_error(&e),
+                    })?
+                },
                 CursorAction::ContinueWithValue(next_value) => {
+                    if !first_result_only {
+                        // if getting the first result is what we want, we'd stop iteration at this block.
+                        return Ok(Some(item.into_pair()));
+                    };
                     cursor
                         .continue_with_key(&next_value)
                         .map_to_mm(|e| CursorError::AdvanceError {
@@ -299,7 +308,7 @@ impl CursorDriver {
                 // This is required because `item_action` can be `CollectItemAction::Include`,
                 // and at this iteration we will return `Ok(Some)`.
                 CursorAction::Stop => self.stopped = true,
-            }
+            };
 
             match item_action {
                 CursorItemAction::Include => return Ok(Some(item.into_pair())),

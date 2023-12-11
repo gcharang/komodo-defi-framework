@@ -190,7 +190,7 @@ impl BlockHeaderStorageOps for IDBBlockHeadersStorage {
             .open_cursor(BlockHeaderStorageTable::TICKER_HEIGHT_INDEX)
             .await
             .map_err(|err| BlockHeaderStorageError::get_err(&ticker, err.to_string()))?
-            .next()
+            .first()
             .await
             .map_err(|err| BlockHeaderStorageError::get_err(&ticker, err.to_string()))?;
 
