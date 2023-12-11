@@ -406,6 +406,63 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    async fn test_get_first_last_cursor_result() {
+        const DB_NAME: &str = "TEST_GET_FIRST_LAST_CURSOR_RESULT";
+        const DB_VERSION: u32 = 1;
+
+        register_wasm_log();
+
+        let items = vec![
+            swap_item!("uuid1", "RICK", "MORTY", 10, 1, 700), // +
+            swap_item!("uuid2", "MORTY", "KMD", 95000, 1, 721),
+            swap_item!("uuid3", "RICK", "XYZ", 7, 6, 721),   // +
+            swap_item!("uuid4", "RICK", "MORTY", 8, 6, 721), // +
+            swap_item!("uuid5", "KMD", "MORTY", 12, 3, 721),
+            swap_item!("uuid6", "QRC20", "RICK", 2, 2, 721),
+        ];
+
+        let db = IndexedDbBuilder::new(DbIdentifier::for_test(DB_NAME))
+            .with_version(DB_VERSION)
+            .with_table::<SwapTable>()
+            .build()
+            .await
+            .expect("!IndexedDb::init");
+        let transaction = db.transaction().await.expect("!IndexedDb::transaction");
+        let table = transaction
+            .table::<SwapTable>()
+            .await
+            .expect("!DbTransaction::open_table");
+        fill_table(&table, items).await;
+
+        // Test get first swap_item
+        let actual_item = table
+            .cursor_builder()
+            .only("base_coin", "RICK")
+            .expect("!CursorBuilder::only")
+            .open_cursor("base_coin")
+            .await
+            .expect("!CursorBuilder::open_cursor")
+            .first()
+            .await
+            .expect("!CursorIter::collect");
+        assert_eq!(actual_item.unwrap().1, swap_item!("uuid1", "RICK", "MORTY", 10, 1, 700));
+
+        // Test get last swap_item
+        let actual_item = table
+            .cursor_builder()
+            .reverse()
+            .only("base_coin", "RICK")
+            .expect("!CursorBuilder::only")
+            .open_cursor("base_coin")
+            .await
+            .expect("!CursorBuilder::open_cursor")
+            .first()
+            .await
+            .expect("!CursorIter::collect");
+        assert_eq!(actual_item.unwrap().1, swap_item!("uuid4", "RICK", "MORTY", 8, 6, 721));
+    }
+
+    #[wasm_bindgen_test]
     async fn test_collect_single_key_cursor() {
         const DB_NAME: &str = "TEST_COLLECT_SINGLE_KEY_CURSOR";
         const DB_VERSION: u32 = 1;
