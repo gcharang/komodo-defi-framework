@@ -241,7 +241,7 @@ impl CursorDriver {
         })
     }
 
-    pub(crate) async fn next(&mut self, first_result_only: bool) -> CursorResult<Option<(ItemId, Json)>> {
+    pub(crate) async fn next(&mut self) -> CursorResult<Option<(ItemId, Json)>> {
         loop {
             // Check if we got `CursorAction::Stop` at the last iteration.
             if self.stopped {
@@ -283,20 +283,10 @@ impl CursorDriver {
             let (item_action, cursor_action) = self.inner.on_iteration(key)?;
 
             match cursor_action {
-                CursorAction::Continue => {
-                    if !first_result_only {
-                        // if getting the first result is what we want, we'd stop iteration at this block..
-                        return Ok(Some(item.into_pair()));
-                    };
-                    cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
-                        description: stringify_js_error(&e),
-                    })?
-                },
+                CursorAction::Continue => cursor.continue_().map_to_mm(|e| CursorError::AdvanceError {
+                    description: stringify_js_error(&e),
+                })?,
                 CursorAction::ContinueWithValue(next_value) => {
-                    if !first_result_only {
-                        // if getting the first result is what we want, we'd stop iteration at this block.
-                        return Ok(Some(item.into_pair()));
-                    };
                     cursor
                         .continue_with_key(&next_value)
                         .map_to_mm(|e| CursorError::AdvanceError {
@@ -316,6 +306,35 @@ impl CursorDriver {
                 CursorItemAction::Skip => (),
             }
         }
+    }
+
+    // if getting the first result is what we want
+    pub(crate) async fn first(&mut self) -> CursorResult<Option<(ItemId, Json)>> {
+        let event = match self.cursor_item_rx.next().await {
+            Some(event) => event,
+            None => return Ok(None),
+        };
+
+        let _cursor_event = event.map_to_mm(|e| CursorError::ErrorOpeningCursor {
+            description: stringify_js_error(&e),
+        })?;
+
+        let cursor = match cursor_from_request(&self.cursor_request)? {
+            Some(cursor) => cursor,
+            // No more items.
+            None => return Ok(None),
+        };
+
+        let (_, js_value) = match (cursor.key(), cursor.value()) {
+            (Ok(key), Ok(js_value)) => (key, js_value),
+            // No more items.
+            _ => return Ok(None),
+        };
+
+        let item: InternalItem =
+            deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
+
+        Ok(Some(item.into_pair()))
     }
 }
 

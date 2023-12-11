@@ -139,27 +139,13 @@ impl<'transaction, Table: TableSignature> CursorIter<'transaction, Table> {
     /// Please note that the items are sorted by the index keys.
     pub async fn next(&mut self) -> CursorResult<Option<(ItemId, Table)>> {
         let (result_tx, result_rx) = oneshot::channel();
-        self.next_impl(
-            DbCursorEvent::NextItem {
-                result_tx,
-                first_result_only: false,
-            },
-            result_rx,
-        )
-        .await
+        self.next_impl(DbCursorEvent::NextItem { result_tx }, result_rx).await
     }
 
     /// Use only when you care about just the first result.
     pub async fn first(&mut self) -> CursorResult<Option<(ItemId, Table)>> {
         let (result_tx, result_rx) = oneshot::channel();
-        self.next_impl(
-            DbCursorEvent::NextItem {
-                result_tx,
-                first_result_only: true,
-            },
-            result_rx,
-        )
-        .await
+        self.next_impl(DbCursorEvent::FirstItem { result_tx }, result_rx).await
     }
 
     async fn next_impl(
@@ -194,18 +180,20 @@ impl<'transaction, Table: TableSignature> CursorIter<'transaction, Table> {
 pub enum DbCursorEvent {
     NextItem {
         result_tx: oneshot::Sender<CursorResult<Option<(ItemId, Json)>>>,
-        first_result_only: bool,
+    },
+    FirstItem {
+        result_tx: oneshot::Sender<CursorResult<Option<(ItemId, Json)>>>,
     },
 }
 
 pub(crate) async fn cursor_event_loop(mut rx: DbCursorEventRx, mut cursor: CursorDriver) {
     while let Some(event) = rx.next().await {
         match event {
-            DbCursorEvent::NextItem {
-                result_tx,
-                first_result_only,
-            } => {
-                result_tx.send(cursor.next(first_result_only).await).ok();
+            DbCursorEvent::NextItem { result_tx } => {
+                result_tx.send(cursor.next().await).ok();
+            },
+            DbCursorEvent::FirstItem { result_tx } => {
+                result_tx.send(cursor.first().await).ok();
             },
         }
     }
