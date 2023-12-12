@@ -280,6 +280,7 @@ impl CursorDriver {
 
             let item: InternalItem =
                 deserialize_from_js(js_value).map_to_mm(|e| CursorError::ErrorDeserializingItem(e.to_string()))?;
+
             let (item_action, cursor_action) = self.inner.on_iteration(key)?;
 
             match cursor_action {
@@ -298,7 +299,7 @@ impl CursorDriver {
                 // This is required because `item_action` can be `CollectItemAction::Include`,
                 // and at this iteration we will return `Ok(Some)`.
                 CursorAction::Stop => self.stopped = true,
-            };
+            }
 
             match item_action {
                 CursorItemAction::Include => return Ok(Some(item.into_pair())),
@@ -321,13 +322,13 @@ impl CursorDriver {
 
         let cursor = match cursor_from_request(&self.cursor_request)? {
             Some(cursor) => cursor,
-            // No more items.
+            // No item found..
             None => return Ok(None),
         };
 
         let (_, js_value) = match (cursor.key(), cursor.value()) {
             (Ok(key), Ok(js_value)) => (key, js_value),
-            // No more items.
+            // No item found.
             _ => return Ok(None),
         };
 
