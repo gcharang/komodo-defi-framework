@@ -3178,3 +3178,14 @@ fn test_parse_env_file() {
         )
     );
 }
+
+pub async fn active_swaps(mm: &MarketMakerIt) -> ActiveSwapsResponse {
+    let request = json!({
+        "userpass": mm.userpass,
+        "method": "active_swaps",
+        "params": []
+    });
+    let response = mm.rpc(&request).await.unwrap();
+    assert_eq!(response.0, StatusCode::OK, "'active_swaps' failed: {}", response.1);
+    json::from_str(&response.1).unwrap()
+}
