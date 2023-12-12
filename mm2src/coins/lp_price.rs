@@ -209,16 +209,17 @@ async fn process_price_request(price_url: &str) -> Result<TickerInfosRegistry, M
 }
 
 pub async fn fetch_price_tickers(
-    price_urls: Vec<String>,
+    price_urls: &mut [String],
 ) -> Result<TickerInfosRegistry, MmError<PriceServiceRequestError>> {
-    for url in price_urls {
-        let model = match process_price_request(&url).await {
+    for (i, url) in price_urls.to_owned().iter().enumerate() {
+        let model = match process_price_request(url).await {
             Ok(model) => model,
             Err(err) => {
                 error!("Error fetching price from: {}, error: {:?}", url, err);
                 continue;
             },
         };
+        price_urls.rotate_left(i);
         debug!("price registry size: {}", model.0.len());
         info!("price successfully fetched from {url}");
         return Ok(model);

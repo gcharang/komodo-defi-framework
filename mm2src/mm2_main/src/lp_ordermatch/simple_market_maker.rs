@@ -9,6 +9,7 @@ use crate::mm2::{lp_ordermatch::{cancel_order, create_maker_order,
                                  update_maker_order, CancelOrderReq, MakerOrder, MakerOrderUpdateReq,
                                  OrdermatchContext, SetPriceReq},
                  lp_swap::{latest_swaps_for_pair, LatestSwapsErr}};
+use coins::hd_wallet::AsyncMutex;
 use coins::lp_price::{fetch_price_tickers, Provider, RateInfos, PRICE_ENDPOINTS};
 use coins::{lp_coinfind, GetNonZeroBalance};
 use common::{executor::{SpawnFuture, Timer},
@@ -614,15 +615,14 @@ async fn execute_create_single_order(
 async fn process_bot_logic(ctx: &MmArc) {
     let simple_market_maker_bot_ctx = TradingBotContext::from_ctx(ctx).unwrap();
     let state = simple_market_maker_bot_ctx.trading_bot_states.lock().await;
-    let (cfg, price_urls) = if let TradingBotState::Running(running_state) = &*state {
-        let res = (running_state.trading_bot_cfg.clone(), running_state.price_urls.clone());
-        drop(state);
-        res
-    } else {
-        drop(state);
-        return;
+    let (cfg, mut price_urls) = match &*state {
+        TradingBotState::Running(running_state) => (
+            running_state.trading_bot_cfg.clone(),
+            running_state.price_urls.lock().await,
+        ),
+        TradingBotState::Stopping(_) | TradingBotState::Stopped(_) => return,
     };
-    let rates_registry = match fetch_price_tickers(price_urls).await {
+    let rates_registry = match fetch_price_tickers(&mut price_urls).await {
         Ok(model) => model,
         Err(err) => {
             let nb_orders = cancel_pending_orders(ctx, &cfg).await;
@@ -630,6 +630,8 @@ async fn process_bot_logic(ctx: &MmArc) {
             return;
         },
     };
+    drop(price_urls);
+    drop(state);
 
     let mut memoization_pair_registry: HashSet<String> = HashSet::new();
     let ordermatch_ctx = OrdermatchContext::from_ctx(ctx).unwrap();
@@ -734,9 +736,10 @@ pub async fn start_simple_market_maker_bot(ctx: MmArc, req: StartSimpleMakerBotR
             *state = RunningState {
                 trading_bot_cfg: req.cfg,
                 bot_refresh_rate: refresh_rate,
-                price_urls: req
-                    .price_urls
-                    .unwrap_or_else(|| PRICE_ENDPOINTS.iter().map(|url| url.to_string()).collect()),
+                price_urls: AsyncMutex::new(
+                    req.price_urls
+                        .unwrap_or_else(|| PRICE_ENDPOINTS.iter().map(|url| url.to_string()).collect()),
+                ),
             }
             .into();
             drop(state);

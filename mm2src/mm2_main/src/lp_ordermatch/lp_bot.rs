@@ -93,7 +93,7 @@ impl From<TradingBotStarted> for TradingBotEvent {
 pub struct RunningState {
     trading_bot_cfg: SimpleMakerBotRegistry,
     bot_refresh_rate: f64,
-    price_urls: Vec<String>,
+    price_urls: AsyncMutex<Vec<String>>,
 }
 
 pub struct StoppingState {
