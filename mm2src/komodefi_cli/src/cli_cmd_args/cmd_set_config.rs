@@ -8,14 +8,14 @@ use inquire::{Confirm, Text};
 use std::fs::File;
 use std::io::Read;
 
-const DEFAULT_RPC_URL: &str = "127.0.0.1:7789";
+const DEFAULT_RPC_URL: &str = "127.0.0.1:7783";
 
 #[derive(Args)]
 #[group(required = false, multiple = true)]
 pub(crate) struct SetConfigArgs {
     #[arg(long, short, help = "Set if you are going to set up a password")]
     pub(crate) password: Option<bool>,
-    #[arg(long, short, visible_alias = "url", help = "KomoDeFi RPC API Uri. localhost:7789")]
+    #[arg(long, short, visible_alias = "url", help = "KomoDeFi RPC API Uri. localhost:7783")]
     pub(crate) uri: Option<String>,
     #[arg(
         long,

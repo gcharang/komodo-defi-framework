@@ -31,7 +31,7 @@ pub(super) fn get_config(option: &crate::cli::GetOption) {
     if option.unhide {
         komodefi_cfg.print_config_with_password()
     } else {
-        println!("{}", komodefi_cfg)
+        info!("{}", komodefi_cfg)
     }
 }
 
@@ -221,10 +221,10 @@ impl KomodefiConfigImpl {
 
     fn print_config_with_password(&self) {
         if !self.is_set() {
-            return println!("komodefi configuration is not set");
+            return info!("komodefi configuration is not set");
         }
 
-        println!(
+        info!(
             "mm2 RPC URL: {}\nmm2 RPC password: {}",
             self.rpc_uri.as_ref().expect("Expected rpc_uri is set"),
             self.rpc_password.clone().expect("Expected rpc_password is not set")
