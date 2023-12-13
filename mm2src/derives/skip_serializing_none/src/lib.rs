@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{parse::Parser, parse_quote, punctuated::Punctuated, spanned::Spanned, Error, Field, Fields, ItemEnum,
           ItemStruct, Meta, Token, Type};
 
@@ -77,11 +77,19 @@ fn skip_serializing_none_add_attr_to_field(field: &mut Field) -> Result<(), Stri
         let has_skip_serializing_if = field_has_attribute(field, "serde", "skip_serializing_if");
 
         let mut has_always_attr = false;
-        field.attrs.retain(|attr| {
-            let has_attr = attr.path().is_ident("serialize_always");
+        for attr in field.clone().attrs {
+            let has_attr = attr
+                .parse_meta()
+                .map_err(|e| e.to_string())?
+                .path()
+                .is_ident("serialize_always");
+
             has_always_attr |= has_attr;
-            !has_attr
-        });
+
+            if !has_attr {
+                field.attrs.retain(|ele| *ele == attr);
+            }
+        }
 
         if has_always_attr && has_skip_serializing_if {
             let mut msg = r#"The attributes `serialize_always` and `serde(skip_serializing_if = "...")` cannot be used on the same field"#.to_string();
@@ -103,9 +111,15 @@ fn skip_serializing_none_add_attr_to_field(field: &mut Field) -> Result<(), Stri
         );
         field.attrs.push(attr);
     } else {
-        let has_attr = field.attrs.iter().any(|attr| attr.path().is_ident("serialize_always"));
-        if has_attr {
-            return Err("`serialize_always` may only be used on fields of type `Option`.".into());
+        for attr in field.attrs.iter() {
+            if attr
+                .parse_meta()
+                .map_err(|e| e.to_string())?
+                .path()
+                .is_ident("serialize_always")
+            {
+                return Err("`serialize_always` may only be used on fields of type `Option`.".into());
+            }
         }
     }
     Ok(())
@@ -146,29 +160,31 @@ fn is_std_option(type_: &Type) -> bool {
 
 fn field_has_attribute(field: &Field, namespace: &str, name: &str) -> bool {
     for attr in &field.attrs {
-        if attr.path().is_ident(namespace) {
-            if let Meta::List(expr) = &attr.meta {
-                let nested = match Punctuated::<Meta, Token![,]>::parse_terminated.parse2(expr.tokens.clone()) {
-                    Ok(nested) => nested,
-                    Err(_) => continue,
-                };
-                for expr in nested {
-                    match expr {
-                        Meta::NameValue(expr) => {
-                            if let Some(ident) = expr.path.get_ident() {
-                                if *ident == name {
-                                    return true;
+        if let Ok(meta) = attr.parse_meta() {
+            if meta.path().is_ident(namespace) {
+                if let Ok(Meta::List(expr)) = &attr.parse_meta() {
+                    let nested = match Punctuated::<Meta, Token![,]>::parse_terminated.parse2(expr.to_token_stream()) {
+                        Ok(nested) => nested,
+                        Err(_) => continue,
+                    };
+                    for expr in nested {
+                        match expr {
+                            Meta::NameValue(expr) => {
+                                if let Some(ident) = expr.path.get_ident() {
+                                    if *ident == name {
+                                        return true;
+                                    }
                                 }
-                            }
-                        },
-                        Meta::Path(expr) => {
-                            if let Some(ident) = expr.get_ident() {
-                                if *ident == name {
-                                    return true;
+                            },
+                            Meta::Path(expr) => {
+                                if let Some(ident) = expr.get_ident() {
+                                    if *ident == name {
+                                        return true;
+                                    }
                                 }
-                            }
-                        },
-                        _ => (),
+                            },
+                            _ => (),
+                        }
                     }
                 }
             }
