@@ -528,6 +528,12 @@ fn get_transfers_with_empty_meta_builder<'a>(conn: &'a Connection, chain: &'a Ch
     Ok(sql_builder)
 }
 
+fn is_table_empty(conn: &Connection, table_name: &str) -> Result<bool, SqlError> {
+    let mut stmt = conn.prepare(&format!("SELECT COUNT(*) FROM {}", table_name))?;
+    let count: i64 = stmt.query_row([], |row| row.get(0))?;
+    Ok(count == 0)
+}
+
 #[async_trait]
 impl NftListStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
     type Error = AsyncConnError;
@@ -901,7 +907,7 @@ impl NftListStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
 
     async fn clear_nft_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
         let table_nft_name = chain.nft_list_table_name()?;
-        let sql_nft = format!("DROP TABLE {};", table_nft_name);
+        let sql_nft = format!("DROP TABLE IF EXISTS {};", table_nft_name);
         let table_scanned_blocks_name = scanned_nft_blocks_table_name()?;
         let sql_scanned_block = format!("DELETE from {} where chain=?1", table_scanned_blocks_name);
         let scanned_block_param = [chain.to_ticker()];
@@ -911,7 +917,7 @@ impl NftListStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
             sql_transaction.execute(&sql_scanned_block, scanned_block_param)?;
             sql_transaction.commit()?;
             if is_table_empty(conn, table_scanned_blocks_name.as_str())? {
-                conn.execute(&format!("DROP TABLE {};", table_scanned_blocks_name), [])
+                conn.execute(&format!("DROP TABLE IF EXISTS {};", table_scanned_blocks_name), [])
                     .map(|_| ())?;
             }
             Ok(())
@@ -919,12 +925,22 @@ impl NftListStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
         .await
         .map_to_mm(AsyncConnError::from)
     }
-}
 
-fn is_table_empty(conn: &Connection, table_name: &str) -> Result<bool, SqlError> {
-    let mut stmt = conn.prepare(&format!("SELECT COUNT(*) FROM {}", table_name))?;
-    let count: i64 = stmt.query_row([], |row| row.get(0))?;
-    Ok(count == 0)
+    async fn clear_all_nft_data(&self) -> MmResult<(), Self::Error> {
+        self.call(move |conn| {
+            let sql_transaction = conn.transaction()?;
+            for chain in Chain::variant_list().into_iter() {
+                let table_name = chain.nft_list_table_name()?;
+                sql_transaction.execute(&format!("DROP TABLE IF EXISTS {};", table_name), [])?;
+            }
+            let table_scanned_blocks_name = scanned_nft_blocks_table_name()?;
+            sql_transaction.execute(&format!("DROP TABLE IF EXISTS {};", table_scanned_blocks_name), [])?;
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
+        .map_to_mm(AsyncConnError::from)
+    }
 }
 
 #[async_trait]
@@ -1247,7 +1263,21 @@ impl NftTransferHistoryStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
         let table_name = chain.transfer_history_table_name()?;
         self.call(move |conn| {
             let sql_transaction = conn.transaction()?;
-            sql_transaction.execute(&format!("DROP TABLE {};", table_name), [])?;
+            sql_transaction.execute(&format!("DROP TABLE IF EXISTS {};", table_name), [])?;
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
+        .map_to_mm(AsyncConnError::from)
+    }
+
+    async fn clear_all_history_data(&self) -> MmResult<(), Self::Error> {
+        self.call(move |conn| {
+            let sql_transaction = conn.transaction()?;
+            for chain in Chain::variant_list().into_iter() {
+                let table_name = chain.transfer_history_table_name()?;
+                sql_transaction.execute(&format!("DROP TABLE IF EXISTS {};", table_name), [])?;
+            }
             sql_transaction.commit()?;
             Ok(())
         })

@@ -109,6 +109,9 @@ pub trait NftListStorageOps {
     ) -> MmResult<(), Self::Error>;
 
     async fn clear_nft_data(&self, chain: &Chain) -> MmResult<(), Self::Error>;
+
+    /// Clears all nft list tables related to each chain.
+    async fn clear_all_nft_data(&self) -> MmResult<(), Self::Error>;
 }
 
 /// Provides asynchronous operations related to the history of NFT transfers.
@@ -200,6 +203,9 @@ pub trait NftTransferHistoryStorageOps {
     ) -> MmResult<(), Self::Error>;
 
     async fn clear_history_data(&self, chain: &Chain) -> MmResult<(), Self::Error>;
+
+    /// Clears all nft history tables related to each chain.
+    async fn clear_all_history_data(&self) -> MmResult<(), Self::Error>;
 }
 
 /// `get_offset_limit` function calculates offset and limit for final result if we use pagination.

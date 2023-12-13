@@ -1,4 +1,5 @@
 use common::ten;
+use enum_from::EnumVariantList;
 use ethereum_types::Address;
 use mm2_core::mm_ctx::{from_ctx, MmArc};
 use mm2_err_handle::prelude::*;
@@ -103,7 +104,7 @@ pub struct RefreshMetadataReq {
 
 /// Represents blockchains which are supported by NFT feature.
 /// Currently there are only EVM based chains.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, EnumVariantList, PartialEq, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Chain {
     Avalanche,

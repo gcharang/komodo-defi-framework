@@ -433,6 +433,8 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
             .await?;
         Ok(())
     }
+
+    async fn clear_all_nft_data(&self) -> MmResult<(), Self::Error> { todo!() }
 }
 
 #[async_trait]
@@ -741,6 +743,8 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
         table.delete_items_by_index("chain", chain.to_string()).await?;
         Ok(())
     }
+
+    async fn clear_all_history_data(&self) -> MmResult<(), Self::Error> { todo!() }
 }
 
 async fn update_transfer_phishing_for_index(

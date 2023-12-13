@@ -22,7 +22,7 @@ use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, ClearNf
                               NftTransferCommon, PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq,
                               SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
-use common::parse_rfc3339_to_timestamp;
+use common::{log::error, parse_rfc3339_to_timestamp};
 use crypto::StandardHDCoinAddress;
 use ethereum_types::{Address, H256};
 use futures::compat::Future01CompatExt;
@@ -1373,27 +1373,37 @@ pub(crate) fn get_domain_from_url(url: Option<&str>) -> Option<String> {
         .and_then(|url| url.domain().map(String::from))
 }
 
-/// todo add doc com
+/// Clears NFT data from the database for specified chains.
 pub async fn clear_nft_db(ctx: MmArc, req: ClearNftDbReq) -> MmResult<(), ClearNftDbError> {
-    let chains = if req.clear_all {
-        vec![Chain::Avalanche, Chain::Bsc, Chain::Eth, Chain::Fantom, Chain::Polygon]
-    } else {
-        req.chains
-    };
-    clear_nft_data_for_chains(&ctx, chains).await
-}
-
-async fn clear_nft_data_for_chains(ctx: &MmArc, chains: Vec<Chain>) -> MmResult<(), ClearNftDbError> {
-    let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(ClearNftDbError::Internal)?;
+    let nft_ctx = NftCtx::from_ctx(&ctx).map_to_mm(ClearNftDbError::Internal)?;
 
     let storage = nft_ctx.lock_db().await?;
-    for chain in &chains {
-        let is_nft_list_init = NftListStorageOps::is_initialized(&storage, chain).await?;
-        let is_history_init = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
-        if !is_nft_list_init && !is_history_init {
-            continue;
+    if req.clear_all {
+        storage.clear_all_nft_data().await?;
+        storage.clear_all_history_data().await?;
+    } else {
+        for chain in req.chains.iter() {
+            if let Err(e) = clear_data_for_chain(&storage, chain).await {
+                error!("Failed to clear data for chain {}: {}", chain, e);
+            }
         }
+    }
+
+    Ok(())
+}
+
+async fn clear_data_for_chain<T>(storage: &T, chain: &Chain) -> MmResult<(), ClearNftDbError>
+where
+    T: NftListStorageOps + NftTransferHistoryStorageOps,
+{
+    let (is_nft_list_init, is_history_init) = (
+        NftListStorageOps::is_initialized(storage, chain).await?,
+        NftTransferHistoryStorageOps::is_initialized(storage, chain).await?,
+    );
+    if is_nft_list_init {
         storage.clear_nft_data(chain).await?;
+    }
+    if is_history_init {
         storage.clear_history_data(chain).await?;
     }
     Ok(())
