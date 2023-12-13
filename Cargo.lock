@@ -3457,7 +3457,6 @@ dependencies = [
  "libp2p-tcp",
  "libp2p-wasm-ext",
  "libp2p-websocket",
- "libp2p-yamux",
  "multiaddr",
  "pin-project",
 ]
@@ -3653,6 +3652,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "libp2p-mplex"
+version = "0.40.0"
+source = "git+https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.1#e7c2fd1ef9d20cc4d29768b0a422a0f0ac9df82d"
+dependencies = [
+ "asynchronous-codec",
+ "bytes 1.4.0",
+ "futures 0.3.28",
+ "libp2p-core",
+ "libp2p-identity",
+ "log",
+ "nohash-hasher",
+ "parking_lot 0.12.0",
+ "rand 0.8.4",
+ "smallvec 1.6.1",
+ "unsigned-varint",
+]
+
+[[package]]
 name = "libp2p-noise"
 version = "0.43.0"
 source = "git+https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.1#e7c2fd1ef9d20cc4d29768b0a422a0f0ac9df82d"
@@ -3790,18 +3807,6 @@ dependencies = [
  "soketto",
  "url",
  "webpki-roots 0.23.1",
-]
-
-[[package]]
-name = "libp2p-yamux"
-version = "0.44.0"
-source = "git+https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.1#e7c2fd1ef9d20cc4d29768b0a422a0f0ac9df82d"
-dependencies = [
- "futures 0.3.28",
- "libp2p-core",
- "log",
- "thiserror",
- "yamux",
 ]
 
 [[package]]
@@ -4600,6 +4605,7 @@ dependencies = [
  "instant",
  "lazy_static",
  "libp2p",
+ "libp2p-mplex",
  "log",
  "rand 0.7.3",
  "regex",
@@ -9407,20 +9413,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
-]
-
-[[package]]
-name = "yamux"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c0608f53c1dc0bad505d03a34bbd49fbf2ad7b51eb036123e896365532745a1"
-dependencies = [
- "futures 0.3.28",
- "log",
- "nohash-hasher",
- "parking_lot 0.12.0",
- "rand 0.8.4",
- "static_assertions",
 ]
 
 [[package]]

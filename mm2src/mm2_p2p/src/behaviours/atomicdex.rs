@@ -942,7 +942,7 @@ where
     transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(noise_config)
-        .multiplex(libp2p::yamux::Config::default())
+        .multiplex(libp2p_mplex::MplexConfig::default())
         .timeout(std::time::Duration::from_secs(20))
         .map(|(peer, muxer), _| (peer, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
         .boxed()
