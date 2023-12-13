@@ -416,7 +416,7 @@ impl TryFrom<PrivKeyBuildPolicy> for EthPrivKeyBuildPolicy {
         match policy {
             PrivKeyBuildPolicy::IguanaPrivKey(iguana) => Ok(EthPrivKeyBuildPolicy::IguanaPrivKey(iguana)),
             PrivKeyBuildPolicy::GlobalHDAccount(global_hd) => Ok(EthPrivKeyBuildPolicy::GlobalHDAccount(global_hd)),
-            PrivKeyBuildPolicy::Trezor => Ok(EthPrivKeyBuildPolicy::Trezor), // Err(PrivKeyPolicyNotAllowed::HardwareWalletNotSupported),
+            PrivKeyBuildPolicy::Trezor => Ok(EthPrivKeyBuildPolicy::Trezor),
         }
     }
 }
@@ -744,7 +744,6 @@ impl InitWithdrawCoin for EthCoin {
         req: WithdrawRequest,
         task_handle: &WithdrawTaskHandle,
     ) -> Result<TransactionDetails, MmError<WithdrawError>> {
-        //init_withdraw(ctx, self.clone(), req, task_handle).await
         InitEthWithdraw::new(ctx, self.clone(), req, task_handle)?.build().await
     }
 }
@@ -5695,10 +5694,6 @@ pub async fn get_eth_address(
     };
     // Convert `PrivKeyBuildPolicy` to `EthPrivKeyBuildPolicy` if it's possible.
     let priv_key_policy = EthPrivKeyBuildPolicy::try_from(priv_key_policy)?;
-    println!(
-        "eth priv_key_policy is trezor={:?}",
-        matches!(priv_key_policy, EthPrivKeyBuildPolicy::Trezor)
-    );
 
     // Todo: This creates an HD wallet different from the ETH one for NFT, we should combine them in the future when implementing NFT HD wallet
     let (_, derivation_method) =
@@ -5706,7 +5701,6 @@ pub async fn get_eth_address(
     let my_address = match derivation_method {
         EthDerivationMethod::SingleAddress(my_address) => my_address,
         EthDerivationMethod::HDWallet(_) => {
-            //hd_wallet.derive_address(path_to_address.account_id, path_to_address.chain, path_to_address.account_id).await?.address()
             return Err(MmError::new(GetEthAddressError::UnexpectedDerivationMethod(
                 UnexpectedDerivationMethod::UnsupportedError("HDWallet is not supported for NFT yet!".to_owned()),
             )));

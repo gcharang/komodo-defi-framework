@@ -3476,13 +3476,6 @@ where
     ///
     /// Panic if the address mode is [`DerivationMethod::HDWallet`].
     pub async fn unwrap_single_addr(&self) -> Address { self.single_addr_or_err().await.unwrap() }
-
-    /*pub fn derivation_path(&self) -> Option<&StandardHDPathToCoin> {
-        match self {
-            DerivationMethod::SingleAddress(_) => None,
-            DerivationMethod::HDWallet(hd_wallet) => Some(hd_wallet.derivation_path()),
-        }
-    }*/
 }
 
 /// A trait representing coins with specific address derivation methods.
