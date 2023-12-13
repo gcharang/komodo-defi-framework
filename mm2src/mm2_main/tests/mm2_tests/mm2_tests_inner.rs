@@ -7800,6 +7800,7 @@ mod trezor_tests {
     use coins::eth::{eth_coin_from_conf_and_request, EthCoin, ETH_GAS};
     use coins::for_tests::test_withdraw_init_loop;
     use coins::rpc_command::account_balance::{AccountBalanceParams, AccountBalanceRpcOps};
+    use coins::rpc_command::init_create_account::for_tests::test_create_new_account_init_loop;
     use coins::{lp_coinfind, CoinProtocol, MmCoinEnum, PrivKeyBuildPolicy};
     use coins_activation::platform_for_tests::init_platform_coin_with_tokens_loop;
     use common::executor::Timer;
@@ -7810,10 +7811,11 @@ mod trezor_tests {
     use mm2_core::mm_ctx::MmArc;
     use mm2_main::mm2::init_hw::init_trezor_user_action;
     use mm2_main::mm2::init_hw::{init_trezor, init_trezor_status, InitHwRequest, InitHwResponse};
-    use mm2_test_helpers::for_tests::{eth_sepolia_trezor_firmware_compat_conf, jst_sepolia_trezor_conf,
-                                      mm_ctx_with_custom_db_with_conf, ETH_DEV_SWAP_CONTRACT, ETH_SEPOLIA_NODE};
+    use mm2_test_helpers::for_tests::{eth_sepolia_trezor_firmware_compat_conf, eth_testnet_conf_trezor,
+                                      jst_sepolia_trezor_conf, mm_ctx_with_custom_db_with_conf, ETH_DEV_NODE,
+                                      ETH_DEV_SWAP_CONTRACT, ETH_SEPOLIA_NODE};
     use rpc_task::{rpc_common::RpcTaskStatusRequest, RpcTaskStatus};
-    use serde_json::{self as json, json, Value as Json};
+    use serde_json::{self, json, Value as Json};
     use std::io::{stdin, stdout, BufRead, Write};
 
     #[derive(Debug, Deserialize)]
@@ -7943,7 +7945,7 @@ mod trezor_tests {
         let ctx = block_on(mm_ctx_with_trezor(mm_conf));
         block_on(init_platform_coin_with_tokens_loop::<EthCoin>(
             ctx.clone(),
-            json::from_value(json!({
+            serde_json::from_value(json!({
                 "ticker": ticker_coin,
                 "rpc_mode": "Http",
                 "nodes": [
@@ -8003,7 +8005,7 @@ mod trezor_tests {
         .expect("withdraw must end successfully");
         log!("tx_hex={}", serde_json::to_string(&tx_details.tx_hex).unwrap());
 
-        // if you need to send tx:
+        // if you need to send the tx:
         /* let send_tx_res = block_on(send_raw_transaction(ctx, json!({
             "coin": ticker_token,
             "tx_hex": tx_details.tx_hex,
@@ -8012,6 +8014,34 @@ mod trezor_tests {
         if send_tx_res.is_ok() {
             println!("tx_hash={}", tx_details.tx_hash);
         } */
-        // TODO: check maybe we need to disconnect trezor somehow
+    }
+
+    /// Test to create a new eth account with trezor
+    /// run cargo test with '--features run-device-tests' option
+    /// to use trezor emulator also add '--features trezor-udp' option to cargo params
+    #[test]
+    fn test_eth_create_new_account_trezor_no_rpc() {
+        let ticker_coin = "ETH";
+        let eth_conf = eth_testnet_conf_trezor();
+        let mm_conf = json!({ "coins": [eth_conf] });
+        let ctx = block_on(mm_ctx_with_trezor(mm_conf));
+        block_on(init_platform_coin_with_tokens_loop::<EthCoin>(
+            ctx.clone(),
+            serde_json::from_value(json!({
+                "ticker": ticker_coin,
+                "rpc_mode": "Http",
+                "nodes": [
+                    {"url": ETH_DEV_NODE} // btw sepolia nodes do not support trace_filter used in create_new_account
+                ],
+                "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
+                "erc20_tokens_requests": [],
+                "priv_key_policy": "Trezor"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+        let create_acc_res = block_on(test_create_new_account_init_loop(ctx, ticker_coin, Some(1)));
+        println!("create_acc_res= {:?}", create_acc_res);
     }
 }

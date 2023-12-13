@@ -741,6 +741,19 @@ pub fn eth_testnet_conf() -> Json {
     })
 }
 
+pub fn eth_testnet_conf_trezor() -> Json {
+    json!({
+        "coin": "ETH",
+        "name": "ethereum",
+        "mm2": 1,
+        "derivation_path": "m/44'/1'", // Trezor uses coin type 1 for testnet
+        "protocol": {
+            "type": "ETH"
+        },
+        "trezor_coin": "Ethereum"
+    })
+}
+
 pub fn eth_sepolia_conf() -> Json {
     json!({
         "coin": "ETH",
