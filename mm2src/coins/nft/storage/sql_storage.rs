@@ -898,6 +898,33 @@ impl NftListStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
         .await
         .map_to_mm(AsyncConnError::from)
     }
+
+    async fn clear_nft_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let table_nft_name = chain.nft_list_table_name()?;
+        let sql_nft = format!("DROP TABLE {};", table_nft_name);
+        let table_scanned_blocks_name = scanned_nft_blocks_table_name()?;
+        let sql_scanned_block = format!("DELETE from {} where chain=?1", table_scanned_blocks_name);
+        let scanned_block_param = [chain.to_ticker()];
+        self.call(move |conn| {
+            let sql_transaction = conn.transaction()?;
+            sql_transaction.execute(&sql_nft, [])?;
+            sql_transaction.execute(&sql_scanned_block, scanned_block_param)?;
+            sql_transaction.commit()?;
+            if is_table_empty(conn, table_scanned_blocks_name.as_str())? {
+                conn.execute(&format!("DROP TABLE {};", table_scanned_blocks_name), [])
+                    .map(|_| ())?;
+            }
+            Ok(())
+        })
+        .await
+        .map_to_mm(AsyncConnError::from)
+    }
+}
+
+fn is_table_empty(conn: &Connection, table_name: &str) -> Result<bool, SqlError> {
+    let mut stmt = conn.prepare(&format!("SELECT COUNT(*) FROM {}", table_name))?;
+    let count: i64 = stmt.query_row([], |row| row.get(0))?;
+    Ok(count == 0)
 }
 
 #[async_trait]
@@ -1209,6 +1236,18 @@ impl NftTransferHistoryStorageOps for AsyncMutexGuard<'_, AsyncConnection> {
             let sql_transaction = conn.transaction()?;
             let params = [Some(i32::from(possible_phishing).to_string()), Some(domain)];
             sql_transaction.execute(&sql, params)?;
+            sql_transaction.commit()?;
+            Ok(())
+        })
+        .await
+        .map_to_mm(AsyncConnError::from)
+    }
+
+    async fn clear_history_data(&self, chain: &Chain) -> MmResult<(), Self::Error> {
+        let table_name = chain.transfer_history_table_name()?;
+        self.call(move |conn| {
+            let sql_transaction = conn.transaction()?;
+            sql_transaction.execute(&format!("DROP TABLE {};", table_name), [])?;
             sql_transaction.commit()?;
             Ok(())
         })

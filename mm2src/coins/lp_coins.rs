@@ -2335,7 +2335,7 @@ pub enum WithdrawError {
     },
     #[display(fmt = "DB error {}", _0)]
     DbError(String),
-    #[display(fmt = "My address:= {}, while current Nft owner:= {}", my_address, token_owner)]
+    #[display(fmt = "My address is {}, while current Nft owner is {}", my_address, token_owner)]
     MyAddressNotNftOwner {
         my_address: String,
         token_owner: String,

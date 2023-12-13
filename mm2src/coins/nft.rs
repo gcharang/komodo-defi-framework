@@ -16,11 +16,11 @@ use nft_structs::{Chain, ContractType, ConvertChain, Nft, NftFromMoralis, NftLis
 
 use crate::eth::{eth_addr_to_hex, get_eth_address, withdraw_erc1155, withdraw_erc721, EthCoin, EthCoinType,
                  EthTxFeeDetails};
-use crate::nft::nft_errors::{MetaFromUrlError, ProtectFromSpamError, TransferConfirmationsError,
+use crate::nft::nft_errors::{ClearNftDbError, MetaFromUrlError, ProtectFromSpamError, TransferConfirmationsError,
                              UpdateSpamPhishingError};
-use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, NftCommon, NftCtx, NftTransferCommon,
-                              PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq, SpamContractReq,
-                              SpamContractRes, TransferMeta, TransferStatus, UriMeta};
+use crate::nft::nft_structs::{build_nft_with_empty_meta, BuildNftFields, ClearNftDbReq, NftCommon, NftCtx,
+                              NftTransferCommon, PhishingDomainReq, PhishingDomainRes, RefreshMetadataReq,
+                              SpamContractReq, SpamContractRes, TransferMeta, TransferStatus, UriMeta};
 use crate::nft::storage::{NftListStorageOps, NftTransferHistoryStorageOps};
 use common::parse_rfc3339_to_timestamp;
 use crypto::StandardHDCoinAddress;
@@ -1371,4 +1371,30 @@ async fn build_nft_from_moralis(
 pub(crate) fn get_domain_from_url(url: Option<&str>) -> Option<String> {
     url.and_then(|uri| Url::parse(uri).ok())
         .and_then(|url| url.domain().map(String::from))
+}
+
+/// todo add doc com
+pub async fn clear_nft_db(ctx: MmArc, req: ClearNftDbReq) -> MmResult<(), ClearNftDbError> {
+    let chains = if req.clear_all {
+        vec![Chain::Avalanche, Chain::Bsc, Chain::Eth, Chain::Fantom, Chain::Polygon]
+    } else {
+        req.chains
+    };
+    clear_nft_data_for_chains(&ctx, chains).await
+}
+
+async fn clear_nft_data_for_chains(ctx: &MmArc, chains: Vec<Chain>) -> MmResult<(), ClearNftDbError> {
+    let nft_ctx = NftCtx::from_ctx(ctx).map_to_mm(ClearNftDbError::Internal)?;
+
+    let storage = nft_ctx.lock_db().await?;
+    for chain in &chains {
+        let is_nft_list_init = NftListStorageOps::is_initialized(&storage, chain).await?;
+        let is_history_init = NftTransferHistoryStorageOps::is_initialized(&storage, chain).await?;
+        if !is_nft_list_init && !is_history_init {
+            continue;
+        }
+        storage.clear_nft_data(chain).await?;
+        storage.clear_history_data(chain).await?;
+    }
+    Ok(())
 }

@@ -732,3 +732,10 @@ where
     let s = String::deserialize(deserializer)?;
     BigUint::from_str(&s).map_err(serde::de::Error::custom)
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ClearNftDbReq {
+    pub(crate) chains: Vec<Chain>,
+    #[serde(default)]
+    pub(crate) clear_all: bool,
+}

@@ -380,3 +380,28 @@ impl From<CoinFindError> for TransferConfirmationsError {
         }
     }
 }
+
+#[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize, SerializeErrorType)]
+#[serde(tag = "error_type", content = "error_data")]
+pub enum ClearNftDbError {
+    #[display(fmt = "DB error {}", _0)]
+    DbError(String),
+    #[display(fmt = "Internal: {}", _0)]
+    Internal(String),
+}
+
+impl<T: NftStorageError> From<T> for ClearNftDbError {
+    fn from(err: T) -> Self { ClearNftDbError::DbError(format!("{:?}", err)) }
+}
+
+impl From<LockDBError> for ClearNftDbError {
+    fn from(e: LockDBError) -> Self { ClearNftDbError::DbError(e.to_string()) }
+}
+
+impl HttpStatusCode for ClearNftDbError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            ClearNftDbError::DbError(_) | ClearNftDbError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
