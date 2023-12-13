@@ -29,3 +29,12 @@ pub(crate) fn ecdsa_curve_to_string(curve: EcdsaCurve) -> String {
         EcdsaCurve::Secp256k1 => "secp256k1".to_owned(),
     }
 }
+
+/// Currently implemented trezor message types
+pub enum TrezorMessageType {
+    /// Utxo based coins
+    Bitcoin,
+    /// Eth coin and tokens
+    Ethereum,
+    // ...
+}

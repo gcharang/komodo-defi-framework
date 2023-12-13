@@ -256,17 +256,19 @@ impl PlatformCoinWithTokensActivationOps for EthCoin {
             .await
             .map_err(EthActivationV2Error::InternalError)?;
 
-        // Todo: support for Trezor should be added in a similar place in init_platform_coin_with_token method when implemented
-        // Todo: check utxo implementation for reference
-        // this is a initial code for trezor:
         let xpub_extractor = if self.is_trezor() {
             let ctx = MmArc::from_weak(&self.ctx).ok_or(EthActivationV2Error::InvalidHardwareWalletCall)?;
             let task_handle = task_handle.ok_or_else(|| {
                 EthActivationV2Error::InternalError("Hardware wallet must be accessed under task manager".to_string())
             })?;
             Some(
-                RpcTaskXPubExtractor::new(&ctx, task_handle, eth_xpub_extractor_rpc_statuses(), true)
-                    .map_err(|_| MmError::new(EthActivationV2Error::HwError(HwRpcError::NotInitialized)))?,
+                RpcTaskXPubExtractor::new_trezor_extractor(
+                    &ctx,
+                    task_handle,
+                    eth_xpub_extractor_rpc_statuses(),
+                    CoinProtocol::ETH,
+                )
+                .map_err(|_| MmError::new(EthActivationV2Error::HwError(HwRpcError::NotInitialized)))?,
             )
         } else {
             None
