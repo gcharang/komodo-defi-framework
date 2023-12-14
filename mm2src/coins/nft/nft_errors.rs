@@ -345,6 +345,11 @@ impl From<GetInfoFromUriError> for MetaFromUrlError {
     fn from(e: GetInfoFromUriError) -> Self { MetaFromUrlError::GetInfoFromUriError(e) }
 }
 
+/// Represents errors that can occur while locking the NFT database.
+///
+/// Variants:
+/// - `WasmNftCacheError`: Errors specific to the WebAssembly (WASM) environment's NFT cache.
+/// - `SqlError`: Errors related to SQL operations in non-WASM environments.
 #[derive(Debug, Display)]
 pub enum LockDBError {
     #[cfg(target_arch = "wasm32")]
@@ -363,6 +368,12 @@ impl From<WasmNftCacheError> for LockDBError {
     fn from(e: WasmNftCacheError) -> Self { LockDBError::WasmNftCacheError(e) }
 }
 
+/// Errors related to calculating transfer confirmations for NFTs.
+///
+/// Variants:
+/// - `NoSuchCoin`: Occurs when the specified coin does not exist.
+/// - `CoinDoesntSupportNft`: Triggered when the specified coin does not support NFT operations.
+/// - `GetCurrentBlockErr`: Represents errors encountered while retrieving the current block number.
 #[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize)]
 pub enum TransferConfirmationsError {
     #[display(fmt = "No such coin {}", coin)]

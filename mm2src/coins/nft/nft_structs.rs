@@ -386,6 +386,16 @@ pub struct NftList {
     pub(crate) total: usize,
 }
 
+/// Parameters for withdrawing an ERC-1155 token.
+///
+/// Fields:
+/// - `chain`: The blockchain network to perform the withdrawal on.
+/// - `to`: The address to send the NFT to.
+/// - `token_address`: The address of the ERC-1155 token contract.
+/// - `token_id`: The unique identifier of the NFT to withdraw.
+/// - `amount`: Optional amount of the token to withdraw. Defaults to 1 if not specified.
+/// - `max`: If set to `true`, withdraws the maximum amount available. Overrides the `amount` field.
+/// - `fee`: Optional details for the withdrawal fee.
 #[derive(Clone, Deserialize)]
 pub struct WithdrawErc1155 {
     pub(crate) chain: Chain,
@@ -399,6 +409,14 @@ pub struct WithdrawErc1155 {
     pub(crate) fee: Option<WithdrawFee>,
 }
 
+/// Parameters for withdrawing an ERC-721 token.
+///
+/// Fields:
+/// - `chain`: The blockchain network to perform the withdrawal on.
+/// - `to`: The address to send the NFT to.
+/// - `token_address`: The address of the ERC-721 token contract.
+/// - `token_id`: The unique identifier of the NFT to withdraw.
+/// - `fee`: Optional details for the withdrawal fee.
 #[derive(Clone, Deserialize)]
 pub struct WithdrawErc721 {
     pub(crate) chain: Chain,
@@ -409,6 +427,11 @@ pub struct WithdrawErc721 {
     pub(crate) fee: Option<WithdrawFee>,
 }
 
+/// Represents a request for withdrawing an NFT, supporting different ERC standards.
+///
+/// Variants:
+/// - `WithdrawErc1155`: Parameters for withdrawing an ERC-1155 token.
+/// - `WithdrawErc721`: Parameters for withdrawing an ERC-721 token.
 #[derive(Clone, Deserialize)]
 #[serde(tag = "type", content = "withdraw_data")]
 #[serde(rename_all = "snake_case")]
@@ -417,6 +440,9 @@ pub enum WithdrawNftReq {
     WithdrawErc721(WithdrawErc721),
 }
 
+/// Details of NFT transaction.
+///
+/// Includes the raw transaction hex for broadcasting, along with additional information about the transaction.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TransactionNftDetails {
     /// Raw bytes of signed transaction, this should be sent as is to `send_raw_transaction` RPC to broadcast the transaction
