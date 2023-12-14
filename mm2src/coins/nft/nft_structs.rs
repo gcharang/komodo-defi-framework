@@ -734,6 +734,12 @@ where
     BigUint::from_str(&s).map_err(serde::de::Error::custom)
 }
 
+/// Request parameters for clearing NFT data from the database.
+///
+/// - `chains`: Specifies the blockchain networks (e.g., Ethereum, BSC) for which
+///   to clear NFT data. Used only when `clear_all` is `false`.
+/// - `clear_all`: If `true`, clears NFT data for all chains, ignoring the `chains` field.
+///   Defaults to `false`.
 #[derive(Debug, Deserialize)]
 pub struct ClearNftDbReq {
     pub(crate) chains: Vec<Chain>,

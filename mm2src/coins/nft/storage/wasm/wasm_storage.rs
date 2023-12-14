@@ -434,7 +434,14 @@ impl NftListStorageOps for NftCacheIDBLocked<'_> {
         Ok(())
     }
 
-    async fn clear_all_nft_data(&self) -> MmResult<(), Self::Error> { todo!() }
+    async fn clear_all_nft_data(&self) -> MmResult<(), Self::Error> {
+        let db_transaction = self.get_inner().transaction().await?;
+        let nft_table = db_transaction.table::<NftListTable>().await?;
+        let last_scanned_block_table = db_transaction.table::<LastScannedBlockTable>().await?;
+        nft_table.clear().await?;
+        last_scanned_block_table.clear().await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -744,7 +751,12 @@ impl NftTransferHistoryStorageOps for NftCacheIDBLocked<'_> {
         Ok(())
     }
 
-    async fn clear_all_history_data(&self) -> MmResult<(), Self::Error> { todo!() }
+    async fn clear_all_history_data(&self) -> MmResult<(), Self::Error> {
+        let db_transaction = self.get_inner().transaction().await?;
+        let table = db_transaction.table::<NftTransferHistoryTable>().await?;
+        table.clear().await?;
+        Ok(())
+    }
 }
 
 async fn update_transfer_phishing_for_index(

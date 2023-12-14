@@ -381,6 +381,12 @@ impl From<CoinFindError> for TransferConfirmationsError {
     }
 }
 
+/// Enumerates errors that can occur while clearing NFT data from the database.
+///
+/// Variants:
+/// - `DbError`: Represents errors related to database operations.
+/// - `Internal`: Indicates internal errors not directly associated with database
+///   operations.
 #[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum ClearNftDbError {
