@@ -394,6 +394,8 @@ pub enum ClearNftDbError {
     DbError(String),
     #[display(fmt = "Internal: {}", _0)]
     Internal(String),
+    #[display(fmt = "Invalid request: {}", _0)]
+    InvalidRequest(String),
 }
 
 impl<T: NftStorageError> From<T> for ClearNftDbError {
@@ -407,6 +409,7 @@ impl From<LockDBError> for ClearNftDbError {
 impl HttpStatusCode for ClearNftDbError {
     fn status_code(&self) -> StatusCode {
         match self {
+            ClearNftDbError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             ClearNftDbError::DbError(_) | ClearNftDbError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

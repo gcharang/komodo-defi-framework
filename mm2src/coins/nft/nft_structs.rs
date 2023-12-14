@@ -736,13 +736,15 @@ where
 
 /// Request parameters for clearing NFT data from the database.
 ///
-/// - `chains`: Specifies the blockchain networks (e.g., Ethereum, BSC) for which
-///   to clear NFT data. Used only when `clear_all` is `false`.
+/// - `chains`: (Optional) Specifies the blockchain networks (e.g., Ethereum, BSC) to clear NFT data.
+///   This field is used and required only when `clear_all` is `false`.
 /// - `clear_all`: If `true`, clears NFT data for all chains, ignoring the `chains` field.
 ///   Defaults to `false`.
+///
+/// Note: If `clear_all` is `false` and `chains` is `None`, the request will be considered invalid and result in an error.
 #[derive(Debug, Deserialize)]
 pub struct ClearNftDbReq {
-    pub(crate) chains: Vec<Chain>,
+    pub(crate) chains: Option<Vec<Chain>>,
     #[serde(default)]
     pub(crate) clear_all: bool,
 }
