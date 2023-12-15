@@ -396,8 +396,8 @@ impl From<CoinFindError> for TransferConfirmationsError {
 ///
 /// Variants:
 /// - `DbError`: Represents errors related to database operations.
-/// - `Internal`: Indicates internal errors not directly associated with database
-///   operations.
+/// - `Internal`: Indicates internal errors not directly associated with database operations.
+/// - `InvalidRequest`: Used for various types of invalid requests, such as missing or contradictory parameters.
 #[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize, SerializeErrorType)]
 #[serde(tag = "error_type", content = "error_data")]
 pub enum ClearNftDbError {
