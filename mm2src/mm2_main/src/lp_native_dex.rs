@@ -457,6 +457,8 @@ pub async fn lp_init_continue(ctx: MmArc) -> MmInitResult<()> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         fix_directories(&ctx)?;
+        ctx.maybe_purge_old_state("2.0.0-beta".to_owned())
+            .map_to_mm(MmInitError::Internal)?;
         ctx.init_sqlite_connection()
             .map_to_mm(MmInitError::ErrorSqliteInitializing)?;
         ctx.init_shared_sqlite_conn()

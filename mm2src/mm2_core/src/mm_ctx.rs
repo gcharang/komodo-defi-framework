@@ -376,6 +376,28 @@ impl MmCtx {
             .lock()
             .unwrap()
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn maybe_purge_old_state(&self, new_stamp: String) -> Result<(), String> {
+        let stamp_path = self.dbdir().join(".stamp");
+        let current_stamp = std::fs::read_to_string(&stamp_path).unwrap_or_default();
+
+        if new_stamp != current_stamp {
+            for db in vec![
+                self.dbdir().join("MM2.db"),
+                self.shared_dbdir().join("MM2-shared.db"),
+                self.dbdir().join("KOMODEFI.db"),
+            ] {
+                if db.exists() {
+                    try_s!(std::fs::remove_file(db));
+                }
+            }
+
+            try_s!(std::fs::write(stamp_path, new_stamp));
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for MmCtx {
