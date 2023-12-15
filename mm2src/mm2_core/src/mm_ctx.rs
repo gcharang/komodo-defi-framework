@@ -6,6 +6,7 @@ use common::log::{self, LogLevel, LogOnError, LogState};
 use common::{cfg_native, cfg_wasm32, small_rng};
 use gstuff::{try_s, Constructible, ERR, ERRL};
 use lazy_static::lazy_static;
+use mm2_event_stream::{controller::Controller, Event, EventStreamConfiguration};
 use mm2_metrics::{MetricsArc, MetricsOps};
 use primitives::hash::H160;
 use rand::Rng;
@@ -25,7 +26,9 @@ cfg_wasm32! {
 }
 
 cfg_native! {
+    use db_common::async_sql_conn::AsyncConnection;
     use db_common::sqlite::rusqlite::Connection;
+    use futures::lock::Mutex as AsyncMutex;
     use futures_rustls::webpki::DNSNameRef;
     use mm2_metrics::prometheus;
     use mm2_metrics::MmMetricsError;
@@ -72,6 +75,10 @@ pub struct MmCtx {
     pub initialized: Constructible<bool>,
     /// True if the RPC HTTP server was started.
     pub rpc_started: Constructible<bool>,
+    /// Controller for continuously streaming data using streaming channels of `mm2_event_stream`.
+    pub stream_channel_controller: Controller<Event>,
+    /// Configuration of event streaming used for SSE.
+    pub event_stream_configuration: Option<EventStreamConfiguration>,
     /// True if the MarketMaker instance needs to stop.
     pub stop: Constructible<bool>,
     /// Unique context identifier, allowing us to more easily pass the context through the FFI boundaries.  
@@ -105,8 +112,10 @@ pub struct MmCtx {
     /// The RPC sender forwarding requests to writing part of underlying stream.
     #[cfg(target_arch = "wasm32")]
     pub wasm_rpc: Constructible<WasmRpcSender>,
+    /// Deprecated, please use `async_sqlite_connection` for new implementations.
     #[cfg(not(target_arch = "wasm32"))]
     pub sqlite_connection: Constructible<Arc<Mutex<Connection>>>,
+    /// Deprecated, please create `shared_async_sqlite_conn` for new implementations and call db `KOMODEFI-shared.db`.
     #[cfg(not(target_arch = "wasm32"))]
     pub shared_sqlite_conn: Constructible<Arc<Mutex<Connection>>>,
     pub mm_version: String,
@@ -123,6 +132,9 @@ pub struct MmCtx {
     pub db_namespace: DbNamespaceId,
     /// The context belonging to the `nft` mod: `NftCtx`.
     pub nft_ctx: Mutex<Option<Arc<dyn Any + 'static + Send + Sync>>>,
+    /// asynchronous handle for rusqlite connection.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async_sqlite_connection: Constructible<Arc<AsyncMutex<AsyncConnection>>>,
 }
 
 impl MmCtx {
@@ -133,6 +145,8 @@ impl MmCtx {
             metrics: MetricsArc::new(),
             initialized: Constructible::default(),
             rpc_started: Constructible::default(),
+            stream_channel_controller: Controller::new(),
+            event_stream_configuration: None,
             stop: Constructible::default(),
             ffi_handle: Constructible::default(),
             ordermatch_ctx: Mutex::new(None),
@@ -165,6 +179,8 @@ impl MmCtx {
             #[cfg(target_arch = "wasm32")]
             db_namespace: DbNamespaceId::Main,
             nft_ctx: Mutex::new(None),
+            #[cfg(not(target_arch = "wasm32"))]
+            async_sqlite_connection: Constructible::default(),
         }
     }
 
@@ -184,7 +200,21 @@ impl MmCtx {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn rpc_ip_port(&self) -> Result<SocketAddr, String> {
-        let port = self.conf["rpcport"].as_u64().unwrap_or(7783);
+        let port = match self.conf.get("rpcport") {
+            Some(rpcport) => {
+                // Check if it's a number or a string that can be parsed into a number
+                rpcport
+                    .as_u64()
+                    .or_else(|| rpcport.as_str().and_then(|s| s.parse::<u64>().ok()))
+                    .ok_or_else(|| {
+                        format!(
+                            "Invalid `rpcport` value. Expected a positive integer, but received: {}",
+                            rpcport
+                        )
+                    })?
+            },
+            None => 7783, // Default port if `rpcport` does not exist in the config
+        };
         if port < 1000 {
             return ERR!("rpcport < 1000");
         }
@@ -272,10 +302,7 @@ impl MmCtx {
 
     pub fn is_watcher(&self) -> bool { self.conf["is_watcher"].as_bool().unwrap_or_default() }
 
-    pub fn use_watchers(&self) -> bool {
-        std::env::var("USE_WATCHERS").is_ok()
-        //self.conf["use_watchers"].as_bool().unwrap_or(true)
-    }
+    pub fn use_watchers(&self) -> bool { self.conf["use_watchers"].as_bool().unwrap_or(true) }
 
     pub fn netid(&self) -> u16 {
         let netid = self.conf["netid"].as_u64().unwrap_or(0);
@@ -288,6 +315,9 @@ impl MmCtx {
     pub fn p2p_in_memory(&self) -> bool { self.conf["p2p_in_memory"].as_bool().unwrap_or(false) }
 
     pub fn p2p_in_memory_port(&self) -> Option<u64> { self.conf["p2p_in_memory_port"].as_u64() }
+
+    /// Returns whether node is configured to use [Upgraded Trading Protocol](https://github.com/KomodoPlatform/komodo-defi-framework/issues/1895)
+    pub fn use_trading_proto_v2(&self) -> bool { self.conf["use_trading_proto_v2"].as_bool().unwrap_or_default() }
 
     /// Returns the cloneable `MmFutSpawner`.
     pub fn spawner(&self) -> MmFutSpawner { MmFutSpawner::new(&self.abortable_system) }
@@ -302,7 +332,7 @@ impl MmCtx {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn init_sqlite_connection(&self) -> Result<(), String> {
         let sqlite_file_path = self.dbdir().join("MM2.db");
-        log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        log_sqlite_file_open_attempt(&sqlite_file_path);
         let connection = try_s!(Connection::open(sqlite_file_path));
         try_s!(self.sqlite_connection.pin(Arc::new(Mutex::new(connection))));
         Ok(())
@@ -311,9 +341,18 @@ impl MmCtx {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn init_shared_sqlite_conn(&self) -> Result<(), String> {
         let sqlite_file_path = self.shared_dbdir().join("MM2-shared.db");
-        log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        log_sqlite_file_open_attempt(&sqlite_file_path);
         let connection = try_s!(Connection::open(sqlite_file_path));
         try_s!(self.shared_sqlite_conn.pin(Arc::new(Mutex::new(connection))));
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn init_async_sqlite_connection(&self) -> Result<(), String> {
+        let sqlite_file_path = self.dbdir().join("KOMODEFI.db");
+        log_sqlite_file_open_attempt(&sqlite_file_path);
+        let async_conn = try_s!(AsyncConnection::open(sqlite_file_path).await);
+        try_s!(self.async_sqlite_connection.pin(Arc::new(AsyncMutex::new(async_conn))));
         Ok(())
     }
 
@@ -336,6 +375,28 @@ impl MmCtx {
             .or(&|| panic!("shared_sqlite_conn is not initialized"))
             .lock()
             .unwrap()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn maybe_purge_old_state(&self, new_stamp: String) -> Result<(), String> {
+        let stamp_path = self.dbdir().join(".stamp");
+        let current_stamp = std::fs::read_to_string(&stamp_path).unwrap_or_default();
+
+        if new_stamp != current_stamp {
+            for db in vec![
+                self.dbdir().join("MM2.db"),
+                self.shared_dbdir().join("MM2-shared.db"),
+                self.dbdir().join("KOMODEFI.db"),
+            ] {
+                if db.exists() {
+                    try_s!(std::fs::remove_file(db));
+                }
+            }
+
+            try_s!(std::fs::write(stamp_path, new_stamp));
+        }
+
+        Ok(())
     }
 }
 
@@ -677,8 +738,17 @@ impl MmCtxBuilder {
         let mut ctx = MmCtx::with_log_state(log);
         ctx.mm_version = self.version;
         ctx.datetime = self.datetime;
+
         if let Some(conf) = self.conf {
-            ctx.conf = conf
+            ctx.conf = conf;
+
+            let event_stream_configuration = &ctx.conf["event_stream_configuration"];
+            if !event_stream_configuration.is_null() {
+                let event_stream_configuration: EventStreamConfiguration =
+                    json::from_value(event_stream_configuration.clone())
+                        .expect("Invalid json value in 'event_stream_configuration'.");
+                ctx.event_stream_configuration = Some(event_stream_configuration);
+            }
         }
 
         #[cfg(target_arch = "wasm32")]
@@ -687,5 +757,17 @@ impl MmCtxBuilder {
         }
 
         MmArc::new(ctx)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_sqlite_file_open_attempt(sqlite_file_path: &Path) {
+    match sqlite_file_path.canonicalize() {
+        Ok(absolute_path) => {
+            log::debug!("Trying to open SQLite database file {}", absolute_path.display());
+        },
+        Err(_) => {
+            log::debug!("Trying to open SQLite database file {}", sqlite_file_path.display());
+        },
     }
 }

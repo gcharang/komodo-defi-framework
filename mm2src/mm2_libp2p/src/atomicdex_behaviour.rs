@@ -1,5 +1,5 @@
 use crate::{adex_ping::AdexPing,
-            network::{get_all_network_seednodes, NETID_7777},
+            network::{get_all_network_seednodes, NETID_8762},
             peers_exchange::{PeerAddresses, PeersExchange},
             request_response::{build_request_response_behaviour, PeerRequest, PeerResponse, RequestResponseBehaviour,
                                RequestResponseBehaviourEvent, RequestResponseSender},
@@ -26,7 +26,7 @@ use libp2p_floodsub::{Floodsub, FloodsubEvent, Topic as FloodsubTopic};
 use log::{debug, error, info};
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::{collections::hash_map::{DefaultHasher, HashMap},
+use std::{collections::{hash_map::DefaultHasher, BTreeMap},
           hash::{Hash, Hasher},
           iter,
           net::IpAddr,
@@ -47,7 +47,7 @@ const ANNOUNCE_INITIAL_DELAY: Duration = Duration::from_secs(60);
 const CHANNEL_BUF_SIZE: usize = 1024 * 8;
 
 /// Returns info about connected peers
-pub async fn get_peers_info(mut cmd_tx: AdexCmdTx) -> HashMap<String, Vec<String>> {
+pub async fn get_peers_info(mut cmd_tx: AdexCmdTx) -> BTreeMap<String, Vec<String>> {
     let (result_tx, rx) = oneshot::channel();
     let cmd = AdexBehaviourCmd::GetPeersInfo { result_tx };
     cmd_tx.send(cmd).await.expect("Rx should be present");
@@ -55,21 +55,21 @@ pub async fn get_peers_info(mut cmd_tx: AdexCmdTx) -> HashMap<String, Vec<String
 }
 
 /// Returns current gossipsub mesh state
-pub async fn get_gossip_mesh(mut cmd_tx: AdexCmdTx) -> HashMap<String, Vec<String>> {
+pub async fn get_gossip_mesh(mut cmd_tx: AdexCmdTx) -> BTreeMap<String, Vec<String>> {
     let (result_tx, rx) = oneshot::channel();
     let cmd = AdexBehaviourCmd::GetGossipMesh { result_tx };
     cmd_tx.send(cmd).await.expect("Rx should be present");
     rx.await.expect("Tx should be present")
 }
 
-pub async fn get_gossip_peer_topics(mut cmd_tx: AdexCmdTx) -> HashMap<String, Vec<String>> {
+pub async fn get_gossip_peer_topics(mut cmd_tx: AdexCmdTx) -> BTreeMap<String, Vec<String>> {
     let (result_tx, rx) = oneshot::channel();
     let cmd = AdexBehaviourCmd::GetGossipPeerTopics { result_tx };
     cmd_tx.send(cmd).await.expect("Rx should be present");
     rx.await.expect("Tx should be present")
 }
 
-pub async fn get_gossip_topic_peers(mut cmd_tx: AdexCmdTx) -> HashMap<String, Vec<String>> {
+pub async fn get_gossip_topic_peers(mut cmd_tx: AdexCmdTx) -> BTreeMap<String, Vec<String>> {
     let (result_tx, rx) = oneshot::channel();
     let cmd = AdexBehaviourCmd::GetGossipTopicPeers { result_tx };
     cmd_tx.send(cmd).await.expect("Rx should be present");
@@ -133,16 +133,16 @@ pub enum AdexBehaviourCmd {
         response_channel: AdexResponseChannel,
     },
     GetPeersInfo {
-        result_tx: oneshot::Sender<HashMap<String, Vec<String>>>,
+        result_tx: oneshot::Sender<BTreeMap<String, Vec<String>>>,
     },
     GetGossipMesh {
-        result_tx: oneshot::Sender<HashMap<String, Vec<String>>>,
+        result_tx: oneshot::Sender<BTreeMap<String, Vec<String>>>,
     },
     GetGossipPeerTopics {
-        result_tx: oneshot::Sender<HashMap<String, Vec<String>>>,
+        result_tx: oneshot::Sender<BTreeMap<String, Vec<String>>>,
     },
     GetGossipTopicPeers {
-        result_tx: oneshot::Sender<HashMap<String, Vec<String>>>,
+        result_tx: oneshot::Sender<BTreeMap<String, Vec<String>>>,
     },
     GetRelayMesh {
         result_tx: oneshot::Sender<Vec<String>>,
@@ -419,8 +419,8 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for AtomicDexBehaviour {
 
 impl NetworkBehaviourEventProcess<FloodsubEvent> for AtomicDexBehaviour {
     fn inject_event(&mut self, event: FloodsubEvent) {
-        // do not process peer announce on 7777 temporary
-        if self.netid != NETID_7777 {
+        // do not process peer announce on 8762 temporary
+        if self.netid != NETID_8762 {
             if let FloodsubEvent::Message(message) = &event {
                 for topic in &message.topics {
                     if topic == &FloodsubTopic::new(PEERS_TOPIC) {
@@ -698,7 +698,7 @@ fn start_gossipsub(
         // build a gossipsub network behaviour
         let mut gossipsub = Gossipsub::new(local_peer_id, gossipsub_config);
 
-        let floodsub = Floodsub::new(local_peer_id, netid != NETID_7777);
+        let floodsub = Floodsub::new(local_peer_id, netid != NETID_8762);
 
         let mut peers_exchange = PeersExchange::new(network_info);
         if !network_info.in_memory() {

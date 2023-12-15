@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright © 2022 Atomic Private Limited and its contributors               *
+ * Copyright © 2023 Pampex LTD and TillyHK LTD              *
  *                                                                            *
  * See the CONTRIBUTOR-LICENSE-AGREEMENT, COPYING, LICENSE-COPYRIGHT-NOTICE   *
  * and DEVELOPER-CERTIFICATE-OF-ORIGIN files in the LEGAL directory in        *
@@ -7,7 +7,7 @@
  * holder information and the developer policies on copyright and licensing.  *
  *                                                                            *
  * Unless otherwise agreed in a custom licensing agreement, no part of the    *
- * AtomicDEX software, including this file may be copied, modified, propagated*
+ * Komodo DeFi Framework software, including this file may be copied, modified, propagated*
  * or distributed except according to the terms contained in the              *
  * LICENSE-COPYRIGHT-NOTICE file.                                             *
  *                                                                            *
@@ -27,6 +27,7 @@ use futures::compat::Future01CompatExt;
 use http::Response;
 use mm2_core::mm_ctx::MmArc;
 use mm2_metrics::MetricsOps;
+use mm2_net::p2p::P2PContext;
 use mm2_number::construct_detailed;
 use mm2_rpc::data::legacy::{BalanceResponse, CoinInitResponse, Mm2RpcResult, MmVersionResponse, Status};
 use serde_json::{self as json, Value as Json};
@@ -245,12 +246,26 @@ pub async fn my_balance(ctx: MmArc, req: Json) -> Result<Response<Vec<u8>>, Stri
     Ok(try_s!(Response::builder().body(res)))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+async fn close_async_connection(ctx: &MmArc) {
+    if let Some(async_conn) = ctx.async_sqlite_connection.as_option() {
+        let mut conn = async_conn.lock().await;
+        if let Err(e) = conn.close().await {
+            error!("Error stopping AsyncConnection: {}", e);
+        }
+    }
+}
+
 pub async fn stop(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
     dispatch_lp_event(ctx.clone(), StopCtxEvent.into()).await;
     // Should delay the shutdown a bit in order not to trip the "stop" RPC call in unit tests.
     // Stopping immediately leads to the "stop" RPC call failing with the "errno 10054" sometimes.
     let fut = async move {
         Timer::sleep(0.05).await;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        close_async_connection(&ctx).await;
+
         if let Err(e) = ctx.stop() {
             error!("Error stopping MmCtx: {}", e);
         }
@@ -306,11 +321,9 @@ pub fn version(ctx: MmArc) -> HyRes {
 }
 
 pub async fn get_peers_info(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
-    use crate::mm2::lp_network::P2PContext;
-    use mm2_libp2p::atomicdex_behaviour::get_peers_info;
     let ctx = P2PContext::fetch_from_mm_arc(&ctx);
     let cmd_tx = ctx.cmd_tx.lock().clone();
-    let result = get_peers_info(cmd_tx).await;
+    let result = mm2_libp2p::get_peers_info(cmd_tx).await;
     let result = json!({
         "result": result,
     });
@@ -319,11 +332,9 @@ pub async fn get_peers_info(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
 }
 
 pub async fn get_gossip_mesh(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
-    use crate::mm2::lp_network::P2PContext;
-    use mm2_libp2p::atomicdex_behaviour::get_gossip_mesh;
     let ctx = P2PContext::fetch_from_mm_arc(&ctx);
     let cmd_tx = ctx.cmd_tx.lock().clone();
-    let result = get_gossip_mesh(cmd_tx).await;
+    let result = mm2_libp2p::get_gossip_mesh(cmd_tx).await;
     let result = json!({
         "result": result,
     });
@@ -332,11 +343,9 @@ pub async fn get_gossip_mesh(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
 }
 
 pub async fn get_gossip_peer_topics(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
-    use crate::mm2::lp_network::P2PContext;
-    use mm2_libp2p::atomicdex_behaviour::get_gossip_peer_topics;
     let ctx = P2PContext::fetch_from_mm_arc(&ctx);
     let cmd_tx = ctx.cmd_tx.lock().clone();
-    let result = get_gossip_peer_topics(cmd_tx).await;
+    let result = mm2_libp2p::get_gossip_peer_topics(cmd_tx).await;
     let result = json!({
         "result": result,
     });
@@ -345,11 +354,9 @@ pub async fn get_gossip_peer_topics(ctx: MmArc) -> Result<Response<Vec<u8>>, Str
 }
 
 pub async fn get_gossip_topic_peers(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
-    use crate::mm2::lp_network::P2PContext;
-    use mm2_libp2p::atomicdex_behaviour::get_gossip_topic_peers;
     let ctx = P2PContext::fetch_from_mm_arc(&ctx);
     let cmd_tx = ctx.cmd_tx.lock().clone();
-    let result = get_gossip_topic_peers(cmd_tx).await;
+    let result = mm2_libp2p::get_gossip_topic_peers(cmd_tx).await;
     let result = json!({
         "result": result,
     });
@@ -358,11 +365,9 @@ pub async fn get_gossip_topic_peers(ctx: MmArc) -> Result<Response<Vec<u8>>, Str
 }
 
 pub async fn get_relay_mesh(ctx: MmArc) -> Result<Response<Vec<u8>>, String> {
-    use crate::mm2::lp_network::P2PContext;
-    use mm2_libp2p::atomicdex_behaviour::get_relay_mesh;
     let ctx = P2PContext::fetch_from_mm_arc(&ctx);
     let cmd_tx = ctx.cmd_tx.lock().clone();
-    let result = get_relay_mesh(cmd_tx).await;
+    let result = mm2_libp2p::get_relay_mesh(cmd_tx).await;
     let result = json!({
         "result": result,
     });

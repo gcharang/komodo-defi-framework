@@ -1,5 +1,5 @@
 use bitcrypto::dhash160;
-use common::{block_on, now_sec_u32};
+use common::{block_on, now_sec};
 use mm2_core::mm_ctx::MmCtxBuilder;
 use mm2_test_helpers::for_tests::zombie_conf;
 use std::path::PathBuf;
@@ -11,6 +11,8 @@ use super::{z_coin_from_conf_and_params_with_z_key, z_mainnet_constants, Future,
             ZTransaction};
 use crate::z_coin::{z_htlc::z_send_dex_fee, ZcoinActivationParams, ZcoinRpcMode};
 use crate::CoinProtocol;
+use crate::DexFee;
+use mm2_number::MmNumber;
 
 #[test]
 fn zombie_coin_send_and_refund_maker_payment() {
@@ -37,7 +39,7 @@ fn zombie_coin_send_and_refund_maker_payment() {
     ))
     .unwrap();
 
-    let time_lock = now_sec_u32() - 3600;
+    let time_lock = now_sec() - 3600;
     let taker_pub = coin.utxo_arc.priv_key_policy.activated_key_or_err().unwrap().public();
     let secret_hash = [0; 20];
 
@@ -94,7 +96,7 @@ fn zombie_coin_send_and_spend_maker_payment() {
     ))
     .unwrap();
 
-    let lock_time = now_sec_u32() - 1000;
+    let lock_time = now_sec() - 1000;
     let taker_pub = coin.utxo_arc.priv_key_policy.activated_key_or_err().unwrap().public();
     let secret = [0; 32];
     let secret_hash = dhash160(&secret);
@@ -228,7 +230,7 @@ fn zombie_coin_validate_dex_fee() {
         fee_tx: &tx,
         expected_sender: &[],
         fee_addr: &[],
-        amount: &"0.001".parse().unwrap(),
+        dex_fee: &DexFee::Standard(MmNumber::from("0.001")),
         min_block_number: 12000,
         uuid: &[1; 16],
     };
@@ -244,7 +246,7 @@ fn zombie_coin_validate_dex_fee() {
         fee_tx: &tx,
         expected_sender: &[],
         fee_addr: &[],
-        amount: &"0.01".parse().unwrap(),
+        dex_fee: &DexFee::Standard(MmNumber::from("0.01")),
         min_block_number: 12000,
         uuid: &[2; 16],
     };
@@ -259,7 +261,7 @@ fn zombie_coin_validate_dex_fee() {
         fee_tx: &tx,
         expected_sender: &[],
         fee_addr: &[],
-        amount: &"0.01".parse().unwrap(),
+        dex_fee: &DexFee::Standard(MmNumber::from("0.01")),
         min_block_number: 14000,
         uuid: &[1; 16],
     };
@@ -274,7 +276,7 @@ fn zombie_coin_validate_dex_fee() {
         fee_tx: &tx,
         expected_sender: &[],
         fee_addr: &[],
-        amount: &"0.01".parse().unwrap(),
+        dex_fee: &DexFee::Standard(MmNumber::from("0.01")),
         min_block_number: 12000,
         uuid: &[1; 16],
     };

@@ -1,6 +1,6 @@
 use super::*;
-use crate::IguanaPrivKey;
-use common::{block_on, now_sec_u32, wait_until_sec};
+use crate::{DexFee, IguanaPrivKey};
+use common::{block_on, now_sec, wait_until_sec};
 use crypto::privkey::key_pair_from_seed;
 use ethkey::{Generator, Random};
 use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
@@ -60,7 +60,7 @@ pub fn jst_distributor() -> EthCoin {
         "urls": ETH_DEV_NODES,
         "swap_contract_address": ETH_DEV_SWAP_CONTRACT,
     });
-    let seed = get_passphrase!(".env.client", "BOB_PASSPHRASE").unwrap();
+    let seed = get_passphrase!(".env.seed", "BOB_PASSPHRASE").unwrap();
     let keypair = key_pair_from_seed(&seed).unwrap();
     let priv_key_policy = PrivKeyBuildPolicy::IguanaPrivKey(keypair.private().secret);
     block_on(eth_coin_from_conf_and_request(
@@ -343,7 +343,7 @@ fn send_and_refund_erc20_payment() {
         abortable_system: AbortableQueue::default(),
     }));
 
-    let time_lock = now_sec_u32() - 200;
+    let time_lock = now_sec() - 200;
     let secret_hash = &[1; 20];
     let maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
@@ -360,7 +360,7 @@ fn send_and_refund_erc20_payment() {
     let payment = coin.send_maker_payment(maker_payment_args).wait().unwrap();
     log!("{:?}", payment);
 
-    let swap_id = coin.etomic_swap_id(time_lock, secret_hash);
+    let swap_id = coin.etomic_swap_id(time_lock.try_into().unwrap(), secret_hash);
     let status = block_on(
         coin.payment_status(
             Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
@@ -429,7 +429,7 @@ fn send_and_refund_eth_payment() {
         abortable_system: AbortableQueue::default(),
     }));
 
-    let time_lock = now_sec_u32() - 200;
+    let time_lock = now_sec() - 200;
     let secret_hash = &[1; 20];
     let send_maker_payment_args = SendPaymentArgs {
         time_lock_duration: 0,
@@ -447,7 +447,7 @@ fn send_and_refund_eth_payment() {
 
     log!("{:?}", payment);
 
-    let swap_id = coin.etomic_swap_id(time_lock, secret_hash);
+    let swap_id = coin.etomic_swap_id(time_lock.try_into().unwrap(), secret_hash);
     let status = block_on(
         coin.payment_status(
             Address::from_str(ETH_DEV_SWAP_CONTRACT).unwrap(),
@@ -1104,8 +1104,11 @@ fn test_get_fee_to_send_taker_fee() {
     let dex_fee_amount = u256_to_big_decimal(DEX_FEE_AMOUNT.into(), 18).expect("!u256_to_big_decimal");
 
     let (_ctx, coin) = eth_coin_for_test(EthCoinType::Eth, &["http://dummy.dummy"], None);
-    let actual = block_on(coin.get_fee_to_send_taker_fee(dex_fee_amount.clone(), FeeApproxStage::WithoutApprox))
-        .expect("!get_fee_to_send_taker_fee");
+    let actual = block_on(coin.get_fee_to_send_taker_fee(
+        DexFee::Standard(MmNumber::from(dex_fee_amount.clone())),
+        FeeApproxStage::WithoutApprox,
+    ))
+    .expect("!get_fee_to_send_taker_fee");
     assert_eq!(actual, expected_fee);
 
     let (_ctx, coin) = eth_coin_for_test(
@@ -1116,8 +1119,11 @@ fn test_get_fee_to_send_taker_fee() {
         &["http://dummy.dummy"],
         None,
     );
-    let actual = block_on(coin.get_fee_to_send_taker_fee(dex_fee_amount, FeeApproxStage::WithoutApprox))
-        .expect("!get_fee_to_send_taker_fee");
+    let actual = block_on(coin.get_fee_to_send_taker_fee(
+        DexFee::Standard(MmNumber::from(dex_fee_amount)),
+        FeeApproxStage::WithoutApprox,
+    ))
+    .expect("!get_fee_to_send_taker_fee");
     assert_eq!(actual, expected_fee);
 }
 
@@ -1143,7 +1149,11 @@ fn test_get_fee_to_send_taker_fee_insufficient_balance() {
     );
     let dex_fee_amount = u256_to_big_decimal(DEX_FEE_AMOUNT.into(), 18).expect("!u256_to_big_decimal");
 
-    let error = block_on(coin.get_fee_to_send_taker_fee(dex_fee_amount, FeeApproxStage::WithoutApprox)).unwrap_err();
+    let error = block_on(coin.get_fee_to_send_taker_fee(
+        DexFee::Standard(MmNumber::from(dex_fee_amount)),
+        FeeApproxStage::WithoutApprox,
+    ))
+    .unwrap_err();
     log!("{}", error);
     assert!(
         matches!(error.get_inner(), TradePreimageError::NotSufficientBalance { .. }),
@@ -1167,7 +1177,7 @@ fn validate_dex_fee_invalid_sender_eth() {
         fee_tx: &tx,
         expected_sender: &DEX_FEE_ADDR_RAW_PUBKEY,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 0,
         uuid: &[],
     };
@@ -1201,7 +1211,7 @@ fn validate_dex_fee_invalid_sender_erc() {
         fee_tx: &tx,
         expected_sender: &DEX_FEE_ADDR_RAW_PUBKEY,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 0,
         uuid: &[],
     };
@@ -1239,7 +1249,7 @@ fn validate_dex_fee_eth_confirmed_before_min_block() {
         fee_tx: &tx,
         expected_sender: &compressed_public,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 11784793,
         uuid: &[],
     };
@@ -1276,7 +1286,7 @@ fn validate_dex_fee_erc_confirmed_before_min_block() {
         fee_tx: &tx,
         expected_sender: &compressed_public,
         fee_addr: &DEX_FEE_ADDR_RAW_PUBKEY,
-        amount: &amount,
+        dex_fee: &DexFee::Standard(amount.into()),
         min_block_number: 11823975,
         uuid: &[],
     };

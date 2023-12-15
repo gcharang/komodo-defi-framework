@@ -11,12 +11,9 @@
 //!                   binary
 
 #![allow(uncommon_codepoints)]
-#![feature(allocator_api)]
 #![feature(integer_atomics, panic_info_message)]
 #![feature(async_closure)]
 #![feature(hash_raw_entry)]
-#![feature(negative_impls)]
-#![feature(auto_traits)]
 #![feature(drain_filter)]
 
 #[macro_use] extern crate arrayref;
@@ -106,6 +103,19 @@ macro_rules! some_or_return_ok_none {
     };
 }
 
+#[macro_export]
+macro_rules! cross_test {
+    ($test_name:ident, $test_code:block) => {
+        #[cfg(not(target_arch = "wasm32"))]
+        #[tokio::test(flavor = "multi_thread")]
+        async fn $test_name() { $test_code }
+
+        #[cfg(target_arch = "wasm32")]
+        #[wasm_bindgen_test]
+        async fn $test_name() { $test_code }
+    };
+}
+
 #[macro_use]
 pub mod jsonrpc_client;
 #[macro_use]
@@ -120,7 +130,6 @@ pub mod custom_iter;
 pub mod number_type_casting;
 pub mod password_policy;
 pub mod seri;
-#[path = "patterns/state_machine.rs"] pub mod state_machine;
 pub mod time_cache;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -145,7 +154,6 @@ use rand::{rngs::SmallRng, SeedableRng};
 use serde::{de, ser};
 use serde_json::{self as json, Value as Json};
 use sha2::{Digest, Sha256};
-use std::alloc::Allocator;
 use std::convert::TryInto;
 use std::fmt::Write as FmtWrite;
 use std::fs::File;
@@ -197,11 +205,6 @@ lazy_static! {
 lazy_static! {
     pub(crate) static ref LOG_FILE: Mutex<Option<std::fs::File>> = Mutex::new(open_log_file());
 }
-
-pub auto trait NotSame {}
-impl<X> !NotSame for (X, X) {}
-// Makes the error conversion work for structs/enums containing Box<dyn ...>
-impl<T: ?Sized, A: Allocator> NotSame for Box<T, A> {}
 
 /// Converts u64 satoshis to f64
 pub fn sat_to_f(sat: u64) -> f64 { sat as f64 / SATOSHIS as f64 }
@@ -1045,3 +1048,40 @@ pub fn parse_rfc3339_to_timestamp(date_str: &str) -> Result<u64, ParseRfc3339Err
 /// This function returns a boolean indicating whether the database is being upgraded from version 0 to 1.
 #[cfg(target_arch = "wasm32")]
 pub fn is_initial_upgrade(old_version: u32, new_version: u32) -> bool { old_version == 0 && new_version == 1 }
+
+/// Takes `http:Uri` and converts it into `String` of websocket address
+///
+/// Panics if the given URI doesn't contain a host value.
+pub fn http_uri_to_ws_address(uri: http::Uri) -> String {
+    let address_prefix = match uri.scheme_str() {
+        Some("https") => "wss://",
+        _ => "ws://",
+    };
+
+    let host_address = uri.host().expect("Host can't be empty.");
+    let port = uri.port_u16().map(|p| format!(":{}", p)).unwrap_or_default();
+
+    format!("{}{}{}", address_prefix, host_address, port)
+}
+
+#[test]
+fn test_http_uri_to_ws_address() {
+    let uri = "https://cosmos-rpc.polkachu.com".parse::<http::Uri>().unwrap();
+    let ws_connection = http_uri_to_ws_address(uri);
+    assert_eq!(ws_connection, "wss://cosmos-rpc.polkachu.com");
+
+    let uri = "http://cosmos-rpc.polkachu.com".parse::<http::Uri>().unwrap();
+    let ws_connection = http_uri_to_ws_address(uri);
+    assert_eq!(ws_connection, "ws://cosmos-rpc.polkachu.com");
+
+    let uri = "http://34.82.96.8:26657".parse::<http::Uri>().unwrap();
+    let ws_connection = http_uri_to_ws_address(uri);
+    assert_eq!(ws_connection, "ws://34.82.96.8:26657");
+}
+
+#[test]
+#[should_panic(expected = "Host can't be empty.")]
+fn test_http_uri_to_ws_address_panic() {
+    let uri = "/demo/value".parse::<http::Uri>().unwrap();
+    http_uri_to_ws_address(uri);
+}
